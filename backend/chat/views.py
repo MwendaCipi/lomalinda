@@ -160,3 +160,34 @@ class ChatContactsView(APIView):
                 | Q(username__icontains=search)
             )
         return Response({'contacts': ChatPersonSerializer(people[:100], many=True).data})
+
+
+class ChatConversationLeaveView(APIView):
+    """Step out of a room you are in — the member's own leave."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        if not services.access_to(request.user, conversation):
+            return Response(
+                {'detail': 'You are not part of that conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # A direct message needs both sides still present; leaving would leave
+        # the other member alone in a room with no one to talk to.
+        if conversation.kind == Conversation.KIND_DM:
+            return Response(
+                {'detail': 'You cannot leave a direct message — close it instead.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        participant = conversation.participants.filter(member=request.user).first()
+        if participant is None:
+            return Response(
+                {'detail': 'You are not part of that conversation.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        participant.delete()
+        # The room may have gone quiet once this member walked out.
+        services.sync_area_room(conversation)
+        return Response({'ok': True})

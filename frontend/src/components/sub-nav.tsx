@@ -28,12 +28,20 @@ export type SectionNavItem = SubNavItem & { href: string };
 const stripClass =
   "min-h-12 w-full flex-wrap items-end gap-1 sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
-/** The section strip's phone layout once it is long enough to wrap anyway:
- *  an equal-share grid, three across — Giving's six pages land as two
- *  level rows of three instead of a wrap that follows each label's length.
- *  Shorter strips keep the natural wrap, which still fits them on one row. */
-const sectionGridClass =
+/** A strip's phone layout once it is long enough to wrap anyway: an
+ *  equal-share grid, three across — Giving's six pages (and the elders' six
+ *  views) land as two level rows of three instead of a wrap that follows
+ *  each label's length. Shorter strips keep the natural wrap, which still
+ *  fits them on one row. */
+const phoneGridClass =
   "grid min-h-12 w-full grid-cols-3 items-stretch gap-1 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
+
+/** A long strip's phone layout: the grid above, three chips a row. */
+function stripLayout(items: readonly { key: string }[]): string {
+  // Three or fewer items fit a phone on one natural row; from four up the
+  // strip wraps anyway, so it switches to the equal-share grid instead.
+  return items.length > 3 ? phoneGridClass : `${stripClass} flex`;
+}
 
 const tabClass = (active: boolean) =>
   `relative flex h-11 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 text-sm font-semibold transition sm:flex-none ${
@@ -79,6 +87,10 @@ function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
  * The items are toggle buttons (`aria-pressed`) rather than links, because
  * they swap content in place. `SectionNav` below is the other half — the
  * sibling pages of a section, which are links.
+ *
+ * A strip long enough to wrap on a phone (the elders' six views) shares the
+ * width equally instead, three chips a row, so the toggles stay in two level
+ * rows rather than a wrap that follows each label's length.
  */
 export function SubNav({
   items,
@@ -105,7 +117,7 @@ export function SubNav({
 
   return (
     <div className={`${band} ${className}`}>
-      <div role="group" aria-label={label} className={`${stripClass} flex`}>
+      <div role="group" aria-label={label} className={stripLayout(items)}>
         {items.map((item) => {
           const active = item.key === value;
           return (
@@ -148,14 +160,12 @@ export function SectionNav({
   label: string;
   className?: string;
 }) {
-  // Three or fewer pages fit a phone on one natural row; from four up the
-  // strip wraps anyway, so it switches to the equal-share grid instead.
-  const phoneGrid = items.length > 3;
   return (
     <nav aria-label={label} className={className}>
       {/* The grid class carries its own display (`grid`, `sm:flex`); the
-          natural-wrap fallback still needs `flex` appended. */}
-      <div className={phoneGrid ? sectionGridClass : `${stripClass} flex`}>
+          natural-wrap fallback still needs `flex` appended — which the
+          shared layout already does. */}
+      <div className={stripLayout(items)}>
         {items.map((item) => {
           const active = item.href === activeHref;
           return (

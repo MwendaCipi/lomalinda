@@ -6,8 +6,10 @@ import {
   ArrowLeft,
   Building2,
   FileText,
+  Mail,
   MessageSquarePlus,
   MessagesSquare,
+  MoreVertical,
   Paperclip,
   Send,
   Smile,
@@ -18,14 +20,17 @@ import {
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { EmojiPicker } from "@/components/emoji-picker";
 
+import { useAllDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import { useConversationSocket } from "@/lib/chat-socket";
 import {
   fetchContacts,
   fetchConversations,
   fetchMessages,
   initials,
+  leaveConversation,
   markConversationRead,
   openConversation,
   pollChatUnread,
@@ -36,6 +41,54 @@ import {
   type ChatMessage,
   type ChatPerson,
 } from "@/lib/chat";
+
+const SABBATH_SCHOOL_CODE = "sabbath_school";
+
+/** An Actions popover for a group room's row — Leave (except Sabbath School)
+    and Contact Leadership. One open at a time across the whole list. */
+function RoomActionsPopover({
+  room,
+  open,
+  onClose,
+  onLeave,
+  onContactLeadership,
+}: {
+  room: ChatConversation;
+  open: boolean;
+  onClose: () => void;
+  onLeave: () => void;
+  onContactLeadership: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const handleOutside = (event: MouseEvent) => {
+      const el = event.target as HTMLElement | null;
+      if (el?.closest?.("[data-room-actions]")) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open, onClose]);
+
+  const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
+  const menuItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand";
+  const dangerItem = "mt-1 flex w-full items-center gap-2.5 border-t border-sand-line px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50";
+
+  return (
+    <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5" data-room-actions>
+      {!isSabbathSchool && (
+        <button type="button" onClick={() => { onClose(); onLeave(); }} className={dangerItem}>
+          <MoreVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Leave
+        </button>
+      )}
+      <button type="button" onClick={() => { onClose(); onContactLeadership(); }} className={menuItem}>
+        <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+        Contact Leadership
+      </button>
+    </div>
+  );
+}
 
 /**
  * How long the open room waits before asking for anything new.
@@ -92,6 +145,8 @@ export function ChatPanel() {
   const { me } = useHeaderData();
   const meName = me?.name || "";
 
+  const departments = useAllDepartments();
+
   const [rooms, setRooms] = useState<ChatConversation[]>([]);
   const [roomsLoaded, setRoomsLoaded] = useState(false);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -112,6 +167,9 @@ export function ChatPanel() {
   // and the church family, where everyone on the roll talks — and the inbox,
   // the member's own direct messages and their thread with the office.
   const [tab, setTab] = useState<"inbox" | "groups">("inbox");
+
+  // Which group room's Actions popover is open.
+  const [actionsOpenId, setActionsOpenId] = useState<number | null>(null);
 
   const listRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<HTMLTextAreaElement>(null);
@@ -295,6 +353,44 @@ export function ChatPanel() {
     }
   };
 
+  const leaveGroup = async (room: ChatConversation) => {
+    const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
+    if (isSabbathSchool) return;
+    const label = room.department_label || room.title;
+    const result = await showAlert(
+      "Leave group",
+      `Step out of ${label}? You will no longer see its messages or be part of the conversation.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Leave", cancelButtonText: "Stay", confirmButtonColor: brand.alert }
+    );
+    if (!result.isConfirmed) return;
+    try {
+      await leaveConversation(room.id);
+      setRooms((prev) => prev.filter((entry) => entry.id !== room.id));
+      if (activeId === room.id) setActiveId(null);
+      showAlert("You left the group", `You are no longer in ${label}.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
+    } catch (error) {
+      showAlert("Could not leave", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
+  const contactLeadership = async (room: ChatConversation) => {
+    const code = room.department_code;
+    if (!code) return;
+    const dept = departments.find((d) => d.code === code);
+    const holder = dept?.holders?.find((h) => h.kind === "leader" && h.id);
+    const targetId = holder?.id ?? undefined;
+    if (!targetId) {
+      showAlert("No leadership", "This department's leadership is not listed yet.", "info");
+      return;
+    }
+    try {
+      enterRoom(await openConversation({ kind: "dm", member_id: targetId }));
+    } catch (error) {
+      showAlert("Could not open the message", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
   /** Splice an emoji into the draft at the caret, leaving the caret on it. */
   const insertEmoji = (emoji: string) => {
     const el = draftRef.current;
@@ -472,35 +568,65 @@ export function ChatPanel() {
           </div>
         ) : (
           <ul>
-            {visibleRooms.map((room) => (
-              <li key={room.id}>
-                <button
-                  type="button"
-                  onClick={() => openRoom(room)}
-                  className={`flex w-full items-center gap-3 border-b border-sand-line/70 px-3.5 py-3 text-left transition ${
-                    room.id === activeId ? "bg-sand-linen" : "hover:bg-sand"
-                  }`}
-                >
-                  <Avatar room={room} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-bark">{room.title}</span>
-                      {room.last_message && (
-                        <span className="shrink-0 text-[10px] text-moss">{whenLabel(room.last_message.created_at)}</span>
-                      )}
-                    </span>
-                    <span className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-moss">{previewOf(room, meName)}</span>
-                      {room.unread_count > 0 && (
-                        <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white">
-                          {room.unread_count > 9 ? "9+" : room.unread_count}
+            {visibleRooms.map((room) => {
+              const isGroup = room.kind === "group";
+              const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
+              const showActions = isGroup && !isSabbathSchool;
+              const actionsOpen = actionsOpenId === room.id;
+
+              return (
+                <li key={room.id}>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => openRoom(room)}
+                      className={`flex w-full items-center gap-3 border-b border-sand-line/70 px-3.5 py-3 text-left transition ${
+                        room.id === activeId ? "bg-sand-linen" : "hover:bg-sand"
+                      }`}
+                    >
+                      <Avatar room={room} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-bark">{room.title}</span>
+                          {room.last_message && (
+                            <span className="shrink-0 text-[10px] text-moss">{whenLabel(room.last_message.created_at)}</span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
+                        <span className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className="truncate text-xs text-moss">{previewOf(room, meName)}</span>
+                          {room.unread_count > 0 && (
+                            <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white">
+                              {room.unread_count > 9 ? "9+" : room.unread_count}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                    {showActions && (
+                      <button
+                        type="button"
+                        onClick={() => setActionsOpenId(actionsOpen ? null : room.id)}
+                        aria-expanded={actionsOpen}
+                        aria-label={`Actions for ${room.title}`}
+                        title="Actions"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sand-mute text-ember transition hover:bg-sand"
+                      >
+                        <MoreVertical className="h-4 w-4 text-moss" aria-hidden="true" />
+                      </button>
+                    )}
+                    {actionsOpen && showActions && (
+                      <RoomActionsPopover
+                        room={room}
+                        open={actionsOpen}
+                        onClose={() => setActionsOpenId(null)}
+                        onLeave={() => leaveGroup(room)}
+                        onContactLeadership={() => contactLeadership(room)}
+                      />
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

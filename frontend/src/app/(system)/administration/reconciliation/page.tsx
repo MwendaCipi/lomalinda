@@ -87,24 +87,20 @@ type IndividualGiving = {
   receipt_sent_at?: string | null;
   status: string;
   item_description?: string;
-  /** A payment still held for the treasurer's assignment: it belongs to the
-      Unassigned desk alone and never stands in Completed Givings as if it
-      were already credited somewhere. */
+  /** A payment still held for the treasurer's assignment: it stands in
+      Individual Givings under the account name the giver typed, and again
+      on the Unassigned desk until the treasurer files it. */
   needs_review?: boolean;
 };
 
 /** Money that actually arrived — completed digital gifts and recorded cash. */
-const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.status === "Recorded";
-
-/** A payment still held for the treasurer's assignment: it lives on the
-    Unassigned desk alone, so it appears in neither the Completed list nor
-    the Failed queue — as though it were already credited nowhere. */
-const isHeldForReview = (g: IndividualGiving) => Boolean(g.needs_review);
-
 /** The whole failed backlog, whenever it was recorded: the Failed tab is a
     queue of noise to clear, not a report over a period — so it reads every
     failed attempt the badge counts, however old, and the two agree. */
 const FAILED_ALL_TIME = { from: "2000-01-01", to: "2099-12-31" };
+
+/** Money that actually arrived — completed digital gifts and recorded cash. */
+const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.status === "Recorded";
 
 /**
  * A finished report, held for the desk to look at before it decides to save
@@ -163,6 +159,17 @@ export default function ReconciliationPage() {
   const [viewMode, setViewMode] = useState<"summary" | "all_givings" | "failed_givings">("all_givings");
   const [allGivingsList, setAllGivingsList] = useState<IndividualGiving[]>([]);
   const [loadingAllGivings, setLoadingAllGivings] = useState(false);
+  // Each purpose block is a fund: a completed gift sits under the account the
+  // giver typed, so a held row — needs_review but still completed — sits right
+  // where the fund shows it. The Unassigned desk keeps its own copy of every
+  // held row until the treasurer files it.
+  const [heldGivings, setHeldGivings] = useState<IndividualGiving[]>([]);
+  const [loadingHeld, setLoadingHeld] = useState(false);
+  // The Failed tab's own rows: read all-time and written only by
+  // loadFailedGivings, apart from the date-window list the Individual tab
+  // uses — so a window refresh can never shrink the queue the badge counts.
+  const [failedGivingsList, setFailedGivingsList] = useState<IndividualGiving[]>([]);
+  const [loadingFailedGivings, setLoadingFailedGivings] = useState(false);
   const [purposeGivings, setPurposeGivings] = useState<Record<string, IndividualGiving[]>>({});
   const [loadingPurpose, setLoadingPurpose] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -198,21 +205,26 @@ export default function ReconciliationPage() {
     void Promise.resolve().then(() => refreshFailedCount());
   }, [refreshFailedCount]);
 
-  const fetchLedgerList = useCallback(async (fDate: string, tDate: string) => {
-    setLoadingAllGivings(true);
+  // `givings` writes the date-window list the Individual tab shows;
+  // `failed` writes the Failed tab's own all-time list. The two targets stay
+  // apart, so no window refresh can overwrite the queue the badge counts.
+  const fetchLedgerList = useCallback(async (fDate: string, tDate: string, which: "givings" | "failed" = "givings") => {
+    const setLoading = which === "failed" ? setLoadingFailedGivings : setLoadingAllGivings;
+    const setList = which === "failed" ? setFailedGivingsList : setAllGivingsList;
+    setLoading(true);
     try {
       const res = await fetch(
-        `${API_URL}/api/members/treasury/purpose-contributions/?from_date=${fDate}&to_date=${tDate}&include_failed=1`,
+        `${API_URL}/api/members/treasury/failed/`,
         { headers: headers() }
       );
       if (res.ok) {
         const data = await res.json();
-        setAllGivingsList(data);
+        setList(data);
       }
     } catch {
       // Ignore fetch errors
     } finally {
-      setLoadingAllGivings(false);
+      setLoading(false);
     }
   }, [headers]);
 
@@ -225,9 +237,16 @@ export default function ReconciliationPage() {
   // noise to clear, not a report over the desk's date window — and reading
   // the same set the badge counts keeps the two from disagreeing.
   const loadFailedGivings = useCallback(
-    () => fetchLedgerList(FAILED_ALL_TIME.from, FAILED_ALL_TIME.to),
+    () => fetchLedgerList(FAILED_ALL_TIME.from, FAILED_ALL_TIME.to, "failed"),
     [fetchLedgerList],
   );
+
+  useEffect(() => {
+    // The Failed tab reads the whole backlog, however old: it is a queue of
+    // noise to clear, not a report over the desk's date window — and reading
+    // the same set the badge counts keeps the two from disagreeing.
+    void Promise.resolve().then(() => loadFailedGivings());
+  }, [loadFailedGivings]);
 
   // The desk reaches the giver the way a message actually gets read: a
   // thread in this app when they hold an account, WhatsApp, or a call.
@@ -269,10 +288,14 @@ export default function ReconciliationPage() {
         timer: 4000,
         showConfirmButton: false,
       });
-      // The row leaves the queue and the badge drops with it, at once —
-      // the desk sees the deduction without reloading the page.
-      loadFailedGivings();
-      refreshFailedCount();
+      // The queue that vote keeps the full backlog; close it so the fresh
+      // all-time list the endpoint returns is what the Failed tab shows next.
+      setAllGivingsList([]);
+      setLoadingAllGivings(false);
+      void Promise.resolve().then(() => {
+        loadFailedGivings();
+        refreshFailedCount();
+      });
     } catch (error) {
       showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
@@ -319,7 +342,7 @@ export default function ReconciliationPage() {
     );
   }, [setHeaderRightAction, searchQuery, pulling, fromDate, toDate]);
 
-  // The treasury's views, as one line. The ledger owns Completed Givings and
+  // The treasury's views, as one line. The ledger owns Individual Givings and
   // Summary in place; the other three walk to the accounts desk, which is
   // where those views live. The shell's header band draws it — one strip for
   // the whole treasury, never a second row under this page's own header.
@@ -360,15 +383,15 @@ export default function ReconciliationPage() {
   // This desk answers two of the treasury's six views under one route, and
   // the rail row that led here is named "Contributions Ledger" — which is the
   // ledger's own name, not the view's. Naming the active view keeps the
-  // heading honest, so pressing Completed Givings does not leave the page
+  // heading honest, so pressing Individual Givings does not leave the page
   // titled after the ledger it sits in.
   useEffect(() => {
     setCustomHeader(
       viewMode === "summary"
         ? { label: "Summary Contributions", description: "Each purpose's giving, totalled by how it came in." }
         : viewMode === "failed_givings"
-          ? { label: "Failed Givings", description: "Attempts that never completed — recorded for the desk, credited to nothing." }
-          : { label: "Completed Givings", description: "Every contribution line by line, with its giver, mode and receipt." }
+          ? { label: "Failed Givings", description: "Attempts that never completed." }
+          : { label: "Individual Givings", description: "Every contribution line by line, with its giver, mode and receipt." }
     );
     return () => setCustomHeader(null);
   }, [setCustomHeader, viewMode]);
@@ -422,6 +445,12 @@ export default function ReconciliationPage() {
         if (pRes.ok) {
           const pData = await pRes.json();
           setPurposeGivings((prev) => ({ ...prev, [expandedPurpose]: pData }));
+          setHeldGivings((prev) =>
+            prev.filter((g) => !pData.some((h: IndividualGiving) => h.id === g.id))
+          );
+          for (const held of pData) {
+            if (held.needs_review) setHeldGivings((prev) => [...prev, held]);
+          }
         }
       } catch {}
     }
@@ -448,10 +477,22 @@ export default function ReconciliationPage() {
     setStatus("ready");
   }
 
-  useEffect(() => { load(); }, []);
-
-  async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
+  useEffect(() => { load(); }, []);  async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
   async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
+
+  // Opening the Failed tab, or switching the page open there, swaps the
+  // window's own date-window list out for the full backlog the badge counts:
+  // nothing else on the page may overwrite that queue. The resets ride the
+  // same microtask as the read — the shape every desk's loads use — so the
+  // effect's own synchronous body sets nothing.
+  useEffect(() => {
+    if (viewMode !== "failed_givings") return;
+    void Promise.resolve().then(() => {
+      setAllGivingsList([]);
+      setLoadingAllGivings(false);
+      loadFailedGivings();
+    });
+  }, [viewMode, loadFailedGivings]);
 
   // The window every report on this page is cut to — and the one the preview
   // is named with, so a document opened for the 8th to the 9th says so.
@@ -671,6 +712,7 @@ export default function ReconciliationPage() {
           return { ...prev, [giving.purpose]: updated };
         });
         setAllGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...patch } : g)));
+        setFailedGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...patch } : g)));
       } else {
         showAlert("Receipt not sent", data.detail || "Nothing was sent.", "warning");
         if (Object.keys(contactPatch).length > 0) {
@@ -680,6 +722,7 @@ export default function ReconciliationPage() {
             return { ...prev, [giving.purpose]: updated };
           });
           setAllGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...contactPatch } : g)));
+          setFailedGivingsList((prev) => prev.map((g) => (g.id === giving.id ? { ...g, ...contactPatch } : g)));
         }
       }
     } catch {
@@ -743,9 +786,7 @@ export default function ReconciliationPage() {
         // range, previewed before they are saved. The strip above decides
         // which side of the money comes out: arrived, or never arrived.
         const failedView = viewMode === "failed_givings";
-        const exported = allGivingsList.filter(
-          (g) => !isHeldForReview(g) && (failedView ? !isReceivedGiving(g) : isReceivedGiving(g)),
-        );
+        const exported = failedView ? failedGivingsList : [];
         const head = ["#", "Date", "Giver Name", "Giving Purpose", "Contact", "Payment Method", "Receipt Number", "Notes", "Amount (KES)", "Status"];
         const rows = exported.map((g, idx) => [
           String(idx + 1),
@@ -760,11 +801,11 @@ export default function ReconciliationPage() {
           g.status || "Completed",
         ]);
         const totalAmt = exported.reduce((acc, g) => acc + Number(g.amount || 0), 0);
-        const grid = [head, ...rows, ["TOTAL", "", failedView ? `"Failed Givings"` : `"Completed Givings"`, "", "", "", "", "", String(totalAmt), ""]];
+        const grid = [head, ...rows, ["TOTAL", "", failedView ? `"Failed Givings"` : `"Individual Givings"`, "", "", "", "", "", String(totalAmt), ""]];
         setPreview({
           kind: "spreadsheet",
-          title: failedView ? "Failed givings" : "Completed givings",
-          filename: `${failedView ? "failed" : "completed"}_givings_${fromDate}_to_${toDate}.csv`,
+          title: failedView ? "Failed givings" : "Individual givings",
+          filename: `${failedView ? "failed" : "individual"}_givings_${fromDate}_to_${toDate}.csv`,
           range: rangeLabel,
           url: window.URL.createObjectURL(csvOf(grid)),
           grid,
@@ -919,79 +960,38 @@ export default function ReconciliationPage() {
                         0
                       );
 
+                      // Payments whose reference named no account sit in the
+                      // held list, off both ledgers until the treasurer names
+                      // the account. Both views below read the same set, so
+                      // it is read once here rather than per view.
+                      const heldList = heldGivings.filter((g) => g.purpose === expandedPurpose);
+
                       return (
                         <>
                           {/* Mobile View */}
                           <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
-                            {isLoading ? (
-                              <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
-                                Loading givings for {expandedPurpose}...
-                              </div>
-                            ) : filteredList.length === 0 ? (
-                              <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
-                                No individual givings found for {expandedPurpose} in this period.
-                              </div>
-                            ) : (
-                              filteredList.map((g) => (
-                                <div key={g.id} className="rounded-xl bg-sand-linen p-3.5 border border-sand-line text-xs space-y-2">
-                                  <div className="flex items-center justify-between font-semibold">
-                                    <span className="text-bark text-sm">{g.donor_name}</span>
-                                    <span className="text-sage font-bold text-sm">
-                                      {money(g.amount)}
-                                    </span>
+                            {heldList.length > 0 ? (
+                                <div className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-bark">Held for assignment</span>
                                   </div>
-                                  <div className="flex items-center justify-between text-[11px] text-moss">
-                                    <span>{dayFirstTime(g.received_at)} · {g.payment_method}</span>
-                                    <span>Receipt: {g.receipt_number || "—"}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between pt-2 border-t border-sand-soft">
-                                    <div>
-                                      {g.receipt_sent_at ? (
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
-                                          <CheckCircle2 className="h-3.5 w-3.5" />
-                                          Sent
+                                  {heldList.map((g) => (
+                                    <div key={g.id} className="rounded-xl bg-sand-linen p-3.5 border border-sand-line text-xs space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-bark text-sm">{g.donor_name}</span>
+                                        <span className="text-sage font-bold text-sm">{money(g.amount)}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[11px] text-moss">
+                                        <span>{dayFirstTime(g.received_at)} · {g.payment_method}</span>
+                                        <span>Receipt: {g.receipt_number || "—"}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between pt-2 border-t border-sand-soft">
+                                        <span className="text-xs text-moss">
+                                          {g.purpose} · needs review
                                         </span>
-                                      ) : (
-                                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                          Failed
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      {g.member_id && (
                                         <button
                                           type="button"
-                                          onClick={() => handleChatGiver(g)}
-                                          aria-label="Chat"
-                                          title="Chat in this app"
-                                          className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
-                                        >
-                                          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-                                        </button>
-                                      )}
-                                      {g.giver_phone && (
-                                        <a
-                                          href={`https://wa.me/${waMeNumber(g.giver_phone)}`}
-                                          aria-label="WhatsApp"
-                                          title="WhatsApp"
-                                          className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
-                                        >
-                                          <WhatsAppIcon className="h-4 w-4 text-sage" />
-                                        </a>
-                                      )}
-                                      {g.giver_phone && (
-                                        <a
-                                          href={`tel:${g.giver_phone}`}
-                                          aria-label="Call"
-                                          title="Call"
-                                          className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
-                                        >
-                                          <Phone className="h-3.5 w-3.5" aria-hidden="true" />
-                                        </a>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResendReceipt(g)}
+                                          onClick={() => handleResendReceipt(g)}
                                         disabled={resendingId === g.id}
                                         className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
                                       >
@@ -999,8 +999,90 @@ export default function ReconciliationPage() {
                                       </button>
                                     </div>
                                   </div>
-                                </div>
-                              ))
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                {isLoading ? (
+                                  <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
+                                    Loading givings for {expandedPurpose}...
+                                  </div>
+                                ) : filteredList.length === 0 ? (
+                                  <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
+                                    No individual givings found for {expandedPurpose} in this period.
+                                  </div>
+                                ) : (
+                                  filteredList.map((g) => (
+                                    <div key={g.id} className="rounded-xl bg-sand-linen p-3.5 border border-sand-line text-xs space-y-2">
+                                      <div className="flex items-center justify-between font-semibold">
+                                        <span className="text-bark text-sm">{g.donor_name}</span>
+                                        <span className="text-sage font-bold text-sm">
+                                          {money(g.amount)}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[11px] text-moss">
+                                        <span>{dayFirstTime(g.received_at)} · {g.payment_method}</span>
+                                        <span>Receipt: {g.receipt_number || "—"}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between pt-2 border-t border-sand-soft">
+                                        <div>
+                                          {g.receipt_sent_at ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
+                                              <CheckCircle2 className="h-3.5 w-3.5" />
+                                              Sent
+                                            </span>
+                                          ) : (
+                                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                              Failed
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {g.member_id && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleChatGiver(g)}
+                                              aria-label="Chat"
+                                              title="Chat in this app"
+                                              className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                            >
+                                              <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                                            </button>
+                                          )}
+                                          {g.giver_phone && (
+                                            <a
+                                              href={`https://wa.me/${waMeNumber(g.giver_phone)}`}
+                                              aria-label="WhatsApp"
+                                              title="WhatsApp"
+                                              className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                            >
+                                              <WhatsAppIcon className="h-4 w-4 text-sage" />
+                                            </a>
+                                          )}
+                                          {g.giver_phone && (
+                                            <a
+                                              href={`tel:${g.giver_phone}`}
+                                              aria-label="Call"
+                                              title="Call"
+                                              className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
+                                            >
+                                              <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                                            </a>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleResendReceipt(g)}
+                                            disabled={resendingId === g.id}
+                                            className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
+                                          >
+                                            {resendingId === g.id ? "Sending..." : "Resend"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </>
                             )}
                           </div>
 
@@ -1025,7 +1107,7 @@ export default function ReconciliationPage() {
                                       Loading givings for {expandedPurpose}...
                                     </td>
                                   </tr>
-                                ) : filteredList.length === 0 ? (
+                                ) : filteredList.length === 0 && heldList.length === 0 ? (
                                   <tr>
                                     <td colSpan={8} className="px-4 py-12 text-center text-moss">
                                       No individual givings found for {expandedPurpose} in this period.
@@ -1148,8 +1230,7 @@ export default function ReconciliationPage() {
                                   onClick={handleExportSpreadsheet}
                                   disabled={preparing !== null}
                                   className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3 sm:px-3.5 text-xs font-semibold text-white hover:bg-bark-900 transition shadow-sm whitespace-nowrap disabled:opacity-60"
-                                >
-                                  {preparing === "spreadsheet" ? (
+                                >                  {preparing === "spreadsheet" ? (
                                     <Loader2 className="h-4 w-4 animate-spin text-sage-light" aria-hidden="true" />
                                   ) : (
                                     <FileSpreadsheet className="h-4 w-4 text-sage-light" aria-hidden="true" />
@@ -1168,45 +1249,78 @@ export default function ReconciliationPage() {
                   <>
                     {/* Mobile Cards View (visible on md:hidden) */}
                     <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
-                      {visibleRows.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
-                          {summarySearch && displayedRows.length > 0 ? (
-                            <>No accounts match “{searchQuery.trim()}”.</>
-                          ) : (
-                            <>No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).</>
-                          )}
-                        </div>
-                      ) : (
-                        visibleRows.map((row, idx) => (
-                          <div
-                            key={row.purpose}
-                            onClick={() => toggleExpandPurpose(row.purpose)}
-                            className="group cursor-pointer rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3 transition hover:border-ember"
-                          >
-                            <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-semibold text-moss">#{idx + 1}</span>
-                                <h3 className="font-bold text-sm text-bark group-hover:text-ember transition">{row.purpose}</h3>
-                              </div>
-                              <span className="font-bold text-sm text-ember bg-sand-linen px-2.5 py-1 rounded-lg border border-sand-line">
-                                {money(row.total)}
-                              </span>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-2 text-xs text-moss">
-                              <div>M-Pesa: <strong className="text-bark">{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</strong></div>
-                              <div>Bank-to-Bank: <strong className="text-bark">{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</strong></div>
-                              <div>Cheque: <strong className="text-bark">{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</strong></div>
-                              <div>Cash: <strong className="text-sage-strong">{Number(row.cash) > 0 ? money(row.cash) : "—"}</strong></div>
-                            </div>
-                            <div className="flex items-center justify-between text-[11px] font-semibold text-ember pt-1">
-                              <span className="inline-flex items-center gap-1">View individual givings <ArrowRight size={11} aria-hidden="true" /></span>
-                              <ChevronRight className="h-4 w-4 text-ember group-hover:translate-x-0.5 transition" />
-                            </div>
+                      {heldGivings.length > 0 ? (
+                        <div className="rounded-2xl border border-sand-line bg-sand-linen p-4 space-y-3 mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-bark">Held for assignment ({heldGivings.length})</span>
                           </div>
-                        ))
-                      )}
-                    </div>
+                          {heldGivings.map((g) => (
+                            <div key={g.id} className="rounded-xl bg-white p-3 border border-sand-line text-xs space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-bark text-sm">{g.donor_name}</span>                                        <span className="text-sage font-bold text-sm">
+                                          {money(g.amount)}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[11px] text-moss">
+                                        <span>{dayFirstTime(g.received_at)} · {g.payment_method}</span>
+                                        <span>Receipt: {g.receipt_number || "—"}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between pt-2 border-t border-sand-soft">
+                                        <span className="text-xs text-moss">
+                                          {g.purpose} · needs review
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleExpandPurpose(g.purpose)}
+                                          className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-bark-900"
+                                        >
+                                          View
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                visibleRows.length === 0 ? (
+                                  <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
+                                    {summarySearch && displayedRows.length > 0 ? (
+                                      <>No accounts match “{searchQuery.trim()}”.</>
+                                    ) : (
+                                      <>No contributions recorded for the selected date range ({fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`}).</>
+                                    )}
+                                </div>
+                              ) : (
+                                visibleRows.map((row, idx) => (
+                                  <div
+                                    key={row.purpose}
+                                    onClick={() => toggleExpandPurpose(row.purpose)}
+                                    className="group cursor-pointer rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3 transition hover:border-ember"
+                                  >
+                                    <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-semibold text-moss">#{idx + 1}</span>
+                                        <h3 className="font-bold text-sm text-bark group-hover:text-ember transition">{row.purpose}</h3>
+                                      </div>
+                                      <span className="font-bold text-sm text-ember bg-sand-linen px-2.5 py-1 rounded-lg border border-sand-line">
+                                        {money(row.total)}
+                                      </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 text-xs text-moss">
+                                      <div>M-Pesa: <strong className="text-bark">{Number(row.mpesa) > 0 ? money(row.mpesa) : "—"}</strong></div>
+                                      <div>Bank-to-Bank: <strong className="text-bark">{Number(row.bank_transfer) > 0 ? money(row.bank_transfer) : "—"}</strong></div>
+                                      <div>Cheque: <strong className="text-bark">{Number(row.cheque) > 0 ? money(row.cheque) : "—"}</strong></div>
+                                      <div>Cash: <strong className="text-sage-strong">{Number(row.cash) > 0 ? money(row.cash) : "—"}</strong></div>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[11px] font-semibold text-ember pt-1">
+                                      <span className="inline-flex items-center gap-1">View individual givings <ArrowRight size={11} aria-hidden="true" /></span>
+                                      <ChevronRight className="h-4 w-4 text-ember group-hover:translate-x-0.5 transition" />
+                                    </div>
+                                  </div>
+                                ))
+                              )
+                            )}
+                            </div>
 
                     {/* Desktop Table View (visible on md and up). The column
                         grid is fixed and declared once, because the totals row
@@ -1347,12 +1461,11 @@ export default function ReconciliationPage() {
                 <>
                   {(() => {
                     const searchQueryLower = searchQuery.trim().toLowerCase();
-                    // The strip above picks the view: completed givings, or
-                    // the attempts that never arrived.
+                    // The strip above picks the view: individual givings, or
+                    // the attempts that never arrived — the latter from its
+                    // own all-time list, never the window's.
                     const showFailed = viewMode === "failed_givings";
-                    const listToDisplay = allGivingsList.filter((g) => {
-                      // A held payment belongs to the Unassigned desk alone.
-                      if (isHeldForReview(g)) return false;
+                    const listToDisplay = (showFailed ? failedGivingsList : allGivingsList).filter((g) => {
                       if (showFailed ? isReceivedGiving(g) : !isReceivedGiving(g)) return false;
                       if (!searchQueryLower) return true;
                       return (
@@ -1362,7 +1475,7 @@ export default function ReconciliationPage() {
                         (g.purpose && g.purpose.toLowerCase().includes(searchQueryLower))
                       );
                     });
-                    const isLoading = loadingAllGivings;
+                    const isLoading = showFailed ? loadingFailedGivings : loadingAllGivings;
                     const displayTotal = listToDisplay.reduce((acc, g) => acc + Number(g.amount || 0), 0);
 
                     return (
@@ -1375,7 +1488,7 @@ export default function ReconciliationPage() {
                             </div>
                           ) : listToDisplay.length === 0 ? (
                             <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
-                              {showFailed ? "No failed transactions in the selected date range." : "No completed givings recorded for the selected date range."}
+                              {showFailed ? "No failed transactions in the selected date range." : "No individual givings recorded for the selected date range."}
                             </div>
                           ) : (
                             listToDisplay.map((giving, idx) => (
@@ -1485,7 +1598,7 @@ export default function ReconciliationPage() {
                             </div>
                           ) : listToDisplay.length === 0 ? (
                             <div className="py-16 text-center text-sm text-moss">
-                              {showFailed ? "No failed transactions in the selected date range." : "No completed givings recorded for the selected date range."}
+                              {showFailed ? "No failed transactions in the selected date range." : "No individual givings recorded for the selected date range."}
                             </div>
                           ) : (
                             <table className="w-full text-left text-xs">

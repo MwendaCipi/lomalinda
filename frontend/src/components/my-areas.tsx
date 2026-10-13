@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, BookOpen, CalendarDays, Droplets, Info, LogOut, Mail, Megaphone, MessageSquare, MoreVertical, Phone, Plus, Search, UserMinus, UserPlus, UserRound, Users, Wallet, X } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
+import { AnnouncementManager } from "@/components/announcement-manager";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { LessonRequestsPanel } from "@/components/lesson-requests-panel";
@@ -514,6 +515,16 @@ const SEX_ONLY_AREA: Record<string, "male" | "female"> = {
 
 type AreaTab = "mine" | "other";
 
+/** The views an opened area carries, as its strip names them. */
+type AreaView =
+  | "members"
+  | "calendar"
+  | "accounts"
+  | "lesson-requests"
+  | "baptismal-class"
+  | "daily-word"
+  | "announcements";
+
 const TAB_LABELS: Record<AreaTab, string> = { mine: "My Ministry", other: "Other Ministries" };
 
 const LEGACY_DEPARTMENT_CODES: Record<string, string> = {
@@ -550,8 +561,13 @@ export function MyAreas() {
   );
 
   const [tab, setTab] = useState<AreaTab>("mine");
-  const [openCode, setOpenCode] = useState<string | null>(null);
-  const [areaView, setAreaView] = useState<"members" | "calendar" | "accounts" | "lesson-requests" | "baptismal-class" | "daily-word">("members");
+  // The area open, and the view of it being read, are the address bar's own
+  // (`?area=` and `?view=`) — the same way the console names its desks with
+  // `?tab=`. The phone's back button, a reload and a shared link then land
+  // on the page being read rather than the map it was opened from, which is
+  // what used to render the old page under the same strip.
+  const searchParams = useSearchParams();
+  const openCode = searchParams.get("area");
   const [joining, setJoining] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<number | null>(null);
@@ -621,9 +637,10 @@ export function MyAreas() {
   const { setCustomToggles, setCustomHeader } = usePageHeader();
   const router = useRouter();
   // The elders' desk keeps the church's announcements — on a phone the rail
-  // is out of sight, so the area's own strip carries the way in. It is the
-  // desk's page, not a view of this one, so the row walks the officer into
-  // it; the roles are the same three the rail row names.
+  // is out of sight, so the area's own strip carries the way in, and the
+  // board opens as this page's own view rather than a jump to the console:
+  // a strip row that left the page took the other five toggles with it. The
+  // roles are the same three the rail row names.
   const canOpenAnnouncements =
     openArea?.code === "eldership" && ["elder", "clerk", "admin"].some((role) => roles.includes(role));
   const accountViewItems = useMemo(
@@ -650,6 +667,29 @@ export function MyAreas() {
     [openArea?.code, canOpenAnnouncements],
   );
 
+  // The view named by the address bar, kept to the ones this area's strip
+  // actually carries: a stale or inapplicable `?view=` opens the roll rather
+  // than an empty page. Announcements is gated the same way the strip gates
+  // it, so a deep link cannot reach the desk from outside the office.
+  const requestedView = searchParams.get("view") ?? "members";
+  const areaView: AreaView = accountViewItems.some((item) => item.key === requestedView)
+    ? (requestedView as AreaView)
+    : "members";
+
+  // Reading the address bar: an area opens as a real step in the phone's
+  // history (back returns to the map); moving between its views replaces the
+  // entry instead, so a session of toggling leaves one step, not thirty,
+  // while the bar still names the card on screen.
+  const showMap = useCallback(() => router.replace("/my-areas"), [router]);
+  const openAreaView = useCallback(
+    (code: string) => router.push(`/my-areas?area=${code}&view=members`),
+    [router]
+  );
+  const selectAreaView = useCallback(
+    (view: string) => router.replace(`/my-areas?area=${openCode}&view=${view}`),
+    [openCode, router]
+  );
+
   // The sub-navs: for directory list (my/joinable), or for opened area (Members/Calendar/Accounts).
   useEffect(() => {
     if (openArea) {
@@ -658,13 +698,9 @@ export function MyAreas() {
           label={`${openArea.label} views`}
           value={areaView}
           onChange={(next) => {
-            // Announcements is a console page rather than a view of this
-            // one — the strip's row opens the desk the rail names.
-            if (next === "announcements") {
-              router.push("/administration?tab=announcements");
-              return;
-            }
-            setAreaView(next as typeof areaView);
+            // Every row is a view of this page now — announcements included —
+            // so the strip stays whole under the content it swaps.
+            selectAreaView(next);
           }}
           items={accountViewItems}
         />
@@ -676,9 +712,10 @@ export function MyAreas() {
         label="Ministry"
         value={tab}
         onChange={(next) => {
+          // Switching the map swaps the address bar's open area for the
+          // tab's, so the strip, the list and the URL agree.
           setTab(next as AreaTab);
-          setOpenCode(null);
-          setAreaView("members");
+          showMap();
         }}
         items={[
           { key: "mine", label: TAB_LABELS.mine },
@@ -687,7 +724,7 @@ export function MyAreas() {
       />
     );
     return () => setCustomToggles(null);
-  }, [openArea, areaView, tab, accountViewItems, setCustomToggles]);
+  }, [openArea, areaView, tab, accountViewItems, setCustomToggles, selectAreaView, showMap]);
 
   // The shell names the area the member opened, or the map they are on.
   useEffect(() => {
@@ -910,8 +947,7 @@ export function MyAreas() {
             <button
               type="button"
               onClick={() => {
-                setOpenCode(null);
-                setAreaView("members");
+                showMap();
               }}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark"
             >
@@ -1172,6 +1208,24 @@ export function MyAreas() {
             </section>
           )}
 
+          {/* Section 4c: Announcements — the desk's board, embedded rather
+              than a jump to the console so the strip above never swaps out. */}
+          {areaView === "announcements" && (
+            <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
+              <div className="mb-4">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
+                  <Megaphone className="h-4 w-4 text-ember" aria-hidden="true" />
+                  Announcements
+                </h2>
+                <p className="mt-0.5 text-xs text-moss">
+                  The notices published to the church family — the same board
+                  the announcements desk keeps.
+                </p>
+              </div>
+              <AnnouncementManager embedded />
+            </section>
+          )}
+
           {/* Section 5: Account Status */}
           {areaView === "accounts" && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
@@ -1245,12 +1299,12 @@ export function MyAreas() {
                 key={area.code}
                 role="button"
                 tabIndex={0}
-                onClick={() => setOpenCode(area.code)}
+                onClick={() => openAreaView(area.code)}
                 onKeyDown={(event) => {
                   if (event.target !== event.currentTarget) return;
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    setOpenCode(area.code);
+                    openAreaView(area.code);
                   }
                 }}
                 className="flex cursor-pointer flex-col rounded-2xl border border-sand-line bg-white p-5 text-left shadow-sm transition hover:border-ember hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ember/30"
@@ -1276,7 +1330,7 @@ export function MyAreas() {
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
-                      setOpenCode(area.code);
+                      openAreaView(area.code);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >

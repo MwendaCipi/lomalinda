@@ -13,7 +13,7 @@ const fundAuthHeaders = (): Record<string, string> => {
  * The treasury's views, as one line of toggles.
  *
  * The ledger (reconciliation), the accounts desk and the drives page all show
- * this same strip — Completed Givings, Summary Contributions, Church
+ * this same strip — Individual Givings, Summary Contributions, Church
  * Accounts, Fund Drives, Expenses, Requests and Failed — so the treasurer meets one
  * navigation wherever in the treasury they stand. Each page renders it into
  * the shell's header band
@@ -23,7 +23,9 @@ const fundAuthHeaders = (): Record<string, string> => {
 export type TreasuryView = "givings" | "summary" | "unassigned" | "accounts" | "drives" | "expenses" | "requests" | "failed";
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
-  { key: "givings", label: "Completed Givings", short: "Completed" },
+  { key: "givings", label: "Individual Givings", short: "Individual" },
+  // Each purpose is a fund, so a completed gift sits in one place — the fund
+  // drive that owns it, not in a shared falling-away ledger.
   { key: "summary", label: "Summary Contributions", short: "Summary" },
   // Paybill payments whose reference named no account wait here: the money
   // is safely in the ledger, and this is where the treasurer names the

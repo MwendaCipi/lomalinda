@@ -3565,9 +3565,9 @@ class PurposeContributionsView(APIView):
                 'receipt_number': c.mpesa_receipt_number or c.paystack_reference or f"REC-DIG-{c.id}",
                 'received_at': c.paid_at.isoformat() if c.paid_at else c.created_at.isoformat(),
                 'receipt_sent_at': c.receipt_sent_at.isoformat() if c.receipt_sent_at else None,
-                # A payment still held for the treasurer's assignment lives
-                # on the Unassigned desk; it must not also stand in Completed
-                # Givings as though it were already credited somewhere.
+                # A payment still held for the treasurer's assignment stands
+                # both in Individual Givings (under the account name the giver
+                # typed) and on the Unassigned desk until it is filed.
                 'needs_review': c.needs_review,
                 'status': c.get_status_display(),
             })
@@ -6247,8 +6247,9 @@ def giving_account_options():
             'account_type': account.account_type,
             'account_type_display': account.get_account_type_display(),
             # Null is the church's own money; a set id is a department's or
-            # ministry's fund. The unassigned-payments desk reads only church
-            # accounts and filters on it; the giving form offers both.
+            # ministry's fund. The unassigned-payments desk offers every
+            # account — the same list as Treasury → Church Accounts; the
+            # giving form offers both too.
             'department_id': account.department_id,
         }
         for account in accounts

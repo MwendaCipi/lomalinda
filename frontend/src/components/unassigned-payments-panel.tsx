@@ -29,9 +29,10 @@ type HeldPayment = {
   paid_at: string;
 };
 
-/** The accounts a held payment can be assigned to — the giving list, which is
- *  the treasury accounts in priority order. ``department_id`` is null for the
- *  church's own money; a set id is a department's or ministry's fund. */
+/** The accounts a held payment can be assigned to — the same list Treasury →
+ *  Church Accounts shows, every treasury account in priority order.
+ *  ``department_id`` marks a department's or ministry's fund; it no longer
+ *  hides an account from this desk. */
 type AccountOption = {
   id: number;
   name: string;
@@ -112,9 +113,9 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
       .catch(() => {});
   }, []);
 
-  /** The church's own accounts — departments' and ministries' funds stay at
-   *  their own desks, so this desk never offers them. */
-  const churchAccounts = accounts.filter((a) => a.department_id == null);
+  /** Every treasury account, exactly as Treasury → Church Accounts lists
+   *  them (LCB and the department funds included). */
+  const churchAccounts = accounts;
 
   const dropRow = (row: HeldPayment) => {
     setRows((prev) => prev.filter((r) => r.id !== row.id));
@@ -309,14 +310,17 @@ function AssignPaymentModal({
 
   const pickedTotal = picked.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const amountsFit = picked.length > 0 && Math.abs(pickedTotal - Number(row.amount)) < 0.01;
+  /** What is left of the gift to appropriate — it falls with every figure
+   *  typed, and goes negative the moment the split outgives the giver. */
+  const remaining = Number(row.amount) - pickedTotal;
 
   const toggleAccount = (account: AccountOption) => {
     setPicked((current) => {
       const existing = current.find((p) => p.accountId === account.id);
       if (existing) return current.filter((p) => p.accountId !== account.id);
-      // New account: seed its amount at the payment's remaining balance.
-      const remaining = Number(row.amount) - pickedTotal;
-      return [...current, { accountId: account.id, amount: String(Math.max(0, remaining)) }];
+      // New account: an empty slot reading 0 — ticking alone appropriates
+      // nothing; the treasurer types each share by hand.
+      return [...current, { accountId: account.id, amount: "0" }];
     });
   };
 
@@ -327,6 +331,18 @@ function AssignPaymentModal({
   const assign = () => {
     if (picked.length === 0) {
       showAlert("Choose an account", "Check at least one account to credit.", "warning");
+      return;
+    }
+    if (picked.some((p) => (parseFloat(p.amount) || 0) <= 0)) {
+      showAlert("Enter an amount", "Every chosen account needs an amount above zero.", "warning");
+      return;
+    }
+    if (pickedTotal > Number(row.amount)) {
+      showAlert(
+        "More than the giver gave",
+        `The allocations add up to KES ${pickedTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}, but the gift is only KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}.`,
+        "warning",
+      );
       return;
     }
     if (!amountsFit) {
@@ -411,6 +427,7 @@ function AssignPaymentModal({
               <AccountsPicker
                 accounts={accounts}
                 paymentAmount={row.amount}
+                remaining={remaining}
                 picked={picked}
                 onToggle={toggleAccount}
                 onAmount={updateAmount}
@@ -463,6 +480,22 @@ function AssignPaymentModal({
               onChange={(event) => setMessage(event.target.value)}
               className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-3 text-xs focus:border-ember focus:outline-none"
             />
+          </div>
+
+          {/* What is left of the gift to appropriate — it falls with every
+              allocation, and a negative figure means the split would take
+              more than the giver gave (which Assign then refuses). */}
+          <div
+            className={`flex items-center justify-between rounded-xl border px-4 py-2.5 text-xs ${
+              remaining < -0.005
+                ? "border-red-200 bg-red-50 text-red-700"
+                : "border-sand-line bg-sand text-moss"
+            }`}
+          >
+            <span className="font-semibold">Available to appropriate</span>
+            <span className="font-bold">
+              KES {remaining.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+            </span>
           </div>
 
           <button
@@ -560,6 +593,7 @@ function ContactGiverModal({ row, onClose }: { row: HeldPayment; onClose: () => 
 function AccountsPicker({
   accounts,
   paymentAmount,
+  remaining,
   picked,
   onToggle,
   onAmount,
@@ -571,6 +605,8 @@ function AccountsPicker({
 }: {
   accounts: AccountOption[];
   paymentAmount: string;
+  /** Left of the gift — negative once the ticks outgive it. */
+  remaining: number;
   picked: PickedAccount[];
   onToggle: (account: AccountOption) => void;
   onAmount: (accountId: number, amount: string) => void;
@@ -689,6 +725,7 @@ function AccountsPicker({
                   <input
                     type="number"
                     min="0"
+                    max={paymentTotal}
                     step="0.01"
                     value={entry?.amount ?? ""}
                     onChange={(e) => onAmount(a.id, e.target.value)}
@@ -704,10 +741,20 @@ function AccountsPicker({
           )}
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-sand-paper bg-white px-3 py-2">
-          <span className={`text-[10px] ${credited > 0 ? "font-semibold text-ember" : "text-moss"}`}>
-            {credited > 0
-              ? `KES ${credited.toLocaleString("en-KE", { minimumFractionDigits: 2 })} of KES ${paymentTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`
-              : "Tick an account to credit"}
+          <span
+            className={`text-[10px] ${
+              remaining < -0.005
+                ? "font-semibold text-red-700"
+                : credited > 0
+                  ? "font-semibold text-ember"
+                  : "text-moss"
+            }`}
+          >
+            {remaining < -0.005
+              ? `KES ${(-remaining).toLocaleString("en-KE", { minimumFractionDigits: 2 })} more than the gift`
+              : credited > 0
+                ? `KES ${credited.toLocaleString("en-KE", { minimumFractionDigits: 2 })} of KES ${paymentTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`
+                : "Tick an account to credit"}
           </span>
           <button
             type="button"

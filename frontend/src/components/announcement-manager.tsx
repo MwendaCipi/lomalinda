@@ -292,7 +292,12 @@ export function AnnouncementManager({
       host modal supplies both. */
   composerOnly = false,
   onDone,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void } = {}) {
+  /** Rides as a card of another page (the elders' area views on Ministry):
+      the host supplies the heading, so the console's own — the phone's
+      "Announcements Management" title and its back-to-overview arrow —
+      stands down. */
+  embedded = false,
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean } = {}) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(composerOnly);
@@ -307,9 +312,10 @@ export function AnnouncementManager({
     // Communicate-from-a-department opens the composer already addressed.
     audience: (presetAudience ?? []) as string[],
     // The kind of post decides which special fields the form shows: a plain
-    // notice (default), a meeting link, a supported account, or a question
-    // the congregation answers.
-    announcement_type: "awareness" as "awareness" | "web_conference" | "promotion" | "opinion",
+    // notice, a meeting link, a supported account, or a question the
+    // congregation answers. Nothing is preselected on a new post so the
+    // officer chooses the type on purpose.
+    announcement_type: "" as "awareness" | "web_conference" | "promotion" | "opinion" | "",
     action_type: "none",
     support_account: "",
     // Promotion posts only: the goal the post's fund drive opens with.
@@ -460,7 +466,7 @@ export function AnnouncementManager({
       text: item.text,
       visibility: postTo.reach,
       audience: postTo.ministries,
-      announcement_type: item.announcement_type ?? "awareness",
+      announcement_type: item.announcement_type ?? "",
       action_type: item.action_type ?? "none",
       support_account: item.support_account ?? "",
       promotion_target: "",
@@ -480,7 +486,7 @@ export function AnnouncementManager({
       text: "",
       visibility: "all",
       audience: (presetAudience ?? []) as string[],
-      announcement_type: "awareness",
+      announcement_type: "",
       action_type: "none",
       support_account: "",
       promotion_target: "",
@@ -537,6 +543,12 @@ export function AnnouncementManager({
       const err = "A promotion / contribution announcement needs a treasury account.";
       setMessage(err);
       showAlert("Account Missing", err, "error");
+      return;
+    }
+    if (!form.announcement_type) {
+      const err = "Choose the announcement type first.";
+      setMessage(err);
+      showAlert("Missing Announcement Type", err, "error");
       return;
     }
     // A promotion mints its fund drive at once, so a new post needs the goal
@@ -626,10 +638,16 @@ export function AnnouncementManager({
                     if (type === "awareness") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "", response_mode: "open", response_options: "" }));
                     else if (type === "web_conference") setForm((f) => ({ ...f, announcement_type: type, support_account: "", response_mode: "open", response_options: "" }));
                     else if (type === "opinion") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
-                    else setForm((f) => ({ ...f, announcement_type: type, href: "", response_mode: "open", response_options: "" }));
+                    else if (type === "promotion") setForm((f) => ({ ...f, announcement_type: type, href: "", response_mode: "open", response_options: "" }));
+                    else setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "", response_mode: "open", response_options: "" }));
                   }}
                   className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                 >
+                  {editingId ? (
+                    <option value="" disabled>-- select --</option>
+                  ) : (
+                    <option value="">-- select --</option>
+                  )}
                   <option value="awareness">Awareness</option>
                   <option value="web_conference">Web conference</option>
                   <option value="promotion">Promotion / Contribution</option>
@@ -1029,22 +1047,29 @@ export function AnnouncementManager({
   }
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col gap-3 border-b border-sand-line bg-white px-6 py-3.5 sm:px-8 sm:py-4 lg:px-10 lg:py-5">
+    <section
+      className={`flex h-full min-h-0 w-full flex-col gap-3 bg-white px-6 py-3.5 sm:px-8 sm:py-4 lg:px-10 lg:py-5 ${
+        embedded ? "" : "border-b border-sand-line"
+      }`}
+    >
       {/* Top Header — the phone's naming of the page: on a wide screen the
-          strip above does it, so the block goes. */}
-      <div className="shrink-0 border-b border-sand-line pb-3 md:hidden">
-        <div className="flex items-center gap-1">
-          <BackToOverviewArrow />
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-bark sm:text-3xl">
-              Announcements Management
-            </h1>
-            <p className="mt-1 text-sm text-moss">
-              Manage published church bulletins, announcements, and member notifications.
-            </p>
+          strip above does it, so the block goes. Embedded in another page
+          the host names it at every width, so the block goes there too. */}
+      {!embedded && (
+        <div className="shrink-0 border-b border-sand-line pb-3 md:hidden">
+          <div className="flex items-center gap-1">
+            <BackToOverviewArrow />
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-bark sm:text-3xl">
+                Announcements Management
+              </h1>
+              <p className="mt-1 text-sm text-moss">
+                Manage published church bulletins, announcements, and member notifications.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">

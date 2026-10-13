@@ -97,6 +97,18 @@ export async function markConversationRead(conversationId: number): Promise<void
   }).catch(() => undefined);
 }
 
+export async function leaveConversation(conversationId: number): Promise<boolean> {
+  const res = await fetch(`${API_URL}/api/members/chat/conversations/${conversationId}/leave/`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "You could not leave this conversation.");
+  }
+  return true;
+}
+
 export async function openConversation(input: {
   kind: ChatConversationKind;
   member_id?: number;
