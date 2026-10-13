@@ -1,20 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { dayFirstTime } from "@/lib/dates";
 import { kenyaCounties } from "@/config/kenya-counties";
 import { getPushState, PushSupport } from "@/lib/push";
 import { useAccessibility } from "@/context/accessibility-context";
 import type { ThemeChoice } from "@/lib/theme";
 import { offlineFetch } from "@/lib/offline-fetch";
-import { OfflineBanner } from "@/components/offline-banner";
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { patchCachedMe } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
 type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; residence: string; current_church: string };
 
 /** One person this member is related to, as the profile keeps it: an
@@ -33,17 +29,13 @@ const RELATIONSHIP_CHOICES = [
 
 export default function MemberPage() {
   const { theme, setTheme } = useAccessibility();
-  const [contributions, setContributions] = useState<Contribution[]>([]);
   const [details, setDetails] = useState<Details | null>(null);
   const [token] = useState(() => typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
-  const [message, setMessage] = useState(token ? "Loading your giving history..." : "Sign in to view your giving history.");
   const [detailsMessage, setDetailsMessage] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
   const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
   const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
   const [prefMessage, setPrefMessage] = useState("");
-  const [isOffline, setIsOffline] = useState(false);
-  const [cachedAt, setCachedAt] = useState<Date | null>(null);
 
   // The contact line: the member's own to change, same validation the
   // office edit gets — no appointment needed to say the number moved. The
@@ -287,27 +279,7 @@ export default function MemberPage() {
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
-    Promise.all([
-      offlineFetch<Contribution[]>(`${API_URL}/api/members/contributions/`, { headers }),
-      offlineFetch<Details>(`${API_URL}/api/members/me/enrollment-details/`, { headers }),
-    ]).then(([contribResult, detailsResult]) => {
-      if (contribResult.status === 401 || contribResult.status === 403) {
-        setMessage("Your session may have expired.");
-        return;
-      }
-      if (contribResult.ok && contribResult.data) {
-        setContributions(contribResult.data);
-        setMessage("");
-      } else if (contribResult.error === "offline" && !contribResult.data) {
-        setMessage("You're offline and this page hasn't been loaded before. Connect to see your giving history.");
-        return;
-      } else if (!contribResult.ok) {
-        setMessage("Could not load your giving history.");
-      }
-      /* Show offline banner if either response came from SW cache. */
-      const offline = contribResult.isOffline || detailsResult.isOffline;
-      setIsOffline(offline);
-      if (offline) setCachedAt(contribResult.cachedAt ?? detailsResult.cachedAt);
+    offlineFetch<Details>(`${API_URL}/api/members/me/enrollment-details/`, { headers }).then((detailsResult) => {
       if (detailsResult.ok && detailsResult.data) setDetails(detailsResult.data);
     });
   }, [token]);
@@ -362,8 +334,7 @@ export default function MemberPage() {
                 <p className="mt-0.5 break-all text-sm text-moss">{email || "No email address on file"}</p>
                 <p className="mt-2 text-xs text-moss">
                   <span className="font-semibold text-bark">Sex:</span>{" "}
-                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase() : "Not on record"}{" "}
-                  — only the church office can change this.
+                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase() : "Not on record"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -398,20 +369,6 @@ export default function MemberPage() {
             </div>
             {photoMessage && <p className="mt-3 text-sm text-moss">{photoMessage}</p>}
           </section>
-
-            <div className="flex flex-wrap items-center justify-end gap-4">
-            <Link href="/give" className="rounded-full bg-ember px-5 py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-ember-dark">
-              Give now
-            </Link>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-4 text-xs sm:text-sm">
-            <Link href="/member/reports" className="font-semibold text-ember">View church financial reports &rarr;</Link>
-            <Link href="/community/welfare" className="font-semibold text-ember">Church welfare &rarr;</Link>
-            <Link href="/announcements" className="font-semibold text-ember">Member announcements &rarr;</Link>
-          </div>
-
-          <OfflineBanner isOffline={isOffline} cachedAt={cachedAt} className="mt-4" />
 
           <form onSubmit={saveContact} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
             <h2 className="text-xl font-semibold">Contact details</h2>
@@ -681,26 +638,6 @@ export default function MemberPage() {
               {prefMessage && <p className="mt-3 text-sm text-moss">{prefMessage}</p>}
             </section>
           )}
-
-          <div className="mt-8 space-y-4">
-            {contributions.map((item) => (
-              <article key={item.id} className="flex flex-col gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-semibold">{item.purpose}</p>
-                  <p className="mt-1 text-sm text-moss">{dayFirstTime(item.created_at)}</p>
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-xl font-semibold">{item.currency} {Number(item.amount).toLocaleString()}</p>
-                  <p className="mt-1 text-sm capitalize text-moss">{item.status}</p>
-                </div>
-              </article>
-            ))}
-            {message && (
-              <div className="rounded-2xl bg-white p-6 text-moss shadow-sm ring-1 ring-sand-line">
-                {message} {message.includes("Sign in") && <Link href="/login" className="font-semibold text-ember">Sign in &rarr;</Link>}
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </main>

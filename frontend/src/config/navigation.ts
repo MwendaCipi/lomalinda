@@ -1056,7 +1056,7 @@ const JOINABLE_DEPARTMENT_CODES = new Set(["aym", "amm", "awm"]);
 const RAIL_AREA_LABELS: Record<string, string> = {
   amm: "Adventist Men",
   awm: "Adventist Women",
-  aym: "AYM",
+  aym: "Adventist Youth",
   apm: "Adventist Possibility",
   // Loma Linda calls the choir the Church Choir.
   choir: "Church Choir",
