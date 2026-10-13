@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
+from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage, send_mail
 from django.core.validators import validate_email
 from django.http import HttpResponse, HttpResponseRedirect, Http404
@@ -30,6 +31,7 @@ from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin
 import requests
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +91,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for, IMAGE_SUFFIX_PATTERN
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -2719,7 +2721,13 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        profile = getattr(request.user, 'member_profile', None)
+        # Read the profile row itself rather than the copy the reverse
+        # relation may have cached on `request.user`: this endpoint's PATCH
+        # writes through a freshly loaded instance, and answering from a
+        # stale cache reports the old values straight back (anything that
+        # touches `user.member_profile` earlier in the request leaves such a
+        # copy behind — a test fixture's create, an admin's edit).
+        profile = MemberProfile.objects.filter(user=request.user).first()
         return Response({
             'id': request.user.id,
             'username': request.user.username,
@@ -2732,6 +2740,9 @@ class MeView(APIView):
             'is_staff': request.user.is_staff,
             'is_superuser': request.user.is_superuser,
             'gender': profile.gender if profile else '',
+            # The member's picture, so the profile page and the identity bar
+            # draw the same face. '' when none is on file.
+            'photo_url': profile.photo_url if profile else '',
             'gifts': profile.gifts if profile else '',
             'ministry': profile.ministry if profile else '',
             'department': profile.department if profile else '',
@@ -2820,7 +2831,7 @@ class MeView(APIView):
                 relationship = str(row.get('relationship') or '').strip()
                 if relationship not in valid_codes:
                     return Response(
-                        {'declared_relationships': 'Each person needs a relationship — spouse, sibling, child, friend or other.'},
+                        {'declared_relationships': 'Each person needs a relationship — spouse, parent, sibling, child, friend or other.'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 person_id = row.get('person_id')
@@ -2845,6 +2856,20 @@ class MeView(APIView):
                 profile.declared_relationships = cleaned
                 changed.append('declared_relationships')
 
+        if 'gender' in request.data:
+            # Sex is the church's record, not the member's preference to
+            # revise. The forced profile update lets a member fill it in once
+            # while it is blank; after that only the office rewrites it —
+            # through the change request the member approves. A rewrite from
+            # here is refused by name rather than silently dropped.
+            submitted = str(request.data.get('gender') or '').strip()[:20]
+            recorded = (profile.gender or '').strip()
+            if submitted and submitted != recorded:
+                return Response(
+                    {'gender': 'Your sex is on record and can only be changed by the church office.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         for field in ('announce_email', 'announce_push'):
             if field in request.data:
                 value = request.data[field]
@@ -2856,6 +2881,82 @@ class MeView(APIView):
         if changed:
             profile.save(update_fields=changed)
         return self.get(request)
+
+
+class MePhotoView(APIView):
+    """The member's own picture: posted as a file, or taken down.
+
+    A photo arrives as multipart rather than a line of JSON, so it needs its
+    own door beside ``/me/`` — everything else about the profile is written
+    there. The upload must actually be an image, and is shrunk before it is
+    stored: a phone photo is several megabytes, and no avatar needs more than
+    a few hundred pixels on its longest edge. Replacing a picture removes the
+    old file, and DELETE takes the picture down — the initial the identity bar
+    draws is the fallback, never a broken image.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    #: Nothing taken of a face needs more than this on its longest edge.
+    MAX_EDGE = 640
+    #: A picture beyond this never came from a camera pointed at a person.
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+    @staticmethod
+    def _refusal(message):
+        return Response({'photo': message}, status=status.HTTP_400_BAD_REQUEST)
+
+    def post(self, request):
+        upload = request.FILES.get('photo')
+        if upload is None:
+            return self._refusal('Choose a picture to upload.')
+        if upload.size > self.MAX_UPLOAD_BYTES:
+            return self._refusal('That picture is too large — 5 MB at most.')
+        if not IMAGE_SUFFIX_PATTERN.search(upload.name or ''):
+            return self._refusal('That file is not an image.')
+
+        try:
+            with Image.open(upload) as opened:
+                image = ImageOps.exif_transpose(opened)
+                # Flatten whatever the phone wrote (transparency, palette,
+                # greyscale) onto white, so what lands on disk is always one
+                # plain JPEG no matter which door the picture came through.
+                if image.mode in ('RGBA', 'LA', 'P'):
+                    flattened = image.convert('RGBA')
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    background.paste(flattened, mask=flattened.getchannel('A'))
+                    image = background
+                elif image.mode != 'RGB':
+                    image = image.convert('RGB')
+                image.thumbnail((self.MAX_EDGE, self.MAX_EDGE))
+                buffer = io.BytesIO()
+                image.save(buffer, format='JPEG', quality=88, optimize=True)
+        except (UnidentifiedImageError, Image.DecompressionBombError, OSError):
+            return self._refusal('That file is not an image.')
+
+        profile, _ = MemberProfile.objects.get_or_create(user=request.user)
+        if profile.photo:
+            # Stored names carry a random suffix per upload, so the old file
+            # must go first or every replace leaves the last one on disk.
+            profile.photo.delete(save=False)
+        profile.photo = ''
+        # The name carries a fresh token, so every upload has its own URL:
+        # replacing a picture must not hand the browser the old file's address
+        # again and let a cached face stand in for the new one.
+        profile.photo.save(
+            f'user-{request.user.pk}-{secrets.token_hex(4)}.jpg',
+            ContentFile(buffer.getvalue()),
+            save=True,
+        )
+        return Response({'photo_url': profile.photo_url})
+
+    def delete(self, request):
+        profile = MemberProfile.objects.filter(user=request.user).first()
+        if profile and profile.photo:
+            profile.photo.delete(save=False)
+            profile.photo = ''
+            profile.save(update_fields=['photo'])
+        return Response({'photo_url': ''})
 
 
 class ProfileUpdateView(APIView):
@@ -8038,7 +8139,7 @@ class GivingRequestView(APIView):
             ) or 'other'
         if relationship not in dict(GIFT_RELATIONSHIP_CHOICES):
             return Response(
-                {'relationship': 'Say how they relate to you — spouse, sibling, child, friend or other.'},
+                {'relationship': 'Say how they relate to you — spouse, parent, sibling, child, friend or other.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not purpose:
@@ -8240,63 +8341,84 @@ class LessonRequestView(APIView):
 
     @staticmethod
     def _row(row):
+        status_val = 'delivered' if row.status in ('delivered', 'served') else 'pending'
+        profile = getattr(row.member, 'member_profile', None)
+        phone = getattr(profile, 'phone_number', '') if profile else ''
+        delivered_by_name = (
+            row.served_by.get_full_name() or row.served_by.username
+        ) if row.served_by_id else ''
         return {
             'id': row.id,
             'lesson': row.lesson,
+            'quantity': getattr(row, 'quantity', 1) or 1,
             'note': row.note,
-            'status': row.status,
+            'status': status_val,
             'created_at': row.created_at,
-            'served_at': row.served_at,
-            'served_by_name': (
-                row.served_by.get_full_name() or row.served_by.username
-            ) if row.served_by_id else '',
+            'delivered_at': row.served_at,
+            'delivered_by_name': delivered_by_name,
             'member_name': (
                 row.member.get_full_name() or row.member.username
             ),
+            'member_phone': phone,
+            'served_at': row.served_at,
+            'served_by_name': delivered_by_name,
         }
 
     def get(self, request):
         serves_the_desk = can_manage_department(request.user, SABBATH_SCHOOL_CODE)
         if serves_the_desk:
-            rows = LessonRequest.objects.select_related('member', 'served_by')[:100]
+            rows = LessonRequest.objects.select_related('member', 'member__member_profile', 'served_by')[:100]
         else:
             rows = LessonRequest.objects.filter(
                 member=request.user,
-            ).select_related('member', 'served_by')[:100]
+            ).select_related('member', 'member__member_profile', 'served_by')[:100]
         queue = []
         for row in rows:
             item = self._row(row)
             item['mine'] = row.member_id == request.user.id
             queue.append(item)
-        return Response({'requests': queue, 'can_serve': serves_the_desk})
+        return Response({
+            'requests': queue,
+            'orders': queue,
+            'can_serve': serves_the_desk,
+            'can_deliver': serves_the_desk,
+        })
 
     def post(self, request):
         lesson = (request.data.get('lesson') or '').strip()
         note = (request.data.get('note') or '').strip()
+        raw_qty = request.data.get('quantity', 1)
+        try:
+            quantity = max(1, int(raw_qty))
+        except (TypeError, ValueError):
+            quantity = 1
+
         if not lesson:
             return Response(
-                {'lesson': 'Name the lesson you would like studied.'},
+                {'lesson': 'Choose or specify the lesson you would like to order.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         row = LessonRequest.objects.create(
-            member=request.user, lesson=lesson[:200], note=note[:1000],
+            member=request.user, lesson=lesson[:200], quantity=quantity, note=note[:1000],
         )
+        data = self._row(row)
+        data['mine'] = True
         return Response(
             {
-                'detail': 'Your request is with the Sabbath School leadership.',
-                'request': self._row(row),
+                'detail': 'Your lesson order is placed with the Sabbath School leadership.',
+                'order': data,
+                'request': data,
             },
             status=status.HTTP_201_CREATED,
         )
 
 
 class LessonRequestServeView(APIView):
-    """Mark one request served — the school's desk, and nobody else's.
+    """Deliver or serve one lesson order — the school's superintendent / leadership desk.
 
-    Serving is the superintendent's own act: the mark records their name and
-    the moment, so a request answered from the front is still an answer the
-    desk can trace. A served request may be returned to the queue — the desk
-    may have spoken too soon.
+    Delivering is the superintendent's own act: the mark records their name and
+    the moment, so an order delivered from the front is traceable.
+    A delivered order may be returned to the queue if marked by mistake.
     """
 
     permission_classes = [IsAuthenticated]
@@ -8304,24 +8426,31 @@ class LessonRequestServeView(APIView):
     def post(self, request, pk):
         if not can_manage_department(request.user, SABBATH_SCHOOL_CODE):
             return Response(
-                {'detail': 'Only the Sabbath School leadership may serve requests.'},
+                {'detail': 'Only the Sabbath School leadership may deliver lesson orders.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         row = LessonRequest.objects.filter(pk=pk).first()
         if row is None:
-            return Response({'detail': 'That request no longer exists.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'That order no longer exists.'}, status=status.HTTP_404_NOT_FOUND)
         reopen = bool(request.data.get('reopen'))
         if reopen:
             row.status = 'pending'
             row.served_by = None
             row.served_at = None
             row.save(update_fields=['status', 'served_by', 'served_at'])
-            return Response({'detail': 'The request is back in the queue.', 'status': row.status})
-        row.status = 'served'
+            return Response({'detail': 'The order is back in the queue.', 'status': row.status})
+
+        # Preserve 'served' for backwards-compat if called via legacy /serve/ without deliver action
+        is_deliver_route = 'deliver' in request.path or request.data.get('action') == 'deliver'
+        row.status = 'delivered' if is_deliver_route else 'served'
         row.served_by = request.user
         row.served_at = timezone.now()
         row.save(update_fields=['status', 'served_by', 'served_at'])
-        return Response({'detail': 'Request marked served.', 'status': row.status})
+        return Response({'detail': 'Order marked as delivered.', 'status': row.status})
+
+
+LessonOrderView = LessonRequestView
+LessonOrderDeliverView = LessonRequestServeView
 
 
 class BaptismalClassView(APIView):
@@ -10357,9 +10486,11 @@ class DepartmentMembersView(APIView):
         role_map: dict[int, list[str]] = {}
         for asgn in assignments:
             parts = role_map.setdefault(asgn.member_id, [])
-            label = asgn.role.name
+            label = asgn.role.name.strip()
             if asgn.kind == 'assistant':
-                label = f'{label} (asst.)'
+                lower_label = label.lower()
+                if not ('assistant' in lower_label or 'asst' in lower_label):
+                    label = 'Assistant Leader' if lower_label == 'leader' else f'Assistant {label}'
             if label not in parts:
                 parts.append(label)
         for m in members:

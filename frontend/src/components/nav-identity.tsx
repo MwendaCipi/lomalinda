@@ -16,6 +16,7 @@ import {
 import Swal from "sweetalert2";
 
 import { AccessibilityMenu } from "./accessibility-menu";
+import { resolveAttachmentUrl } from "./announcement-attachment";
 import { triggerPwaInstall } from "./pwa-register";
 import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -90,10 +91,10 @@ export function useUnreadNotifications(): number {
  *
  * This is the bell, the accessibility menu, install and the account menu —
  * everything the bar carries that is *not* navigation. The colour mode is not
- * here: it follows the device by default and is chosen on My Account, so the
+ * here: it follows the device by default and is chosen on My Profile, so the
  * bar no longer spends a control on it. The rail owns the map, so these are the
- * only three things that ever load a page: the member's own account, the
- * calendar, and the console for staff.
+ * only things that ever load a page from here: the member's own profile and
+ * its givings, and the console for staff.
  */
 export function NavIdentity() {
   const router = useRouter();
@@ -463,9 +464,21 @@ export function NavIdentity() {
           className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 p-1 pr-1 text-white transition hover:bg-white/20 sm:pr-3"
           aria-expanded={showUserMenu}
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ember text-xs font-bold text-white">
-            {(me?.name || me?.username || "?").charAt(0).toUpperCase()}
-          </span>
+          {me?.photo_url ? (
+            // The member's own picture once one is chosen; the initial below
+            // is the fallback — a photo-less account never shows a broken
+            // image.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolveAttachmentUrl(me.photo_url)}
+              alt=""
+              className="h-7 w-7 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ember text-xs font-bold text-white">
+              {(me?.name || me?.username || "?").charAt(0).toUpperCase()}
+            </span>
+          )}
           <span className="hidden min-w-0 max-w-40 text-left sm:block">
             <span className="block truncate text-xs font-semibold text-white">{me?.name || me?.username}</span>
             <span className="block truncate text-[10px] text-white/70">{me?.email || `@${me?.username}`}</span>

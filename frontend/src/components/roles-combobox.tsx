@@ -193,6 +193,24 @@ export function roleDisplayLabel(code: string, assistantRoles: string[] = []): s
   return assistantRoles.includes(code) ? `Assistant ${roleLabel(code)}` : roleLabel(code);
 }
 
+/** Format a department/board position cleanly without repeating "Assistant" */
+export function formatOfficeRole(position?: string | null, kind?: "leader" | "assistant" | string): string {
+  const pos = (position || "").trim();
+  if (kind === "leader") {
+    return pos || "Leader";
+  }
+  if (!pos || pos.toLowerCase() === "assistant") {
+    return "Assistant";
+  }
+  if (pos.toLowerCase() === "leader") {
+    return "Assistant Leader";
+  }
+  if (pos.toLowerCase().includes("assistant")) {
+    return pos;
+  }
+  return `Assistant ${pos}`;
+}
+
 /**
  * How someone who holds no office reads.
  *

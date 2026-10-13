@@ -14,7 +14,7 @@ import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
-import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
+import { localDate, firstDayOfMonth, dayFirst, dayFirstTime, timeOnly } from "@/lib/dates";
 import { densityCellPad } from "@/lib/table-density";
 import Swal from "sweetalert2";
 
@@ -990,12 +990,13 @@ export default function TreasuryPage() {
                               <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-sm">
                                 <tr>
                                   <th className="px-4 py-3 text-left w-12">#</th>
-                                  <th className="px-4 py-3">Date</th>
+                                  <th className="px-4 py-3 w-32 whitespace-nowrap">Date & Time</th>
                                   <th className="px-4 py-3">Giver</th>
-                                  <th className="px-4 py-3">Mode</th>
-                                  <th className="px-4 py-3">Receipt #</th>
-                                  <th className="px-4 py-3">Receipt</th>
-                                  <th className="px-4 py-3 text-center">Actions</th>
+                                  <th className="px-4 py-3 w-20">Mode</th>
+                                  <th className="px-4 py-3 w-24">Receipt #</th>
+                                  <th className="px-4 py-3 text-right w-24">Amount</th>
+                                  <th className="px-4 py-3 w-20">Receipt</th>
+                                  <th className="px-4 py-3 text-center w-20">Actions</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-sand-soft">
@@ -1015,8 +1016,11 @@ export default function TreasuryPage() {
                                   filteredList.map((g, gIdx) => (
                                     <tr key={g.id} className="hover:bg-sand-linen">
                                       <td className={`px-4 ${rowPad} text-xs font-semibold font-mono text-moss`}>{gIdx + 1}</td>
-                                      <td className={`px-4 ${rowPad} text-xs text-moss`}>
-                                        {dayFirst(g.received_at)}
+                                      <td className={`px-4 ${rowPad} text-xs text-moss whitespace-nowrap`}>
+                                        <div className="font-semibold text-bark">{dayFirst(g.received_at)}</div>
+                                        {timeOnly(g.received_at) ? (
+                                          <div className="text-[11px] font-mono text-moss">{timeOnly(g.received_at)}</div>
+                                        ) : null}
                                       </td>
                                       <td className={`px-4 ${rowPad} font-semibold text-bark`}>{g.donor_name}</td>
                                       <td className={`px-4 ${rowPad}`}>
@@ -1091,37 +1095,47 @@ export default function TreasuryPage() {
                           </div>
 
                           {/* Sticky Footer for Dedicated Purpose View */}
-                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
-                            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-                              <div className="flex items-center gap-4 text-xs sm:text-sm">
-                                <span className="text-xs text-moss">
+                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark shadow-lg md:shadow-none">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5">
+                              <div className="flex items-center gap-3 text-xs sm:text-sm">
+                                <span className="text-[11px] sm:text-xs text-moss font-semibold">
                                   Showing <strong className="text-bark">{filteredList.length}</strong> of <strong className="text-bark">{rawList.length}</strong> entries
                                 </span>
-                                <span className="font-bold text-bark">
+                                <span className="font-bold text-bark text-xs sm:text-sm">
                                   {expandedPurpose} Total: <span className="text-ember">{money(purposeTotal)}</span>
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
+                                <button
+                                  type="button"
+                                  onClick={pullMpesaTransactions}
+                                  disabled={pulling}
+                                  className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
+                                  title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+                                >
+                                  <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
+                                  <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => setIsModalOpen(true)}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark whitespace-nowrap"
+                                  className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-ember px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
                                 >
-                                  <Plus className="h-4 w-4" />
-                                  <span>Add Receipt</span>
+                                  <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                                  <span className="truncate">Add Receipt</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleDownloadBackendPdf(true, expandedPurpose)}
                                   disabled={preparing !== null}
-                                  className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
+                                  className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                                 >
                                   {preparing === "pdf" ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-ember" aria-hidden="true" />
+                                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-ember shrink-0" aria-hidden="true" />
                                   ) : (
-                                    <Printer className="h-4 w-4 text-ember" aria-hidden="true" />
+                                    <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
                                   )}
-                                  <span>{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
+                                  <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
                                 </button>
                               </div>
                             </div>
@@ -1297,46 +1311,48 @@ export default function TreasuryPage() {
                           </tr>
                         </tfoot>
                       </table>
-                      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-sand-line">
-                        <span className="text-xs font-semibold text-moss">
-                          Total Rows Available: <strong className="text-bark">{visibleRows.length}</strong>
-                        </span>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {/* The pull sits at the foot of the table with the
-                              desk's other buttons rather than in the header:
-                              it records into the window the footer totals. */}
-                          <button
-                            type="button"
-                            onClick={pullMpesaTransactions}
-                            disabled={pulling}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
-                            title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
-                          >
-                            <RefreshCw className={`h-4 w-4 text-ember ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-                            <span>{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIsModalOpen(true)}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark whitespace-nowrap"
-                          >
-                            <Plus className="h-4 w-4" />
-                            <span>Add Receipt</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadBackendPdf(false)}
-                            disabled={preparing !== null}
-                            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
-                          >
-                            {preparing === "pdf" ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-ember" aria-hidden="true" />
-                            ) : (
-                              <Printer className="h-4 w-4 text-ember" aria-hidden="true" />
-                            )}
-                            <span>{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
-                          </button>
-                        </div>
+                    </div>
+
+                    {/* Breakdown View Sticky Footer */}
+                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-lg md:shadow-none">
+                      <span className="text-moss text-[11px] sm:text-xs">
+                        Total Rows Available: <strong className="text-bark">{visibleRows.length}</strong>
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
+                        {/* The pull sits at the foot of the table with the
+                            desk's other buttons rather than in the header:
+                            it records into the window the footer totals. */}
+                        <button
+                          type="button"
+                          onClick={pullMpesaTransactions}
+                          disabled={pulling}
+                          className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
+                          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
+                          <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsModalOpen(true)}
+                          className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-ember px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
+                        >
+                          <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                          <span className="truncate">Add Receipt</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadBackendPdf(false)}
+                          disabled={preparing !== null}
+                          className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
+                        >
+                          {preparing === "pdf" ? (
+                            <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-ember shrink-0" aria-hidden="true" />
+                          ) : (
+                            <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
+                          )}
+                          <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
+                        </button>
                       </div>
                     </div>
                   </>
@@ -1384,6 +1400,7 @@ export default function TreasuryPage() {
                                     <div className="font-bold text-sm text-bark">{giving.donor_name}</div>
                                     <div className="text-[11px] text-moss">
                                       {dayFirst(giving.received_at)}
+                                      {timeOnly(giving.received_at) ? ` · ${timeOnly(giving.received_at)}` : ""}
                                     </div>
                                   </div>
                                   <div className="text-right">
@@ -1491,13 +1508,13 @@ export default function TreasuryPage() {
                               <thead className="sticky top-0 z-10 bg-sand font-semibold text-moss uppercase tracking-wider shadow-sm">
                                 <tr>
                                   <th className="px-3 py-2.5 w-10">#</th>
-                                  <th className="px-3 py-2.5 w-28 whitespace-nowrap">Date</th>
+                                  <th className="px-3 py-2.5 w-32 whitespace-nowrap">Date & Time</th>
                                   <th className="px-3 py-2.5 w-44 shrink-0">Giver</th>
                                   <th className="px-3 py-2.5 w-44 shrink-0">Account</th>
-                                  <th className="px-3 py-2.5 w-24">Mode</th>
-                                  <th className="px-3 py-2.5 w-32">Receipt #</th>
+                                  <th className="px-3 py-2.5 w-20">Mode</th>
+                                  <th className="px-3 py-2.5 w-24">Receipt #</th>
                                   <th className="px-3 py-2.5 text-right w-28">Amount</th>
-                                  <th className="px-3 py-2.5 w-24">Receipt</th>
+                                  <th className="px-3 py-2.5 w-20">Receipt</th>
                                   <th className="px-3 py-2.5 text-center w-20">Actions</th>
                                 </tr>
                               </thead>
@@ -1506,7 +1523,10 @@ export default function TreasuryPage() {
                                   <tr key={giving.id} className="hover:bg-sand-plate">
                                     <td className="px-3 py-3 text-xs text-moss font-mono font-semibold">{idx + 1}</td>
                                     <td className="px-3 py-3 text-moss whitespace-nowrap">
-                                      {dayFirst(giving.received_at)}
+                                      <div className="font-semibold text-bark">{dayFirst(giving.received_at)}</div>
+                                      {timeOnly(giving.received_at) ? (
+                                        <div className="text-[11px] font-mono text-moss">{timeOnly(giving.received_at)}</div>
+                                      ) : null}
                                     </td>
                                     <td className="px-3 py-3 w-44 shrink-0 font-semibold text-bark truncate max-w-[170px]" title={giving.donor_name}>
                                       {giving.donor_name}
@@ -1521,7 +1541,7 @@ export default function TreasuryPage() {
                                         {giving.payment_method}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-3 text-moss font-mono text-[11px]">
+                                    <td className="px-3 py-3 text-moss font-mono text-[11px] truncate max-w-[100px]" title={giving.receipt_number}>
                                       {giving.receipt_number || "—"}
                                     </td>
                                     <td className="px-3 py-3 text-right font-semibold text-bark">
@@ -1659,8 +1679,8 @@ export default function TreasuryPage() {
                         </div>
 
                         {/* Fixed Child Table Footer — sits flush on the tab bar. */}
-                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-4 py-2.5 font-semibold text-xs text-bark flex flex-wrap items-center justify-between gap-3 shadow-lg md:shadow-none">
-                          <span className="text-moss">
+                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-lg md:shadow-none">
+                          <span className="text-moss text-[11px] sm:text-xs">
                             {showFailed ? (
                               <>
                                 Failed attempts: <strong className="text-bark">{listToDisplay.length}</strong> • <span className="font-bold text-ember">KES {money(displayTotal)} never arrived</span>
@@ -1672,7 +1692,7 @@ export default function TreasuryPage() {
                             )}
                           </span>
 
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
                             {/* The pull sits at the foot of the table with the
                                 desk's other buttons rather than in the header:
                                 it records into the window the footer totals. */}
@@ -1680,32 +1700,32 @@ export default function TreasuryPage() {
                               type="button"
                               onClick={pullMpesaTransactions}
                               disabled={pulling}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
+                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                               title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
                             >
-                              <RefreshCw className={`h-4 w-4 text-ember ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-                              <span>{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
+                              <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
+                              <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => setIsModalOpen(true)}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 sm:px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark whitespace-nowrap"
+                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-ember px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
                             >
-                              <Plus className="h-4 w-4" />
-                              <span>Add Receipt</span>
+                              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                              <span className="truncate">Add Receipt</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDownloadBackendPdf(true)}
                               disabled={preparing !== null}
-                              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 sm:px-3.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm whitespace-nowrap disabled:opacity-60"
+                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                             >
                               {preparing === "pdf" ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-ember" aria-hidden="true" />
+                                <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-ember shrink-0" aria-hidden="true" />
                               ) : (
-                                <Printer className="h-4 w-4 text-ember" aria-hidden="true" />
+                                <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
                               )}
-                              <span>{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
+                              <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
                             </button>
                           </div>
                         </div>

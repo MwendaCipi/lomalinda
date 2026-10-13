@@ -10,6 +10,8 @@ import { useAccessibility } from "@/context/accessibility-context";
 import type { ThemeChoice } from "@/lib/theme";
 import { offlineFetch } from "@/lib/offline-fetch";
 import { OfflineBanner } from "@/components/offline-banner";
+import { resolveAttachmentUrl } from "@/components/announcement-attachment";
+import { patchCachedMe } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Contribution = { id: string; amount: string; currency: string; purpose: string; status: string; created_at: string };
@@ -22,6 +24,7 @@ type DeclaredRelationship = { person_id?: number | null; name: string; relations
 /** The church's short list — anything rarer is Other. */
 const RELATIONSHIP_CHOICES = [
   { value: "spouse", label: "Spouse" },
+  { value: "parent", label: "Parent" },
   { value: "sibling", label: "Sibling" },
   { value: "child", label: "Child" },
   { value: "friend", label: "Friend" },
@@ -43,10 +46,23 @@ export default function MemberPage() {
   const [cachedAt, setCachedAt] = useState<Date | null>(null);
 
   // The contact line: the member's own to change, same validation the
-  // office edit gets — no appointment needed to say the number moved.
+  // office edit gets — no appointment needed to say the number moved. The
+  // address is here for the same reason: receipts are sent to whatever the
+  // account carries, so a member with none could never receive one.
   const [phone, setPhone] = useState("");
   const [phoneSaving, setPhoneSaving] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [originalEmail, setOriginalEmail] = useState("");
+
+  // Who the account is: the name on file and the picture they show beside it.
+  // Sex rides along read-only — the church's record, changeable only by the
+  // office — so the profile shows it without offering to write it.
+  const [displayName, setDisplayName] = useState("");
+  const [gender, setGender] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState("");
 
   // The people this member gives for or asks to give: declared here once,
   // read by the giving form instead of being asked on every gift.
@@ -68,38 +84,109 @@ export default function MemberPage() {
           setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
           setPhone(data.phone_number || "");
           setRelationships(Array.isArray(data.declared_relationships) ? data.declared_relationships : []);
+          setDisplayName([data.first_name, data.last_name].filter(Boolean).join(" ") || data.username || "");
+          setEmail(data.email || "");
+          setOriginalEmail(data.email || "");
+          setGender(data.gender || "");
+          setPhotoUrl(data.photo_url || "");
         }
       })
       .catch(() => {});
     getPushState().then(setPushSupport).catch(() => setPushSupport(null));
   }, [token]);
 
-  async function savePhone(event: FormEvent<HTMLFormElement>) {
+  async function saveContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) return;
     setPhoneSaving(true);
     setPhoneMessage("");
     try {
+      // The address rides along only when it actually moved: sending it
+      // always would mean an accidental edit of an untouched field could    // clear the account's address and its receipts with it.
+      const payload: Record<string, string> = { phone_number: phone.trim() };
+      if (email.trim() !== originalEmail) payload.email = email.trim();
       const response = await fetch(`${API_URL}/api/members/me/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ phone_number: phone.trim() }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
         // The API names the field it refused — read it back verbatim.
-        throw new Error(data?.phone_number || data?.detail || "Your phone number could not be saved.");
+        throw new Error(data?.phone_number || data?.email || data?.detail || "Your contact details could not be saved.");
       }
       setPhone(data?.phone_number ?? phone.trim());
-      const successMsg = "Your phone number has been saved.";
+      if (data && typeof data.email === "string") {
+        setEmail(data.email);
+        setOriginalEmail(data.email);
+      }
+      const successMsg = "Your contact details have been saved.";
       setPhoneMessage(successMsg);
-      showAlert("Phone number saved", successMsg, "success");
+      showAlert("Contact details saved", successMsg, "success");
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Your phone number could not be saved.";
+      const errorMsg = error instanceof Error ? error.message : "Your contact details could not be saved.";
       setPhoneMessage(errorMsg);
       showAlert("Not saved", errorMsg, "error");
     } finally {
       setPhoneSaving(false);
+    }
+  }
+
+  /** The picture: posted as the file it is, then read back by its new URL.
+      The header's cached identity is patched in the same breath, so the bar    at the top of the app shows the new face without waiting for a reload. */
+  async function savePhoto(file: File | null) {
+    if (!token || !file) return;
+    setPhotoSaving(true);
+    setPhotoMessage("");
+    try {
+      const body = new FormData();
+      body.append("photo", file);
+      const response = await fetch(`${API_URL}/api/members/me/photo/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.photo || data?.detail || "Your picture could not be saved.");
+      }
+      const url = data?.photo_url ?? "";
+      setPhotoUrl(url);
+      patchCachedMe({ photo_url: url });
+      const successMsg = "Your picture has been saved.";
+      setPhotoMessage(successMsg);
+      showAlert("Picture saved", successMsg, "success");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Your picture could not be saved.";
+      setPhotoMessage(errorMsg);
+      showAlert("Not saved", errorMsg, "error");
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
+  /** Taking the picture down returns the bar to the initial it draws. */
+  async function removePhoto() {
+    if (!token) return;
+    setPhotoSaving(true);
+    setPhotoMessage("");
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/photo/`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Your picture could not be removed.");
+      setPhotoUrl("");
+      patchCachedMe({ photo_url: "" });
+      const successMsg = "Your picture has been removed.";
+      setPhotoMessage(successMsg);
+      showAlert("Picture removed", successMsg, "success");
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Your picture could not be removed.";
+      setPhotoMessage(errorMsg);
+      showAlert("Not removed", errorMsg, "error");
+    } finally {
+      setPhotoSaving(false);
     }
   }
 
@@ -133,7 +220,7 @@ export default function MemberPage() {
       return;
     }
     if (!newRelationship) {
-      showAlert("Relationship needed", "Say how this person relates to you — spouse, sibling, child, friend or other.", "warning");
+      showAlert("Relationship needed", "Say how this person relates to you — spouse, parent, sibling, child, friend or other.", "warning");
       return;
     }
     const already = relationships.some((row) =>
@@ -254,6 +341,64 @@ export default function MemberPage() {
     <main className="min-h-full bg-sand text-bark">
       <div className="p-4 sm:p-8 lg:p-10">
         <div className="mx-auto max-w-5xl space-y-6">
+          <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+            <div className="flex flex-wrap items-center gap-5">
+              {photoUrl ? (
+                // Plain img: the picture is a same-origin upload, the way
+                // every other photo in the app is shown.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={resolveAttachmentUrl(photoUrl)}
+                  alt={displayName || "Your picture"}
+                  className="h-20 w-20 shrink-0 rounded-full object-cover ring-1 ring-sand-line"
+                />
+              ) : (
+                <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-ember text-2xl font-bold text-white">
+                  {(displayName || "?").charAt(0).toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-semibold">{displayName || "Your profile"}</h2>
+                <p className="mt-0.5 break-all text-sm text-moss">{email || "No email address on file"}</p>
+                <p className="mt-2 text-xs text-moss">
+                  <span className="font-semibold text-bark">Sex:</span>{" "}
+                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1).toLowerCase() : "Not on record"}{" "}
+                  — only the church office can change this.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label
+                  className={`cursor-pointer rounded-full bg-sage px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 ${photoSaving ? "opacity-60" : ""}`}
+                >
+                  {photoSaving ? "Saving..." : photoUrl ? "Change picture" : "Add picture"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    disabled={photoSaving}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      // Clearing lets the same picture be re-picked after a    // failed attempt, instead of the input swallowing the change.
+                      event.target.value = "";
+                      void savePhoto(file);
+                    }}
+                  />
+                </label>
+                {photoUrl && (
+                  <button
+                    type="button"
+                    disabled={photoSaving}
+                    onClick={() => void removePhoto()}
+                    className="rounded-full border border-sand-line px-5 py-2.5 text-sm font-semibold text-moss transition hover:border-ember hover:text-ember disabled:opacity-60"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+            {photoMessage && <p className="mt-3 text-sm text-moss">{photoMessage}</p>}
+          </section>
+
             <div className="flex flex-wrap items-center justify-end gap-4">
             <Link href="/give" className="rounded-full bg-ember px-5 py-2.5 text-xs sm:text-sm font-semibold text-white hover:bg-ember-dark">
               Give now
@@ -268,36 +413,49 @@ export default function MemberPage() {
 
           <OfflineBanner isOffline={isOffline} cachedAt={cachedAt} className="mt-4" />
 
-          <form onSubmit={savePhone} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
-            <h2 className="text-xl font-semibold">Phone number</h2>
+          <form onSubmit={saveContact} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+            <h2 className="text-xl font-semibold">Contact details</h2>
             <p className="mt-2 text-sm leading-6 text-moss">
-              The number the church reaches you on, and the one M-Pesa prompts when you give.
-              A member in our system receives their letters on their account address; this is the line for everything else.
+              The number the church reaches you on, and the one M-Pesa prompts when you give — plus the
+              address your giving receipts are sent to. A member in our system receives their letters on
+              their account address; the phone line is for everything else.
             </p>
-            <label className="mt-5 block text-sm font-medium">
-              Phone number
-              <input
-                type="tel"
-                inputMode="numeric"
-                maxLength={12}
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="e.g. 0712345678"
-                className="mt-1.5 w-full max-w-sm rounded-xl border border-sand-mute px-4 py-2.5"
-              />
-            </label>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Phone number
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={12}
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="e.g. 0712345678"
+                  className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Email address
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5"
+                />
+              </label>
+            </div>
             <button disabled={phoneSaving} className="mt-5 rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
-              {phoneSaving ? "Saving..." : "Save phone number"}
+              {phoneSaving ? "Saving..." : "Save contact details"}
             </button>
             {phoneMessage && <p className="mt-3 text-sm text-moss">{phoneMessage}</p>}
           </form>
 
           <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
-            <h2 className="text-xl font-semibold">Relationships</h2>
+            <h2 className="text-xl font-semibold">Family members</h2>
             <p className="mt-2 text-sm leading-6 text-moss">
-              How the people you give for — or ask to give — relate to you. Set them once here and the
-              giving form reads them, so no gift asks you the same question again. Anything not listed
-              is recorded as Other.
+              The people your family is made of — a spouse, parent, sibling or child — and the close
+              friends among them. Set them once here and the giving form reads them, so no gift asks you
+              the same question again. Anything not listed is recorded as Other.
             </p>
 
             {relationships.length > 0 ? (

@@ -58,6 +58,9 @@ export type HeaderMe = {
   /** The member's recorded sex, where the profile carries one. The area pages
       read it to keep the men's and women's fellowships apart. */
   gender: string;
+  /** The member's own picture, once one is chosen — '' until then, when the
+      identity bar draws their initial instead. */
+  photo_url: string;
   /** The member's own department, first as a real Department row, then the
       legacy profile code for accounts not yet re-filed. */
   department_ref: string;
@@ -134,6 +137,7 @@ async function fetchMe(token: string): Promise<MeResult> {
       email: data.email || "",
       phone_number: data.phone_number || "",
       gender: data.gender || "",
+      photo_url: data.photo_url || "",
       department_ref: data.department_ref || "",
       department: data.department || "",
       announce_email: !!data.announce_email,

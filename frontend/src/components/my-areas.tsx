@@ -8,7 +8,7 @@ import { usePageHeader } from "@/components/app-frame";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
-import { LessonRequestsPanel } from "@/components/lesson-requests-panel";
+import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { SubNav } from "@/components/sub-nav";
 import { isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
@@ -19,6 +19,7 @@ import { dayFirst } from "@/lib/dates";
 import { DepartmentAccountsPanel } from "@/components/department-hub";
 import { openConversation } from "@/lib/chat";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
+import { formatOfficeRole } from "@/components/roles-combobox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -520,6 +521,7 @@ type AreaView =
   | "members"
   | "calendar"
   | "accounts"
+  | "lesson-orders"
   | "lesson-requests"
   | "baptismal-class"
   | "daily-word"
@@ -581,11 +583,11 @@ export function MyAreas() {
       the area view only ever renders after a tap, so there is no markup to
       disagree with. */
   const [wide, setWide] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(min-width: 640px)").matches : true
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true
   );
 
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 640px)");
+    const query = window.matchMedia("(min-width: 768px)");
     const onChange = (event: MediaQueryListEvent) => setWide(event.matches);
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
@@ -604,36 +606,53 @@ export function MyAreas() {
     return area.code === ownDepartmentCode || ties.includes(area.code);
   }, [ownDepartmentCode, ties]);
 
-  // What the member sees: first the areas they belong to or serve in, then
-  // other areas open for a join request. Sex-only ministries stay hidden from
-  // people who may not request them.
-  const visible = useMemo(
-    () =>
-      rows
+  // What the member sees: on mobile (!wide), we present a flat list starting from
+  // the ones the person belongs to, then the other ministries they may join.
+  // On wide screens, the member toggles between My Ministry and Other Ministries.
+  const visible = useMemo(() => {
+    if (!wide) {
+      const myAreas = rows
+        .filter((area) => isMyMinistry(area))
+        .sort((a, b) => {
+          const departmentA = a.code === ownDepartmentCode ? 0 : 1;
+          const departmentB = b.code === ownDepartmentCode ? 0 : 1;
+          if (departmentA !== departmentB) return departmentA - departmentB;
+          const groupA = a.group === "ministry" ? 0 : 1;
+          const groupB = b.group === "ministry" ? 0 : 1;
+          return groupA - groupB || a.label.localeCompare(b.label);
+        });
+
+      const otherAreas = rows
         .filter((area) => {
           const mine = isMyMinistry(area);
-          if (tab === "mine") return mine;
-          // The treasury's desk is held by office: only the treasurer and the
-          // admin are offered it here, the same pair the rail gates it to.
+          if (mine || ties.includes(area.code)) return false;
           if (area.code === "treasury" && !holdsTreasury) return false;
-          return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
+          return staff || canJoin(area.code);
         })
-        .sort((a, b) => {
-          if (tab === "mine") {
-            const departmentA = a.code === ownDepartmentCode ? 0 : 1;
-            const departmentB = b.code === ownDepartmentCode ? 0 : 1;
-            if (departmentA !== departmentB) return departmentA - departmentB;
-            const groupA = a.group === "ministry" ? 0 : 1;
-            const groupB = b.group === "ministry" ? 0 : 1;
-            return groupA - groupB || a.label.localeCompare(b.label);
-          }
-          // Other Ministries reads as one A–Z list, the way the rail files
-          // it: nobody should step past every ministry before the first
-          // department appears.
-          return a.label.localeCompare(b.label);
-        }),
-    [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
-  );
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+      return [...myAreas, ...otherAreas];
+    }
+
+    return rows
+      .filter((area) => {
+        const mine = isMyMinistry(area);
+        if (tab === "mine") return mine;
+        if (area.code === "treasury" && !holdsTreasury) return false;
+        return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
+      })
+      .sort((a, b) => {
+        if (tab === "mine") {
+          const departmentA = a.code === ownDepartmentCode ? 0 : 1;
+          const departmentB = b.code === ownDepartmentCode ? 0 : 1;
+          if (departmentA !== departmentB) return departmentA - departmentB;
+          const groupA = a.group === "ministry" ? 0 : 1;
+          const groupB = b.group === "ministry" ? 0 : 1;
+          return groupA - groupB || a.label.localeCompare(b.label);
+        }
+        return a.label.localeCompare(b.label);
+      });
+  }, [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties, wide]);
 
   // The Treasury is filed in this list, but it is a desk of the console,
   // not an area of the map — it has no Members/Calendar/Accounts views of
@@ -666,11 +685,10 @@ export function MyAreas() {
             { key: "announcements", label: "Announcements", short: "News", help: "Announcements", icon: Megaphone },
           ]
         : []),
-      // Lesson requests belong to the Sabbath School alone: every church
-      // member is on its roll by default, and its superintendent is the one
-      // who serves what they ask for.
+      // Lesson orders belong to the Sabbath School alone: every church
+      // member is on its roll by default, and its superintendent delivers what they order.
       ...(openArea?.code === SABBATH_SCHOOL_CODE
-        ? [{ key: "lesson-requests", label: "Lesson Requests", short: "Lessons", help: "Lesson Requests", icon: MessageSquare }]
+        ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", help: "Lesson Orders", icon: BookOpen }]
         : []),
     ],
     [openArea?.code, canOpenAnnouncements],
@@ -680,7 +698,8 @@ export function MyAreas() {
   // actually carries: a stale or inapplicable `?view=` opens the roll rather
   // than an empty page. Announcements is gated the same way the strip gates
   // it, so a deep link cannot reach the desk from outside the office.
-  const requestedView = searchParams.get("view") ?? "members";
+  const rawView = searchParams.get("view") ?? "members";
+  const requestedView = rawView === "lesson-requests" ? "lesson-orders" : rawView;
   const areaView: AreaView = accountViewItems.some((item) => item.key === requestedView)
     ? (requestedView as AreaView)
     : "members";
@@ -730,6 +749,12 @@ export function MyAreas() {
       );
       return () => setCustomToggles(null);
     }
+    // On mobile, instead of having toggles for my ministry and other ministries,
+    // we just have a flat list starting from the ones the person belongs to, then the others.
+    if (!wide) {
+      setCustomToggles(null);
+      return () => setCustomToggles(null);
+    }
     setCustomToggles(
       <SubNav
         label="Ministry"
@@ -747,7 +772,7 @@ export function MyAreas() {
       />
     );
     return () => setCustomToggles(null);
-  }, [openArea, areaView, tab, accountViewItems, setCustomToggles, selectAreaView, showMap]);
+  }, [openArea, areaView, tab, accountViewItems, setCustomToggles, selectAreaView, showMap, wide]);
 
   // One card's actions popover at a time: a press anywhere outside the menu
   // closes it, the same way the desks' row menus behave.
@@ -793,13 +818,15 @@ export function MyAreas() {
         : {
             label: "Ministry",
             description:
-              tab === "mine"
-                ? "The ministries and departments you are part of or serve in."
-                : "Other ministries and departments you can ask to join.",
+              !wide
+                ? "The church's ministries and departments — your areas first, followed by others you can join."
+                : tab === "mine"
+                  ? "The ministries and departments you are part of or serve in."
+                  : "Other ministries and departments you can ask to join.",
           }
     );
     return () => setCustomHeader(null);
-  }, [openArea, tab, setCustomHeader, showMap]);
+  }, [openArea, tab, setCustomHeader, showMap, wide]);
 
   const [roll, setRoll] = useState<RollRow[]>([]);
   const [events, setEvents] = useState<AreaEvent[]>([]);
@@ -1049,8 +1076,7 @@ export function MyAreas() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-bark">{holder.name}</p>
                           <p className="truncate text-[11px] text-moss">
-                            {holder.role}
-                            {holder.kind === "assistant" ? " · Assistant" : ""}
+                            {formatOfficeRole(holder.role, holder.kind)}
                           </p>
                         </div>
                         {/* The same contact actions a roll card gets — a leader
@@ -1238,22 +1264,10 @@ export function MyAreas() {
             </section>
           )}
 
-          {/* Section 4: Lesson Requests — the Sabbath School's own card. */}
-          {areaView === "lesson-requests" && (
+          {/* Section 4: Lesson Orders — the Sabbath School's own card. */}
+          {(areaView === "lesson-orders" || areaView === "lesson-requests") && (
             <section className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <div>
-                  <h2 className="flex items-center gap-2 text-sm font-bold text-bark">
-                    <MessageSquare className="h-4 w-4 text-ember" aria-hidden="true" />
-                    Lesson Requests
-                  </h2>
-                  <p className="mt-0.5 text-xs text-moss">
-                    Send a lesson you would like studied; the Sabbath School
-                    superintendent (area Leader) serves them from here.
-                  </p>
-                </div>
-              </div>
-              <LessonRequestsPanel />
+              <LessonOrdersPanel />
             </section>
           )}
 
@@ -1367,6 +1381,8 @@ export function MyAreas() {
           <p className="mt-1 text-xs text-moss">
             {rows.length === 0
               ? "One moment."
+              : !wide
+              ? "No ministries or departments available to join."
               : tab === "mine"
               ? "Your department and ministries will appear here once the church office files them."
               : "There are no other ministries or departments available to join."}

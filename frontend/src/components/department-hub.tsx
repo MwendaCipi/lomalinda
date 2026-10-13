@@ -63,6 +63,7 @@ import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
+import { formatOfficeRole } from "./roles-combobox";
 import {
   CalendarViewToggle,
   MonthGrid,
@@ -1877,7 +1878,7 @@ function LeadershipEditModal({
     const before = department.roles.find((r) => r.id === role.id);
     for (const p of role.people) {
       if (!before?.holders.some((h) => h.id === p.id && h.kind === p.kind)) {
-        staged.push({ roleId: role.id, positionLabel: p.kind === "leader" ? role.name : `Assistant ${role.name}`, person: p });
+        staged.push({ roleId: role.id, positionLabel: formatOfficeRole(role.name, p.kind), person: p });
       }
     }
   }
@@ -4093,12 +4094,7 @@ function DepartmentDetail({
         // deaconate's Head Deaconess beside its Head Deacon), not someone
         // assisting one — so it keeps its own name rather than reading
         // "Head Deaconess · Assistant" for a seat that takes no assistant.
-        office:
-          assistant.kind === "leader"
-            ? assistant.position || "Leader"
-            : assistant.position
-              ? `${assistant.position} · Assistant`
-              : "Assistant",
+        office: formatOfficeRole(assistant.position, assistant.kind),
       })),
     ];
     for (const { holder, office } of boardPeople) {
@@ -4845,7 +4841,11 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
                 <p className="text-bark">
                   <span className="font-semibold text-moss">Assistants:</span>{" "}
                   {department.assistants.length > 0 ? (
-                    <span className="font-semibold">{department.assistants.map((a) => `${a.name}${a.position ? ` (${a.position})` : ""}`).join(", ")}</span>
+                    <span className="font-semibold">
+                      {department.assistants
+                        .map((a) => `${a.name}${a.position && a.position.toLowerCase() !== "assistant" ? ` (${formatOfficeRole(a.position, a.kind)})` : ""}`)
+                        .join(", ")}
+                    </span>
                   ) : (
                     <span className="italic text-moss-faint">none</span>
                   )}

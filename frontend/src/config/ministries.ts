@@ -146,6 +146,18 @@ export const MINISTRIES: Ministry[] = [
       { title: "Development Stewardship & Giving", text: "Mobilizing financial, material, and professional resources for lasting church infrastructure." },
     ],
   },
+  {
+    slug: "sabbath-school",
+    title: "Sabbath School",
+    givingPurpose: "Sabbath School Materials",
+    description: "The church at study — Sabbath morning Bible lessons, interactive classes, teachers, and mission focus for every age.",
+    department: "Sabbath School",
+    sections: [
+      { title: "Lesson Study & Classes", text: "Interactive Bible study groups and quarterly guides designed to strengthen faith and understanding." },
+      { title: "Mission Emphasis", text: "Connecting with the worldwide church through weekly mission stories and global outreach reports." },
+      { title: "Teacher Training & Growth", text: "Equipping lesson teachers and facilitators with study aids, guides, and practical discussion methods." },
+    ],
+  },
 ];
 
 export type CalendarEvent = {
@@ -171,6 +183,7 @@ export function getMinistryGivingPurpose(departmentOrName?: string): string {
 
   // Match against known keywords. The words returned are the treasury
   // accounts' own labels, so a deep link preselects a real account.
+  if (lower.includes("sabbath") || lower.includes("lesson")) return "Sabbath School Materials";
   if (lower.includes("youth") || lower.includes("ay") || lower.includes("aym") || lower.includes("ambassador")) return "Adventist Youth Ministry";
   if (lower.includes("possibility") || lower.includes("apm") || lower.includes("special need") || lower.includes("disabilit")) return "Possibility";
   if (lower.includes("child") || lower.includes("kid") || lower.includes("cradle") || lower.includes("kindergarten") || lower.includes("primary")) return "Children Ministry";

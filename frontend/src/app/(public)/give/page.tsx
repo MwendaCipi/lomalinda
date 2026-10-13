@@ -36,6 +36,7 @@ type RecipientMode = "myself" | "for_someone" | "request";
     declared once, in the member's profile; the form only reads them. */
 const relationships = [
   { value: "spouse", label: "Spouse" },
+  { value: "parent", label: "Parent" },
   { value: "sibling", label: "Sibling" },
   { value: "child", label: "Child" },
   { value: "friend", label: "Friend" },

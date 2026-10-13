@@ -318,9 +318,9 @@ export const destinations = {
   },
   myAccount: {
     href: "/member",
-    label: "My Account & Giving",
-    short: "My Account",
-    description: "Your details and your giving history.",
+    label: "My Profile",
+    short: "My Profile",
+    description: "Your details, your picture, your family and your giving history.",
     icon: Users,
     area: "account",
     // `/member/reports` is its own destination below, so it is excluded here.
@@ -1054,10 +1054,10 @@ const JOINABLE_DEPARTMENT_CODES = new Set(["aym", "amm", "awm"]);
 
 
 const RAIL_AREA_LABELS: Record<string, string> = {
-  amm: "AMM",
-  awm: "AWM",
+  amm: "Adventist Men",
+  awm: "Adventist Women",
   aym: "AYM",
-  apm: "APM",
+  apm: "Adventist Possibility",
   // Loma Linda calls the choir the Church Choir.
   choir: "Church Choir",
   chaplaincy: "Chaplaincy",
@@ -1329,13 +1329,14 @@ export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
 
 /**
  * The account menu, at the foot of the rail. Short by design: the rail names
- * every place the church has, so this holds only the member's own page, the
- * calendar, and the console for staff.
+ * every place the church has, so this holds only the member's own pages and
+ * the console for staff. The church calendar is deliberately not here — it is
+ * a place of the church, not of the member's account, and the rail, the
+ * dashboard and the Fellowship strip already carry it.
  */
 export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "myAccount" },
   { key: "myGivings" },
-  { key: "calendar" },
   { key: "administration", staffOnly: true },
 ];
 

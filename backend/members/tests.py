@@ -12397,6 +12397,180 @@ class ProfileRelationshipsAndPhoneTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Contribution.objects.get().relationship, 'friend')
 
+    def test_a_parent_can_be_declared(self):
+        """Family is not complete without the people above you: a parent is
+        one of the relationships the church records."""
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {
+            'declared_relationships': [{'name': 'Anna Mother', 'relationship': 'parent'}],
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.member.member_profile.refresh_from_db()
+        self.assertEqual(
+            self.member.member_profile.declared_relationships,
+            [{'person_id': None, 'name': 'Anna Mother', 'relationship': 'parent'}],
+        )
+
+
+class ProfilePhotoAndSexTests(APITestCase):
+    """The profile's picture and its sex.
+
+    A picture is the member's own to set — it arrives through its own door
+    because it is a file rather than a line of JSON, it is shrunk to an
+    avatar before it lands on disk, and it can be taken down again. Sex is
+    the church's record: the member's own endpoint refuses to rewrite it by
+    name, leaving the office's change request as the only way it moves.
+    """
+
+    ME_URL = '/api/members/me/'
+    PHOTO_URL = '/api/members/me/photo/'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import shutil
+        import tempfile
+        cls._media_root = tempfile.mkdtemp(prefix='profile-photo-tests-')
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        import shutil
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        # Each test counts the files this test made, so the pictures earlier
+        # tests left behind (the directory is shared for the class) go first.
+        import os
+        import shutil
+        directory = os.path.join(self._media_root, 'profile_photos')
+        if os.path.isdir(directory):
+            shutil.rmtree(directory)
+        self.member = User.objects.create_user(
+            'photo.member', 'photo.member@example.com', 'StrongPass#2026',
+            first_name='Ruth', last_name='Member',
+        )
+        self.profile = MemberProfile.objects.create(
+            user=self.member, role='member', roles='member', gender='Female',
+        )
+
+    def _picture(self, name='face.png', size=(1200, 900)):
+        """A real picture at the given size — the upload is decoded, so the
+        bytes have to be an actual image rather than a fake header."""
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        buffer = io.BytesIO()
+        Image.new('RGB', size, (30, 90, 200)).save(buffer, format='PNG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')
+
+    def _stored_names(self):
+        import os
+        directory = os.path.join(self._media_root, 'profile_photos')
+        return sorted(os.listdir(directory)) if os.path.isdir(directory) else []
+
+    def test_the_profile_answers_with_an_empty_picture_line_when_none_is_set(self):
+        self.client.force_authenticate(self.member)
+        self.assertEqual(self.client.get(self.ME_URL).data['photo_url'], '')
+
+    def test_a_member_may_upload_their_own_picture(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.PHOTO_URL, {'photo': self._picture()}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['photo_url'].startswith('/media/profile_photos/'))
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.photo)
+        # And the profile reads the same URL back.
+        self.assertEqual(self.client.get(self.ME_URL).data['photo_url'], response.data['photo_url'])
+
+    def test_the_stored_picture_is_an_avatar_not_a_camera_original(self):
+        """A 1200px upload comes back at avatar size — the several megabytes
+        a phone photographs never reach disk."""
+        from PIL import Image
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.PHOTO_URL, {'photo': self._picture()}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        with Image.open(self.profile.photo.path) as stored:
+            self.assertLessEqual(max(stored.size), 640)
+
+    def test_a_file_that_is_not_a_picture_is_refused(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.PHOTO_URL,
+            {'photo': SimpleUploadedFile('notes.txt', b'just words', content_type='text/plain')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.photo)
+
+    def test_an_oversized_picture_is_refused(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(self.member)
+        huge = SimpleUploadedFile(
+            'huge.png',
+            b'\x89PNG\r\n\x1a\n' + b'0' * (5 * 1024 * 1024 + 1),
+            content_type='image/png',
+        )
+        response = self.client.post(self.PHOTO_URL, {'photo': huge}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('photo', response.data)
+        self.assertEqual(self._stored_names(), [])
+
+    def test_a_new_picture_replaces_the_old_file(self):
+        """Replacing must not pile up pictures on disk: the old file goes
+        when the new one lands."""
+        self.client.force_authenticate(self.member)
+        first = self.client.post(self.PHOTO_URL, {'photo': self._picture()}, format='multipart')
+        old_name = self.profile.photo.name
+        second = self.client.post(
+            self.PHOTO_URL,
+            {'photo': self._picture(name='other.png', size=(100, 80))},
+            format='multipart',
+        )
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(first.data['photo_url'], second.data['photo_url'])
+        self.profile.refresh_from_db()
+        self.assertNotEqual(self.profile.photo.name, old_name)
+        self.assertEqual(len(self._stored_names()), 1)
+
+    def test_a_member_may_take_their_picture_down(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.PHOTO_URL, {'photo': self._picture()}, format='multipart')
+        response = self.client.delete(self.PHOTO_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['photo_url'], '')
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.photo)
+        self.assertEqual(self._stored_names(), [])
+
+    def test_a_member_may_not_rewrite_their_sex(self):
+        """On record means on record: the office corrects it through the
+        change request the member approves, never the profile form."""
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {'gender': 'Male'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('gender', response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, 'Female')
+
+    def test_a_blank_sex_cannot_be_filled_in_from_the_profile(self):
+        """Setting it the first time belongs to the forced profile update
+        (or the office) — this door never writes sex at all."""
+        self.profile.gender = ''
+        self.profile.save(update_fields=['gender'])
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(self.ME_URL, {'gender': 'Female'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.gender, '')
+
 
 class UserDetailUpdateViewTests(APITestCase):
     """The office's edit of a member's record: proposed, never applied —
@@ -12952,6 +13126,33 @@ class SabbathSchoolLessonTests(APITestCase):
         row.refresh_from_db()
         self.assertEqual(row.status, 'pending')
         self.assertIsNone(row.served_by)
+
+    def test_sabbath_school_is_a_ministry(self):
+        school = Department.objects.get(code='sabbath_school')
+        self.assertEqual(school.group, 'ministry')
+
+    def test_a_member_orders_lessons_and_superintendent_delivers(self):
+        orders_url = '/api/members/lesson-orders/'
+        self.client.force_authenticate(self.member)
+        post = self.client.post(
+            orders_url,
+            {'lesson': 'Teacher\'s guide', 'quantity': 3, 'note': 'For Sabbath School class 4'},
+            format='json',
+        )
+        self.assertEqual(post.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(post.data['order']['quantity'], 3)
+        self.assertEqual(post.data['order']['status'], 'pending')
+        order_id = post.data['order']['id']
+
+        # Superintendent delivers the order
+        self.client.force_authenticate(self.superintendent)
+        deliver_res = self.client.post(f'{orders_url}{order_id}/deliver/', {}, format='json')
+        self.assertEqual(deliver_res.status_code, status.HTTP_200_OK)
+        order = LessonRequest.objects.get(pk=order_id)
+        self.assertEqual(order.status, 'delivered')
+        self.assertEqual(order.served_by, self.superintendent)
+        self.assertEqual(order.quantity, 3)
+        self.assertTrue(order.is_delivered)
 
 
 class EldershipDeskToolsTests(APITestCase):

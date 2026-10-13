@@ -143,6 +143,7 @@ MINISTRY_AUDIENCE_OPTIONS = (
     ('dept_development', 'Development Ministry'),
     ('dept_dorcas', 'Dorcas Ministry'),
     ('dept_welfare', 'Welfare Ministry'),
+    ('dept_sabbath_school', 'Sabbath School Ministry'),
 )
 
 MINISTRY_AUDIENCE_CODES = tuple(code for code, _label in MINISTRY_AUDIENCE_OPTIONS)

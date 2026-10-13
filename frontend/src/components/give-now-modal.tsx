@@ -28,6 +28,7 @@ const SAFARICOM_PREFIXES = ["070", "071", "072", "074", "079"];
  * list — anything rarer is Other. */
 const relationships = [
   { value: "spouse", label: "Spouse" },
+  { value: "parent", label: "Parent" },
   { value: "sibling", label: "Sibling" },
   { value: "child", label: "Child" },
   { value: "friend", label: "Friend" },

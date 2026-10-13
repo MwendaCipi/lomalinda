@@ -83,6 +83,7 @@ export function weekdayOf(value: Dateish): string {
 export function dayFirstTime(value?: Dateish, fallback = "—"): string {
   const parsed = parseDateish(value);
   if (!parsed) return fallback;
+  if (parsed.dateOnly) return dayFirst(value, fallback);
   const parts = new Intl.DateTimeFormat(undefined, {
     timeZone: CHURCH_TZ,
     day: "2-digit",
@@ -95,3 +96,18 @@ export function dayFirstTime(value?: Dateish, fallback = "—"): string {
   const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${find("day")}/${find("month")}/${find("year")} ${find("hour")}:${find("minute")}`;
 }
+
+/** The time of day as HH:MM in the church's timezone. Empty string if date-only or missing. */
+export function timeOnly(value?: Dateish, fallback = ""): string {
+  const parsed = parseDateish(value);
+  if (!parsed || parsed.dateOnly) return fallback;
+  const parts = new Intl.DateTimeFormat(undefined, {
+    timeZone: CHURCH_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(parsed.date);
+  const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${find("hour")}:${find("minute")}`;
+}
+

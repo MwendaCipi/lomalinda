@@ -88,6 +88,13 @@ class MemberProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='member_profile')
     phone_number = models.CharField(max_length=20, blank=True)
     whatsapp_number = models.CharField(max_length=20, blank=True, default='')
+    # The member's own picture, uploaded from the profile. Stored under
+    # media/profile_photos/ like every other uploaded file — the same door
+    # nginx already serves for album pictures and announcement attachments —
+    # and shrunk to an avatar's size on the way in, so a phone photo never
+    # lands on disk at phone-photo weight. Blank is the normal state: the
+    # identity bar draws the member's initial until one is chosen.
+    photo = models.ImageField(upload_to='profile_photos/', blank=True)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='member')
     role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES, help_text="Primary/legacy role kept in sync with 'roles'")
     roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes; a member can hold several roles")
@@ -202,6 +209,17 @@ class MemberProfile(models.Model):
     terms_of_use_version = models.CharField(max_length=20, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def photo_url(self):
+        """The picture's URL, or '' when there is none.
+
+        Asked for by name (``getattr(profile, 'photo_url', '')``) by readers
+        that do not care whether one is on file — the roll, the identity bar —
+        so an account without a picture answers with an empty line rather than
+        an attribute error.
+        """
+        return self.photo.url if self.photo else ''
 
     def get_roles(self):
         """Return the list of role codes this member holds (roles + legacy role)."""
@@ -1089,6 +1107,7 @@ class ChurchEventMedia(models.Model):
 # rarer reads as "Other" and the desk can ask.
 GIFT_RELATIONSHIP_CHOICES = [
     ('spouse', 'Spouse'),
+    ('parent', 'Parent'),
     ('sibling', 'Sibling'),
     ('child', 'Child'),
     ('friend', 'Friend'),
@@ -1481,7 +1500,7 @@ class LessonRequest(models.Model):
     desk should be able to trace.
     """
 
-    STATUS_CHOICES = [('pending', 'Pending'), ('served', 'Served')]
+    STATUS_CHOICES = [('pending', 'Pending'), ('delivered', 'Delivered'), ('served', 'Delivered')]
 
     member = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='lesson_requests',
@@ -1490,6 +1509,7 @@ class LessonRequest(models.Model):
         max_length=200,
         help_text="The lesson or passage the member asks to have studied.",
     )
+    quantity = models.PositiveIntegerField(default=1, help_text="Number of copies ordered.")
     note = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     served_by = models.ForeignKey(
@@ -1502,8 +1522,20 @@ class LessonRequest(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    @property
+    def is_delivered(self):
+        return self.status in ('delivered', 'served')
+
+    @property
+    def delivered_by(self):
+        return self.served_by
+
+    @property
+    def delivered_at(self):
+        return self.served_at
+
     def __str__(self):
-        return f"{self.member} asks for the lesson: {self.lesson[:40]}"
+        return f"{self.member} orders lesson: {self.lesson[:40]} (qty {self.quantity})"
 
 
 class BaptismalClassEntry(models.Model):
