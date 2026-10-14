@@ -1,6 +1,22 @@
+import type { Metadata } from "next";
 import { ChurchBeliefs } from "@/components/church-beliefs";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { aboutSectionLinks } from "@/config/site-sections";
+
+export const metadata: Metadata = {
+  title: "Fundamental Beliefs",
+  description:
+    "Explore the foundational biblical beliefs of Seventh-day Adventists at SDA Loma Linda, Meru.",
+  alternates: {
+    canonical: "/beliefs",
+  },
+  openGraph: {
+    title: "Fundamental Beliefs | SDA Loma Linda",
+    description:
+      "Explore the foundational biblical beliefs of Seventh-day Adventists at SDA Loma Linda, Meru.",
+    url: "https://sdalomalinda.or.ke/beliefs",
+  },
+};
 
 /**
  * What we believe — one of the three places the public header names, beside

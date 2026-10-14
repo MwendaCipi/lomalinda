@@ -6,6 +6,8 @@ import { AccessibilityProvider } from "@/context/accessibility-context";
 import { brand } from "@/lib/brand";
 import { authInitScript, themeInitScript } from "@/lib/theme";
 
+import { churchSchema, defaultMetadata } from "@/config/seo";
+
 export const viewport: Viewport = {
   themeColor: brand.bark,
   width: "device-width",
@@ -17,11 +19,10 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  ...defaultMetadata,
   // Token-bearing pages (accept-invite, enroll confirm, password reset) read
   // their secret from the query string; never name that URL in a Referer.
   referrer: "no-referrer",
-  title: "SDA Loma Linda",
-  description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya, growing in faith, hope, and love.",
   // `public/manifest.json` is the manifest the installed app actually reads
   // (`manifest.ts` next to this file only produces an unused copy). It starts
   // at the dashboard, so the launch entry is the floor of the app's back
@@ -52,6 +53,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-KE" className="h-full antialiased" suppressHydrationWarning>
       <head>
+        {/* Schema.org Church JSON-LD structured data for search engines */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(churchSchema) }}
+        />
         {/* Before the first paint: a member whose stored preferences say dark
             gets the dark palette on the very first frame rather than a white
             flash that the provider corrects a moment later. */}
