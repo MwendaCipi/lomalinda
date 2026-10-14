@@ -200,7 +200,7 @@ function FilterPopover<T extends string>({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label={`Filter by ${label}`}
-        className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
+        className={`flex h-9 w-full items-center justify-between gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
           !isDefault
             ? "border-bark bg-bark text-white shadow-sm"
             : "border-sand-line bg-sand text-bark hover:border-sand-mute"
@@ -212,7 +212,7 @@ function FilterPopover<T extends string>({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 w-40 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-xl ring-1 ring-black/5">
+        <div className="absolute left-0 top-full z-30 mt-1.5 w-full min-w-40 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-xl ring-1 ring-black/5">
           <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss">{label}</p>
           {options.map((item) => (
             <button
@@ -506,51 +506,62 @@ export function MyGivings() {
   return (
     <section
       aria-label="My Givings"
-      className="flex flex-col rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
-      style={{ maxHeight: "min(70svh, 640px)" }}
+      // A pinned page's card fills the panel (the shell passes the height
+      // down through MemberWorkspace), so the timeline scrolls inside it and
+      // the actions row stays fixed at the foot — flush above the phone's
+      // tab bar, which the shell's bottom padding matches exactly.
+      className="flex min-h-0 flex-1 flex-col rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
     >
-      {/* Filters in one row: date range, type popover, status popover, and search */}
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-sand-line px-5 py-3.5">
-        <div className="flex shrink-0 items-center gap-1.5">
-          <input
-            type="date"
-            value={fromDate}
-            max={toDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            title="From date"
-            className="h-9 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
-          />
-          <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
-          <input
-            type="date"
-            value={toDate}
-            min={fromDate}
-            onChange={(e) => setToDate(e.target.value)}
-            title="To date"
-            className="h-9 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
-          />
+      {/* The filters share each row in equal parts — the date range across
+          the phone's first row, the two popovers across the second — and the
+          search gets a row of its own below them rather than squeezing in. */}
+      <div className="border-b border-sand-line px-5 py-3.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex w-full items-center gap-1.5 sm:w-auto sm:flex-1">
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              title="From date"
+              className="h-9 min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+            />
+            <ArrowRight size={12} className="shrink-0 text-moss" aria-hidden="true" />
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate}
+              onChange={(e) => setToDate(e.target.value)}
+              title="To date"
+              className="h-9 min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+            />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <FilterPopover
+              label="Type"
+              value={kindFilter}
+              options={KIND_OPTIONS}
+              onChange={setKindFilter}
+            />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <FilterPopover
+              label="Status"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+              onChange={setStatusFilter}
+            />
+          </div>
         </div>
-
-        <FilterPopover
-          label="Type"
-          value={kindFilter}
-          options={KIND_OPTIONS}
-          onChange={setKindFilter}
-        />
-
-        <FilterPopover
-          label="Status"
-          value={statusFilter}
-          options={STATUS_OPTIONS}
-          onChange={setStatusFilter}
-        />
 
         <input
           type="text"
           placeholder="Search purpose, items, method or receipt…"
           value={givingSearch}
           onChange={(e) => setGivingSearch(e.target.value)}
-          className="h-9 min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 text-xs text-bark focus:border-ember focus:outline-none sm:min-w-[180px]"
+          className="mt-2.5 h-9 w-full rounded-xl border border-sand-line bg-sand px-3 text-xs text-bark focus:border-ember focus:outline-none"
         />
       </div>
 

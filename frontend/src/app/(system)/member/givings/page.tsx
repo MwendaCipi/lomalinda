@@ -14,7 +14,7 @@ import { MemberWorkspace } from "@/components/member-workspace";
  */
 export default function MyGivingsPage() {
   return (
-    <MemberWorkspace>
+    <MemberWorkspace flushBottom>
       <MyGivings />
     </MemberWorkspace>
   );

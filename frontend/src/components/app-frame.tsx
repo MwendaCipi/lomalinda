@@ -75,6 +75,10 @@ export function scrollModeForPath(pathname: string): ScrollMode {
   // list and the thread scroll inside it, so the compose box can sit at the
   // foot of the thread instead of riding the page's own scroll.
   if (pathname === "/chat") return "pinned";
+  // My Givings is the same shape as the giving page it records: the filters
+  // and the actions row stay put and the timeline scrolls between them, so
+  // the footer can sit flush against the phone's tab bar.
+  if (pathname === "/member/givings") return "pinned";
   // The church calendar holds still and lets its own list scroll inside, so the
   // toggles and heading stay put while the rows move under them.
   if (pathname === "/calendar") return "pinned";
@@ -177,7 +181,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   return (
     <PageHeaderContext.Provider value={pageHeaderSlots}>
       <div
-        className="app-shell flex min-h-0 flex-1 flex-col pb-24 md:h-full md:overflow-hidden md:pb-0"
+        // A pinned page fills the shell at every width, so its foot is the
+        // shell's own bottom: on a phone that bottom is the tab bar's top
+        // edge exactly (bar height + safe area), where a scrolling page keeps
+        // pb-24 — room to scroll its last row clear of the bar.
+        className={`app-shell flex min-h-0 flex-1 flex-col md:h-full md:overflow-hidden md:pb-0 ${
+          mode === "pinned" ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]" : "pb-24"
+        }`}
         data-scroll-mode={mode}
       >
         <div className="app-shell-body flex min-h-0 flex-1">
