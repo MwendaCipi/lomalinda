@@ -3,15 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { NextGatheringCard } from "@/components/next-gathering-card";
 import { ChurchGallery } from "@/components/church-gallery";
 import { ClarionHero } from "@/components/clarion-hero";
 import { ChurchMission } from "@/components/church-mission";
 import { ChurchBeliefs } from "@/components/church-beliefs";
 import { WeeklySchedule } from "@/components/weekly-schedule";
-import { useHeaderData } from "@/hooks/use-header-data";
 import { footerColumns, footerLinkOf } from "@/config/navigation";
 
 const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
@@ -51,17 +48,6 @@ const ways = [
 // destinations.
 
 export function MarketingHome() {
-  // A signed-in member who lands on the public home page — opening the app
-  // or backing out after signing in — is swapped over to their dashboard
-  // with a history replace, so pressing back repeatedly exits the app
-  // instead of replaying the marketing page. `hasToken` reads the cached
-  // session, so this stays a pure localStorage check — no request.
-  const router = useRouter();
-  const { hasToken } = useHeaderData();
-  useEffect(() => {
-    if (hasToken) router.replace("/dashboard");
-  }, [hasToken, router]);
-
   return (
     <main className="min-h-screen bg-sand text-bark">
       <section id="top" className="mx-auto max-w-6xl px-6 pb-14 pt-6 sm:pt-10 lg:px-8 lg:pt-14">
@@ -112,7 +98,7 @@ export function MarketingHome() {
               href="/give"
               className="rounded-full border border-sand-mute bg-white px-6 py-3.5 text-sm font-semibold transition hover:border-bark"
             >
-              Give
+              Support Us
             </Link>
           </div>
         </div>

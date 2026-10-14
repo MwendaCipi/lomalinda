@@ -1401,8 +1401,15 @@ export const footerColumns: { heading: string; links: FooterLink[] }[] = [
     // behind the sign-in wall. Fund Drives is left out for the same reason —
     // its index is a member page, and there is no visitor-facing list to send
     // them to yet.
+    //
+    // "Support Us" is the marketing site's name for the giving page (the
+    // header and the landing hero say the same); the registry keeps
+    // "Giving" for the app, where members know the place by that name.
     heading: "Giving",
-    links: [{ key: "give" }, { href: "/give?give=in-kind", label: "In-Kind Giving" }],
+    links: [
+      { href: "/give", label: "Support Us" },
+      { href: "/give?give=in-kind", label: "In-Kind Giving" },
+    ],
   },
   {
     heading: "Church",
