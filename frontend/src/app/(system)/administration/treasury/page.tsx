@@ -363,15 +363,15 @@ export default function TreasuryPage() {
           } else if (view === "summary") {
             setViewMode("summary");
           } else if (view === "unassigned") {
-            router.push("/administration?tab=accounts&view=unassigned");
+            router.replace("/administration?tab=accounts&view=unassigned");
           } else if (view === "accounts") {
-            router.push("/administration?tab=accounts&view=accounts");
+            router.replace("/administration?tab=accounts&view=accounts");
           } else if (view === "drives") {
-            router.push("/administration/fund-drives");
+            router.replace("/administration/fund-drives");
           } else if (view === "expenses") {
-            router.push("/administration?tab=accounts&view=expenditure");
+            router.replace("/administration?tab=accounts&view=expenditure");
           } else {
-            router.push("/administration?tab=accounts&view=withdrawals");
+            router.replace("/administration?tab=accounts&view=withdrawals");
           }
         }}
       />

@@ -41,18 +41,22 @@ function FormModal({
   wide = false,
   onClose,
   children,
+  footer,
 }: {
   title: string;
   wide?: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  /** The action buttons row, pinned below the scrollable body. */
+  footer: React.ReactNode;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
       <div
-        className={`max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-lg"} overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8`}
+        className={`flex max-h-[90vh] w-full ${wide ? "max-w-2xl" : "max-w-lg"} flex-col overflow-hidden rounded-3xl border border-sand-line bg-white shadow-2xl`}
       >
-        <div className="mb-6 flex items-center justify-between border-b border-sand-line pb-4">
+        {/* Fixed header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 py-4 sm:px-8">
           <h2 className="text-xl font-semibold text-bark">{title}</h2>
           <button
             type="button"
@@ -63,7 +67,14 @@ function FormModal({
             <X size={14} aria-hidden="true" />
           </button>
         </div>
-        {children}
+        {/* Scrollable body */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-8">
+          {children}
+        </div>
+        {/* Fixed footer */}
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-4 sm:px-8">
+          {footer}
+        </div>
       </div>
     </div>
   );
@@ -177,8 +188,30 @@ export function PrayerRequestForm({
   }
 
   return (
-    <FormModal title="Request Prayer" onClose={onClose}>
-      <form onSubmit={submitPrayerRequest} className="space-y-5">
+    <FormModal
+      title="Request Prayer"
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-sand-mute px-6 py-3 font-semibold text-bark transition hover:bg-sand"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="prayer-request-form"
+            disabled={loading}
+            className="rounded-full bg-ember px-6 py-3 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
+          >
+            {loading ? "Submitting…" : "Submit"}
+          </button>
+        </>
+      }
+    >
+      <form id="prayer-request-form" onSubmit={submitPrayerRequest} className="space-y-5">
         {error && (
           <p className="rounded-xl bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700">{error}</p>
         )}
@@ -248,23 +281,6 @@ export function PrayerRequestForm({
             placeholder="Share what is on your heart..."
           />
         </label>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 rounded-full bg-ember px-6 py-3.5 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
-          >
-            {loading ? "Sending..." : "Send Prayer Request"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-sand-mute px-6 py-3.5 font-semibold text-bark transition hover:bg-sand"
-          >
-            Cancel
-          </button>
-        </div>
       </form>
     </FormModal>
   );
@@ -378,8 +394,31 @@ export function VisitationRequestForm({
   }
 
   return (
-    <FormModal title="Request a Visit" wide onClose={onClose}>
-      <form onSubmit={submitVisitationRequest} className="space-y-5">
+    <FormModal
+      title="Request a Visit"
+      wide
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-sand-mute px-6 py-3 font-semibold text-bark transition hover:bg-sand"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="visitation-request-form"
+            disabled={loading}
+            className="rounded-full bg-sage px-6 py-3 font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
+          >
+            {loading ? "Submitting…" : "Submit"}
+          </button>
+        </>
+      }
+    >
+      <form id="visitation-request-form" onSubmit={submitVisitationRequest} className="space-y-5">
         {error && (
           <p className="rounded-xl bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700">{error}</p>
         )}
@@ -504,23 +543,6 @@ export function VisitationRequestForm({
             placeholder="Add any additional details, directions, or prayer needs..."
             className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
           />
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-sand-mute px-6 py-3.5 font-semibold text-bark transition hover:bg-sand"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 rounded-full bg-sage py-3.5 text-center font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
-          >
-            {loading ? "Submitting..." : "Submit Request"}
-          </button>
         </div>
       </form>
     </FormModal>

@@ -680,13 +680,13 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       <TreasuryNav
         active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : view === "unassigned" ? "unassigned" : "requests"}
         onSelect={(next) => {
-          if (next === "givings") router.push("/administration/treasury?mode=all_givings");
-          else if (next === "summary") router.push("/administration/treasury?mode=summary");
+          if (next === "givings") router.replace("/administration/treasury?mode=all_givings");
+          else if (next === "summary") router.replace("/administration/treasury?mode=summary");
           else if (next === "unassigned") setView("unassigned");
           else if (next === "accounts") setView("accounts");
-          else if (next === "drives") router.push("/administration/fund-drives");
+          else if (next === "drives") router.replace("/administration/fund-drives");
           else if (next === "expenses") setView("expenditure");
-          else if (next === "failed") router.push("/administration/treasury?mode=failed");
+          else if (next === "failed") router.replace("/administration/treasury?mode=failed");
           else setView("withdrawals");
         }}
       />
@@ -1548,7 +1548,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           presetAccountLabel={(promoteAccount.description || promoteAccount.name).trim()}
           onCreated={() => {
             setPromoteAccount(null);
-            router.push("/administration/fund-drives");
+            router.replace("/administration/fund-drives");
           }}
           onClosed={() => setPromoteAccount(null)}
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
 /** One view of a page, as its sub-navigation names it. */
@@ -168,6 +168,7 @@ export function SectionNav({
   label: string;
   className?: string;
 }) {
+  const router = useRouter();
   return (
     <nav aria-label={label} className={className}>
       {/* The grid class carries its own display (`grid`, `sm:flex`); the
@@ -177,15 +178,19 @@ export function SectionNav({
         {items.map((item) => {
           const active = item.href === activeHref;
           return (
-            <Link
+            <button
               key={item.href}
-              href={item.href}
+              type="button"
               aria-current={active ? "page" : undefined}
+              aria-pressed={active}
               title={item.help}
+              onClick={() => {
+                if (!active) router.replace(item.href, { scroll: false });
+              }}
               className={tabClass(active)}
             >
               <TabBody item={item} active={active} />
-            </Link>
+            </button>
           );
         })}
       </div>

@@ -30,13 +30,13 @@ export default function FundDrivesPage() {
       <TreasuryNav
         active="drives"
         onSelect={(next) => {
-          if (next === "givings") router.push("/administration/treasury?mode=all_givings");
-          else if (next === "summary") router.push("/administration/treasury?mode=summary");
-          else if (next === "unassigned") router.push("/administration?tab=accounts&view=unassigned");
-          else if (next === "accounts") router.push("/administration?tab=accounts&view=accounts");
-          else if (next === "expenses") router.push("/administration?tab=accounts&view=expenditure");
-          else if (next === "requests") router.push("/administration?tab=accounts&view=withdrawals");
-          else if (next === "failed") router.push("/administration/treasury?mode=failed");
+          if (next === "givings") router.replace("/administration/treasury?mode=all_givings");
+          else if (next === "summary") router.replace("/administration/treasury?mode=summary");
+          else if (next === "unassigned") router.replace("/administration?tab=accounts&view=unassigned");
+          else if (next === "accounts") router.replace("/administration?tab=accounts&view=accounts");
+          else if (next === "expenses") router.replace("/administration?tab=accounts&view=expenditure");
+          else if (next === "requests") router.replace("/administration?tab=accounts&view=withdrawals");
+          else if (next === "failed") router.replace("/administration/treasury?mode=failed");
         }}
       />
     );
