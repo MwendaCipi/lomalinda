@@ -42,6 +42,10 @@ export type SectionLink = {
  * The links a first-time visitor reaches from the header and the footer.
  * These are the pages a "English-speaking church in Meru" search returns,
  * so every one of them is named here, with one canonical description.
+ *
+ * The church's photo wall and the testimony desk are left off on purpose:
+ * they are the app's, reached by signing in, and a visitor's first page offers
+ * only what they can open right now.
  */
 export const publicWebsiteLinks: SectionLink[] = [
   {
@@ -79,26 +83,13 @@ export const publicWebsiteLinks: SectionLink[] = [
     description: "Tithes and offerings by mobile money, and fund drives for the church's work.",
     icon: HandHeart,
   },
-  {
-    key: "share",
-    href: "/share/moments",
-    label: "Church moments",
-    description: "Sabbath songs, services and events from around the church year.",
-    icon: Sparkles,
-  },
-  {
-    key: "testimonies",
-    href: "/spiritual/testimonies",
-    label: "Sharing",
-    description: "Share a testimony of what God has done, or an idea that could help the church.",
-    icon: Sparkles,
-  },
 ];
 
 /**
  * The links a first-time visitor reaches from the public header and footer.
  * These are the pages a "english speaking church meru" search returns, so
-every one of them is named here, with one canonical description.
+ * every one of them is named here, with one canonical description. The same
+ * two app pages are left off as in the list above.
  */
 export const publicWebsiteHeaderLinks: SectionLink[] = [
   {
@@ -135,20 +126,6 @@ export const publicWebsiteHeaderLinks: SectionLink[] = [
     label: "Giving",
     description: "Tithes and offerings by mobile money, and fund drives for the church's work.",
     icon: HandHeart,
-  },
-  {
-    key: "share",
-    href: "/share/moments",
-    label: "Church moments",
-    description: "Sabbath songs, services and events from around the church year.",
-    icon: Sparkles,
-  },
-  {
-    key: "testimonies",
-    href: "/spiritual/testimonies",
-    label: "Sharing",
-    description: "Share a testimony of what God has done, or an idea that could help the church.",
-    icon: Sparkles,
   },
 ];
 

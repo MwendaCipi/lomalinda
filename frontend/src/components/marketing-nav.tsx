@@ -8,23 +8,25 @@ import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { normalizePath } from "@/lib/paths";
 
+// Three links, and every one of them a page a visitor can open without
+// signing in: the calendar the public reads to know when we meet, the beliefs
+// the landing page states (an anchor back to the landing's own section, so it
+// works from any public page), and the way to give. Everything else the church
+// has — About, study materials, contact — lives in the footer and in the
+// landing page's own body, which is where a first-time visitor reads it.
 const marketingLinks = [
-  { href: "/", label: "Home" },
-  { href: "/about", label: "About" },
   { href: "/calendar", label: "Calendar" },
-  { href: "/materials", label: "Study" },
+  { href: "/#beliefs", label: "Beliefs" },
   { href: "/give", label: "Give" },
-  { href: "/share/moments", label: "Moments" },
-  { href: "/spiritual/testimonies", label: "Sharing" },
 ];
 
 /**
  * The public website: what a visitor (or a signed-out member) sees first.
  *
- * The site home is on this list, so opening sdalomalinda.or.ke shows the
- * church's own website — not the marketing page wearing the app's header and
- * bottom tab bar. The header itself carries the way in (its button reads
- * "Dashboard" for a signed-in member), so nothing is stranded here.
+ * The site home is reached through the brand above it, so the header carries
+ * only the three places a visitor has a reason to look for — and the header
+ * itself carries the way in (its button reads "Dashboard" for a signed-in
+ * member), so nothing is stranded here.
  *
  * Everywhere else on the public side a member keeps the app chrome; the
  * sign-in surfaces are the exception because the app would be a detour on the
@@ -74,7 +76,11 @@ export function MarketingNav() {
   const AccountIcon = signedIn ? LayoutDashboard : LogIn;
 
   const isActive = (href: string) => {
-    const [path] = href.split("#");
+    const [path, hash] = href.split("#");
+    // A link into a section of the landing page owns no page of its own: only
+    // the routes that are a page may claim to be here, so the anchor lights
+    // nowhere however deep in the site it is read.
+    if (hash) return false;
     return path === "/" ? pathname === "/" : pathname.startsWith(path);
   };
 

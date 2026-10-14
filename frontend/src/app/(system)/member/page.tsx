@@ -47,6 +47,17 @@ export default function MemberPage() {
   const [email, setEmail] = useState("");
   const [originalEmail, setOriginalEmail] = useState("");
 
+  // Email verification when changing email
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [showEmailVerifyModal, setShowEmailVerifyModal] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [requestingCode, setRequestingCode] = useState(false);
+
+  // Profile picture removal confirmation prompt
+  const [showRemovePhotoPrompt, setShowRemovePhotoPrompt] = useState(false);
+
   // Who the account is: the name on file and the picture they show beside it.
   // Sex rides along read-only — the church's record, changeable only by the
   // office — so the profile shows it without offering to write it.
@@ -79,6 +90,7 @@ export default function MemberPage() {
           setDisplayName([data.first_name, data.last_name].filter(Boolean).join(" ") || data.username || "");
           setEmail(data.email || "");
           setOriginalEmail(data.email || "");
+          setPendingEmail(data.pending_email_change || "");
           setGender(data.gender || "");
           setPhotoUrl(data.photo_url || "");
         }
@@ -87,16 +99,30 @@ export default function MemberPage() {
     getPushState().then(setPushSupport).catch(() => setPushSupport(null));
   }, [token]);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (showRemovePhotoPrompt && !photoSaving) setShowRemovePhotoPrompt(false);
+        if (showEmailVerifyModal && !verifyingCode) setShowEmailVerifyModal(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showRemovePhotoPrompt, photoSaving, showEmailVerifyModal, verifyingCode]);
+
   async function saveContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) return;
     setPhoneSaving(true);
     setPhoneMessage("");
     try {
-      // The address rides along only when it actually moved: sending it
-      // always would mean an accidental edit of an untouched field could    // clear the account's address and its receipts with it.
+      const emailChanged = email.trim().toLowerCase() !== originalEmail.trim().toLowerCase();
+
+      // If phone changed or address was explicitly cleared, send PATCH to me/
       const payload: Record<string, string> = { phone_number: phone.trim() };
-      if (email.trim() !== originalEmail) payload.email = email.trim();
+      if (email.trim() === "" && originalEmail) {
+        payload.email = "";
+      }
       const response = await fetch(`${API_URL}/api/members/me/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -104,17 +130,39 @@ export default function MemberPage() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        // The API names the field it refused — read it back verbatim.
         throw new Error(data?.phone_number || data?.email || data?.detail || "Your contact details could not be saved.");
       }
       setPhone(data?.phone_number ?? phone.trim());
-      if (data && typeof data.email === "string") {
-        setEmail(data.email);
-        setOriginalEmail(data.email);
+      if (email.trim() === "" && originalEmail) {
+        setEmail("");
+        setOriginalEmail("");
+        setPendingEmail("");
+        patchCachedMe({ email: "" });
       }
-      const successMsg = "Your contact details have been saved.";
-      setPhoneMessage(successMsg);
-      showAlert("Contact details saved", successMsg, "success");
+
+      // If email changed to a new address, trigger verification
+      if (emailChanged && email.trim() !== "") {
+        const reqResponse = await fetch(`${API_URL}/api/members/me/email-change/request/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        const reqData = await reqResponse.json().catch(() => null);
+        if (!reqResponse.ok) {
+          throw new Error(reqData?.email || reqData?.detail || "Unable to request email verification.");
+        }
+        setPendingEmail(email.trim());
+        setShowEmailVerifyModal(true);
+        setVerificationCode("");
+        setVerifyError("");
+        const msg = `Verification code sent to ${email.trim()}. Enter it to confirm your new email.`;
+        setPhoneMessage(msg);
+        showAlert("Verification code sent", msg, "info");
+      } else if (!emailChanged) {
+        const successMsg = "Your contact details have been saved.";
+        setPhoneMessage(successMsg);
+        showAlert("Contact details saved", successMsg, "success");
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Your contact details could not be saved.";
       setPhoneMessage(errorMsg);
@@ -122,6 +170,77 @@ export default function MemberPage() {
     } finally {
       setPhoneSaving(false);
     }
+  }
+
+  async function verifyEmailChange(e?: FormEvent) {
+    if (e) e.preventDefault();
+    if (!token || !verificationCode.trim()) return;
+    setVerifyingCode(true);
+    setVerifyError("");
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/email-change/verify/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: verificationCode.trim() }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.code || data?.detail || "Verification failed. Check the code and try again.");
+      }
+      const updatedEmail = data.email || pendingEmail;
+      setEmail(updatedEmail);
+      setOriginalEmail(updatedEmail);
+      setPendingEmail("");
+      setShowEmailVerifyModal(false);
+      setVerificationCode("");
+      patchCachedMe({ email: updatedEmail });
+      showAlert("Email verified", "Your email address has been successfully verified and updated.", "success");
+      setPhoneMessage("Your email address has been updated.");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Verification failed.";
+      setVerifyError(msg);
+    } finally {
+      setVerifyingCode(false);
+    }
+  }
+
+  async function resendEmailCode() {
+    if (!token || !pendingEmail) return;
+    setRequestingCode(true);
+    setVerifyError("");
+    try {
+      const res = await fetch(`${API_URL}/api/members/me/email-change/request/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.email || data?.detail || "Could not resend verification code.");
+      }
+      showAlert("Code resent", `A new verification code was sent to ${pendingEmail}.`, "success");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Could not resend code.";
+      setVerifyError(msg);
+    } finally {
+      setRequestingCode(false);
+    }
+  }
+
+  async function cancelEmailChange() {
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/api/members/me/email-change/cancel/`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {}
+    setPendingEmail("");
+    setShowEmailVerifyModal(false);
+    setVerificationCode("");
+    setVerifyError("");
+    setEmail(originalEmail);
+    showAlert("Cancelled", "Email change request has been cancelled.", "info");
   }
 
   /** The picture: posted as the file it is, then read back by its new URL.
@@ -359,7 +478,7 @@ export default function MemberPage() {
                   <button
                     type="button"
                     disabled={photoSaving}
-                    onClick={() => void removePhoto()}
+                    onClick={() => setShowRemovePhotoPrompt(true)}
                     className="rounded-full border border-sand-line px-5 py-2.5 text-sm font-semibold text-moss transition hover:border-ember hover:text-ember disabled:opacity-60"
                   >
                     Remove
@@ -401,6 +520,35 @@ export default function MemberPage() {
                 />
               </label>
             </div>
+            {pendingEmail && (
+              <div className="mt-4 rounded-2xl bg-sand p-4 border border-sand-line flex flex-wrap items-center justify-between gap-3 text-sm">
+                <div>
+                  <span className="font-semibold text-bark">Verification pending:</span>{" "}
+                  <span className="text-moss">{pendingEmail}</span>
+                  <p className="mt-0.5 text-xs text-moss">A 6-digit verification code was sent to this address to verify ownership.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVerifyError("");
+                      setVerificationCode("");
+                      setShowEmailVerifyModal(true);
+                    }}
+                    className="rounded-full bg-sage px-4 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                  >
+                    Enter code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void cancelEmailChange()}
+                    className="rounded-full border border-sand-line px-4 py-2 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
+                  >
+                    Cancel change
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="mt-5 flex justify-end">
               <button disabled={phoneSaving} className="rounded-full bg-sage px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">
                 {phoneSaving ? "Saving..." : "Save contact details"}
@@ -646,6 +794,139 @@ export default function MemberPage() {
           )}
         </div>
       </div>
+
+      {/* Remove Profile Picture Confirmation Modal */}
+      {showRemovePhotoPrompt && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remove-photo-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !photoSaving) {
+              setShowRemovePhotoPrompt(false);
+            }
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              <h3 id="remove-photo-dialog-title" className="text-xl font-bold text-bark">
+                Remove profile picture?
+              </h3>
+              <p className="mt-2 text-sm text-moss leading-relaxed">
+                Are you sure you want to remove your profile picture? Your profile and the navigation bar will revert to displaying your initial.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-4">
+              <button
+                type="button"
+                disabled={photoSaving}
+                onClick={() => setShowRemovePhotoPrompt(false)}
+                className="rounded-full border border-sand-line px-5 py-2.5 text-sm font-semibold text-moss transition hover:bg-sand disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={photoSaving}
+                onClick={async () => {
+                  await removePhoto();
+                  setShowRemovePhotoPrompt(false);
+                }}
+                className="rounded-full bg-ember px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                {photoSaving ? "Removing..." : "Remove picture"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Verification Modal */}
+      {showEmailVerifyModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="email-verify-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !verifyingCode) {
+              setShowEmailVerifyModal(false);
+            }
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <form onSubmit={(e) => void verifyEmailChange(e)} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                  <h3 id="email-verify-dialog-title" className="text-xl font-bold text-bark">
+                    Verify new email address
+                  </h3>
+                  <p className="mt-2 text-sm text-moss leading-relaxed">
+                    We sent a 6-digit verification code to <strong className="text-bark">{pendingEmail}</strong>. Enter the code below to confirm changing your account email.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-moss">
+                    6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/\D/g, "");
+                      setVerificationCode(clean);
+                      setVerifyError("");
+                    }}
+                    placeholder="000000"
+                    className="mt-1.5 block w-full rounded-2xl border border-sand-mute px-4 py-3 text-center text-2xl font-mono tracking-widest outline-none focus:border-ember"
+                  />
+                </div>
+
+                {verifyError && (
+                  <p className="rounded-xl bg-ember/10 p-2.5 text-xs font-medium text-ember">
+                    {verifyError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <button
+                    type="button"
+                    disabled={requestingCode}
+                    onClick={() => void resendEmailCode()}
+                    className="font-medium text-sage hover:underline disabled:opacity-60"
+                  >
+                    {requestingCode ? "Resending..." : "Didn't receive code? Resend"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Fixed bottom button panel */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-4">
+                <button
+                  type="button"
+                  disabled={verifyingCode}
+                  onClick={() => setShowEmailVerifyModal(false)}
+                  className="rounded-full border border-sand-line px-5 py-2.5 text-sm font-semibold text-moss transition hover:bg-sand disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={verifyingCode || verificationCode.trim().length !== 6}
+                  className="rounded-full bg-sage px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                >
+                  {verifyingCode ? "Verifying..." : "Verify & update"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

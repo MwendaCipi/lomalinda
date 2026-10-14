@@ -17,7 +17,10 @@ import { footerColumns, footerLinkOf } from "@/config/navigation";
 const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
 
 // Every one of these is a page a visitor can actually open — no member sign-in
-// required — so the landing page never sends anyone to a gate.
+// required — so the landing page never sends anyone to a gate. Three cards,
+// each a real page: when we meet, what to study, how to give. The church's
+// photo wall and the testimony desk belong to the app now, so they are not
+// offered here.
 //
 // The page asks a visitor for one thing only: a giving announcement's pledge,
 // through the church's own pledge form on the card above. Prayer requests, a
@@ -38,16 +41,6 @@ const ways = [
     href: "/give",
     title: "Giving & campaigns",
     text: "Tithes and offerings by mobile money, and fund drives for the church's work.",
-  },
-  {
-    href: "/share/moments",
-    title: "Church moments",
-    text: "Sabbath songs, services and events from around the church year.",
-  },
-  {
-    href: "/spiritual/testimonies",
-    title: "Share your story",
-    text: "Testimonies and the fellowship that happens between Sabbaths.",
   },
 ];
 

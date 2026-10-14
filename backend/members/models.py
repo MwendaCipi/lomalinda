@@ -2461,6 +2461,56 @@ class ProfileChangeRequest(models.Model):
         return f"Profile change for {member_name} ({self.status}, {len(self.changes)} field(s))"
 
 
+class EmailChangeRequest(models.Model):
+    """A member's request to change their account email address, pending verification.
+
+    When a member updates their email in their profile, a verification code is
+    emailed to the new address. The account email is only modified once the
+    member enters the code received at that new address.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='email_change_requests',
+        help_text='The member who requested the email change.',
+    )
+    new_email = models.EmailField(
+        help_text='The new email address awaiting verification.',
+    )
+    code = models.CharField(
+        max_length=64,
+        help_text='SHA-256 hash of the short verification code emailed to the new address.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    verified = models.BooleanField(default=False)
+
+    raw_code = None
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def set_code(self, raw_code=None):
+        self.raw_code = str(raw_code or self._new_code())
+        self.code = invitation_code_hash(self.raw_code)
+        return self.raw_code
+
+    @staticmethod
+    def _new_code():
+        return ''.join(secrets.choice(VERIFICATION_CODE_ALPHABET) for _ in range(VERIFICATION_CODE_DIGITS))
+
+    def check_code(self, raw_code):
+        if not raw_code:
+            return False
+        return self.code == invitation_code_hash(raw_code)
+
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    def __str__(self):
+        return f"Email change for {self.user} -> {self.new_email} (verified={self.verified})"
+
+
 class ChildrenGroup(models.Model):
     """A children division / category in the church (Beginners, Kindergarten, Primary, Teens, Pathfinders...).
 

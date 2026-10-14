@@ -44,7 +44,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 from .validators import validate_phone_number
@@ -2769,6 +2769,15 @@ class MeView(APIView):
             # departments and ministries, not the whole church.
             'my_ties': member_tie_codes(request.user),
             'profile_update_pending': bool(profile and profile.needs_profile_update()),
+            'pending_email_change': (
+                EmailChangeRequest.objects.filter(
+                    user=request.user, verified=False, expires_at__gt=timezone.now()
+                )
+                .order_by('-created_at')
+                .values_list('new_email', flat=True)
+                .first()
+                or ''
+            ),
         })
 
     def patch(self, request):
@@ -2957,6 +2966,116 @@ class MePhotoView(APIView):
             profile.photo = ''
             profile.save(update_fields=['photo'])
         return Response({'photo_url': ''})
+
+
+def send_email_change_verification(user, change_request):
+    church_name = current_church_name()
+    name = user.first_name or user.username or 'there'
+    send_mail(
+        f'Verify your new email address — {church_name_plain(church_name)}',
+        f"Hello {name},\n\n"
+        f"You requested to change the email address on your church account to {change_request.new_email}.\n\n"
+        f"Your verification code is:\n\n{change_request.raw_code}\n\n"
+        f"Enter this code on your profile page to confirm your new email address. "
+        f"It is valid for 30 minutes.\n\n"
+        f"If you did not request this change, you can safely ignore this email.\n\n"
+        f"Warm regards,\n{church_name}",
+        settings.DEFAULT_FROM_EMAIL,
+        [change_request.new_email],
+        fail_silently=False,
+    )
+
+
+class EmailChangeRequestView(APIView):
+    """Request a verification code to change account email."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = MemberEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        raw_email = serializer.validated_data.get('email', '').strip()
+        if not raw_email:
+            return Response({'email': 'Enter an email address.'}, status=status.HTTP_400_BAD_REQUEST)
+        new_email = raw_email.lower()
+
+        if new_email == (request.user.email or '').strip().lower():
+            return Response({'email': 'This is already your email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=new_email).exclude(pk=request.user.pk).exists():
+            return Response({'email': 'An account already exists with this email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Invalidate any previous unverified requests for this user
+        EmailChangeRequest.objects.filter(user=request.user, verified=False).delete()
+
+        change_request = EmailChangeRequest(
+            user=request.user,
+            new_email=new_email,
+            expires_at=timezone.now() + timedelta(minutes=30),
+        )
+        change_request.set_code()
+        change_request.save()
+
+        try:
+            send_email_change_verification(request.user, change_request)
+        except Exception:
+            pass
+
+        return Response({
+            'message': f'A verification code has been sent to {new_email}. Enter it to confirm your new email address.',
+            'pending_email': new_email,
+        })
+
+
+class EmailChangeVerifyView(APIView):
+    """Verify code and update account email."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        code = str(request.data.get('code') or '').strip()
+        if not code:
+            return Response({'code': 'Enter the verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pending = (
+            EmailChangeRequest.objects.filter(user=request.user, verified=False)
+            .order_by('-created_at')
+            .first()
+        )
+        if not pending or pending.is_expired():
+            return Response(
+                {'detail': 'This verification code is invalid or expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not pending.check_code(code):
+            return Response(
+                {'detail': 'This verification code is invalid or expired.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(email__iexact=pending.new_email).exclude(pk=request.user.pk).exists():
+            return Response(
+                {'detail': 'An account already exists with this email address.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request.user.email = pending.new_email
+        request.user.save(update_fields=['email'])
+        pending.verified = True
+        pending.save(update_fields=['verified'])
+
+        return Response({
+            'message': 'Your email address has been updated successfully.',
+            'email': request.user.email,
+        })
+
+
+class EmailChangeCancelView(APIView):
+    """Cancel a pending email change request."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        EmailChangeRequest.objects.filter(user=request.user, verified=False).delete()
+        return Response({'message': 'Pending email change cancelled.'})
 
 
 class ProfileUpdateView(APIView):

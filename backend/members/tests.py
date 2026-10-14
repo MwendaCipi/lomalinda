@@ -59,7 +59,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -13352,3 +13352,106 @@ class NoGuessedEmailAddressTests(TestCase):
             email = 'friend.0712345678@friend.church'
 
         self.assertEqual(receipt_email_for(_SignedInGiver()), '')
+
+
+class EmailChangeVerificationTests(APITestCase):
+    REQUEST_URL = '/api/members/me/email-change/request/'
+    VERIFY_URL = '/api/members/me/email-change/verify/'
+    CANCEL_URL = '/api/members/me/email-change/cancel/'
+    ME_URL = '/api/members/me/'
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            'email.member', 'current@example.com', 'Pass#2026', first_name='Ruth', last_name='Member'
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        mail.outbox.clear()
+
+    def test_request_email_change_sends_verification_code(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.REQUEST_URL, {'email': 'new.address@example.com'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pending_email'], 'new.address@example.com')
+
+        req = EmailChangeRequest.objects.get(user=self.member)
+        self.assertEqual(req.new_email, 'new.address@example.com')
+        self.assertFalse(req.verified)
+
+        # Check mail was sent
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertIn('new.address@example.com', sent.to)
+        self.assertIn('Your verification code is:', sent.body)
+        raw_code = sent.body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
+        self.assertTrue(req.check_code(raw_code))
+
+        # Me endpoint reports pending email change
+        me_resp = self.client.get(self.ME_URL)
+        self.assertEqual(me_resp.data['pending_email_change'], 'new.address@example.com')
+        self.assertEqual(me_resp.data['email'], 'current@example.com')
+
+    def test_request_email_change_rejects_same_email(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.REQUEST_URL, {'email': 'current@example.com'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already your email', response.data['email'])
+
+    def test_request_email_change_rejects_already_registered_email(self):
+        User.objects.create_user('other.member', 'other@example.com', 'Pass#2026')
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.REQUEST_URL, {'email': 'other@example.com'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already exists', response.data['email'])
+
+    def test_successful_verification_updates_email(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.REQUEST_URL, {'email': 'verified.new@example.com'}, format='json')
+        raw_code = mail.outbox[-1].body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
+
+        # Post the verification code
+        response = self.client.post(self.VERIFY_URL, {'code': raw_code}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], 'verified.new@example.com')
+
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.email, 'verified.new@example.com')
+
+        # Pending email change is cleared
+        me_resp = self.client.get(self.ME_URL)
+        self.assertEqual(me_resp.data['pending_email_change'], '')
+        self.assertEqual(me_resp.data['email'], 'verified.new@example.com')
+
+    def test_invalid_code_is_refused(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.REQUEST_URL, {'email': 'verified.new@example.com'}, format='json')
+
+        response = self.client.post(self.VERIFY_URL, {'code': '000000'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.email, 'current@example.com')
+
+    def test_expired_code_is_refused(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.REQUEST_URL, {'email': 'verified.new@example.com'}, format='json')
+        raw_code = mail.outbox[-1].body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
+        req = EmailChangeRequest.objects.get(user=self.member)
+        req.expires_at = timezone.now() - timedelta(minutes=1)
+        req.save(update_fields=['expires_at'])
+
+        response = self.client.post(self.VERIFY_URL, {'code': raw_code}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.member.refresh_from_db()
+        self.assertEqual(self.member.email, 'current@example.com')
+
+    def test_cancel_pending_email_change(self):
+        self.client.force_authenticate(self.member)
+        self.client.post(self.REQUEST_URL, {'email': 'cancelled@example.com'}, format='json')
+        self.assertTrue(EmailChangeRequest.objects.filter(user=self.member, verified=False).exists())
+
+        response = self.client.post(self.CANCEL_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(EmailChangeRequest.objects.filter(user=self.member, verified=False).exists())
+
+        me_resp = self.client.get(self.ME_URL)
+        self.assertEqual(me_resp.data['pending_email_change'], '')
+
