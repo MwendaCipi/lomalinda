@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useHeaderData } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -27,6 +28,7 @@ const defaultSubtext =
  */
 export function ClarionHero() {
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
+  const { hasToken } = useHeaderData();
 
   useEffect(() => {
     fetch(`${API_URL}/api/members/church-settings/`)
@@ -54,12 +56,21 @@ export function ClarionHero() {
         {subtext}
       </p>
       <div className="hero-line mt-6 grid grid-cols-1 gap-3 sm:mt-9 sm:grid-cols-2 sm:gap-4 sm:max-w-xl">
-        <Link
-          href="#contact"
-          className="flex items-center justify-center rounded-full border border-sand-mute bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-bark hover:bg-sand-tint sm:py-3.5 sm:text-base"
-        >
-          Location &amp; Contacts
-        </Link>
+        {hasToken ? (
+          <Link
+            href="/dashboard"
+            className="flex items-center justify-center rounded-full bg-ember px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-ember-dark sm:py-3.5 sm:text-base shadow-sm"
+          >
+            Go to Member Dashboard &rarr;
+          </Link>
+        ) : (
+          <Link
+            href="#contact"
+            className="flex items-center justify-center rounded-full border border-sand-mute bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-bark hover:bg-sand-tint sm:py-3.5 sm:text-base"
+          >
+            Location &amp; Contacts
+          </Link>
+        )}
         <Link
           href="/calendar"
           className="flex items-center justify-center rounded-full border border-sand-mute bg-white px-4 py-3 text-center text-sm font-medium transition hover:border-bark hover:bg-sand-tint sm:py-3.5 sm:text-base"
