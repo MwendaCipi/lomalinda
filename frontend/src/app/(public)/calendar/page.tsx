@@ -16,9 +16,7 @@ import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbat
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { dayFirst, weekdayOf } from "@/lib/dates";
 
-import { PublicSectionNav } from "@/components/public-section-nav";
 import { ChurchLockup } from "@/components/church-lockup";
-import { publicWebsiteLinks } from "@/config/site-sections";
 
 /**
  * The page a first-time visitor searches for and never finds: the church
@@ -447,14 +445,6 @@ function CalendarPageContent() {
                 Every Sabbath School, vespers, programme and special event the church holds through the year, in one week-by-week view.
               </p>
             </div>
-        <PublicSectionNav
-          eyebrow="Explore"
-          title="The church at a glance"
-          description="Sabbath worship, study materials, prayer and care, giving, and the fellowship we share between Sabbaths."
-          links={publicWebsiteLinks}
-          activeKey="calendar"
-          className="border-t border-sand-line bg-white/60"
-        />
           </div>
         </div>
       </section>

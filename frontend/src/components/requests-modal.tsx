@@ -266,9 +266,10 @@ export function RequestsModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="requests-modal-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8"
+        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-sand-line bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        {/* Fixed header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 py-4 sm:px-8">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-ember">Requests</p>
             <h3 id="requests-modal-title" className="text-lg font-bold text-bark">
@@ -286,12 +287,14 @@ export function RequestsModal({
           </button>
         </div>
 
-        {error && (
-          <p className="mt-4 rounded-xl bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700">{error}</p>
-        )}
+        {/* Scrollable body */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-8">
+          {error && (
+            <p className="mb-4 rounded-xl bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-700">{error}</p>
+          )}
 
-        <form onSubmit={submit} className="mt-4 space-y-5 text-sm">
-          {/* The first field in the modal: the request type. */}
+          <form id="requests-modal-form" onSubmit={submit} className="space-y-5 text-sm">
+            {/* The first field in the modal: the request type. */}
           <div>
             <label className={labelCls} htmlFor="request-type">
               Request type <span className="text-moss">*</span>
@@ -650,24 +653,28 @@ export function RequestsModal({
             </>
           )}
 
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 rounded-full bg-ember px-6 py-3.5 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
-            >
-              {submitting ? "Sending..." : `Send ${REQUEST_TYPES.find((t) => t.value === requestType)?.label ?? "Request"}`}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="rounded-full border border-sand-mute px-6 py-3.5 font-semibold text-bark transition hover:bg-sand"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
+
+        {/* Fixed footer */}
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-4 sm:px-8">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-full border border-sand-mute px-6 py-3 font-semibold text-bark transition hover:bg-sand"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="requests-modal-form"
+            disabled={submitting}
+            className="rounded-full bg-ember px-6 py-3 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-60"
+          >
+            {submitting ? "Submitting…" : "Submit"}
+          </button>
+        </div>
       </div>
     </div>
   );
