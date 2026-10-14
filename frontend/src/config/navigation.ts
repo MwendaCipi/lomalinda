@@ -125,9 +125,11 @@ export const destinations = {
     description: "Where the church family gathers.",
     icon: Megaphone,
     area: "fellowship",
-    // Materials rides this section now (it is a page of Fellowship, not a
-    // place of its own), so its tree belongs to the section's matchers too.
-    match: ["/fellowship", "/share", "/spiritual", "/announcements", "/community", "/enroll", "/materials"],
+    // The section's own tree and the pages that redirect into it. Materials is
+    // no longer one of them: it stands on a rail row and a phone tab of its
+    // own, so claiming its tree here would light this tab on a page that is
+    // not Fellowship's — and would file the page under a section it left.
+    match: ["/fellowship", "/share", "/spiritual", "/announcements", "/community", "/enroll"],
   },
   announcements: {
     href: "/announcements",
@@ -824,25 +826,27 @@ export const railEntries: RailEntry[] = [
   {
     label: "Fellowship",
     icon: Megaphone,
-    // Two things have no row of their own and ride here instead. Materials is
-    // something the church shares, read beside the news and the calendar —
-    // giving its slot back to the phone's bar frees the room the Ministries
-    // and Departments tabs need there. And the requests: prayer, visitation,
-    // dedication and joining used to stand on a rail row of their own, but a
-    // member asking the church for something is already in Fellowship — the
-    // phone's tab stays lit on every /community page — so the four forms have
-    // one place of their own on the strip rather than four chips of their own
-    // in the rail. That one page opens with the request type as its first
-    // field, which is the pick the rest of the form hangs off.
+    // One thing has no row of its own and rides here instead: the requests.
+    // Prayer, visitation, dedication and joining used to stand on a rail row
+    // of their own, but a member asking the church for something is already in
+    // Fellowship — the phone's tab stays lit on every /community page — so the
+    // four forms have one place of their own on the strip rather than four
+    // chips of their own in the rail. That one page opens with the request type
+    // as its first field, which is the pick the rest of the form hangs off.
     items: [
       page("announcements"),
       page("calendar"),
       page("moments"),
       page("testimonies"),
-      page("materials"),
       page("requests"),
     ],
   },
+  // Materials stands on a row of its own: the church's study shelf is a place a
+  // member goes to, not a page of the week's news, so it keeps a rail row and
+  // the phone's bar carries it too (see `tabKeys`). It is a plain row rather
+  // than a one-page section — the strip on it is the page's own shelves, handed
+  // to the shell, so there are no siblings for a section strip to name.
+  { ...page("materials"), sectionKey: "my-church" },
   {
     label: "Stewardship",
     icon: HandHeart,
@@ -920,6 +924,7 @@ export type RailSection =
 /** Which heading a row is filed under; a row with none sits before the first. */
 const RAIL_SECTION_OF: Partial<Record<string, RailSection>> = {
   "Fellowship": "my-church",
+  "Materials": "my-church",
   "Stewardship": "my-church",
 };
 
@@ -1317,13 +1322,15 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
  * and departments as the member's own map of them, which every member may read
  * (the office console keeps the writing side). Home has no tab of its own: the
  * topbar's church mark is the way back to the dashboard, which is the floor of
- * the back stack. Materials has no tab either — it is a page of Fellowship
- * now. Staff still reach the console from the account menu.
+ * the back stack. Materials rides between Stewardship and Chat: the study shelf
+ * is read all week, beside the giving page and the rooms rather than inside a
+ * section's strip. Staff still reach the console from the account menu.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
   { key: "myAreas" },
   { key: "give" },
+  { key: "materials" },
   { key: "chat" },
 ];
 

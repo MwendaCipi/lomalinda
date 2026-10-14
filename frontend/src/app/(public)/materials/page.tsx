@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 
 import { SubNav } from "@/components/sub-nav";
 import { PublicSectionNav } from "@/components/public-section-nav";
@@ -47,9 +45,11 @@ function sectionFromUrl(): MaterialSection {
  * Two strips used to stand on top of this page — the shell's Fellowship pages
  * and this page's own shelves — so a member read two rows of toggles that were
  * not even the same kind of thing. Handing the shelves to the shell makes them
- * the *only* strip: the Fellowship row steps aside, the heading reads Materials
- * with the way back to Fellowship above it, and the shelves answer to it, the
- * same shape an opened area takes on My Areas.
+ * the *only* strip: no section strip is left to name, the heading reads
+ * Materials and the shelves answer to it, the same shape an opened area takes
+ * on My Areas. Materials is a place of its own on the rail and a tab of its own
+ * on a phone, so the page carries no way back to Fellowship above its name —
+ * the bars it was reached from are the way out.
  *
  * The marketing intro and the Fellowship tail below return only for signed-out
  * visitors, where the page doubles as the public website's study-materials page.
@@ -104,23 +104,10 @@ export default function MaterialsPage() {
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
 
-  // Materials is a page of Fellowship, so the way out of it is the section it
-  // was filed under — read above the name on a phone, where the rail is out of
-  // sight and this page carries no other door back.
+  // The page names itself: the shelf strip below it is this page's, not a
+  // section's, so the heading is the only place the place is named.
   useEffect(() => {
-    setCustomHeader({
-      label: "Materials",
-      description: PAGE_DESCRIPTION,
-      leading: (
-        <Link
-          href="/announcements"
-          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Fellowship
-        </Link>
-      ),
-    });
+    setCustomHeader({ label: "Materials", description: PAGE_DESCRIPTION });
     return () => setCustomHeader(null);
   }, [setCustomHeader]);
 

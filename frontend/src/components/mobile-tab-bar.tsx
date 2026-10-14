@@ -23,10 +23,12 @@ type TabItem = {
  * The phone's tab bar — the places a member moves between all week.
  *
  * Every tab navigates: a section's tab opens the section's first page, and
- * the chip strip on that page carries its siblings (AppFrame). The last tab
- * includes Fellowship, the member's ministry map, Stewardship and Chat. The office
- * console has no tab any more (the church's own areas matter more than the
- * office's here); staff reach it from the account menu.
+ * the chip strip on that page carries its siblings (AppFrame). The bar carries
+ * Fellowship, the member's ministry map, Stewardship, Materials and Chat —
+ * Materials read between the giving page and the rooms, because the study shelf
+ * is opened all week the way those two are. The office console has no tab any
+ * more (the church's own areas matter more than the office's here); staff reach
+ * it from the account menu.
  */
 export function MobileTabBar() {
   const pathname = normalizePath(usePathname());

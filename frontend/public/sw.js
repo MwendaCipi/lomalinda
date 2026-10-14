@@ -410,8 +410,14 @@
    cannot be handed back as a page), so the cards opened nothing. A navigation
    to /api/ now falls through to the browser, which follows the redirect itself
    exactly as it did before the API cache landed. Chrome changed, so installed
-   apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v79";
+   apps must take the new shell.
+
+   v80 — Materials stands on its own again: a rail row and a tab on the phone's
+   bottom bar, between Stewardship and Chat, instead of a chip on Fellowship's
+   strip. Chrome changed, so installed apps must take the new shell. Its page is
+   precached with the other public pages, so a tab that is now one tap away is
+   not blank offline. */
+const CACHE_NAME = "sda-loma-linda-meru-v80";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -420,6 +426,7 @@ const STATIC_ASSETS = [
   "/announcements/",
   "/give/",
   "/login/",
+  "/materials/",
   "/requests/",
   "/share/",
   "/share/sabbath-school/",
