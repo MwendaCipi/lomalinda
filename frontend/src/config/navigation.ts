@@ -1407,7 +1407,7 @@ export const footerColumns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: "Church",
     links: [
-      { href: "#beliefs", label: "What we believe" },
+      { href: "/beliefs", label: "What we believe" },
       { href: "#contact", label: "Contact & directions" },
       { key: "about" },
       { href: "/privacy", label: "Privacy Policy" },

@@ -138,6 +138,13 @@ export const aboutSectionLinks: SectionLink[] = [
     icon: Building2,
   },
   {
+    key: "beliefs",
+    href: "/beliefs",
+    label: "What We Believe",
+    description: "The faith that shapes our worship, with the Scripture behind each belief.",
+    icon: Book,
+  },
+  {
     key: "calendar",
     href: "/calendar",
     label: "Church Calendar",

@@ -10,13 +10,14 @@ import { normalizePath } from "@/lib/paths";
 
 // Three links, and every one of them a page a visitor can open without
 // signing in: the calendar the public reads to know when we meet, the beliefs
-// the landing page states (an anchor back to the landing's own section, so it
-// works from any public page), and the way to give. Everything else the church
-// has — About, study materials, contact — lives in the footer and in the
-// landing page's own body, which is where a first-time visitor reads it.
+// the landing page states (a page of their own, since the header must work
+// from anywhere on the site, not only from the landing), and the way to give.
+// Everything else the church has — About, study materials, contact — lives in
+// the footer and in the landing page's own body, which is where a first-time
+// visitor reads it.
 const marketingLinks = [
   { href: "/calendar", label: "Calendar" },
-  { href: "/#beliefs", label: "Beliefs" },
+  { href: "/beliefs", label: "Beliefs" },
   { href: "/give", label: "Give" },
 ];
 

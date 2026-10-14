@@ -39,14 +39,21 @@ const beliefs = [
   },
 ];
 
-export function ChurchBeliefs() {
+export function ChurchBeliefs({ asPage = false }: { asPage?: boolean }) {
+  // The same beliefs read two ways: as a section of the landing page (an h2
+  // under the page's own headline) and as the page the header names (its own
+  // h1, with the page's spacing rather than the section's).
+  const Heading = asPage ? "h1" : "h2";
   return (
-    <section id="beliefs" className="px-6 py-16 lg:px-8 lg:py-20">
+    <section
+      id="beliefs"
+      className={asPage ? "px-6 pb-16 pt-14 lg:px-8 lg:pb-20 lg:pt-20" : "px-6 py-16 lg:px-8 lg:py-20"}
+    >
       <div className="mx-auto max-w-6xl">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">What we believe</p>
-        <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
+        <Heading className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
           Rooted in Scripture, looking for Jesus to come
-        </h2>
+        </Heading>
         <p className="mt-5 max-w-3xl text-base leading-8 text-moss">
           We are a Seventh-day Adventist congregation, which simply means we keep the seventh-day Sabbath and
           live in the hope of Christ&apos;s return. These are the beliefs that shape our worship and our life
