@@ -78,7 +78,9 @@ export default function MaterialsPage() {
   // The shelf chips, in one stable array: the shell's toggle slot is written
   // from an effect, so a fresh list each render would re-register every time.
   const shelfItems = useMemo(
-    () => materialSections.map((entry) => ({ key: entry.value, label: entry.label, icon: entry.icon })),
+    // `short` is what a phone reads: the four shelves share one row there, so
+    // the one-worder is the name, and the full one answers on a wider screen.
+    () => materialSections.map((entry) => ({ key: entry.value, label: entry.label, short: entry.short, icon: entry.icon })),
     []
   );
 

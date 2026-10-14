@@ -36,10 +36,18 @@ const stripClass =
 const phoneGridClass =
   "grid min-h-12 w-full grid-cols-3 items-stretch gap-1 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
-/** A long strip's phone layout: the grid above, three chips a row. */
+/** A long strip's phone layout: the grid above, three chips a row — or four
+ *  when the count divides by four, so the four study shelves read as one level
+ *  row and eight toggles as two level rows of four. Six keeps three a row,
+ *  leaving Giving's six pages and the elders' six views as the two level rows
+ *  they are. Same shape as the grid above with the count the strip needs. */
+const fourUpGridClass =
+  "grid min-h-12 w-full grid-cols-4 items-stretch gap-1 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
+
 function stripLayout(items: readonly { key: string }[]): string {
   // Three or fewer items fit a phone on one natural row; from four up the
   // strip wraps anyway, so it switches to the equal-share grid instead.
+  if (items.length > 3 && items.length % 4 === 0) return fourUpGridClass;
   return items.length > 3 ? phoneGridClass : `${stripClass} flex`;
 }
 

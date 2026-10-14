@@ -21,6 +21,95 @@ const FLOOR_TIMEOUT_MS = 1000;
 type HistoryState = Record<string, unknown> | null;
 
 /**
+ * The page each live entry holds, keyed by its index.
+ *
+ * The platform lets a page ask where it stands but not what is down there, so
+ * the answer is kept as the stack is stamped. It is what lets a tab recognise
+ * that its page is already in the history below it — the platform cannot
+ * delete an entry, so the way to keep Back short is to walk back to the one
+ * that already holds the page rather than add a second copy above it.
+ */
+const entryPaths = new Map<number, string>();
+
+/** The page an entry holds: path and query, the address a member recognises. */
+function pathKey(url?: string | URL | null): string {
+  const raw = url === null || url === undefined ? window.location.href : String(url);
+  let path: string;
+  let search = "";
+  try {
+    const resolved = new URL(raw, window.location.href);
+    path = resolved.pathname;
+    search = resolved.search;
+  } catch {
+    return raw;
+  }
+  // The app is exported with a trailing slash, so "/give" and "/give/" are
+  // the same page to a member and have to compare as one — a tab's href has
+  // no slash, while the address the router writes does.
+  if (path.length > 1 && !path.endsWith("/")) path += "/";
+  return path + search;
+}
+
+/** Forget the entries a push dropped from above the current one. */
+function forgetEntriesAbove(index: number) {
+  for (const known of [...entryPaths.keys()]) {
+    if (known > index) entryPaths.delete(known);
+  }
+}
+
+/** The index an entry already carries, or null when it predates the app. */
+function stampedIndex(state: unknown): number | null {
+  const value = (state as HistoryState)?.[APP_INDEX_KEY];
+  return typeof value === "number" ? value : null;
+}
+
+/** The most recent entry below us that already holds this page, or -1. */
+function earlierEntryFor(path: string): number {
+  let at = -1;
+  entryPaths.forEach((known, index) => {
+    if (index < currentIndex && known === path && index > at) at = index;
+  });
+  return at;
+}
+
+/** Set while a revisit is folding the stack back to the entry that held the page. */
+let pendingCollapse: { to: number } | null = null;
+let collapseTimer: number | null = null;
+/** Long enough for the router to finish painting the page it just pushed. */
+const COLLAPSE_DELAY_MS = 250;
+
+function cancelCollapse() {
+  pendingCollapse = null;
+  if (collapseTimer !== null) {
+    window.clearTimeout(collapseTimer);
+    collapseTimer = null;
+  }
+}
+
+/**
+ * Walk back to the entry that already holds the page we were just sent to.
+ *
+ * The push has happened by now — a navigation is never refused, only tidied
+ * up — so the walk lands on an entry holding the very same address: the screen
+ * does not change, and only the stack does. The entries above that one become
+ * forward history, which Back never visits and the next push drops.
+ */
+function scheduleCollapse(to: number) {
+  // The home walk owns the stack while it is under way.
+  if (pendingHome) return;
+  cancelCollapse();
+  pendingCollapse = { to };
+  collapseTimer = window.setTimeout(() => {
+    collapseTimer = null;
+    const pending = pendingCollapse;
+    pendingCollapse = null;
+    if (!pending || pendingHome) return;
+    const delta = pending.to - currentIndex;
+    if (delta < 0) window.history.go(delta);
+  }, COLLAPSE_DELAY_MS);
+}
+
+/**
  * Surfaces that need to know the location moved.
  *
  * Next's client navigation writes the address bar through the history API
@@ -90,17 +179,37 @@ export function trackAppHistory() {
   installed = true;
 
   const { pushState, replaceState } = window.history;
+  entryPaths.set(0, pathKey(null));
   replaceState.call(window.history, stamp(window.history.state, 0), "", window.location.href);
 
   window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
+    const target = pathKey(url);
+    // A page the member has already walked past is still in the stack below
+    // us: the push goes ahead as usual, then the stack folds back to the
+    // entry that already holds it — so the history keeps one entry per page
+    // and Back is one tap per place however the app is wandered.
+    const earlier = earlierEntryFor(target);
     currentIndex += 1;
     const result = pushState.call(this, stamp(data as HistoryState, currentIndex), unused, url);
+    // A push truncates whatever sat above us, so the stack is exactly these
+    // entries from here up.
+    entryPaths.set(currentIndex, target);
+    forgetEntriesAbove(currentIndex);
     notifyLocation();
+    if (earlier >= 0) scheduleCollapse(earlier);
     return result;
   };
 
   window.history.replaceState = function (data: unknown, unused: string, url?: string | URL | null) {
-    const result = replaceState.call(this, stamp(data as HistoryState, currentIndex), unused, url);
+    // A replace rewrites the entry under us; it does not move it, so the
+    // entry keeps the index it already carries. Stamping it from the counter
+    // instead would misplace it whenever something rewrites an entry this
+    // handler has not landed on yet — the router answers a popstate before
+    // this one does, and a misstamp makes a walk back land on a page the
+    // counter thinks is somewhere else entirely.
+    const index = stampedIndex(this.state) ?? currentIndex;
+    const result = replaceState.call(this, stamp(data as HistoryState, index), unused, url);
+    entryPaths.set(index, pathKey(url));
     notifyLocation();
     return result;
   };
@@ -110,6 +219,9 @@ export function trackAppHistory() {
     // floor. Reading the index off the destination also covers a jump across
     // several entries in one go.
     currentIndex = readIndex(event.state);
+    entryPaths.set(currentIndex, pathKey(null));
+    // The member has taken the stack over; a queued walk would now be wrong.
+    cancelCollapse();
     notifyLocation();
     if (currentIndex === 0 && pendingHome) {
       // One tick later: the router's own popstate handling starts first, and
@@ -147,6 +259,9 @@ export function collapseToHome(onFloor: () => void) {
   // step back a second time and overshoot the floor, landing on whatever
   // document the app was opened from.
   if (pendingHome) return;
+  // A revisit's walk would land somewhere else once this one has moved the
+  // stack, so it is dropped in favour of the longer one home.
+  cancelCollapse();
 
   pendingHome = onFloor;
   if (pendingTimer !== null) window.clearTimeout(pendingTimer);

@@ -212,28 +212,41 @@ export const newsAndEventsLinks: SectionLink[] = [
  */
 export type MaterialSection = "lesson-guides" | "mission-readings" | "bible-egw" | "hymnals";
 
-export const materialSections: { value: MaterialSection; label: string; description: string; icon: LucideIcon }[] = [
+export const materialSections: {
+  value: MaterialSection;
+  label: string;
+  /** The one-worder a phone's four-across strip shows: at 375px the full name
+   *  of a shelf does not fit four across, and a shelf the member cannot read
+   *  is a shelf they will not open. */
+  short: string;
+  description: string;
+  icon: LucideIcon;
+}[] = [
   {
     value: "lesson-guides",
     label: "Lesson Guides",
+    short: "Lessons",
     description: "The current Sabbath School guides.",
     icon: BookOpen,
   },
   {
     value: "mission-readings",
     label: "Mission Readings",
+    short: "Missions",
     description: "This quarter's mission stories from the Adventist Mission quarterlies.",
     icon: Globe,
   },
   {
     value: "bible-egw",
     label: "Bible & EGW",
+    short: "Bible/EGW",
     description: "Holy Scriptures and Spirit of Prophecy writings for worship and study.",
     icon: Book,
   },
   {
     value: "hymnals",
     label: "Hymnals",
+    short: "Hymns",
     description: "SDA Church Hymnal and Nyimbo za Kristo lyrics and song search for worship.",
     icon: Music,
   },

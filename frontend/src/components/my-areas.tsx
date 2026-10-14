@@ -606,53 +606,38 @@ export function MyAreas() {
     return area.code === ownDepartmentCode || ties.includes(area.code);
   }, [ownDepartmentCode, ties]);
 
-  // What the member sees: on mobile (!wide), we present a flat list starting from
-  // the ones the person belongs to, then the other ministries they may join.
-  // On wide screens, the member toggles between My Ministry and Other Ministries.
-  const visible = useMemo(() => {
-    if (!wide) {
-      const myAreas = rows
-        .filter((area) => isMyMinistry(area))
-        .sort((a, b) => {
-          const departmentA = a.code === ownDepartmentCode ? 0 : 1;
-          const departmentB = b.code === ownDepartmentCode ? 0 : 1;
-          if (departmentA !== departmentB) return departmentA - departmentB;
-          const groupA = a.group === "ministry" ? 0 : 1;
-          const groupB = b.group === "ministry" ? 0 : 1;
-          return groupA - groupB || a.label.localeCompare(b.label);
-        });
-
-      const otherAreas = rows
+  // What the member sees: first the areas they belong to or serve in, then
+  // other areas open for a join request. Sex-only ministries stay hidden from
+  // people who may not request them. One rule at every width — the two toggles
+  // name the halves of this list on a phone as they do on a desk, so the strip
+  // and the cards below it answer the same question everywhere.
+  const visible = useMemo(
+    () =>
+      rows
         .filter((area) => {
           const mine = isMyMinistry(area);
-          if (mine || ties.includes(area.code)) return false;
+          if (tab === "mine") return mine;
+          // The treasury's desk is held by office: only the treasurer and the
+          // admin are offered it here, the same pair the rail gates it to.
           if (area.code === "treasury" && !holdsTreasury) return false;
-          return staff || canJoin(area.code);
+          return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
         })
-        .sort((a, b) => a.label.localeCompare(b.label));
-
-      return [...myAreas, ...otherAreas];
-    }
-
-    return rows
-      .filter((area) => {
-        const mine = isMyMinistry(area);
-        if (tab === "mine") return mine;
-        if (area.code === "treasury" && !holdsTreasury) return false;
-        return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
-      })
-      .sort((a, b) => {
-        if (tab === "mine") {
-          const departmentA = a.code === ownDepartmentCode ? 0 : 1;
-          const departmentB = b.code === ownDepartmentCode ? 0 : 1;
-          if (departmentA !== departmentB) return departmentA - departmentB;
-          const groupA = a.group === "ministry" ? 0 : 1;
-          const groupB = b.group === "ministry" ? 0 : 1;
-          return groupA - groupB || a.label.localeCompare(b.label);
-        }
-        return a.label.localeCompare(b.label);
-      });
-  }, [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties, wide]);
+        .sort((a, b) => {
+          if (tab === "mine") {
+            const departmentA = a.code === ownDepartmentCode ? 0 : 1;
+            const departmentB = b.code === ownDepartmentCode ? 0 : 1;
+            if (departmentA !== departmentB) return departmentA - departmentB;
+            const groupA = a.group === "ministry" ? 0 : 1;
+            const groupB = b.group === "ministry" ? 0 : 1;
+            return groupA - groupB || a.label.localeCompare(b.label);
+          }
+          // Other Ministries reads as one A–Z list, the way the rail files
+          // it: nobody should step past every ministry before the first
+          // department appears.
+          return a.label.localeCompare(b.label);
+        }),
+    [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
+  );
 
   // The Treasury is filed in this list, but it is a desk of the console,
   // not an area of the map — it has no Members/Calendar/Accounts views of
@@ -715,6 +700,10 @@ export function MyAreas() {
     // Administration" — and the hand-placed card this row replaced did the
     // same, so pressing it walks straight to the desk and its own toggles
     // rather than opening an area the treasury does not have.
+    //
+    // Re-opening an area the member has already walked past folds back to
+    // the entry that holds it (the history layer's job, not this page's):
+    // one entry per area is what keeps Back one tap per place.
     (code: string) =>
       router.push(code === "treasury" ? "/administration?tab=accounts" : `/my-areas?area=${code}&view=members`),
     [router]
@@ -749,12 +738,6 @@ export function MyAreas() {
       );
       return () => setCustomToggles(null);
     }
-    // On mobile, instead of having toggles for my ministry and other ministries,
-    // we just have a flat list starting from the ones the person belongs to, then the others.
-    if (!wide) {
-      setCustomToggles(null);
-      return () => setCustomToggles(null);
-    }
     setCustomToggles(
       <SubNav
         label="Ministry"
@@ -772,7 +755,7 @@ export function MyAreas() {
       />
     );
     return () => setCustomToggles(null);
-  }, [openArea, areaView, tab, accountViewItems, setCustomToggles, selectAreaView, showMap, wide]);
+  }, [openArea, areaView, tab, accountViewItems, setCustomToggles, selectAreaView, showMap]);
 
   // One card's actions popover at a time: a press anywhere outside the menu
   // closes it, the same way the desks' row menus behave.
@@ -818,15 +801,13 @@ export function MyAreas() {
         : {
             label: "Ministry",
             description:
-              !wide
-                ? "The church's ministries and departments, your areas first, followed by others you can join."
-                : tab === "mine"
-                  ? "The ministries and departments you are part of or serve in."
-                  : "Other ministries and departments you can ask to join.",
+              tab === "mine"
+                ? "The ministries and departments you are part of or serve in."
+                : "Other ministries and departments you can ask to join.",
           }
     );
     return () => setCustomHeader(null);
-  }, [openArea, tab, setCustomHeader, showMap, wide]);
+  }, [openArea, tab, setCustomHeader, showMap]);
 
   const [roll, setRoll] = useState<RollRow[]>([]);
   const [events, setEvents] = useState<AreaEvent[]>([]);
@@ -1381,8 +1362,6 @@ export function MyAreas() {
           <p className="mt-1 text-xs text-moss">
             {rows.length === 0
               ? "One moment."
-              : !wide
-              ? "No ministries or departments available to join."
               : tab === "mine"
               ? "Your department and ministries will appear here once the church office files them."
               : "There are no other ministries or departments available to join."}

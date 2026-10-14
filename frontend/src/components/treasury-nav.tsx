@@ -122,14 +122,24 @@ export function TreasuryNav({
   }, [failedCount]);
 
   // The same underline tabs the rest of the app uses — a label over the band's
-  // rule rather than a pill button.
+  // rule rather than a pill button. The phone's cells are a quarter of the
+  // strip's width, so the padding gives up most of its own on that width and
+  // the label sits a little lower: four toggles must read, not merely fit, and
+  // a count has to hold the cell's corner without touching it.
   const tabClass = (isActive: boolean) =>
-    `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 text-sm font-semibold transition ${
+    `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1.5 pt-3 text-sm font-semibold transition sm:px-3.5 sm:pt-0 ${
       isActive ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"
     }`;
 
   return (
-    <div role="group" aria-label="Treasury views" className="flex flex-wrap items-center gap-1">
+    // A phone reads the treasury in two level rows of four — the grid shares
+    // the width equally, so the strip has the same shape on every desk. A
+    // screen wide enough keeps the natural line, which wraps when it must.
+    <div
+      role="group"
+      aria-label="Treasury views"
+      className="grid grid-cols-4 items-stretch gap-1 sm:flex sm:flex-wrap sm:items-center"
+    >
       {TREASURY_VIEWS.map((view) => (
         <button
           key={view.key}
@@ -141,17 +151,17 @@ export function TreasuryNav({
           <span className="sm:hidden">{view.short}</span>
           <span className="hidden sm:inline">{view.label}</span>
           {view.key === "requests" && displayCount > 0 && (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
+            <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white shadow-2xs sm:static sm:h-5 sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {displayCount}
             </span>
           )}
           {view.key === "unassigned" && displayUnassigned > 0 && (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
+            <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white shadow-2xs sm:static sm:h-5 sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {displayUnassigned}
             </span>
           )}
           {view.key === "failed" && displayFailed > 0 && (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ember px-1.5 text-[10px] font-bold text-white shadow-2xs">
+            <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white shadow-2xs sm:static sm:h-5 sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {displayFailed}
             </span>
           )}
