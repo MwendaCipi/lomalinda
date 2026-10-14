@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 
 import { SubNav } from "@/components/sub-nav";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { MaterialsShelf } from "@/components/materials-destinations";
+import { usePageHeader } from "@/components/app-frame";
 import { fellowshipLinks, materialSections, type MaterialSection } from "@/config/site-sections";
 
 /** The shelf the page opens on when nothing else is asked for. */
 const DEFAULT_SECTION: MaterialSection = "lesson-guides";
+
+/** What the page is, in one line — read as the heading's description. */
+const PAGE_DESCRIPTION =
+  "Sabbath School lessons, mission readings, Scripture, hymns and the writings of Ellen G. White.";
 
 const isSection = (value: string | null): value is MaterialSection =>
   materialSections.some((section) => section.value === value);
@@ -36,6 +43,14 @@ function sectionFromUrl(): MaterialSection {
  * for the same reason the rail does it: this page is a static export, and the
  * query only matters after a real visit.
  *
+ * Inside the app the shelf strip is handed to the shell rather than drawn here.
+ * Two strips used to stand on top of this page — the shell's Fellowship pages
+ * and this page's own shelves — so a member read two rows of toggles that were
+ * not even the same kind of thing. Handing the shelves to the shell makes them
+ * the *only* strip: the Fellowship row steps aside, the heading reads Materials
+ * with the way back to Fellowship above it, and the shelves answer to it, the
+ * same shape an opened area takes on My Areas.
+ *
  * The marketing intro and the Fellowship tail below return only for signed-out
  * visitors, where the page doubles as the public website's study-materials page.
  *
@@ -46,6 +61,8 @@ export default function MaterialsPage() {
   const [signedIn, setSignedIn] = useState(false);
   const [section, setSection] = useState<MaterialSection>(DEFAULT_SECTION);
 
+  const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
+
   useEffect(() => {
     setSignedIn(Boolean(localStorage.getItem("access_token")));
     setSection(sectionFromUrl());
@@ -53,38 +70,88 @@ export default function MaterialsPage() {
 
   const active = materialSections.find((entry) => entry.value === section) ?? materialSections[0];
 
-  const show = (next: MaterialSection) => {
+  const show = useCallback((next: MaterialSection) => {
     setSection(next);
     window.history.replaceState(null, "", next === DEFAULT_SECTION ? "/materials/" : `/materials/?section=${next}`);
-  };
+  }, []);
+
+  // The shelf chips, in one stable array: the shell's toggle slot is written
+  // from an effect, so a fresh list each render would re-register every time.
+  const shelfItems = useMemo(
+    () => materialSections.map((entry) => ({ key: entry.value, label: entry.label, icon: entry.icon })),
+    []
+  );
+
+  // The shelves are this page's navigation, so they take the shell's strip —
+  // which is what retires the Fellowship row while a member is here.
+  useEffect(() => {
+    setCustomToggles(
+      <SubNav
+        label="Study materials"
+        value={section}
+        onChange={(key) => show(key as MaterialSection)}
+        items={shelfItems}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [section, shelfItems, show, setCustomToggles]);
+
+  // A phone reads this page top-down: the way back and the place, then the
+  // shelves themselves. The shell's default names the place first — the strip
+  // answers to it — so the page asks for its own order while it is on screen.
+  useEffect(() => {
+    setHeadingFirst(true);
+    return () => setHeadingFirst(false);
+  }, [setHeadingFirst]);
+
+  // Materials is a page of Fellowship, so the way out of it is the section it
+  // was filed under — read above the name on a phone, where the rail is out of
+  // sight and this page carries no other door back.
+  useEffect(() => {
+    setCustomHeader({
+      label: "Materials",
+      description: PAGE_DESCRIPTION,
+      leading: (
+        <Link
+          href="/announcements"
+          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Fellowship
+        </Link>
+      ),
+    });
+    return () => setCustomHeader(null);
+  }, [setCustomHeader]);
 
   return (
     <main className={signedIn ? "h-full min-h-0 bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
-      {/* Compact hub heading — the toggles and the cards are the point. The
-          line under it is desktop-only: on a phone it costs a row of the screen
-          and says no more than the labels below it. */}
-      <section className={signedIn ? "sr-only" : "px-6 pt-14 lg:px-8"}>
-        <div className={signedIn ? "max-w-5xl" : "max-w-6xl"}>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Study Materials</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>
-          <p className="mt-2 hidden text-sm leading-6 text-moss sm:block">
-            Sabbath School lessons, mission readings, Scripture, hymns and the writings of Ellen G. White — one shelf for each kind of study.
-          </p>
-        </div>
-      </section>
+      {/* Signed-out only: the app's shell draws this page's heading and its
+          shelf strip, and a public visitor has neither. */}
+      {!signedIn && (
+        <>
+          <section className="px-6 pt-14 lg:px-8">
+            <div className="max-w-6xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-ember">Study Materials</p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Study Materials</h1>
+              <p className="mt-2 hidden text-sm leading-6 text-moss sm:block">{PAGE_DESCRIPTION}</p>
+            </div>
+          </section>
 
-      {/* The topbar: the four shelves, switched in place. It is a strip of
-          toggles rather than links — the page underneath does not change. */}
-      <section className={signedIn ? "px-5 pt-4 sm:px-8 lg:px-10" : "px-6 pt-8 lg:px-8"}>
-        <div className={signedIn ? "max-w-5xl" : "max-w-4xl"}>
-          <SubNav
-            label="Study materials"
-            items={materialSections.map((entry) => ({ key: entry.value, label: entry.label, icon: entry.icon }))}
-            value={section}
-            onChange={(key) => show(key as MaterialSection)}
-          />
-        </div>
-      </section>
+          {/* The topbar: the four shelves, switched in place. It is a strip of
+              toggles rather than links — the page underneath does not change. */}
+          <section className="px-6 pt-8 lg:px-8">
+            <div className="max-w-4xl">
+              <SubNav
+                label="Study materials"
+                items={shelfItems}
+                value={section}
+                onChange={(key) => show(key as MaterialSection)}
+              />
+            </div>
+          </section>
+        </>
+      )}
 
       {/* The shelf the topbar chose. */}
       <section className={signedIn ? "px-5 py-5 sm:px-8 lg:px-10" : "px-6 py-8 lg:px-8"}>
@@ -104,7 +171,7 @@ export default function MaterialsPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">Study &amp; worship resources</p>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Church Study Materials</h2>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">
-                Sabbath School lessons, mission readings, Scripture and the Spirit of Prophecy — gathered in one place
+                Sabbath School lessons, mission readings, Scripture and the Spirit of Prophecy, gathered in one place
                 for personal devotion, family worship and class preparation.
               </p>
             </div>

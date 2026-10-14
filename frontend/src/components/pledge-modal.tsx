@@ -143,7 +143,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
       setPledge(
         data.pledge ?? { id: data.id, amount: parseFloat(amount), due_date: dueDate, redeemed: false, redeemed_via: "" }
       );
-      setMessage(`Thank you — your pledge of ${money(parseFloat(amount))} is recorded for ${prettyDay(dueDate)}.`);
+      setMessage(`Thank you. Your pledge of ${money(parseFloat(amount))} is recorded for ${prettyDay(dueDate)}.`);
       onPledged?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Submission failed.");
@@ -213,7 +213,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
               {pledge.redeemed ? (
                 <p className="mt-1 text-xs font-semibold text-sage-strong">
                   <Check className="inline h-3 w-3" aria-hidden="true" /> Marked as given
-                  {pledge.redeemed_via === "giving" ? " — we saw your gift come in." : "."}
+                  {pledge.redeemed_via === "giving" ? ". We saw your gift come in." : "."}
                 </p>
               ) : (
                 <p className="mt-1 text-xs text-moss">
@@ -282,7 +282,7 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
               />
               <p className="mt-1 text-[11px] text-moss">
                 {deadline
-                  ? `The event is on ${prettyDay(deadline)} — a pledge cannot run past it. We will remind you the day before.`
+                  ? `The event is on ${prettyDay(deadline)}. A pledge cannot run past it. We will remind you the day before.`
                   : "We will remind you the day before if the gift has not come in."}
               </p>
             </div>

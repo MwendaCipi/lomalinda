@@ -139,7 +139,7 @@ export function NavIdentity() {
     const timer = setTimeout(() => {
       Swal.fire({
         title: "Notifications on this device?",
-        text: "Turn on notifications and the church can reach you on this device even with the app closed — announcements, and requests waiting for your office if you serve. You can change this anytime under Notification preferences on your profile.",
+        text: "Turn on notifications and the church can reach you on this device even with the app closed. You can change this anytime under Notification preferences on your profile.",
         icon: "question",
         showCancelButton: true,
         showDenyButton: true,

@@ -104,7 +104,7 @@ export function GroupedBarChart({
                     rx={2}
                     fill={series[seriesIndex]?.color ?? brand.bark}
                   >
-                    <title>{`${group.label} — ${series[seriesIndex]?.label ?? ""}: ${formatValue(value)}`}</title>
+                    <title>{`${group.label}: ${series[seriesIndex]?.label ?? ""} ${formatValue(value)}`}</title>
                   </rect>
                 );
               })}
@@ -205,7 +205,7 @@ export function TrendLineChart({
               {showDots &&
                 coordinates.map(([x, y], index) => (
                   <circle key={index} cx={x} cy={y} r={3} fill="#fff" stroke={entry.color} strokeWidth={2}>
-                    <title>{`${points[index].label} — ${entry.label}: ${formatValue(points[index].values[seriesIndex] ?? 0)}`}</title>
+                    <title>{`${points[index].label}: ${entry.label} ${formatValue(points[index].values[seriesIndex] ?? 0)}`}</title>
                   </circle>
                 ))}
             </g>

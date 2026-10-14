@@ -550,7 +550,7 @@ export function ChatPanel() {
                 </p>
                 {roomsLoaded && (
                   <p className="mt-1 text-xs text-moss">
-                    Your ministries and departments — and the church family — read here.
+                    Your ministries and departments, and the church family, read here.
                   </p>
                 )}
               </>
@@ -666,7 +666,7 @@ export function ChatPanel() {
             {loadingMessages && messages.length === 0 ? (
               <p className="py-6 text-center text-xs text-moss">Loading this conversation…</p>
             ) : messages.length === 0 ? (
-              <p className="py-6 text-center text-xs text-moss">No messages yet — say the first word.</p>
+              <p className="py-6 text-center text-xs text-moss">No messages yet. Say the first word.</p>
             ) : (
               <div className="space-y-3">
                 {messages.map((message) => {

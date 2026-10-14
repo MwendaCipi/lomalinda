@@ -108,7 +108,7 @@ function LoginContent() {
         <section className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-sand-line sm:p-8">
           <h1 className="text-xl font-semibold tracking-tight">You&apos;re offline</h1>
           <p className="mt-2 text-sm leading-6 text-moss">
-            You are still signed in on this device — we just could not reach the church&apos;s server to confirm it. Try again
+            You are still signed in on this device. We just could not reach the church&apos;s server to confirm it. Try again
             once the connection is back.
           </p>
           <button

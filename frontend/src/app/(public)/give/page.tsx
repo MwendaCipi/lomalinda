@@ -550,7 +550,7 @@ function GivePageContent() {
         }
         if (!token) {
           setLoading(false);
-          showAlert("Sign in first", "Only a member can ask another member to give — the request carries your name.", "warning");
+          showAlert("Sign in first", "Only a member can ask another member to give, and the request carries your name.", "warning");
           return;
         }
         const response = await fetch(`${API_URL}/api/members/giving-requests/`, {
@@ -774,7 +774,7 @@ function GivePageContent() {
                     <div className="flex items-start justify-between gap-3">
                       <dt className="shrink-0 text-moss">Account number</dt>
                       <dd className="text-right font-semibold text-bark">
-                        The account you are giving for — e.g. TITHE or Combined Offering
+                        The account you are giving for, e.g. TITHE or Combined Offering
                       </dd>
                     </div>
                   </dl>
@@ -952,7 +952,7 @@ function GivePageContent() {
                     {declaredLabelFor(pickedPerson) ? (
                       <>Your relationship: <span className="font-semibold text-bark">{declaredLabelFor(pickedPerson)}</span></>
                     ) : (
-                      <>Not set yet — add this person under <Link href="/member" className="font-semibold text-ember">Profile &rarr; Relationships</Link>; until then the gift is recorded as Other.</>
+                      <>Not set yet. Add this person under <Link href="/member" className="font-semibold text-ember">Profile &rarr; Relationships</Link>; until then the gift is recorded as Other.</>
                     )}
                   </p>
                 )}
@@ -981,8 +981,8 @@ function GivePageContent() {
             {isRequestMode && (
               <div className="mt-4 space-y-4">
                 <p className="text-sm text-moss">
-                  Ask a member to give — the account and the amount below set
-                  the ask. A request is an invitation, never a debt.
+                  Ask a member to give. The account and the amount below set
+                  the ask; a request is an invitation, never a debt.
                 </p>
                 <div>
                   <p className="mb-2 text-sm font-medium text-bark">Who are you asking?</p>
@@ -1002,7 +1002,7 @@ function GivePageContent() {
                     {declaredLabelFor(pickedPerson) ? (
                       <>Your relationship: <span className="font-semibold text-bark">{declaredLabelFor(pickedPerson)}</span></>
                     ) : (
-                      <>Not set yet — add this person under <Link href="/member" className="font-semibold text-ember">Profile &rarr; Relationships</Link>; until then the request is recorded as Other.</>
+                      <>Not set yet. Add this person under <Link href="/member" className="font-semibold text-ember">Profile &rarr; Relationships</Link>; until then the request is recorded as Other.</>
                     )}
                   </p>
                 )}

@@ -14,7 +14,7 @@ const beliefs = [
   },
   {
     title: "Salvation by grace",
-    text: "Salvation is God's free gift, received by faith in Jesus — who lived, died and rose again for us.",
+    text: "Salvation is God's free gift, received by faith in Jesus, who lived, died and rose again for us.",
     reference: "John 3:16 · Ephesians 2:8",
   },
   {
@@ -29,7 +29,7 @@ const beliefs = [
   },
   {
     title: "The Second Coming",
-    text: "Jesus will return visibly and personally — the blessed hope of every believer — to make all things new.",
+    text: "Jesus will return visibly and personally, to make all things new.",
     reference: "Acts 1:11 · Revelation 22:12",
   },
   {

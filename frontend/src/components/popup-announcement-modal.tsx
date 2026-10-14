@@ -228,7 +228,7 @@ export function PopupAnnouncementModal() {
                 <p className="mt-1 text-xs text-moss">
                   {current.action_prompt ||
                     (isContributionAction
-                      ? "Pledge an amount, give in kind, or give money — or dismiss this announcement."
+                      ? "Pledge an amount, give in kind, or give money, or dismiss this announcement."
                       : actionType === "respond"
                       ? "You may enter your response, or dismiss this announcement."
                       : "You can dismiss this announcement when you are done reading.")}

@@ -24,10 +24,10 @@ const POST_TO_OPTIONS: { value: string; label: string }[] = [
   { value: "board", label: "Board Members" },
   // Department addressing: a post to one of these reaches the department's
   // roll holders and its members (the backend resolves both).
-  { value: "men_ministry", label: "AMM — Adventist Men" },
-  { value: "women_ministry", label: "AWM — Adventist Women" },
-  { value: "youth_leader", label: "AYM — Youth & Children" },
-  { value: "apm_leader", label: "APM — Possibility Ministries" },
+  { value: "men_ministry", label: "AMM (Adventist Men)" },
+  { value: "women_ministry", label: "AWM (Adventist Women)" },
+  { value: "youth_leader", label: "AYM (Youth & Children)" },
+  { value: "apm_leader", label: "APM (Possibility Ministries)" },
   { value: "chaplaincy", label: "Chaplaincy" },
 ];
 
@@ -262,7 +262,7 @@ function PledgePanel({ item }: { item: Announcement }) {
               </p>
               <p className="truncate text-[10px] text-moss">
                 {pledge.redeemed
-                  ? `Given${pledge.redeemed_via === "giving" ? " — matched to their giving" : pledge.redeemed_via === "member" ? " — ticked off by them" : " — marked here"}`
+                  ? `Given${pledge.redeemed_via === "giving" ? ": matched to their giving" : pledge.redeemed_via === "member" ? ": ticked off by them" : ": marked here"}`
                   : `promised by ${pledgeDay(pledge.due_date)}`}
               </p>
             </div>
@@ -526,7 +526,7 @@ export function AnnouncementManager({
       return;
     }
     if (!form.event_date_from) {
-      const err = "Set the event date — when it begins. The post leads the feed as the day approaches and comes down after the event ends.";
+      const err = "Set the event date. The post leads the feed as the day approaches and comes down after the event ends.";
       setMessage(err);
       showAlert("Event Date Missing", err, "error");
       return;
@@ -733,7 +733,7 @@ export function AnnouncementManager({
                     required
                     value={form.href}
                     onChange={(e) => setForm({ ...form, href: e.target.value })}
-                    placeholder="https://… — Zoom, Meet or Teams link"
+                    placeholder="Zoom, Meet or Teams link"
                     className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
@@ -746,7 +746,7 @@ export function AnnouncementManager({
                     type="url"
                     value={form.href}
                     onChange={(e) => setForm({ ...form, href: e.target.value })}
-                    placeholder="https://… — Application link or vacancy page (optional)"
+                    placeholder="Application link or vacancy page (optional)"
                     className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
@@ -837,8 +837,8 @@ export function AnnouncementManager({
                       onChange={(e) => setForm({ ...form, response_mode: e.target.value as "open" | "closed" })}
                       className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                     >
-                      <option value="open">Open — members write their answer</option>
-                      <option value="closed">Closed — members pick from options</option>
+                      <option value="open">Open: members write their answer</option>
+                      <option value="closed">Closed: members pick from options</option>
                     </select>
                   </label>
                   {form.response_mode === "closed" && (
@@ -849,7 +849,7 @@ export function AnnouncementManager({
                         rows={4}
                         value={form.response_options}
                         onChange={(e) => setForm({ ...form, response_options: e.target.value })}
-                        placeholder={"Yes, I will attend\nNo, I cannot make it\nMaybe — I will confirm later"}
+                        placeholder={"Yes, I will attend\nNo, I cannot make it\nMaybe (I will confirm later)"}
                         className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                       />
                     </label>
@@ -887,7 +887,7 @@ export function AnnouncementManager({
                       className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember"
                     />
                     <span className="mt-1 block text-[10px] font-normal text-moss">
-                      The goal of the fund drive this post opens — its progress shows beneath the post as members give.
+                      The goal of the fund drive this post opens.
                     </span>
                   </label>
                 </>
@@ -970,7 +970,7 @@ export function AnnouncementManager({
                   />
                   {form.announcement_type === "promotion" && (
                     <span className="mt-1 block text-[10px] font-normal text-moss">
-                      This text is the drive&apos;s description and the message broadcast to its audience — there is no second letter to write.
+                      This text is the drive&apos;s description and the message broadcast to its audience. There is no second letter to write.
                     </span>
                   )}
                   <span

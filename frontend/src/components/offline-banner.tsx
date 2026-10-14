@@ -32,7 +32,7 @@ export function OfflineBanner({
     >
       <WifiOff className="h-3.5 w-3.5 shrink-0" />
       <span>
-        You&apos;re offline — showing{ago ? ` data last synced ${ago}` : " cached data"}.
+        You&apos;re offline. Showing{ago ? ` data last synced ${ago}` : " cached data"}.
         Some information may be out of date.
       </span>
     </div>

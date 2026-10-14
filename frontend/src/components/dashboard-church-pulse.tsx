@@ -141,7 +141,7 @@ export function DashboardChurchPulse() {
           </h3>
           <p className="mt-1 text-[11px] text-moss">
             {requests.waiting_total === 0
-              ? "Every desk is clear — nothing is waiting for an answer."
+              ? "Every desk is clear."
               : `${count(requests.waiting_total)} ${
                   requests.waiting_total === 1 ? "request is" : "requests are"
                 } still unanswered.`}

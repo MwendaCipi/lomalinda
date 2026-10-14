@@ -212,7 +212,7 @@ export default function MemberPage() {
       return;
     }
     if (!newRelationship) {
-      showAlert("Relationship needed", "Say how this person relates to you — spouse, parent, sibling, child, friend or other.", "warning");
+      showAlert("Relationship needed", "Say how this person relates to you.", "warning");
       return;
     }
     const already = relationships.some((row) =>
@@ -373,7 +373,7 @@ export default function MemberPage() {
           <form onSubmit={saveContact} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
             <h2 className="text-xl font-semibold">Contact details</h2>
             <p className="mt-2 text-sm leading-6 text-moss">
-              The number the church reaches you on, and the one M-Pesa prompts when you give — plus the
+              The number the church reaches you on, and the one M-Pesa prompts when you give, plus the
               address your giving receipts are sent to. A member in our system receives their letters on
               their account address; the phone line is for everything else.
             </p>
@@ -412,7 +412,7 @@ export default function MemberPage() {
           <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
             <h2 className="text-xl font-semibold">Family members</h2>
             <p className="mt-2 text-sm leading-6 text-moss">
-              The people your family is made of — a spouse, parent, sibling or child — and the close
+              The people your family is made of, a spouse, parent, sibling or child, and the close
               friends among them. Set them once here and the giving form reads them, so no gift asks you
               the same question again. Anything not listed is recorded as Other.
             </p>
@@ -454,7 +454,7 @@ export default function MemberPage() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-5 rounded-2xl bg-sand px-4 py-3 text-sm text-moss">No relationships yet — add the first below.</p>
+              <p className="mt-5 rounded-2xl bg-sand px-4 py-3 text-sm text-moss">No relationships yet. Add the first below.</p>
             )}
 
             <div className="mt-5 rounded-2xl border border-sand-line p-4">
@@ -505,7 +505,7 @@ export default function MemberPage() {
                   Add
                 </button>
                 {!pickedForAdd && relQuery.trim().length >= 2 && relMatches.length === 0 && (
-                  <span className="text-xs text-moss">No match — Add writes the name as typed.</span>
+                  <span className="text-xs text-moss">No match. Add writes the name as typed.</span>
                 )}
               </div>
             </div>
@@ -605,7 +605,7 @@ export default function MemberPage() {
                 <label className="flex items-center justify-between gap-4 rounded-2xl bg-sand px-4 py-3 text-sm font-medium cursor-pointer">
                   <span>
                     Announcements by email
-                    <span className="block text-xs font-normal text-moss">The broadcast letters, not receipts — those always come.</span>
+                    <span className="block text-xs font-normal text-moss">The broadcast letters, not receipts. Those always come.</span>
                   </span>
                   <input
                     type="checkbox"
@@ -638,7 +638,7 @@ export default function MemberPage() {
               </div>
               {pushSupport?.supported && !pushSupport.enabled && announcePrefs.push && (
                 <p className="mt-3 text-xs text-moss">
-                  To receive them on <em>this</em> device, also tap <strong>Turn on notifications</strong> in the bell at the top of the page — that grants the browser permission.
+                  To receive them on <em>this</em> device, also tap <strong>Turn on notifications</strong> in the bell at the top of the page. That grants the browser permission.
                 </p>
               )}
               {prefMessage && <p className="mt-3 text-sm text-moss">{prefMessage}</p>}

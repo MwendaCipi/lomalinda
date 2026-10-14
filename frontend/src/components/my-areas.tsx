@@ -819,7 +819,7 @@ export function MyAreas() {
             label: "Ministry",
             description:
               !wide
-                ? "The church's ministries and departments — your areas first, followed by others you can join."
+                ? "The church's ministries and departments, your areas first, followed by others you can join."
                 : tab === "mine"
                   ? "The ministries and departments you are part of or serve in."
                   : "Other ministries and departments you can ask to join.",
@@ -1280,7 +1280,7 @@ export function MyAreas() {
                   Baptismal Class
                 </h2>
                 <p className="mt-0.5 text-xs text-moss">
-                  The members being prepared for baptism — their walk from
+                  The members being prepared for baptism, their walk from
                   studying to the font, kept by the eldership desk.
                 </p>
               </div>
@@ -1315,7 +1315,7 @@ export function MyAreas() {
                   Announcements
                 </h2>
                 <p className="mt-0.5 text-xs text-moss">
-                  The notices published to the church family — the same board
+                  The notices published to the church family, the same board
                   the announcements desk keeps.
                 </p>
               </div>

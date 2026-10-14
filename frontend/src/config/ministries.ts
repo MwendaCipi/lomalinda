@@ -118,7 +118,7 @@ export const MINISTRIES: Ministry[] = [
     department: "Welfare Ministry",
     sections: [
       { title: "Member Assistance", text: "Walking alongside church members through illness, bereavement, financial hardship, and other life challenges." },
-      { title: "Community Outreach", text: "Extending practical care — food, clothing, and essential support — to vulnerable people in the surrounding community." },
+      { title: "Community Outreach", text: "Extending practical care to vulnerable people in the surrounding community." },
       { title: "Hospital & Home Visits", text: "Bringing encouragement, prayer, and a listening ear to the sick, elderly, and those unable to attend church." },
     ],
   },
@@ -131,7 +131,7 @@ export const MINISTRIES: Ministry[] = [
     sections: [
       { title: "Clothing & Food Relief", text: "Collecting, sorting, and distributing clothing and food parcels to families and individuals in need." },
       { title: "Compassionate Service", text: "Organising regular outreach visits, practical help, and donations to the less privileged in our community." },
-      { title: "Acts of Kindness", text: "Embodying the example of Dorcas — faithful, generous service that makes Christ's love tangible and real." },
+      { title: "Acts of Kindness", text: "Embodying the example of Dorcas." },
     ],
   },
   {
@@ -150,7 +150,7 @@ export const MINISTRIES: Ministry[] = [
     slug: "sabbath-school",
     title: "Sabbath School",
     givingPurpose: "Sabbath School Materials",
-    description: "The church at study — Sabbath morning Bible lessons, interactive classes, teachers, and mission focus for every age.",
+    description: "The church at study.",
     department: "Sabbath School",
     sections: [
       { title: "Lesson Study & Classes", text: "Interactive Bible study groups and quarterly guides designed to strengthen faith and understanding." },

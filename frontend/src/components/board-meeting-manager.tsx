@@ -175,9 +175,9 @@ export function BoardMeetingManager() {
         fetchMeetings();
         // Report what actually went out, not that something probably did.
         const delivery = !notifySms && !notifyEmail
-          ? "No invitations were sent — the meeting was saved without notifying the board."
+          ? "No invitations were sent. The meeting was saved without notifying the board."
           : invited === 0
-            ? "No board members were found to invite — check the board roles in church settings."
+            ? "No board members were found to invite. Check the board roles in church settings."
             : `Invitations sent to ${invited} board member${invited === 1 ? "" : "s"}${notifyEmail ? ` (${emailed} by email)` : " (in the app only)"}.`;
         showAlert(
           "Board Meeting Scheduled",

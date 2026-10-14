@@ -154,7 +154,7 @@ function CheckboxCombobox({
               onChange={() => onChange([])}
               className="h-4 w-4 rounded border-sand-mute accent-sage"
             />
-            <span className="font-medium">None — no special needs</span>
+            <span className="font-medium">None (no special needs)</span>
           </label>
         )}
         {options.map((item) => {
@@ -364,7 +364,7 @@ export default function CompleteProfilePage() {
         <section className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-sand-line sm:p-8">
           <h1 className="text-xl font-semibold tracking-tight">You&apos;re offline</h1>
           <p className="mt-2 text-sm leading-6 text-moss">
-            We couldn&apos;t reach the church&apos;s server, so your details could not be loaded. Nothing is lost — try again
+            We couldn&apos;t reach the church&apos;s server, so your details could not be loaded. Nothing is lost. Try again
             once the connection is back.
           </p>
           <button
@@ -409,7 +409,7 @@ export default function CompleteProfilePage() {
             </select>
             {genderLocked && (
               <span className="mt-1 block text-xs font-normal text-moss">
-                Already on record. It cannot be changed here — ask the church
+                Already on record. It cannot be changed here. Ask the church
                 office if it needs correcting.
               </span>
             )}

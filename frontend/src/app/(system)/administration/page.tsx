@@ -355,7 +355,7 @@ function AdministrationContent() {
             href: "/administration?tab=users",
             label: "User Management",
             short: "Users",
-            help: "The church register — every member, the roles they hold and their standing.",
+            help: "The church register.",
           },
           {
             key: "settings",
@@ -385,7 +385,7 @@ function AdministrationContent() {
           icon: <ShieldCheck size={16} aria-hidden="true" />,
           description: "The church's members, their roles and the church's own settings.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register — every member, the roles they hold and their standing.", href: "/administration?tab=users" },
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
           ],
         }
@@ -399,7 +399,7 @@ function AdministrationContent() {
             { icon: <Armchair size={20} aria-hidden="true" />, label: "Board Meetings", description: "The board's schedules, agendas, files and minutes.", href: "/administration?tab=board" },
             { icon: <Briefcase size={20} aria-hidden="true" />, label: "Business Meetings", description: "The congregation in session: agendas, files and minutes.", href: "/administration?tab=business" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for — LCB, Msamaria Mwema and Evangelism.", href: "/administration?tab=clerkship-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
         }
       : null,
@@ -411,7 +411,7 @@ function AdministrationContent() {
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
             { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts — LCB, Msamaria Mwema and its funds.", href: "/administration?tab=eldership-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
           ],
         }
@@ -424,8 +424,8 @@ function AdministrationContent() {
           cards: [
             { icon: <Scale size={20} aria-hidden="true" />, label: "Contributions Ledger", description: "Record cash receipts and track all giving breakdown ledgers.", href: "/administration/treasury" },
             { icon: <Landmark size={20} aria-hidden="true" />, label: "Church Accounts", description: "Set up church accounts, watch balances, track income and spending, and promote an account into a fund drive.", href: "/administration?tab=accounts" },
-            { icon: <Heart size={20} aria-hidden="true" />, label: "Fund Drives", description: "Manage the church's fund drives — targets, dates, receipts and member invites.", href: "/administration/fund-drives" },
-            { icon: <BarChart3 size={20} aria-hidden="true" />, label: "Church Budget", description: "Post the year's plan — income, spending — and publish it to the congregation.", href: "/administration?tab=budget" },
+            { icon: <Heart size={20} aria-hidden="true" />, label: "Fund Drives", description: "Manage the church's fund drives.", href: "/administration/fund-drives" },
+            { icon: <BarChart3 size={20} aria-hidden="true" />, label: "Church Budget", description: "Post the year's plan and publish it to the congregation.", href: "/administration?tab=budget" },
             { icon: <Undo2 size={20} aria-hidden="true" />, label: "M-Pesa Refunds", description: "Return mistaken or duplicate giving through B2C payouts.", href: "/administration?tab=refunds" },
           ],
         }
@@ -460,7 +460,7 @@ function AdministrationContent() {
       <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
         <p className="text-sm font-semibold text-bark">You&apos;re offline</p>
         <p className="mx-auto mt-1 max-w-sm text-xs">
-          The workspace needs the church&apos;s server. Nothing is lost — it opens again the moment the connection is back.
+          The workspace needs the church&apos;s server. Nothing is lost. It opens again the moment the connection is back.
         </p>
         <button
           type="button"

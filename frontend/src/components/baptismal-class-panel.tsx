@@ -193,7 +193,7 @@ export function BaptismalClassPanel() {
           type="text"
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Note (optional) — e.g. studying weekly"
+          placeholder="Note (optional), e.g. studying weekly"
           className="mt-2 w-full rounded-xl border border-sand-line bg-white px-3 py-2.5 text-xs focus:border-ember focus:outline-none"
         />
         <button

@@ -47,7 +47,7 @@ function EmptySharing({
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-moss">
         {searching
           ? "Try a different name or word, or clear the search to read everything shared here."
-          : "Be the first to tell the church family what God has done — or to offer an idea that could help the church. Share it here now."}
+          : "Be the first to tell the church family what God has done, or to offer an idea that could help the church. Share it here now."}
       </p>
       <div className="mx-auto mt-6 max-w-sm">
         <button

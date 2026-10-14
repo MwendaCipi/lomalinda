@@ -180,7 +180,7 @@ export function MonthGrid<T extends GridEvent>({
                               type="button"
                               aria-expanded={openActions === actionKey}
                               onClick={() => onToggleActions(actionKey)}
-                              title={`${row.title}${row.department_name ? ` — ${row.department_name}` : ""}`}
+                              title={`${row.title}${row.department_name ? `: ${row.department_name}` : ""}`}
                               className="w-full rounded-md border-l-2 border-ember bg-sand-plate px-1.5 py-1 text-left transition hover:bg-sand-wash"
                             >
                               <span className="block truncate text-[10px] font-semibold text-bark">{row.title}</span>

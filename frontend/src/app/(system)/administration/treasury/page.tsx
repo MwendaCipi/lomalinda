@@ -272,7 +272,7 @@ export default function TreasuryPage() {
   const handleRemoveFailed = async (giving: IndividualGiving) => {
     const confirm = await Swal.fire({
       title: "Remove this failed attempt?",
-      text: `${giving.donor_name} — KES ${money(giving.amount)} for ${giving.purpose} never arrived. Removing takes it off the ledger for good.`,
+      text: `${giving.donor_name}: KES ${money(giving.amount)} for ${giving.purpose} never arrived. Removing takes it off the ledger for good.`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Remove it",
@@ -661,7 +661,7 @@ export default function TreasuryPage() {
         if (useSms) {
           const digits = typedPhone.replace(/\D/g, "");
           if (!typedPhone || digits.length < 9 || digits.length > 15) {
-            Swal.showValidationMessage("Enter a valid phone number — 9 to 15 digits.");
+            Swal.showValidationMessage("Enter a valid phone number (9 to 15 digits).");
             return false;
           }
         }
@@ -1111,7 +1111,7 @@ export default function TreasuryPage() {
                                   onClick={pullMpesaTransactions}
                                   disabled={pulling}
                                   className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
-                                  title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+                                  title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours, all the Pull API keeps)."
                                 >
                                   <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
                                   <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
@@ -1327,7 +1327,7 @@ export default function TreasuryPage() {
                           onClick={pullMpesaTransactions}
                           disabled={pulling}
                           className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
-                          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+                          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours, all the Pull API keeps)."
                         >
                           <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
                           <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
@@ -1432,7 +1432,7 @@ export default function TreasuryPage() {
                                       {giving.receipt_sent_at ? "Sent" : "Failed"}
                                     </span>
                                   ) : (
-                                    <span className="text-[11px] font-semibold text-moss">No receipt — payment failed</span>
+                                    <span className="text-[11px] font-semibold text-moss">No receipt (payment failed)</span>
                                   )}
                                   <div className="flex items-center gap-2">
                                     {giving.member_id && (
@@ -1614,7 +1614,7 @@ export default function TreasuryPage() {
                                                 handleChatGiver(giving);
                                               }}
                                               disabled={!giving.member_id}
-                                              title={giving.member_id ? "Open a thread in this app" : "This giver holds no member account — use WhatsApp or Call"}
+                                              title={giving.member_id ? "Open a thread in this app" : "This giver holds no member account. Use WhatsApp or Call."}
                                               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition disabled:opacity-45"
                                             >
                                               <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
@@ -1701,7 +1701,7 @@ export default function TreasuryPage() {
                               onClick={pullMpesaTransactions}
                               disabled={pulling}
                               className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
-                              title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours — all the Pull API keeps)."
+                              title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours, all the Pull API keeps)."
                             >
                               <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
                               <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>

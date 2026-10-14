@@ -468,7 +468,7 @@ function AssignPaymentModal({
           </div>
           {!email.trim() && !phone.trim() && (
             <p className="text-[11px] text-moss">
-              No contact yet — the gift will be filed, but the giver will not be thanked from here.
+              No contact yet. The gift will be filed, but the giver will not be thanked from here.
             </p>
           )}
 

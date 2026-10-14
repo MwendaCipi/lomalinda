@@ -711,7 +711,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                   type="text"
                   required
                   minLength={2}
-                  placeholder={requestKind === "repair" ? "e.g. Sony Projector 4K — the sanctuary one" : "e.g. Two cordless microphones"}
+                  placeholder={requestKind === "repair" ? "e.g. Sony Projector 4K, the sanctuary one" : "e.g. Two cordless microphones"}
                   value={requestItem}
                   onChange={(e) => setRequestItem(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
@@ -721,7 +721,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 <label className="font-bold text-bark">Details</label>
                 <textarea
                   rows={3}
-                  placeholder="What is needed and why — quantity, quote, room…"
+                  placeholder="What is needed and why: quantity, quote, room…"
                   value={requestNote}
                   onChange={(e) => setRequestNote(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"

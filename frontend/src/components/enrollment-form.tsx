@@ -225,7 +225,7 @@ export function EnrollmentForm({
             />
           </label>
           <p className="text-xs leading-5 text-moss">
-            Type the code from the email we just sent — then continue below to add your phone number and sign-in details.
+            Type the code from the email we just sent. Then continue below to add your phone number and sign-in details.
           </p>
           <label className="flex items-start gap-3 text-xs leading-5 text-moss">
             <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-sage" />
@@ -252,8 +252,8 @@ export function EnrollmentForm({
             }}
             className="mt-1.5 w-full rounded-xl border border-ember bg-sand px-4 py-3 text-sm font-semibold text-bark outline-none focus:ring-2 focus:ring-ember"
           >
-            <option value="transfer_in">Transfer In — Join SDA Loma Linda</option>
-            <option value="transfer_out">Transfer Out — Move to Another Church</option>
+            <option value="transfer_in">Transfer In: Join SDA Loma Linda</option>
+            <option value="transfer_out">Transfer Out: Move to Another Church</option>
           </select>
         </div>
       )}

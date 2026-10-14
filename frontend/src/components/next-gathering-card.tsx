@@ -223,7 +223,7 @@ export function NextGatheringCard() {
           </>
         ) : (
           <p className="mt-3 text-lg leading-7 text-moss-dark">
-            The week&apos;s meetings are still being set up — the church calendar has what is on.
+            The week&apos;s meetings are still being set up. The church calendar has what is on.
           </p>
         )}
       </div>

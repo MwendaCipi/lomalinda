@@ -122,7 +122,7 @@ export const destinations = {
   fellowship: {
     href: "/announcements",
     label: "Fellowship",
-    description: "Where the church family gathers — news, testimony, ideas and care.",
+    description: "Where the church family gathers.",
     icon: Megaphone,
     area: "fellowship",
     // Materials rides this section now (it is a page of Fellowship, not a
@@ -162,7 +162,7 @@ export const destinations = {
   moments: {
     href: "/share/moments",
     label: "Moments",
-    description: "The church's events, album by album — kept by the administrators.",
+    description: "The church's events, album by album.",
     icon: Sparkles,
     area: "fellowship",
     match: ["/share/moments"],
@@ -207,7 +207,7 @@ export const destinations = {
     href: "/community/visitation",
     label: "Visitation Requests",
     short: "Visitation",
-    description: "Ask for a pastoral, home or hospital visit — pin where to come.",
+    description: "Ask for a pastoral, home or hospital visit.",
     icon: HeartHandshake,
     area: "fellowship",
     match: ["/community"],
@@ -335,7 +335,7 @@ export const destinations = {
   myGivings: {
     href: "/member/givings",
     label: "My Givings",
-    description: "Your money and in-kind giving, as one timeline — with statuses, receipts and totals.",
+    description: "Your money and in-kind giving, as one timeline.",
     icon: Receipt,
     area: "account",
     match: ["/member/givings"],
@@ -378,7 +378,7 @@ export const destinations = {
     href: "/my-areas",
     label: "Ministry",
     short: "Ministry",
-    description: "The ministries and departments you are part of — and the ones you could join.",
+    description: "The ministries and departments you are part of, and the ones you could join.",
     icon: HeartHandshake,
     area: "fellowship",
     match: ["/my-areas"],
@@ -392,7 +392,7 @@ export const destinations = {
   requests: {
     href: "/requests",
     label: "Requests",
-    description: "Prayer, visitation, dedication, joining — four request types, one place.",
+    description: "Prayer, visitation, dedication and joining.",
     icon: HeartHandshake,
     area: "fellowship",
     // The old sibling pages answer to this one chip too, so a deep link into
@@ -632,7 +632,7 @@ export const clerkshipItems: RailRow[] = [
   officeTab("clerkship-funding", "Funding & Accounts", Wallet, {
     roles: CLERKSHIP_ROLES,
     short: "Funding",
-    description: "The church funds the clerk keeps the books for — LCB, Msamaria Mwema and Evangelism — with balances and movements.",
+    description: "The church funds the clerk keeps the books for, with balances and movements.",
   }),
 ];
 
@@ -663,7 +663,7 @@ export const eldershipItems: RailRow[] = [
   }),
   officeTab("requests", "Requests", HeartHandshake, {
     roles: REQUESTS_DESK_ROLES,
-    description: "The asks the church has received — joining, prayer, visits, dedications and welfare.",
+    description: "The asks the church has received.",
   }),
   // The elders answer for the church's money the same way the deaconate
   // does: the desk reads every treasury account — LCB and Msamaria Mwema
@@ -671,7 +671,7 @@ export const eldershipItems: RailRow[] = [
   officeTab("eldership-funding", "Funding & Accounts", Wallet, {
     roles: ELDERSHIP_ROLES,
     short: "Funding",
-    description: "The church's treasury accounts — LCB, Msamaria Mwema and its funds — with balances and movements.",
+    description: "The church's treasury accounts, with balances and movements.",
   }),
 ];
 
@@ -738,26 +738,26 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
  * when the desk writes one) wins where it carries one.
  */
 export const DEPARTMENT_BLURBS: Record<string, string> = {
-  eldership: "The church's elders — its spiritual leadership and the programmes it keeps.",
-  clerkship: "The church's records — the membership register, the minutes and the letters.",
+  eldership: "The church's elders.",
+  clerkship: "The church's records.",
   deaconate: "The church's property, its duty rota, and the ordinances it serves.",
-  amm: "The Adventist Men's ministry — connected to the AMO account for men's ministries work.",
+  amm: "The Adventist Men's ministry.",
   awm: "Women encouraging one another through fellowship, discipleship and care.",
   aym: "Young people growing in faith,  friendship, leadership and service.",
   children: "Nurturing children into a loving, lifelong relationship with Jesus.",
   ambassadors: "Young adults growing together in faith, service and leadership.",
   apm: "Belonging and full participation for people with disabilities, orphans, widows and caregivers.",
   chaplaincy: "A ministry of presence, comfort and prayer in places of need.",
-  health: "The church's health ministry — wholeness of body, mind and spirit.",
-  sabbath_school: "The church's Sabbath School — its classes, its teachers and the lesson study that opens the Sabbath.",
+  health: "The church's health ministry.",
+  sabbath_school: "The church's Sabbath School.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
   welfare: "Practical support and compassion for church members and neighbours in need.",
   dorcas: "Providing food, clothing, and compassionate service in the spirit of Dorcas.",
   development: "Planning, infrastructure, sanctuary building, and church plot development.",
   // Loma Linda says "Church Choir", but the area code is "choir" — the desk's
   // own page and the rail both label it Church Choir.
-  music: "The church's music — its singing groups and the seasons they sing.",
-  choir: "The church's choir — the songs it rehearses and the services it leads.",
+  music: "The church's music.",
+  choir: "The church's choir.",
 };
 
 /**

@@ -638,7 +638,7 @@ export function CampaignManagement({
       await navigator.clipboard.writeText(url);
       showAlert(
         "Giving Link Copied",
-        `A giving link for ${campaign.title || campaign.name} is on your clipboard — opening it goes straight to the M-Pesa prompt.`,
+        `A giving link for ${campaign.title || campaign.name} is on your clipboard. Opening it goes straight to the M-Pesa prompt.`,
         "success"
       );
     } catch {
@@ -874,7 +874,7 @@ export function CampaignManagement({
                 />
                 {accountReferenceLocked && (
                   <span className="mt-1 block text-[11px] font-normal text-moss">
-                    Fixed by the treasury — the drive gives into this account.
+                    Fixed by the treasury. The drive gives into this account.
                   </span>
                 )}
               </label>
@@ -931,7 +931,7 @@ export function CampaignManagement({
 
             {/* Attachment (flyer / poster) */}
             <label className="block text-xs font-semibold text-bark">
-              Attachment <span className="font-normal text-moss">(Optional — shown with the drive's announcement and attached to its emails)</span>
+              Attachment <span className="font-normal text-moss">(Optional, shown with the drive's announcement and attached to its emails)</span>
               <input
                 type="file"
                 accept="image/*,.pdf,.doc,.docx"
@@ -1056,7 +1056,7 @@ export function CampaignManagement({
                     <p className="py-10 text-center text-xs text-moss">
                       {accountSearch.trim()
                         ? `No account matches "${accountSearch.trim()}".`
-                        : "No treasury accounts yet — add one from the accounts desk."}
+                        : "No treasury accounts yet. Add one from the accounts desk."}
                     </p>
                   ) : (
                     filteredDriveAccounts.map((account) => (

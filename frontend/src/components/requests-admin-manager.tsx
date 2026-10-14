@@ -465,7 +465,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         showAlert(
           decision === "approved" ? "Join Request Approved" : "Join Request Rejected",
           decision === "approved"
-            ? "The account has been activated \u2014 they can now sign in."
+            ? "The account has been activated. They can now sign in."
             : "The join request was rejected.",
           "success"
         );
@@ -867,7 +867,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           <div className="md:hidden">
             <h2 className="text-2xl font-semibold text-bark">Received Requests</h2>
             <p className="mt-0.5 text-sm text-moss">
-              Join requests, prayer, visitation, dedications, welfare and membership transfers — one table.
+              Join requests, prayer, visitation, dedications, welfare and membership transfers.
             </p>
           </div>
         </div>
@@ -1147,7 +1147,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       {/* Still verifying their email — a hint the old joins tab carried. */}
       {!loading && joinRequests.some((j) => j.status === "verification_pending") && (activeTab === "all" || activeTab === "join") && (
         <p className="rounded-2xl bg-sand p-4 text-xs italic text-moss-mid">
-          Requests marked <strong>Awaiting their email</strong> can be approved now — the account activates as soon as the person
+          Requests marked <strong>Awaiting their email</strong> can be approved now. The account activates as soon as the person
           finishes signing up.
         </p>
       )}

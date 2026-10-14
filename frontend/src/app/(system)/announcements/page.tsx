@@ -227,7 +227,7 @@ export default function AnnouncementsPage() {
                         {item.announcement_type === "opinion" && (
                           <div className="mt-3 border-t border-sand-line pt-3">
                             {opinionDone.includes(item.id) ? (
-                              <p className="text-sm font-semibold text-sage-strong">Thank you — your response has been recorded.</p>
+                              <p className="text-sm font-semibold text-sage-strong">Thank you. Your response has been recorded.</p>
                             ) : opinionId === item.id ? (
                               <div className="space-y-3">
                                 {item.response_mode === "closed" && item.response_options ? (
@@ -381,7 +381,7 @@ export default function AnnouncementsPage() {
                           announcement's responses, where the CSV export
                           reaches it. The card keeps the confirmation. */}
                       {pledgeDone.includes(item.id) && (
-                        <p className="mt-2 text-xs font-semibold text-sage-strong">Thank you — your pledge has been recorded.</p>
+                        <p className="mt-2 text-xs font-semibold text-sage-strong">Thank you. Your pledge has been recorded.</p>
                       )}
                     </>
                   );

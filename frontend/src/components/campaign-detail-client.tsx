@@ -562,7 +562,7 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
                   </button>
                 </div>
                 {(campaign.donors ?? []).length === 0 ? (
-                  <p className="mt-3 text-xs text-moss">No completed gifts yet — be the first to give.</p>
+                  <p className="mt-3 text-xs text-moss">No completed gifts yet. Be the first to give.</p>
                 ) : (
                   <ul className="mt-3 divide-y divide-sand-light">
                     {(campaign.donors ?? []).map((d, i) => (
@@ -806,7 +806,7 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
 
               {signedIn ? (
                 <label className="block text-sm font-medium text-bark">
-                  Email <span className="font-normal text-moss">(optional — for your receipt)</span>
+                  Email <span className="font-normal text-moss">(optional, for your receipt)</span>
                   <input
                     type="email"
                     value={donorEmail}
@@ -817,7 +817,7 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
                 </label>
               ) : (
                 <p className="text-[11px] leading-relaxed text-moss">
-                  No account needed — your receipt is sent by SMS to the number you give.{" "}
+                  No account needed. Your receipt is sent by SMS to the number you give.{" "}
                   <Link href={signInHref} className="font-semibold text-ember hover:underline">
                     Sign in
                   </Link>{" "}

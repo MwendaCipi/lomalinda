@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { HandHelping } from "lucide-react";
 
 import { RequestsModal, type RequestType } from "@/components/requests-modal";
 
@@ -21,19 +20,7 @@ export default function RequestsPage() {
   return (
     <main className="min-h-screen bg-white text-bark">
       <div className="mx-auto max-w-5xl px-5 py-8 sm:px-8 sm:py-12">
-        <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-ember/10">
-            <HandHelping size={24} className="text-ember" aria-hidden="true" />
-          </div>
-          <h1 className="mt-5 text-3xl font-bold tracking-tight text-bark sm:text-4xl">
-            Make a Request
-          </h1>
-          <p className="mt-2 text-sm text-moss">
-            Choose a request type to get started. The first field in the form is the request type.
-          </p>
-        </div>
-
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-5 sm:grid-cols-2">
           {REQUEST_TYPES.map((type) => (
             <button
               key={type.value}

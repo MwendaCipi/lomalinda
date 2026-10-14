@@ -270,7 +270,7 @@ export function ReportComposer({
       if (dirty) {
         const answer = await showAlert(
           "Unsaved corrections",
-          "Download the statement as it is saved — your corrections stay on screen until you save them.",
+          "Download the statement as it is saved. Your corrections stay on screen until you save them.",
           "info",
           { confirmButtonText: "Download", showCancelButton: true, cancelButtonText: "Keep editing" }
         );
@@ -284,7 +284,7 @@ export function ReportComposer({
     if (dirty) {
       await showAlert(
         "The statement is not saved yet",
-        "Post the report first, then download the PDF — the page is printed from the saved statement.",
+        "Post the report first, then download the PDF. The page is printed from the saved statement.",
         "info"
       );
       return;
@@ -294,7 +294,7 @@ export function ReportComposer({
     // from a saved statement.
     const answer = await showAlert(
       "Post this statement?",
-      "A report is downloaded from the church's records, so this one will be posted first — then the PDF downloads.",
+      "A report is downloaded from the church's records, so this one will be posted first, then the PDF downloads.",
       "info",
       { confirmButtonText: "Post & download", showCancelButton: true, cancelButtonText: "Not now" }
     );

@@ -124,7 +124,7 @@ export default function MinistryDetailClient() {
       <PublicSectionNav
         eyebrow="Church ministries"
         title="Explore our other ministries"
-        description="Each ministry has its own programme, leaders and calendar — open one to see what they do."
+        description="Each ministry has its own programme, leaders and calendar."
         links={ministrySectionLinks}
         activeKey={slug}
         className="border-t border-sand-line bg-white/60"

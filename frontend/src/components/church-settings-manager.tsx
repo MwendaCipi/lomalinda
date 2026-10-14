@@ -276,7 +276,7 @@ export function ChurchSettingsManager() {
               Receipt Thank-You Message
             </label>
             <p className="mt-0.5 text-xs text-moss">
-              Supports placeholders: <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{amount}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{account}"}</code>. The message is sent exactly as written — start it with your greeting (e.g. <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">Dear {"{name}"}</code>).
+              Supports placeholders: <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{amount}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{account}"}</code>. The message is sent exactly as written. Start it with your greeting (e.g. <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">Dear {"{name}"}</code>).
             </p>
             <textarea
               rows={3}
@@ -294,7 +294,7 @@ export function ChurchSettingsManager() {
               Split-Gift Receipt Message
             </label>
             <p className="mt-0.5 text-xs text-moss">
-              Used when one gift is spread over several accounts, so the giver gets one receipt listing the distribution instead of one per account. Supports <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{amount}"}</code> (the whole gift) and <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{distribution}"}</code> — the "Account: amount" lines.
+              Used when one gift is spread over several accounts, so the giver gets one receipt listing the distribution instead of one per account. Supports <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{name}"}</code>, <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{amount}"}</code> (the whole gift) and <code className="bg-white px-1 py-0.5 rounded border border-sand-line text-ember">{"{distribution}"}</code>, the "Account: amount" lines.
             </p>
             <textarea
               rows={4}
@@ -386,7 +386,7 @@ export function ChurchSettingsManager() {
           </h3>
           <p className="mt-1 text-xs text-moss">
             The one number members pay into. On the giving page they are told to type what they are giving for as the
-            M-Pesa account number — the account they picked on the form, such as Tithe or Combined Offering.
+            M-Pesa account number, the account they picked on the form, such as Tithe or Combined Offering.
           </p>
 
           <div className="mt-4 max-w-sm">
@@ -411,7 +411,7 @@ export function ChurchSettingsManager() {
             <Shield size={16} aria-hidden="true" /> Church Roles Configuration
           </h3>
           <p className="mt-1 text-xs text-moss">
-            Every role holder sits on the church board by default, so board invitations go to them automatically —
+            Every role holder sits on the church board by default, so board invitations go to them automatically,
             except assistants, who share the role's work but not its board seat. Pick a role below to give or take away
             what its holders may do in the app.
           </p>
@@ -440,7 +440,7 @@ export function ChurchSettingsManager() {
               <div className="mt-4 rounded-xl border border-sand-line bg-white p-4">
                 <p className="text-sm font-bold text-bark">
                   {selected.label}
-                  <span className="ml-2 text-xs font-medium text-moss">— rights held by this role</span>
+                  <span className="ml-2 text-xs font-medium text-moss">(rights held by this role)</span>
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {roleRights.rights.map((right) => {
@@ -529,7 +529,7 @@ export function ChurchSettingsManager() {
           </h3>
           <p className="mt-1 text-xs text-moss">
             What the elders and administrators receive the moment someone submits a join, prayer,
-            visitation, dedication, welfare or membership transfer request — and what a person
+            visitation, dedication, welfare or membership transfer request, and what a person
             receives once their join request has been approved.
           </p>
 
@@ -716,9 +716,8 @@ export function ChurchSettingsManager() {
             carry their own — see WeeklyMeeting and the hub's meeting panel. */}
         <div className="grid gap-4 sm:grid-cols-2">
           <p className="rounded-xl border border-sand-line bg-sand-plate px-4 py-3 text-xs leading-5 text-moss sm:col-span-2">
-            Regular meeting times live with the meetings themselves — midweek vespers, Friday vespers and the
-            Sabbath — set on <span className="font-semibold text-bark">Departments &amp; Ministries</span>, under
-            Personal Ministries.
+            Regular meeting times live with the meetings themselves, set on
+            <span className="font-semibold text-bark">Departments &amp; Ministries</span>, under Personal Ministries.
           </p>
 
           <div>

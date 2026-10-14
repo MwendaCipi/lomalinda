@@ -79,8 +79,8 @@ export function AppTopBar() {
           href={liveHref}
           target="_blank"
           rel="noreferrer"
-          title={`${gathering?.name} is meeting now — join`}
-          aria-label={`${gathering?.name} is meeting now — join the web conference`}
+          title={`${gathering?.name} is meeting now: join`}
+          aria-label={`${gathering?.name} is meeting now: join the web conference`}
           className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full bg-ember px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-ember-deep sm:inline-flex"
         >
           <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
@@ -111,7 +111,7 @@ export function AppTopBar() {
       {hasToken && (
         <Link
           href="/chat"
-          aria-label={chatUnread > 0 ? `Chat — ${chatUnread} unread` : "Chat"}
+          aria-label={chatUnread > 0 ? `Chat: ${chatUnread} unread` : "Chat"}
           title="Chat"
           className="relative mr-auto hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 lg:flex"
         >

@@ -182,7 +182,7 @@ export default function MomentsPage() {
   const removeAlbum = async (event: MomentEvent) => {
     const answer = await showAlert(
       `Delete “${event.title}” and all its files?`,
-      "The whole album — every picture and video — is gone for good. This cannot be undone.",
+      "The whole album is gone for good. This cannot be undone.",
       "warning",
       { showCancelButton: true, confirmButtonText: "Delete the album", cancelButtonText: "Keep it" }
     );
@@ -209,8 +209,7 @@ export default function MomentsPage() {
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Moments</h1>
               <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
-                The church&apos;s events, and the pictures and videos of each day — baptisms, choir sabbaths,
-                camporees, the life of the family, album by album.
+                The church&apos;s events, and the pictures and videos of each day, album by album.
               </p>
             </div>
             )}
@@ -239,7 +238,7 @@ export default function MomentsPage() {
               <h2 className="mt-3 text-lg font-semibold text-bark">No moments yet</h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-moss">
                 When the church posts an event&apos;s pictures and videos, they gather here album by album.
-                {canManage ? " Start with the button above — the day, its title, and its pictures." : ""} The{" "}
+                {canManage ? " Start with the button above." : ""} The{" "}
                 <Link href="/announcements" className="font-semibold text-ember hover:underline">
                   announcements feed
                 </Link>{" "}
@@ -264,7 +263,7 @@ export default function MomentsPage() {
                         </span>
                         {event.posted_by_name && <span>Posted by {event.posted_by_name}</span>}
                         {!event.published && (
-                          <span className="rounded-full bg-alert-film px-2 py-0.5 font-semibold text-brick">Unpublished — only the desk sees this</span>
+                          <span className="rounded-full bg-alert-film px-2 py-0.5 font-semibold text-brick">Unpublished (only the desk sees this)</span>
                         )}
                       </div>
                       {event.description && <p className="mt-2 max-w-2xl text-sm leading-6 text-moss">{event.description}</p>}

@@ -99,7 +99,7 @@ export function MarketingHome() {
             <p className="text-base leading-8 text-moss">
               Whether you are looking for a church home, coming back after time away, or simply curious about
               faith, come as you are. There is a seat for you, a class for your children, and a church family
-              ready to walk with you — and to remember you in prayer.
+              ready to walk with you, and to remember you in prayer.
             </p>
           </div>
           <div className="mt-9 flex flex-wrap gap-3">
@@ -163,7 +163,7 @@ export function MarketingHome() {
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-gold">Visit us</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Plan your Sabbath with us</h2>
             <p className="mt-5 max-w-xl text-sm leading-7 text-white/75">
-              We meet every Saturday — Sabbath School for children and adults, then Divine Service. Midweek
+              We meet every Saturday: Sabbath School for children and adults, then Divine Service. Midweek
               vespers is online on Wednesday evening, and Friday vespers closes the week in the sanctuary.
             </p>
             <ul className="mt-7 space-y-3 text-sm text-white/80">
@@ -171,7 +171,7 @@ export function MarketingHome() {
                 "Sabbath School and Divine Service every Saturday",
                 "Midweek vespers online, Friday vespers in person",
                 "Children's classes and a warm welcome at the door",
-                "Come as you are — there is no dress code to keep",
+                "Come as you are, no dress code to keep",
               ].map((line) => (
                 <li key={line} className="flex gap-3">
                   <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
@@ -195,7 +195,7 @@ export function MarketingHome() {
           <div className="rounded-[2rem] bg-white/5 p-6 ring-1 ring-white/15 sm:p-8">
             <h3 className="text-xl font-semibold">Find us</h3>
             <p className="mt-3 text-sm leading-6 text-white/70">
-              Loma Linda, Meru — on the church grounds. Open the map for directions before you set off.
+              Loma Linda, Meru, on the church grounds. Open the map for directions before you set off.
             </p>
             <div className="mt-6">
               <ChurchLocation />
@@ -292,7 +292,7 @@ export function MarketingHome() {
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
-              title="TikTok — Coming soon"
+              title="TikTok (Coming soon)"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.75a8.28 8.28 0 004.84 1.56V6.86a4.85 4.85 0 01-1.07-.17z"/>
@@ -305,7 +305,7 @@ export function MarketingHome() {
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm font-semibold text-white/70 transition hover:border-white/40 hover:text-white"
-              title="YouTube — Coming soon"
+              title="YouTube (Coming soon)"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>

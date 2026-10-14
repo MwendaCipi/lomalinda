@@ -429,7 +429,7 @@ export function MpesaRefundManager() {
 
               {!refundTarget.phone_number && (
                 <p className="rounded-xl bg-alert-wash p-3 text-[11px] font-semibold text-alert">
-                  This contribution has no phone number on record — the refund will be rejected. Record the payer&apos;s number first.
+                  This contribution has no phone number on record. The refund will be rejected. Record the payer&apos;s number first.
                 </p>
               )}
 

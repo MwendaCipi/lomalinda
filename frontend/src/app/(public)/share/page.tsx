@@ -45,7 +45,7 @@ export default function FellowshipPage() {
       <PublicSectionNav
         eyebrow="Explore"
         title="Where the church family gathers"
-        description="Notices, worship services, photos, testimonies, the calendar and your ideas — open any of them."
+        description="Notices, worship services, photos, testimonies, the calendar and your ideas."
         links={fellowshipLinks}
         className="border-t border-sand-line bg-white/60"
       />

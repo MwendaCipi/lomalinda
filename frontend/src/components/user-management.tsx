@@ -111,7 +111,7 @@ const TYPE_TABS: { key: TypeFilter | "awaiting"; label: string; help: string }[]
   {
     key: "awaiting",
     label: "Invites (pending)",
-    help: "Invitations, transfer requests and accounts still awaiting approval — none can sign in yet",
+    help: "Invitations, transfer requests and accounts still awaiting approval. None can sign in yet.",
   },
 ];
 
@@ -163,7 +163,7 @@ function AccountStatus({ member }: { member: MemberUser }) {
   }
   return (
     <span
-      title="Waiting for leadership approval on the Requests desk — they cannot sign in yet"
+      title="Waiting for leadership approval on the Requests desk. They cannot sign in yet."
       className="inline-flex items-center gap-1.5 rounded-full bg-gold-pale px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ember-deep"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-ember" aria-hidden="true" />
@@ -1626,7 +1626,7 @@ export function UserManagement() {
           data.temporary_password
             ? {
                 type: "success",
-                text: `Member '${data.username}' registered. Share these sign-in details now — the password is shown only once.`,
+                text: `Member '${data.username}' registered. Share these sign-in details now. The password is shown only once.`,
                 credentials: `Username: ${data.username}   Password: ${data.temporary_password}`,
               }
             : { type: "success", text: `Member '${data.username}' registered successfully with full record.` },
@@ -1709,7 +1709,7 @@ export function UserManagement() {
           data.temporary_password
             ? {
                 type: "success",
-                text: `Friend '${data.username}' added. Share these sign-in details now — the password is shown only once.`,
+                text: `Friend '${data.username}' added. Share these sign-in details now. The password is shown only once.`,
                 credentials: `Username: ${data.username}   Password: ${data.temporary_password}`,
               }
             : { type: "success", text: `Friend '${data.username}' added successfully.` },
@@ -3132,8 +3132,8 @@ export function UserManagement() {
                     value={
                       profileData.is_active === false
                         ? profileData.deactivated_at
-                          ? `Inactive — switched off on ${fmtDate(profileData.deactivated_at)}`
-                          : "Inactive — awaiting approval"
+                          ? `Inactive: switched off on ${fmtDate(profileData.deactivated_at)}`
+                          : "Inactive (awaiting approval)"
                         : "Active"
                     }
                   />
@@ -3182,7 +3182,7 @@ export function UserManagement() {
 
               <p className="rounded-xl bg-sand-cream px-4 py-3 text-[11px] leading-relaxed text-moss">
                 To correct any of these details, use <strong className="text-bark">Assign Leadership</strong> for roles,
-                or ask the clerk to propose a change — the member approves it on their dashboard before anything is applied.
+                or ask the clerk to propose a change. The member approves it on their dashboard before anything is applied.
               </p>
 
               {/* Where an officer reviewing a record looks for the roster's own
@@ -3230,7 +3230,7 @@ export function UserManagement() {
             className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 id="edit-member-title" className="text-xl font-bold text-bark">
-                Edit Profile — {editingMember.first_name || editingMember.username}
+                Edit Profile: {editingMember.first_name || editingMember.username}
               </h3>
               <button type="button" onClick={() => setEditingMember(null)} className="rounded-full p-2 text-moss hover:bg-sand text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
@@ -3304,7 +3304,7 @@ export function UserManagement() {
               </div>
               <p className="rounded-xl bg-sand-cream px-4 py-3 text-[11px] leading-relaxed text-moss">
                 Profile changes take effect when <strong className="text-bark">{editingMember.first_name || editingMember.username}</strong> approves
-                them — they&apos;ll get a notification on their dashboard and can accept or keep their current details. Role changes apply immediately.
+                them. They&apos;ll get a notification on their dashboard and can accept or keep their current details. Role changes apply immediately.
               </p>
               <div className="flex items-center gap-3 pt-2">
                 <button type="submit" disabled={submitting}
@@ -3328,7 +3328,7 @@ export function UserManagement() {
           <div className="w-full max-w-md rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 className="text-base font-bold text-bark">
-                Transfer Member — {transferMember.first_name || transferMember.username}
+                Transfer Member: {transferMember.first_name || transferMember.username}
               </h3>
               <button onClick={() => setTransferMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
@@ -3366,7 +3366,7 @@ export function UserManagement() {
           <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 className="text-base font-bold text-bark">
-                Account Type — {typeMember.first_name || typeMember.username}
+                Account Type: {typeMember.first_name || typeMember.username}
               </h3>
               <button onClick={() => setTypeMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
@@ -3430,7 +3430,7 @@ export function UserManagement() {
           <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 className="text-base font-bold text-bark">
-                Roles — {leadershipMember.first_name || leadershipMember.username}
+                Roles: {leadershipMember.first_name || leadershipMember.username}
               </h3>
               <button onClick={() => setLeadershipMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>

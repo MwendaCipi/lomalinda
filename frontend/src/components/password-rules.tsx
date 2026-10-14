@@ -23,7 +23,7 @@ export function PasswordRules({ password, className = "" }: { password: string; 
           >
             <span aria-hidden="true" className="flex w-3 justify-center">{rule.met ? <Check size={12} /> : "•"}</span>
             <span>{rule.label}</span>
-            <span className="sr-only">{rule.met ? " — met" : " — not yet met"}</span>
+            <span className="sr-only">{rule.met ? ", met" : ", not yet met"}</span>
           </li>
         ))}
       </ul>

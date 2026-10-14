@@ -48,7 +48,7 @@ export const publicWebsiteLinks: SectionLink[] = [
     key: "top",
     href: "#top",
     label: "The welcome",
-    description: "An English-speaking Seventh-day Adventist church in Meru — worship, study and the fellowship we share between Sabbaths.",
+    description: "An English-speaking Seventh-day Adventist church in Meru.",
     icon: Sparkles,
   },
   {
@@ -105,7 +105,7 @@ export const publicWebsiteHeaderLinks: SectionLink[] = [
     key: "top",
     href: "#top",
     label: "The welcome",
-    description: "An English-speaking Seventh-day Adventist church in Meru — worship, study and the fellowship we share between Sabbaths.",
+    description: "An English-speaking Seventh-day Adventist church in Meru.",
     icon: Sparkles,
   },
   {
@@ -216,7 +216,7 @@ export const materialSections: { value: MaterialSection; label: string; descript
   {
     value: "lesson-guides",
     label: "Lesson Guides",
-    description: "The current Sabbath School guides — adult, young adult and every children's division.",
+    description: "The current Sabbath School guides.",
     icon: BookOpen,
   },
   {
@@ -336,7 +336,7 @@ export const fellowshipLinks: SectionLink[] = [
     key: "moments",
     href: "/share/moments",
     label: "Moments",
-    description: "The church's events, album by album — kept by the administrators.",
+    description: "The church's events, album by album.",
     icon: Sparkles,
   },
   {

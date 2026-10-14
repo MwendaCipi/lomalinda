@@ -828,7 +828,7 @@ function AddEventModal({
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
-          <h3 className="text-lg font-bold text-bark">Add event — {targetLabel}</h3>
+          <h3 className="text-lg font-bold text-bark">Add event for {targetLabel}</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
@@ -1423,7 +1423,7 @@ function SingingGroupsPanel({
         <div>
           <h3 className="text-sm font-bold text-bark">Singing groups</h3>
           <p className="mt-0.5 text-[11px] text-moss">
-            The groups registered under {departmentLabel} — each one's singers also count on the department's roll.
+            The groups registered under {departmentLabel}. Each one's singers also count on the department's roll.
           </p>
         </div>
         {canManage ? (
@@ -1998,7 +1998,7 @@ function LeadershipEditModal({
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
-            <h3 className="text-lg font-bold text-bark">{department.label} — Leadership</h3>
+            <h3 className="text-lg font-bold text-bark">Leadership: {department.label}</h3>
             <p className="text-[11px] text-moss">Search a member, set them into a position, then save. Contacts stay on their accounts.</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
@@ -2103,7 +2103,7 @@ function LeadershipEditModal({
           ))}
           {staged.length === 0 && (
             <p className="rounded-xl border border-dashed border-sand-line px-3 py-2 text-[11px] italic text-moss-faint">
-              No appointments set yet — search above, then set a position.
+              No appointments set yet. Search above, then set a position.
             </p>
           )}
         </div>
@@ -2232,7 +2232,7 @@ function AssignRoleModal({
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
             <h3 className="text-lg font-bold text-bark">Assign role</h3>
-            <p className="text-[11px] text-moss">{member.name} — {department.label}</p>
+            <p className="text-[11px] text-moss">{member.name}: {department.label}</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
@@ -2313,7 +2313,7 @@ function AssignRoleModal({
               leadership modal asks about before staging. */}
           {chosen && seated.length > 0 && !seated.some((h) => h.id === member.id) && (
             <p className="rounded-xl border border-gold-soft bg-sand-cream px-3 py-2 text-[11px] text-bark">
-              {chosen.name} is {seated.map((h) => h.name).join(", ")} — saving gives it to {member.name}.
+              {chosen.name} is {seated.map((h) => h.name).join(", ")}. Saving gives it to {member.name}.
             </p>
           )}
         </div>
@@ -2400,7 +2400,7 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
   async function save() {
     if (!draft || saving) return;
     if (!draft.title.trim()) {
-      setError("Give the meeting a name — \"Midweek Vespers\", \"Sabbath Worship\".");
+      setError("Give the meeting a name, for example \"Midweek Vespers\" or \"Sabbath Worship\".");
       return;
     }
     if (draft.end_time <= draft.start_time) {
@@ -2625,7 +2625,7 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
         <p className="py-8 text-center text-xs text-moss">Loading the church&apos;s week…</p>
       ) : meetings.length === 0 ? (
         <p className="py-8 text-center text-xs text-moss">
-          No weekly meetings yet. Add the ones the church keeps — midweek vespers, Friday vespers, the Sabbath.
+          No weekly meetings yet. Add the ones the church keeps.
         </p>
       ) : visibleMeetings.length === 0 ? (
         <p className="py-8 text-center text-xs text-moss">No meeting matches that search.</p>
@@ -3456,7 +3456,7 @@ export function DepartmentAccountsPanel({
                   >
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
-                        {acc.description || acc.name} — KES {Number(acc.balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                        {acc.description || acc.name}: KES {Number(acc.balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                       </option>
                     ))}
                   </select>
@@ -4287,7 +4287,7 @@ function DepartmentDetail({
                           {row.via && !isSabbathSchool && (
                             <span
                               className="shrink-0 rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss"
-                              title={`On the roll through ${row.via} — remove them there`}
+                              title={`On the roll through ${row.via}. Remove them there.`}
                             >
                               via {row.via}
                             </span>
@@ -4418,7 +4418,7 @@ function DepartmentDetail({
                                     const [email, phone] = contactOf(row);
                                     window.open(
                                       email
-                                        ? `mailto:${email}?subject=${encodeURIComponent(`${department.label} — a word from your department`)}`
+                                        ? `mailto:${email}?subject=${encodeURIComponent(`${department.label}: a word from your department`)}`
                                         : `tel:${(phone ?? "").replace(/\s+/g, "")}`,
                                       "_self",
                                     );
@@ -4452,7 +4452,7 @@ function DepartmentDetail({
                                 </button>
                               ) : (
                                 <p className="px-3 py-2 text-[11px] italic text-moss-faint">
-                                  {row.via && !isSabbathSchool ? `On the roll through ${row.via}` : "Appointed — no roll entry"}
+                                  {row.via && !isSabbathSchool ? `On the roll through ${row.via}` : "Appointed (no roll entry)"}
                                 </p>
                               )}
                                 </>
@@ -4792,7 +4792,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
       <div className="shrink-0 md:hidden">
         <h2 className="text-lg font-bold text-bark">Leadership</h2>
         <p className="mt-0.5 text-xs text-moss">
-          Every ministry and department — the church&apos;s offices among them — with its leader and assistants.
+          Every ministry and department, the church&apos;s offices among them, with its leader and assistants.
         </p>
       </div>
 
@@ -5069,7 +5069,7 @@ function DepartmentBudgetModal({
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-3">
           <div>
-            <h3 className="text-lg font-bold text-bark">{department.label} — Budget</h3>
+            <h3 className="text-lg font-bold text-bark">Budget: {department.label}</h3>
             <p className="text-[11px] text-moss">Planned spending lines; the treasury still moves the money.</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
@@ -5263,7 +5263,7 @@ function AddAreaModal({
             </span>
           </label>
           <p className="text-[11px] text-moss">
-            Created with Leader, Secretary and Treasurer roles — appoint their holders when editing leadership.
+            Created with Leader, Secretary and Treasurer roles. Appoint their holders when editing leadership.
           </p>
           <div className="flex items-center justify-end gap-2 border-t border-sand-line pt-3">
             <button

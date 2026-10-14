@@ -75,7 +75,7 @@ function HonoreeCard({
           <p className="text-sm font-semibold text-bark">For {honoree.name}</p>
           <p className="text-[11px] text-moss">
             Your {relationships.find((option) => option.value === honoree.relationship)?.label.toLowerCase() || honoree.relationship}
-            {honoree.id ? " — in our system, so their letter goes by email." : "."}
+            {honoree.id ? " (in our system, so their letter goes by email)." : "."}
           </p>
         </div>
         <button

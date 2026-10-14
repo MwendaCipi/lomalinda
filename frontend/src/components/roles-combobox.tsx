@@ -624,7 +624,7 @@ export function RolesCombobox({
             const assistantTitle = !r.assistant
               ? `${r.label} does not take an assistant.`
               : !checked
-                ? `Tick ${r.label} first — an assistant holds the role too.`
+                ? `Tick ${r.label} first. An assistant holds the role too.`
                 : undefined;
 
             return (

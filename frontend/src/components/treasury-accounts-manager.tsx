@@ -411,7 +411,7 @@ function WithdrawalRequestsPanel({
                     {row.decided_by && (row.status === "approved" || row.status === "declined") && (
                       <p className="text-[10px] italic text-moss-faint">
                         {row.status === "approved" ? "Approved" : "Rejected"} by {row.decided_by}
-                        {row.reply ? ` — &ldquo;${row.reply}&rdquo;` : ""}
+                        {row.reply ? `: &ldquo;${row.reply}&rdquo;` : ""}
                       </p>
                     )}
                   </td>
@@ -494,21 +494,21 @@ function WithdrawalRequestsPanel({
                   {awaitingElder
                     ? "Waiting for an elder to clear it before the treasury releases the money."
                     : awaitingTreasurer
-                      ? "Cleared by an elder — the treasury releases or declines it now."
+                      ? "Cleared by an elder. The treasury releases or declines it now."
                       : canReverse
                         ? `Released by ${target.decided_by ?? "the treasury"}. Reversing credits the fund back and removes the expense.`
                         : isReversed
-                          ? "Reversed — the fund was credited back. It can be approved again while the account covers it."
-                          : `Decided by ${target.decided_by ?? "the office"}${target.reply ? ` — “${target.reply}”` : ""}.`}
+                          ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
+                          : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: “${target.reply}”` : ""}.`}
                 </p>
                 {selfCleared && (awaitingTreasurer || isReversed) && (
                   <p className="mt-1.5 text-[11px] font-semibold text-ember">
-                    You cleared this request as its elder — the treasurer who releases the money has to be someone else.
+                    You cleared this request as its elder. The treasurer who releases the money has to be someone else.
                   </p>
                 )}
                 {isReversed && !reversedCovered && (
                   <p className="mt-1.5 text-[11px] font-semibold text-red-600">
-                    {target.account_name} holds KES {Number(target.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })} —
+                    {target.account_name} holds KES {Number(target.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })},
                     less than the KES {Number(target.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} asked for, so it cannot be
                     approved yet.
                   </p>
@@ -568,7 +568,7 @@ function WithdrawalRequestsPanel({
                     disabled={busy || selfCleared}
                     title={
                       selfCleared
-                        ? "You gave this request its elder approval — a different treasurer must release the money."
+                        ? "You gave this request its elder approval. A different treasurer must release the money."
                         : undefined
                     }
                     className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
@@ -584,7 +584,7 @@ function WithdrawalRequestsPanel({
                     disabled={busy || selfCleared}
                     title={
                       selfCleared
-                        ? "You cleared this request as its elder — a different treasurer must release the money."
+                        ? "You cleared this request as its elder. A different treasurer must release the money."
                         : undefined
                     }
                     className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
@@ -1103,7 +1103,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     const link = supportLinkFor(account);
     try {
       await navigator.clipboard.writeText(link);
-      showAlert("Link copied", `Paste it wherever members can act on it — it opens the giving form with ${account.name} already selected.`, "success");
+      showAlert("Link copied", `Paste it wherever members can act on it. It opens the giving form with ${account.name} already selected.`, "success");
     } catch {
       showAlert("Copy this link", link, "info");
     }
@@ -1617,7 +1617,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                   onChange={(e) => setAddForm({ ...addForm, department: e.target.value })}
                   className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                 >
-                  <option value="">None — the church&apos;s own money</option>
+                  <option value="">None (the church&apos;s own money)</option>
                   {departments.map((d) => (
                     <option key={d.code} value={d.code}>
                       {d.label}
@@ -1625,7 +1625,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                   ))}
                 </select>
                 <p className="mt-1 text-[11px] text-moss">
-                  The department whose desk may read this fund and request withdrawals from it — the choir&apos;s Ensemble, the youth ministries&apos; AYM fund, and so on. One fund per department.
+                  The department whose desk may read this fund and request withdrawals from it. One fund per department.
                 </p>
               </div>
 
@@ -1680,7 +1680,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                   className="mt-1 block w-full rounded-xl border border-sand-mute px-3.5 py-2.5 outline-none focus:border-ember"
                 />
                 <p className="mt-1 text-[11px] text-moss">
-                  What M-Pesa shows in the prompt — Safaricom caps it at 12 characters.
+                  What M-Pesa shows in the prompt. Safaricom caps it at 12 characters.
                 </p>
               </div>
 
@@ -1731,7 +1731,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                   onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
                   className="mt-1 block w-full rounded-xl border border-sand-mute px-3 py-2.5 outline-none focus:border-ember"
                 >
-                  <option value="">None — the church&apos;s own money</option>
+                  <option value="">None (the church&apos;s own money)</option>
                   {departments.map((d) => (
                     <option key={d.code} value={d.code}>
                       {d.label}

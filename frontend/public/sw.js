@@ -401,8 +401,17 @@
    a subtle "offline · last synced" chip instead of an error wall. Auth
    errors (401/403) are never masked — the sign-in prompt still appears when
    a session expires. Non-API chrome is unchanged.
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v78";
+   Chrome changed, so installed apps must take the new shell.
+
+   v79 — the offline API cache leaves page navigations alone: the lesson and
+   mission readers are anchors to `/api/members/…`, which the API answers with
+   a 302 to another origin. Running those through the API cache followed the
+   redirect inside the worker and failed the navigation (an opaque response
+   cannot be handed back as a page), so the cards opened nothing. A navigation
+   to /api/ now falls through to the browser, which follows the redirect itself
+   exactly as it did before the API cache landed. Chrome changed, so installed
+   apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v79";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -539,6 +548,10 @@ async function networkOnlyFallbackOffline(request) {
 const API_CACHE_NAME = "sda-api-v1";
 
 function rememberApi(request, response) {
+  /* Only a readable 200 is worth keeping: an opaque response (status 0, no
+     body, no headers) cannot be rebuilt into a Response — `new Response(null,
+     { status: 0 })` throws — and has nothing a page could read offline. */
+  if (!response.ok || response.type === "opaque") return response;
   /* Store the timestamp alongside the response body so pages can display
      "last updated X minutes ago" without an extra round-trip. */
   const copy = response.clone();
@@ -621,8 +634,15 @@ self.addEventListener("fetch", (event) => {
 
   /* API requests: dedicated network-first-with-stale-fallback cache.
      These are same-origin (/api/…) so the origin check that excludes
-     third-party requests does not apply here. */
-  if (url.pathname.startsWith("/api/")) {
+     third-party requests does not apply here.
+
+     A page navigation to /api/ is *never* answered from here: those are the
+     lesson, mission and children's readers, whose endpoints 302 to another
+     origin. Following that redirect inside the worker yields an opaque
+     response the browser refuses to paint as a page, so the link would open
+     nothing. Left to the browser, the redirect is followed natively and the
+     reader opens — the behaviour before the API cache existed. */
+  if (url.pathname.startsWith("/api/") && event.request.mode !== "navigate") {
     event.respondWith(apiNetworkFirst(event.request));
     return;
   }

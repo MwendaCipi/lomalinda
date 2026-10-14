@@ -111,7 +111,7 @@ export function DailyWordPanel() {
             rows={3}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="A short thought for the day — a promise, a picture, a nudge."
+            placeholder="A short thought for the day."
             className="mt-1.5 w-full rounded-xl border border-sand-line bg-white px-3 py-2.5 text-xs focus:border-ember focus:outline-none"
           />
           <button

@@ -49,7 +49,7 @@ export function WeeklySchedule() {
           ))}
           {meetings !== null && meetings.length === 0 && (
             <p className="text-sm text-moss">
-              The week&apos;s meetings are still being set up — check the{" "}
+              The week&apos;s meetings are still being set up. Check the{" "}
               <Link href="/calendar" className="font-semibold text-ember hover:underline">
                 church calendar
               </Link>{" "}
@@ -59,7 +59,7 @@ export function WeeklySchedule() {
         </div>
 
         <p className="mt-8 text-sm text-moss">
-          Visiting for the first time? Everything you need — programmes, times and what to expect — is on the{" "}
+          Visiting for the first time? Everything you need is on the{" "}
           <Link href="/calendar" className="font-semibold text-ember hover:underline">
             church calendar
           </Link>

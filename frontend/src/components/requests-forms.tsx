@@ -213,7 +213,7 @@ export function PrayerRequestForm({
 
         {!isLoggedIn && (
           <label className="block text-xs font-medium text-bark">
-            Your Name <span className="font-normal text-moss">(optional — leave blank to submit anonymously)</span>
+            Your Name <span className="font-normal text-moss">(optional, leave blank to submit anonymously)</span>
             <input
               type="text"
               value={optionalName}

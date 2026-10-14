@@ -305,7 +305,7 @@ export function DashboardAnalytics() {
       <section className="mt-6 rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-sm font-bold text-bark">Church finances</h2>
         <p className="mt-2 text-xs text-moss">
-          The figures could not be loaded just now. Reload the page to try again — the rest of your dashboard is
+          The figures could not be loaded just now. Reload the page to try again. The rest of your dashboard is
           unaffected.
         </p>
       </section>
@@ -364,7 +364,7 @@ export function DashboardAnalytics() {
             <Landmark className="h-4 w-4 text-ember" /> Church finances at a glance
           </h2>
           <p className="mt-1 text-[11px] text-moss">
-            Real receipts only — completed gifts and recorded cash — for the {rangeLabel} to{" "}
+            Real receipts only, completed gifts and recorded cash, for the {rangeLabel} to{" "}
             {fmtDay(data.as_of)}.
           </p>
         </div>
@@ -636,7 +636,7 @@ export function DashboardAnalytics() {
             <Users className="h-4 w-4 text-ember" /> Giving activity
           </h3>
           <p className="mt-1 text-[11px] text-moss">
-            Who is giving, without naming and ranking donors — the figures are per gift, not per person.
+            Who is giving, without naming and ranking donors. The figures are per gift, not per person.
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[

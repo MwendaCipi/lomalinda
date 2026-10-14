@@ -35,7 +35,7 @@ const referenceShelf: {
     badge: "Spirit of Prophecy",
     title: "Explore the E.G. White Writings",
     description:
-      "The complete published writings of Ellen G. White — books, articles, letters and manuscripts, searchable by topic, scripture reference or phrase.",
+      "The complete published writings of Ellen G. White, searchable by topic, scripture reference or phrase.",
     href: fellowshipResources.egw,
     button: "Open EGW Writings",
   },

@@ -100,7 +100,7 @@ export function DateField({
         ref={pickerRef}
         type="date"
         value={value}
-        aria-label={`${label} — calendar`}
+        aria-label={`${label}: calendar`}
         onChange={(event) => {
           setDraft(null);
           onChange(event.target.value);
@@ -120,7 +120,7 @@ export function DateField({
       <button
         type="button"
         onClick={openCalendar}
-        aria-label={`${label} — open calendar`}
+        aria-label={`${label}: open calendar`}
         title="Pick from calendar"
         className="absolute right-0 inset-y-0 grid w-7 place-items-center text-moss transition hover:text-ember"
       >

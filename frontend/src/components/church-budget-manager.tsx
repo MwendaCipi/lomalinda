@@ -185,8 +185,8 @@ export function ChurchBudgetManager() {
             <Calendar className="mx-auto h-10 w-10 text-moss" />
             <h3 className="mt-3 text-sm font-semibold text-bark">No budget on record yet</h3>
             <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-moss">
-              Post the church&apos;s budget for the year — what it plans to receive and to spend — and publish
-              it to the congregation&apos;s budget page when it is ready.
+              Post the church&apos;s budget for the year and publish it to the congregation&apos;s budget page
+              when it is ready.
             </p>
           </div>
         ) : (
@@ -332,7 +332,7 @@ export function ChurchBudgetManager() {
                   onChange={(e) => setForm({ ...form, published_to_public: e.target.checked })}
                   className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sage"
                 />
-                <span>Publish to the congregation now — the budget appears on the church&apos;s budget page.</span>
+                <span>Publish to the congregation now. The budget appears on the church&apos;s budget page.</span>
               </label>
 
               <button

@@ -48,7 +48,7 @@ function ThankYouContent() {
   const heading = pendingMpesa ? "Almost there" : kind === "in-kind" ? "Thank you for your gift" : "Thank you for your giving";
 
   const body = pendingMpesa
-    ? `We've sent an M-Pesa prompt to your phone. Enter your PIN to complete your gift${forDrive} — it counts as soon as Safaricom confirms it.`
+    ? `We've sent an M-Pesa prompt to your phone. Enter your PIN to complete your gift${forDrive}. It counts as soon as Safaricom confirms it.`
     : kind === "in-kind"
       ? `Your in-kind gift${forDrive} has been recorded. The stewardship team will follow up on the items you listed.`
       : `Your bank transfer details${forDrive} have been recorded. It counts toward the drive once the deposit lands.`;
