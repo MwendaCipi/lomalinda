@@ -18,6 +18,11 @@ const ChurchLocation = dynamic(() => import("@/components/church-location"), { s
 
 // Every one of these is a page a visitor can actually open — no member sign-in
 // required — so the landing page never sends anyone to a gate.
+//
+// The page asks a visitor for one thing only: a giving announcement's pledge,
+// through the church's own pledge form on the card above. Prayer requests, a
+// visit asked for, answers to an opinion question and the church's records are
+// the app's, reached by signing in.
 const ways = [
   {
     href: "/calendar",
@@ -28,11 +33,6 @@ const ways = [
     href: "/materials",
     title: "Sabbath School & Bible study",
     text: "Quarterly lessons, the hymnal and Bible reading to follow along at home.",
-  },
-  {
-    href: "/requests",
-    title: "Prayer & community care",
-    text: "Send a prayer request, ask for a visit, or tell us about a practical need.",
   },
   {
     href: "/give",
@@ -183,9 +183,6 @@ export function MarketingHome() {
               <a className="text-gold hover:underline" href="mailto:hello@sdalomalinda.or.ke">
                 hello@sdalomalinda.or.ke
               </a>
-              <Link href="/requests" className="text-white/80 hover:text-white">
-                Prayer &amp; care requests &rarr;
-              </Link>
               <Link href="/login" className="text-white/80 hover:text-white">
                 Member sign in &rarr;
               </Link>
@@ -221,12 +218,6 @@ export function MarketingHome() {
               className="rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-ember transition hover:bg-sand"
             >
               Give now
-            </Link>
-            <Link
-              href="/requests"
-              className="rounded-full border border-white/40 px-6 py-3.5 text-sm font-semibold text-white transition hover:border-white"
-            >
-              Prayer &amp; care
             </Link>
           </div>
         </div>

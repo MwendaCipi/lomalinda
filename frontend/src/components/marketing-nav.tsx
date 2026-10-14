@@ -13,7 +13,6 @@ const marketingLinks = [
   { href: "/about", label: "About" },
   { href: "/calendar", label: "Calendar" },
   { href: "/materials", label: "Study" },
-  { href: "/requests", label: "Prayer" },
   { href: "/give", label: "Give" },
   { href: "/share/moments", label: "Moments" },
   { href: "/spiritual/testimonies", label: "Sharing" },

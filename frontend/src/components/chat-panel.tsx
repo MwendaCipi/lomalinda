@@ -730,7 +730,12 @@ export function ChatPanel() {
                   aria-hidden="true"
                   onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 />
-                <div className="flex items-end gap-2">
+                {/* Centred, not bottom-aligned: a textarea is inline-block, so
+                    its line box hangs a few pixels below it and the bottom of
+                    the row is not the bottom of the field — the paperclip rode
+                    low with the emoji. Centring the row and the emoji on the
+                    field keeps all three on the same line as the words. */}
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -754,7 +759,7 @@ export function ChatPanel() {
                       }}
                       rows={1}
                       placeholder={`Message ${active.title}`}
-                      className="max-h-32 min-h-[42px] w-full resize-none rounded-2xl border border-sand-line bg-sand-linen py-2.5 pl-3.5 pr-10 text-sm text-bark outline-none focus:border-ember"
+                      className="block max-h-32 min-h-[42px] w-full resize-none rounded-2xl border border-sand-line bg-sand-linen py-2.5 pl-3.5 pr-10 text-sm text-bark outline-none focus:border-ember"
                     />
                     <button
                       data-emoji-trigger
@@ -762,7 +767,7 @@ export function ChatPanel() {
                       onClick={() => setShowEmoji((open) => !open)}
                       aria-label="Emoji"
                       title="Emoji"
-                      className="absolute bottom-2.5 right-2.5 text-moss transition hover:text-ember"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-moss transition hover:text-ember"
                     >
                       <Smile className="h-4 w-4" aria-hidden="true" />
                     </button>

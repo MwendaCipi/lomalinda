@@ -1380,16 +1380,22 @@ export type FooterLink = { key: DestinationKey } | { href: string; label: string
 export const footerColumns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: "Worship",
+    // The footer is the landing page's, and the request desks (prayer,
+    // visitation) are reached from the app, not from a visitor's first page.
     links: [
       { key: "calendar" },
       { key: "materials" },
       { key: "announcements" },
-      { key: "prayerVisitation" },
     ],
   },
   {
+    // In-kind is the public giving page's own form rather than the member's
+    // in-kind desk: the footer is a visitor's, and /support/in-kind sits
+    // behind the sign-in wall. Fund Drives is left out for the same reason —
+    // its index is a member page, and there is no visitor-facing list to send
+    // them to yet.
     heading: "Giving",
-    links: [{ key: "give" }, { key: "fundDrives" }, { key: "inKind" }],
+    links: [{ key: "give" }, { href: "/give?give=in-kind", label: "In-Kind Giving" }],
   },
   {
     heading: "Church",

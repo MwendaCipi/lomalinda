@@ -154,6 +154,12 @@ function GivePageContent() {
   // be turned into the differently-named "Budget".
   const normalizedPurpose = linkedPurpose ? getMinistryGivingPurpose(linkedPurpose) : "";
 
+  // The landing page's In-kind action hands the goods form straight over:
+  // ?give=in-kind opens it, the way ?purpose= names the account the money
+  // form starts on. This page is public, which the member-side in-kind desk
+  // is not — so a visitor's giving never meets the sign-in wall.
+  const inKindRequested = (searchParams.get("give") ?? "").trim().toLowerCase() === "in-kind";
+
   // A giver may support several accounts in one payment, so the choice is a list
   // and each chosen account carries its own amount. One M-Pesa prompt is sent,
   // for the total; the church records the split per account.
@@ -190,7 +196,7 @@ function GivePageContent() {
   // page open — one form, so a gift is filed identically wherever it is
   // given. The Giving page carries its button beside Give Money, so the
   // shelf of ways to give needs no page of its own.
-  const [showInKindModal, setShowInKindModal] = useState(false);
+  const [showInKindModal, setShowInKindModal] = useState(inKindRequested);
 
   // ── Giving for someone, and asking someone to give ─────────────────────
   // All three ways of giving live in this one modal, picked from a combo at

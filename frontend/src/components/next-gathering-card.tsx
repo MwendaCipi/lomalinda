@@ -35,7 +35,9 @@ type Announcement = {
  * A giving announcement's slide carries the giving actions themselves —
  * Pledge, In-kind and Give Money, always in one row, left to right — instead
  * of a form-and-done flow; the Fellowship feed is where a member answers an
- * opinion question or reads the full text.
+ * opinion question or reads the full text. Pledge opens the church's own
+ * pledge form here; In-kind and Give Money lead to the public giving page,
+ * which carries the goods form and the money form for a visitor.
  */
 export function NextGatheringCard() {
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
@@ -250,8 +252,11 @@ export function NextGatheringCard() {
                   Pledge
                 </button>
               )}
+              {/* The goods form lives on the public giving page: this card is
+                  a visitor's, and the member in-kind desk (/support/in-kind)
+                  sits behind the sign-in wall. */}
               <Link
-                href="/support/in-kind"
+                href="/give?give=in-kind"
                 className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
               >
                 In-kind
