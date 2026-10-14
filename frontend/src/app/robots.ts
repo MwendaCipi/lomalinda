@@ -22,5 +22,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: SYSTEM_SECTIONS.map((section) => `/${section}/`),
       },
     ],
+    sitemap: "https://sdalomalinda.or.ke/sitemap.xml",
   };
 }
