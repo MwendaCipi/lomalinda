@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
-import { aboutSectionLinks, publicWebsiteLinks } from "@/config/site-sections";
+import { aboutSectionLinks } from "@/config/site-sections";
 
 const values = [
   ["Faith", "We follow Jesus, trust Scripture, and make room for questions, growth, and grace."],

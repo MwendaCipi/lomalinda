@@ -8,8 +8,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { showAlert } from "@/lib/alerts";
 import { thankYouPath } from "@/lib/giving-thanks";
 import { getMinistryGivingPurpose } from "@/config/ministries";
-import { PublicSectionNav } from "@/components/public-section-nav";
-import { publicWebsiteLinks } from "@/config/site-sections";
 import { stewardshipLinks } from "@/config/site-sections";
 import { PENDING_GIVINGS_KEY } from "@/components/my-givings";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
@@ -821,15 +819,6 @@ function GivePageContent() {
 
           </div>
       </div>
-
-      {/* The public landing page offers the wider stewardship navigation; the authenticated shell hides it. */}        <PublicSectionNav
-        eyebrow="Stewardship & support"
-        title="More ways to support the church"
-        description="In-kind gifts, fund drives, the church budget and the treasury's published figures."
-        links={publicWebsiteLinks}
-        activeKey="give"
-        className="public-section-nav border-t border-sand-line bg-white/60"
-      />
 
       {/* ── Give in Kind — the same form the announcements and the in-kind
           page open, so a goods gift is filed identically wherever it is

@@ -8,7 +8,6 @@ import {
   FileText,
   Globe,
   HandHelping,
-  HandHeart,
   Handshake,
   Heart,
   Megaphone,
@@ -36,98 +35,6 @@ export type SectionLink = {
   description: string;
   icon: LucideIcon;
 };
-
-/** Beside About: the church's story, its calendar and privacy. */
-/**
- * The links a first-time visitor reaches from the header and the footer.
- * These are the pages a "English-speaking church in Meru" search returns,
- * so every one of them is named here, with one canonical description.
- *
- * The church's photo wall and the testimony desk are left off on purpose:
- * they are the app's, reached by signing in, and a visitor's first page offers
- * only what they can open right now.
- */
-export const publicWebsiteLinks: SectionLink[] = [
-  {
-    key: "top",
-    href: "#top",
-    label: "The welcome",
-    description: "An English-speaking Seventh-day Adventist church in Meru.",
-    icon: Sparkles,
-  },
-  {
-    key: "calendar",
-    href: "/calendar",
-    label: "Church Calendar",
-    description: "Sabbaths, vespers, programmes and special events across the church year.",
-    icon: Calendar,
-  },
-  {
-    key: "materials",
-    href: "/materials",
-    label: "Study Materials",
-    description: "Sabbath School lessons, hymnals, the Bible and the writings of Ellen G. White.",
-    icon: BookOpen,
-  },
-  {
-    key: "prayer",
-    href: "/requests",
-    label: "Prayer & community care",
-    description: "Send a prayer request, ask for a visit, or tell us about a practical need.",
-    icon: Heart,
-  },
-  {
-    key: "give",
-    href: "/give",
-    label: "Giving",
-    description: "Tithes and offerings by mobile money, and fund drives for the church's work.",
-    icon: HandHeart,
-  },
-];
-
-/**
- * The links a first-time visitor reaches from the public header and footer.
- * These are the pages a "english speaking church meru" search returns, so
- * every one of them is named here, with one canonical description. The same
- * two app pages are left off as in the list above.
- */
-export const publicWebsiteHeaderLinks: SectionLink[] = [
-  {
-    key: "top",
-    href: "#top",
-    label: "The welcome",
-    description: "An English-speaking Seventh-day Adventist church in Meru.",
-    icon: Sparkles,
-  },
-  {
-    key: "calendar",
-    href: "/calendar",
-    label: "Church Calendar",
-    description: "Sabbaths, vespers, programmes and special events across the church year.",
-    icon: Calendar,
-  },
-  {
-    key: "materials",
-    href: "/materials",
-    label: "Study Materials",
-    description: "Sabbath School lessons, hymnals, the Bible and the writings of Ellen G. White.",
-    icon: BookOpen,
-  },
-  {
-    key: "prayer",
-    href: "/requests",
-    label: "Prayer & community care",
-    description: "Send a prayer request, ask for a visit, or tell us about a practical need.",
-    icon: Heart,
-  },
-  {
-    key: "give",
-    href: "/give",
-    label: "Giving",
-    description: "Tithes and offerings by mobile money, and fund drives for the church's work.",
-    icon: HandHeart,
-  },
-];
 
 export const aboutSectionLinks: SectionLink[] = [
   {
