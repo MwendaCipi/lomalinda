@@ -578,11 +578,38 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         # Duplicates would double-count an addressing; a list of codes is a set.
         return list(dict.fromkeys(codes))
 
+    def to_internal_value(self, data):
+        """Read a blank event time as the clear it was meant to be.
+
+        The composer posts multipart form data, which cannot say "null", and a
+        field left out of a PATCH means "leave it as it was" — so an officer
+        who empties an existing post's start time would find the old hour still
+        standing. A blank is therefore turned into an explicit None here, and
+        the time fields are null-able, so both an emptied and a never-set hour
+        land as no hour at all.
+        """
+        if hasattr(data, 'copy') and hasattr(data, 'get'):
+            mutable = data.copy()
+            for field in ('event_time_from', 'event_time_to'):
+                if field in mutable and not str(mutable.get(field) or '').strip():
+                    mutable[field] = None
+            data = mutable
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
         instance = self.instance
         start = attrs.get('event_date_from', instance.event_date_from if instance else None)
         end = attrs.get('event_date_to', instance.event_date_to if instance else None)
         if start and end and end < start:
+            raise serializers.ValidationError('The event cannot end before it starts.')
+        # The clock rides the same rule one notch finer — but only on a single
+        # day, where the two times share a date and can be compared directly.
+        # Across days each time belongs to its own date, and a 09:00 start on
+        # the 1st with a 08:00 end on the 3rd is simply a long event.
+        single_day = bool(end) and end == start
+        time_from = attrs.get('event_time_from', instance.event_time_from if instance else None)
+        time_to = attrs.get('event_time_to', instance.event_time_to if instance else None)
+        if single_day and time_from and time_to and time_to < time_from:
             raise serializers.ValidationError('The event cannot end before it starts.')
 
         # The type decides which special fields belong to the post. Fields a
@@ -647,7 +674,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

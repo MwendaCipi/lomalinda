@@ -4888,6 +4888,91 @@ class AnnouncementEventDatesAPITests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_the_event_hour_is_kept_beside_its_days(self):
+        """A service at 09:00 is not the post an 11:00 one is, same day."""
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Sabbath service',
+            'text': 'Worship at nine.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'event_date_from': '2026-10-03',
+            'event_date_to': '2026-10-03',
+            'event_time_from': '09:00',
+            'event_time_to': '11:00',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['event_time_from'], '09:00:00')
+        self.assertEqual(response.data['event_time_to'], '11:00:00')
+
+    def test_an_all_day_event_carries_no_hour(self):
+        """The hour is optional: a day of camp has no start time to tell."""
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Camp meeting',
+            'text': 'All day, both days.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'event_date_from': '2026-10-03',
+            'event_date_to': '2026-10-04',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data['event_time_from'])
+        self.assertIsNone(response.data['event_time_to'])
+
+    def test_one_day_cannot_end_before_it_starts(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Backwards hours',
+            'text': 'Ends before it begins.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'event_date_from': '2026-10-03',
+            'event_date_to': '2026-10-03',
+            'event_time_from': '11:00',
+            'event_time_to': '09:00',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_an_event_across_days_may_end_earlier_in_the_day(self):
+        """09:00 on the 1st to 08:00 on the 3rd is a long event, not a mistake."""
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Camp weekend',
+            'text': 'Friday evening to Sunday morning.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'event_date_from': '2026-10-01',
+            'event_date_to': '2026-10-03',
+            'event_time_from': '09:00',
+            'event_time_to': '08:00',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_clearing_the_hour_takes_it_off_the_post(self):
+        """The composer posts form data, where a blank is the only way to say
+        "no hour" — and a blank means the clear it looks like, not a field
+        quietly left as it was."""
+        announcement = self._announcement(
+            'Evening program',
+            event_date_from=timezone.localdate(),
+            event_time_from='18:00',
+            event_time_to='20:00',
+        )
+
+        response = self.client.patch(
+            f'/api/members/announcements/{announcement.id}/',
+            {'event_time_from': '', 'event_time_to': ''},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['event_time_from'])
+        self.assertIsNone(response.data['event_time_to'])
+        announcement.refresh_from_db()
+        self.assertIsNone(announcement.event_time_from)
+
 
 class LiveReportsEndpointsAPITests(APITestCase):
     """The member Live Reports page's stats and feed endpoints."""

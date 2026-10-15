@@ -39,6 +39,8 @@ type FeedItem = {
   href?: string | null;
   event_date_from?: string | null;
   event_date_to?: string | null;
+  event_time_from?: string | null;
+  event_time_to?: string | null;
   attachment?: string | null;
   attachment_name?: string | null;
   attachment_size?: number | null;

@@ -50,6 +50,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 /** Keep in sync with validate_text in backend/members/serializers.py. */
 const ANNOUNCEMENT_TEXT_LIMIT = 500;
 
+/** Ties the composer's buttons to its form: the buttons stand in the dialog's
+ *  fixed footer, outside the form they submit. */
+const COMPOSER_FORM_ID = "announcement-composer-form";
+
 type Announcement = {
   id: number;
   title: string;
@@ -57,6 +61,8 @@ type Announcement = {
   href?: string | null;
   event_date_from?: string | null;
   event_date_to?: string | null;
+  event_time_from?: string | null;
+  event_time_to?: string | null;
   attachment?: string | null;
   attachment_name?: string | null;
   attachment_size?: number | null;
@@ -330,6 +336,9 @@ export function AnnouncementManager({
     href: "",
     event_date_from: "",
     event_date_to: "",
+    // The event's clock: blank for an all-day event, where the day says it.
+    event_time_from: "",
+    event_time_to: "",
   });
   // The treasury accounts a "Request support" post may name, offered as the
   // wording members read on the giving form.
@@ -476,6 +485,8 @@ export function AnnouncementManager({
       href: item.href ?? "",
       event_date_from: item.event_date_from ?? "",
       event_date_to: item.event_date_to ?? "",
+      event_time_from: (item.event_time_from ?? "").slice(0, 5),
+      event_time_to: (item.event_time_to ?? "").slice(0, 5),
     });
     setShowCreateModal(true);
   }
@@ -496,6 +507,8 @@ export function AnnouncementManager({
       href: "",
       event_date_from: "",
       event_date_to: "",
+      event_time_from: "",
+      event_time_to: "",
     });
     setEditingId(null);
     setAttachment(null);
@@ -588,8 +601,16 @@ export function AnnouncementManager({
         // (an empty string would fail date parsing server-side). The drive
         // goal rides along only when written — the API requires it of a new
         // promotion and ignores it on edits.
+        // The event's clock is never omitted, even when blank: leaving a field
+        // out of a PATCH says "leave it as it was", and an officer who clears
+        // the start time of an existing post means to clear it. A blank time
+        // is read by the API as exactly that.
         const optional = key === "href" || key === "event_date_from" || key === "event_date_to" || key === "promotion_target";
         if (optional && !value) return;
+        if ((key === "event_time_from" || key === "event_time_to") && !value) {
+          payload.append(key, "");
+          return;
+        }
         // The list-valued audience returned above; everything left is a string.
         payload.append(key, String(value));
       });
@@ -621,10 +642,11 @@ export function AnnouncementManager({
     }
   }
 
-  /** The compose form: the fields, the message row, the Cancel/Post buttons. */
+  /** The compose form: the fields and the message row — the buttons ride the
+   *  dialog's own foot, outside the form, and reach it by its id. */
   function renderComposerFields() {
     return (
-      <form onSubmit={submit} className="mt-6 grid gap-4 md:grid-cols-2">
+      <form id={COMPOSER_FORM_ID} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
               {/* The type leads: it decides which special fields the rest of
                   the form shows. */}
               <label className="block text-xs font-semibold text-bark">
@@ -923,6 +945,36 @@ export function AnnouncementManager({
                 </label>
               </div>
 
+              {/* The hour, beside the days it falls on. Both are optional:
+                  an all-day event leaves them empty and reads on its dates
+                  alone. The start is not copied into the end — a service that
+                  begins at 09:00 does not finish at 09:00. */}
+              <div className="md:col-span-2 grid grid-cols-2 gap-3">
+                <label className="block text-xs font-semibold text-bark">
+                  Start time
+                  <input
+                    type="time"
+                    value={form.event_time_from}
+                    onChange={(e) => setForm({ ...form, event_time_from: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold text-bark">
+                  End time
+                  <input
+                    type="time"
+                    value={form.event_time_to}
+                    onChange={(e) => setForm({ ...form, event_time_to: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                  />
+                </label>
+
+                <p className="md:col-span-2 text-[10px] font-normal text-moss">
+                  Optional — blank means an all-day event. A start time alone reads “from 09:00”.
+                </p>
+              </div>
+
               <div className="text-xs font-semibold text-bark">
                 Attachment (optional)
                 {existingAttachment && !removeAttachment && (
@@ -989,37 +1041,56 @@ export function AnnouncementManager({
                 </div>
               )}
 
-              <div className="md:col-span-2 flex items-center justify-end gap-3 border-t border-sand-line pt-4">
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={resetAndCloseModal}
-                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-full bg-sage px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
-                >
-                  {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
-                </button>
-              </div>
             </form>
+    );
+  }
+
+  /**
+   * The composer's two buttons, at the dialog's foot rather than inside the
+   * form.
+   *
+   * An announcement is a long form, and honours the request modals under
+   * Fellowship instead: the fields scroll between a standing header and a
+   * standing footer, so Post is in reach without scrolling a post's own
+   * length. The submit rides the form by its id, since it no longer sits
+   * inside it.
+   */
+  function renderComposerActions() {
+    return (
+      <div className="flex shrink-0 items-center justify-end gap-3">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={resetAndCloseModal}
+          className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          form={COMPOSER_FORM_ID}
+          disabled={submitting}
+          className="rounded-full bg-sage px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
+        >
+          {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
+        </button>
+      </div>
     );
   }
 
   /** The compose dialog: overlay + card in manager mode; called via renderComposerForm(true) when embedded. */
   function renderComposerForm(inline = false) {
+    // Three parts, the way the request modals are built: a header and a footer
+    // that hold still, and the fields scrolling between them — so a post
+    // longer than the screen still has its Post button in the same place.
     const card = (
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-announcement-title"
-        className={inline ? "w-full" : "max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"}
+        className={inline ? "w-full" : "flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"}
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-4">
+        <div className={`flex shrink-0 items-center justify-between border-b border-sand-line ${inline ? "pb-4" : "px-6 py-4 sm:px-8"}`}>
           <h2 id="create-announcement-title" className="text-xl font-bold text-bark">
             {editingId ? "Edit Announcement" : "Post Announcement"}
           </h2>
@@ -1033,8 +1104,11 @@ export function AnnouncementManager({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className={inline ? "mt-6" : ""}>
+        <div className={inline ? "mt-6" : "min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-8"}>
           {renderComposerFields()}
+        </div>
+        <div className={`flex shrink-0 items-center justify-end border-t border-sand-line bg-sand-linen/40 ${inline ? "pt-4" : "px-6 py-4 sm:px-8"}`}>
+          {renderComposerActions()}
         </div>
       </div>
     );
@@ -1057,8 +1131,14 @@ export function AnnouncementManager({
 
   if (composerOnly) {
     // Communicate mode: the compose fields alone — the host modal supplies
-    // the frame, the heading, and the close button.
-    return renderComposerFields();
+    // the frame, the heading, and the close button. The buttons come along,
+    // because no frame of ours is here to draw them.
+    return (
+      <>
+        {renderComposerFields()}
+        <div className="mt-6 border-t border-sand-line pt-4">{renderComposerActions()}</div>
+      </>
+    );
   }
 
   return (

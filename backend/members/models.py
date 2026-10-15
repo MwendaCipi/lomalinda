@@ -1002,6 +1002,12 @@ class Announcement(models.Model):
     expires_at = models.DateField(null=True, blank=True, help_text="Legacy display end; the event date drives ordering and dismissal now")
     event_date_from = models.DateField(null=True, blank=True, help_text="First day of the event this announcement is about")
     event_date_to = models.DateField(null=True, blank=True, help_text="Last day of that event; same as from, or blank, for a single day")
+    # The event's clock, to the minute. A service at 09:00 is not the post an
+    # 11:00 one is, and the two can fall on the same day — so the hour is kept
+    # beside the dates rather than folded into them. Blank means the day alone
+    # says it: an all-day event, or one whose hour nobody needs told.
+    event_time_from = models.TimeField(null=True, blank=True, help_text="Time the event starts, when the hour matters")
+    event_time_to = models.TimeField(null=True, blank=True, help_text="Time the event ends; blank when it has no set end")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
