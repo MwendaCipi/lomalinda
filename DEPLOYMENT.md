@@ -113,6 +113,36 @@ venv/bin/python manage.py pull_mpesa_transactions --days 2             # record 
 
 The API keeps only 48 hours of transactions and refuses a window longer than that, so the page asks for the last two days and the command warns rather than inventing rows. Payments whose typed reference matched no treasury account land in the Unassigned tab for the treasurer to assign — the money is already in the ledger either way.
 
+## Notifications: the phone's web push (VAPID)
+
+A member's phone rings through the browser's push service, which needs one thing the code cannot carry: the church's VAPID key pair, stored on the `ChurchSettings` row. It is the only piece of push configuration that lives in the database, which is why a fresh install, a restored dump, or a database rebuilt without it can serve a perfect app that never once rings a phone.
+
+The API now creates that pair by itself the first time a browser asks for it (`GET /api/members/push/key/`, which every "Turn on notifications" press calls). A deploy needs no extra step, and there is nothing to run on a new server.
+
+```bash
+cd backend
+venv/bin/python manage.py generate_vapid_keys   # only to replace a pair on purpose
+```
+
+That command **rotates**: every device subscribed with the old public key is orphaned and each member must turn notifications on again. Never put it in `deploy.sh` — it must not run on every deploy. Read the keys back with `venv/bin/python manage.py shell -c "from members.models import ChurchSettings; print(ChurchSettings.objects.first().vapid_public_key)"`.
+
+To check delivery rather than guess at it, press **Send a test notification** under the bell when notifications are on (the bell is only there for a signed-in member), or from the server:
+
+```bash
+cd backend
+venv/bin/python manage.py shell -c "from django.contrib.auth import get_user_model; from members.push import send_test_push; print(send_test_push(get_user_model().objects.get(username='<name>')))"
+```
+
+The report has three numbers and none of them mean the same thing: `devices` is how many phones are registered to that account, `delivered` how many the push service accepted, and each entry in `results` carries the push service's own answer for a device it refused. A `404`/`410` there means the endpoint is dead (browser reinstalled, permission revoked) and its row was dropped; everything else is written to the log by the sender.
+
+Three failures look identical from the phone and are fixed in three different places:
+
+- **`devices` is 0** — no phone was ever subscribed for that account. The notification switch only ever offers itself where the browser supports push, and **iOS Safari only allows it for an app added to the Home Screen** (Share → Add to Home Screen, then open the installed app). Android Chrome needs no install.
+- **`devices` > 0, `delivered` 0** — the endpoint the server holds is stale. Chrome and Firefox rotate push subscriptions, and the app re-registers the browser's current one on every signed-in visit and on the worker's own `pushsubscriptionchange`, so a member who still gets nothing should turn notifications off and on again on that phone.
+- **`delivered` > 0 and still no banner** — delivery is fine and the phone is filtering: check the app's notification permission in the phone's settings, and any battery/"do not disturb" mode silencing the app.
+
+Only three things ring a phone today: requests reaching the office holders who answer that desk, announcements posted with the **Phone** channel, and the alert the finance office gets when a payment callback crashes. Every other notice is in-app (the bell) only — a member who expects a phone banner for one of those is asking for coverage the code does not yet have.
+
 ## Chat: the live transport
 
 Chat's messages have two doors. The REST endpoints under `/api/members/chat/` write and read them, and a WebSocket on `/ws/chat/<conversation_id>/` carries them the moment they are written. Both doors end in the same service layer, and a REST write broadcasts to every open socket, so nothing is only live if it was sent over the socket.

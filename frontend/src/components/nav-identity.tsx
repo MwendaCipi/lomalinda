@@ -22,7 +22,7 @@ import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { clearSession } from "@/lib/auth";
-import { disablePush, enablePush, getPushState, PushSupport } from "@/lib/push";
+import { disablePush, enablePush, getPushState, postPushSubscription, PushSupport, sendTestPush, syncPushSubscription } from "@/lib/push";
 import {
   markCachedNotificationsRead,
   patchCachedMe,
@@ -111,12 +111,26 @@ export function NavIdentity() {
 
   const announcePrefs = me ? { email: me.announce_email, push: me.announce_push } : null;
 
-  // Whether this device can take browser notifications. Only asked once per
-  // sign-in; a stale reading while signed out is harmless because every
-  // consumer also guards on the signed-in state.
+  // Whether this device can take browser notifications, re-registering the
+  // subscription it already holds first. A device whose endpoint the browser
+  // rotated (or whose row the server dropped as dead) is silently out of reach
+  // otherwise: the app would keep saying notifications are on while nothing
+  // arrives. Only asked once per sign-in; a stale reading while signed out is
+  // harmless because every consumer also guards on the signed-in state.
   useEffect(() => {
     if (!isLoggedIn) return;
-    getPushState().then(setPushState).catch(() => setPushState(null));
+    let cancelled = false;
+    syncPushSubscription()
+      .then(() => getPushState())
+      .then((state) => {
+        if (!cancelled) setPushState(state);
+      })
+      .catch(() => {
+        if (!cancelled) setPushState(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isLoggedIn]);
 
   // A member who has not turned notifications on gets one gentle ask per
@@ -191,6 +205,11 @@ export function NavIdentity() {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === "push-navigate" && event.data.link) router.push(event.data.link);
+      // The worker renewed a subscription the browser had rotated: hand the
+      // replacement to the server, or this device goes quiet from here on.
+      if (event.data?.type === "push-resubscribe" && event.data.subscription) {
+        postPushSubscription(event.data.subscription as PushSubscription).catch(() => {});
+      }
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
@@ -254,6 +273,44 @@ export function NavIdentity() {
     } else {
       showAlert("Not enabled", result.error || "This browser would not allow notifications.", "warning");
     }
+  };
+
+  /**
+   * Prove this device is actually reachable, and name why when it is not.
+   *
+   * The switch can only say a browser accepted a subscription; it cannot say
+   * the server still reaches that device. A member with a silent phone has no
+   * other way to tell "never subscribed" from "the row went stale" from "the
+   * push service refused it" — three different fixes that look identical.
+   */
+  const testDeviceNotifications = async () => {
+    const report = await sendTestPush();
+    if (!report.ok) {
+      showAlert("Test not sent", report.error, "warning");
+      return;
+    }
+    if (report.devices === 0) {
+      showAlert(
+        "No device is subscribed yet",
+        "This account has no phone registered for notifications. Turn notifications on from this device; on an iPhone, add the app to the Home Screen first — Safari only allows notifications for an installed app.",
+        "warning"
+      );
+      return;
+    }
+    if (report.delivered > 0) {
+      showAlert(
+        "Test sent",
+        `Delivered to ${report.delivered} of ${report.devices} registered device(s). If nothing appears within a minute, check this app's notification settings on the phone itself.`,
+        "success"
+      );
+      return;
+    }
+    const first = report.results[0];
+    showAlert(
+      "The push service refused it",
+      `${first?.device || "The device"} answered${first?.status ? ` with ${first.status}` : " with an error"}: ${first?.error || "no delivery"}. Switching notifications off and on again on that phone registers it afresh.`,
+      "warning"
+    );
   };
 
   const signOut = () => {
@@ -396,6 +453,26 @@ export function NavIdentity() {
                     }`}
                   >
                     {pushState.enabled ? "Turn off notifications" : "Turn on notifications"}
+                  </button>
+                )}
+                {pushState && !pushState.supported && (
+                  // "The button is gone" and "the button does nothing" are the
+                  // same silence on the phone. Safari only offers notifications
+                  // to an app on the Home Screen, and push only exists on a
+                  // secure origin — neither is guessable from an empty panel.
+                  <p className="rounded-xl bg-sand p-2.5 text-[10px] leading-4 text-moss">
+                    {pushState.reason === "insecure"
+                      ? "Notifications need the secure (https) address of the site."
+                      : "This browser will not show notifications here. On an iPhone, open the site in Safari, tap Share then Add to Home Screen, and turn notifications on inside the installed app."}
+                  </p>
+                )}
+                {pushState?.supported && pushState.enabled && (
+                  <button
+                    type="button"
+                    onClick={testDeviceNotifications}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-ember transition-colors hover:bg-sand"
+                  >
+                    Send a test notification
                   </button>
                 )}
                 {announcePrefs && (

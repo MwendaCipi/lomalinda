@@ -416,8 +416,15 @@
    bottom bar, between Stewardship and Chat, instead of a chip on Fellowship's
    strip. Chrome changed, so installed apps must take the new shell. Its page is
    precached with the other public pages, so a tab that is now one tap away is
-   not blank offline. */
-const CACHE_NAME = "sda-loma-linda-meru-v80";
+   not blank offline.
+
+   v81 — the bell names the state of notifications: a device that cannot take
+   push says why (an iPhone needs the app on the Home Screen), an enabled one
+   offers a test notice, and a rotated subscription re-registers itself. This
+   worker also renews the subscription the browser retires, instead of leaving
+   the server holding a dead endpoint. Chrome changed, so installed apps must
+   take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v81";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -616,6 +623,42 @@ self.addEventListener("push", (event) => {
     renotify: false,
   };
   event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/* Browsers retire and reissue push subscriptions on their own — a Chrome or
+   Firefox update, a long-idle device, a reinstall. An unhandled rotation is
+   how a phone goes quiet while every screen still says notifications are on:
+   the server keeps the old endpoint, the push service rejects it, and the row
+   is dropped as dead.
+
+   The worker re-subscribes with the same application server key it was given
+   (so the church's identity is unchanged) and hands the replacement to any
+   open window, which stores it against the signed-in account. With no window
+   open nothing is lost: the subscription lives in the browser, and the next
+   signed-in visit re-registers it from the page. */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const previous = event.oldSubscription && event.oldSubscription.options;
+        const key = previous && previous.applicationServerKey;
+        // No key on the retired subscription means we have nothing to
+        // subscribe with: leave it to the page, which asks the server.
+        if (!key) return;
+        const fresh = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: key,
+        });
+        const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        for (const client of windows) {
+          client.postMessage({ type: "push-resubscribe", subscription: fresh.toJSON() });
+        }
+      } catch {
+        // A browser that will not re-subscribe leaves the page's own sync to
+        // recover on the next visit; nothing here may throw.
+      }
+    })()
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

@@ -7192,16 +7192,46 @@ class ChurchNotificationView(generics.ListAPIView):
 
 
 class PushKeyView(APIView):
-    """The server's VAPID public key, for the browser's subscription call."""
+    """The server's VAPID public key, for the browser's subscription call.
+
+    This is the only door a browser has into push, so it also carries the one
+    piece of configuration that lives in the database: a church with no key
+    pair on record (a fresh install, a restored dump, a server where nobody ran
+    the management command) would otherwise refuse every device that tried to
+    enable notifications, with nothing to say for it. The pair is created here
+    on first ask — never rotated, since a new pair invalidates the devices that
+    already subscribed with the old one.
+    """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from .models import ChurchSettings
+        from .push import ensure_vapid_keys
 
+        ensure_vapid_keys()
         row = ChurchSettings.objects.first()
         key = (row.vapid_public_key if row else '') or ''
         return Response({'public_key': key})
+
+
+class PushTestView(APIView):
+    """Send one test notice to this account's devices and report each answer.
+
+    A member who gets nothing on their phone has no way to tell whether the
+    device was never subscribed, whether the row is stale, or whether the push
+    service refused it — and neither does the office. This answers with the
+    device count and the delivery result per device, which is what turns
+    "notifications don't work" into a sentence somebody can act on.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .push import send_test_push
+
+        report = send_test_push(request.user)
+        return Response(report)
 
 
 class PushSubscribeView(APIView):

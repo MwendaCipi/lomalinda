@@ -9114,6 +9114,111 @@ class VapidKeyCommandTests(TestCase):
         self.assertEqual(len(raw), 65)
 
 
+class PushKeyEndpointTests(APITestCase):
+    """The key endpoint is the door push has to walk through, so it heals itself.
+
+    Push has exactly one setting that lives in the database rather than in the
+    code, and a church without it can enable nothing: every device is refused
+    and no screen says why. Asking for the key must therefore leave a pair on
+    record. What it must never do is *rotate* one — a device subscribes with
+    the key it was served, so a changed pair silently orphans every phone that
+    already enabled notifications.
+    """
+
+    def setUp(self):
+        self.member = User.objects.create_user('push.member', 'push.member@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.client.force_authenticate(self.member)
+
+    def test_first_ask_generates_a_pair(self):
+        row = ChurchSettings.objects.first()
+        self.assertFalse(bool(row and row.vapid_public_key))
+
+        res = self.client.get('/api/members/push/key/')
+
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data['public_key'])
+        row = ChurchSettings.objects.first()
+        self.assertEqual(row.vapid_public_key, res.data['public_key'])
+        self.assertIn('PRIVATE KEY', row.vapid_private_key)
+
+    def test_later_asks_keep_the_same_pair(self):
+        first = self.client.get('/api/members/push/key/').data['public_key']
+        row = ChurchSettings.objects.first()
+        stored_private = row.vapid_private_key
+
+        second = self.client.get('/api/members/push/key/').data['public_key']
+
+        self.assertEqual(first, second)
+        row.refresh_from_db()
+        self.assertEqual(row.vapid_private_key, stored_private)
+
+    def test_signing_out_is_no_door(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get('/api/members/push/key/').status_code, 401)
+
+
+class PushTestEndpointTests(APITestCase):
+    """A silent phone has three different causes; this names which one."""
+
+    def setUp(self):
+        self.member = User.objects.create_user('push.tester', 'push.tester@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.client.force_authenticate(self.member)
+
+    def test_no_device_reports_zero_rather_than_failing(self):
+        res = self.client.post('/api/members/push/test/')
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['devices'], 0)
+        self.assertEqual(res.data['delivered'], 0)
+        self.assertEqual(res.data['results'], [])
+
+    def test_a_registered_device_is_woken_and_counted(self):
+        from .models import PushSubscription
+
+        self.client.get('/api/members/push/key/')
+        PushSubscription.objects.create(
+            user=self.member,
+            endpoint='https://fcm.googleapis.com/fcm/send/device-1',
+            p256dh='key-material',
+            auth='auth-material',
+        )
+
+        with patch('pywebpush.webpush') as send:
+            res = self.client.post('/api/members/push/test/')
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['devices'], 1)
+        self.assertEqual(res.data['delivered'], 1)
+        self.assertEqual(res.data['results'][0]['device'], 'fcm.googleapis.com')
+        self.assertTrue(send.called)
+
+    def test_a_refused_device_reports_the_push_service_answer(self):
+        from pywebpush import WebPushException
+
+        from .models import PushSubscription
+
+        self.client.get('/api/members/push/key/')
+        PushSubscription.objects.create(
+            user=self.member,
+            endpoint='https://updates.push.services.mozilla.com/wpush/v2/device-2',
+            p256dh='key-material',
+            auth='auth-material',
+        )
+
+        response = MagicMock(status_code=410)
+        with patch('pywebpush.webpush', side_effect=WebPushException('gone', response=response)):
+            res = self.client.post('/api/members/push/test/')
+
+        self.assertEqual(res.data['devices'], 1)
+        self.assertEqual(res.data['delivered'], 0)
+        self.assertIn('no longer registered', res.data['results'][0]['error'])
+        # A device the push service has retired must not be left on the list
+        # to be retried at every future notice.
+        self.assertEqual(PushSubscription.objects.count(), 0)
+
+
 class AnnouncementPreferenceTests(APITestCase):
     """Announcements are mass communication; members choose their channels.
 
