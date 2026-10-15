@@ -8089,10 +8089,17 @@ class AnnouncementAudienceTests(APITestCase):
     def test_a_support_request_keeps_the_account_it_names(self):
         # Support lives on the promotion type since types took over the form:
         # an awareness post is a plain notice, and its account is stripped.
-        response = self._post(announcement_type='promotion', support_account='Welfare Fund')
+        response = self._post(
+            announcement_type='promotion', support_account='Welfare Fund', promotion_target='25000',
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(response.data['support_account'], 'Welfare Fund')
+        # A promotion mints its drive as it posts, and the goal the officer
+        # typed is the goal that drive opens with.
+        drive = FundraisingCampaign.objects.get(pk=response.data['campaign_id'])
+        self.assertEqual(drive.target_amount, Decimal('25000.00'))
+        self.assertEqual(drive.account_name, 'Welfare Fund')
 
 
 class FundDriveAccountBackedTotalTests(APITestCase):
@@ -9526,7 +9533,8 @@ class AnnouncementTypeTests(APITestCase):
 
     Awareness is a plain notice: it carries no link and no account, and the
     API clears any it is handed. A web conference must carry its meeting
-    link; a promotion must name the treasury account it supports.
+    link; a promotion must name the treasury account it supports and open
+    its fund drive with a goal.
     """
 
     def setUp(self):
@@ -9559,13 +9567,31 @@ class AnnouncementTypeTests(APITestCase):
         self.assertEqual(res.data['support_account'], '')
 
     def test_promotion_requires_account(self):
-        res = self._post(announcement_type='promotion')
+        res = self._post(announcement_type='promotion', promotion_target='200000')
         self.assertEqual(res.status_code, 400)
-        res = self._post(announcement_type='promotion', support_account='Local Church Budget', href='https://stray.example.com')
+        self.assertIn('treasury account', str(res.data))
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget', promotion_target='200000', href='https://stray.example.com')
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.data['support_account'], 'Local Church Budget')
         # A promotion carries no meeting link, whatever the client sent.
         self.assertEqual(res.data['href'], '')
+
+    def test_a_new_promotion_needs_a_target_for_its_drive(self):
+        # A promotion is a drive, and a drive without a goal has no percentage
+        # to read: the API asks for the target when the post mints its drive.
+        # An edit of a post that already carries one asks for nothing — the
+        # drive's own numbers are managed on the drive.
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('target amount', str(res.data))
+        # A goal of zero is no goal at all, and neither is a stray word.
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget', promotion_target='0')
+        self.assertEqual(res.status_code, 400)
+
+        created = self._post(announcement_type='promotion', support_account='Local Church Budget', promotion_target='200000')
+        self.assertEqual(created.status_code, 201, created.data)
+        edit = self.client.patch(f"/api/members/announcements/{created.data['id']}/", {'text': 'Camp still needs tents.'}, format='json')
+        self.assertEqual(edit.status_code, 200, edit.data)
 
 
 class EnrollmentCodeFlowTests(APITestCase):
