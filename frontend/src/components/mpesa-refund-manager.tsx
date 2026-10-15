@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { dayFirstTime } from "@/lib/dates";
@@ -175,7 +174,6 @@ export function MpesaRefundManager() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
-          <BackToOverviewArrow />
           {/* Named by the strip above on a wide screen. */}
           <div className="md:hidden">
             <h2 className="text-2xl font-bold text-bark">M-Pesa Refunds</h2>

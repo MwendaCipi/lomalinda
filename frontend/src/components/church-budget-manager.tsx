@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Calendar, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -154,7 +153,6 @@ export function ChurchBudgetManager() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-1">
-          <BackToOverviewArrow />
           <div className="md:hidden">
             <h2 className="text-2xl font-bold text-bark">Church Budget</h2>
             <p className="mt-1 text-sm text-moss">Post the year&apos;s plan and decide when the congregation sees it.</p>

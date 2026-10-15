@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, SlidersHorizontal } from "lucide-react";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
@@ -1305,14 +1304,6 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-      {/* ── The phone's way back. The six treasury views ride the shell's band
-          above (see `TreasuryNav`) and the search rides the shell's header
-          beside the page's name, so only the back arrow needs a row here; the
-          metrics ride the footer below. ── */}
-      <div className="flex shrink-0 items-center border-b border-sand-line px-5 py-1.5 sm:px-6 lg:hidden">
-        <BackToOverviewArrow />
-      </div>
-
       {actionMessage && (
         <div className="mx-5 mt-3 shrink-0 rounded-xl border border-sand-mute bg-white p-3 text-xs font-semibold text-bark shadow-xs sm:mx-6">
           {actionMessage}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, ArrowLeft, Download, Loader2, Trash2, X } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, X } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -463,6 +463,10 @@ export default function TreasuryPage() {
             // set the badge counts — rather than the desk's date window.
             loadFailedGivings();
           } else if (view === "summary") {
+            // The summary chip is the way back out of a purpose's own view:
+            // pressing it lands on the whole summary again, never the
+            // drill-down the reader had stepped into.
+            setExpandedPurpose(null);
             setViewMode("summary");
           } else if (view === "unassigned") {
             router.replace("/administration?tab=accounts&view=unassigned");
@@ -907,16 +911,6 @@ export default function TreasuryPage() {
                     {/* Top Header of Dedicated Purpose View */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 border-b border-sand-line bg-sand-linen shrink-0">
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpandedPurpose(null);
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark hover:bg-sand transition shadow-sm"
-                        >
-                          <ArrowLeft className="h-4 w-4 text-ember" />
-                          <span>Back to Summary</span>
-                        </button>
                         <div>
                           <h2 className="text-base font-bold text-bark flex items-center gap-2">
                             <span>{expandedPurpose}</span>
