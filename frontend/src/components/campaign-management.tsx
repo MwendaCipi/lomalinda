@@ -393,22 +393,25 @@ export function CampaignManagement({
   useEffect(() => {
     if (!isAdminMode || formOnly || !canEdit) return;
     setHeaderRightAction(
-      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+      <div className="flex w-full items-center gap-2 sm:w-auto">
         <input
           type="text"
           placeholder="Search by drive or account..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
+          className="w-full min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60 sm:flex-none"
           aria-label="Search fund drives"
         />
+        {/* One row on a phone: the search takes the line's spare width and the
+            door to a new drive keeps its own — stacked, they cost two rows. */}
         <button
           type="button"
           onClick={openStartDrive}
           className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-sage px-3.5 py-2 text-xs font-bold text-white transition hover:bg-sage-deep"
         >
           <Plus size={14} aria-hidden="true" />
-          Start fund drive
+          <span className="sm:hidden">New</span>
+          <span className="hidden sm:inline">Start fund drive</span>
         </button>
       </div>
     );

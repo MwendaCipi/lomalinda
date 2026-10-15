@@ -15,6 +15,7 @@ import {
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { FilterPopover, FilterSet } from "@/components/filter-popover";
 import { DepartmentAccountsPanel, DepartmentHub } from "./department-hub";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
@@ -225,31 +226,40 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   const { setHeaderRightAction } = usePageHeader();
   useEffect(() => {
     if (activeTab !== "inventory") return;
+    // The two filters, written once and shown twice: inside the phone's
+    // popover, and in the open beside the search on a wide screen.
+    const filterCls = "w-full rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none";
+    const categoryControl = (
+      <select
+        value={categoryFilter}
+        onChange={(e) => setCategoryFilter(e.target.value)}
+        className={filterCls}
+        aria-label="Property category filter"
+      >
+        <option value="all">All categories</option>
+        {INVENTORY_CATEGORIES.map((category) => (
+          <option key={category.value} value={category.value}>{category.label}</option>
+        ))}
+      </select>
+    );
+    const stateControl = (
+      <select
+        value={stateFilter}
+        onChange={(e) => setStateFilter(e.target.value)}
+        className={filterCls}
+        aria-label="Property condition filter"
+      >
+        <option value="all">All conditions</option>
+        {INVENTORY_STATES.map((state) => (
+          <option key={state.value} value={state.value}>{state.label}</option>
+        ))}
+      </select>
+    );
+    const categoryLabel = INVENTORY_CATEGORIES.find((c) => c.value === categoryFilter)?.label;
+    const stateLabel = INVENTORY_STATES.find((s) => s.value === stateFilter)?.label;
     setHeaderRightAction(
-      <div className="flex items-center gap-2">
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none"
-          aria-label="Property category filter"
-        >
-          <option value="all">All categories</option>
-          {INVENTORY_CATEGORIES.map((category) => (
-            <option key={category.value} value={category.value}>{category.label}</option>
-          ))}
-        </select>
-        <select
-          value={stateFilter}
-          onChange={(e) => setStateFilter(e.target.value)}
-          className="rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark focus:border-ember focus:outline-none"
-          aria-label="Property condition filter"
-        >
-          <option value="all">All conditions</option>
-          {INVENTORY_STATES.map((state) => (
-            <option key={state.value} value={state.value}>{state.label}</option>
-          ))}
-        </select>
-        <div className="relative w-44 sm:w-56">
+      <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
           <input
             type="text"
@@ -258,6 +268,20 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
           />
+        </div>
+        {/* The phone: both filters behind one button beside the search. */}
+        <FilterPopover
+          title="Property filters"
+          summary={categoryLabel || stateLabel || "All items"}
+          active={categoryFilter !== "all" || stateFilter !== "all"}
+        >
+          <FilterSet label="Category">{categoryControl}</FilterSet>
+          <FilterSet label="Condition">{stateControl}</FilterSet>
+        </FilterPopover>
+        {/* The wider screens: both filters in the open. */}
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+          <div className="w-40">{categoryControl}</div>
+          <div className="w-40">{stateControl}</div>
         </div>
       </div>
     );

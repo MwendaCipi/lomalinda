@@ -3654,7 +3654,10 @@ function DepartmentDetail({
     const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
     if (subTab === "members") {
       setHeaderRightAction(
-        <div className="flex items-center gap-1.5">
+        // One row on a phone: the roll's filter is already a popover of its
+        // own, so the search takes what is left of the line rather than a
+        // fixed width that pushed itself off the edge.
+        <div className="flex w-full items-center gap-1.5 sm:w-auto">
           <MembersFilterButton
             value={memberFilter}
             onChange={setMemberFilter}
@@ -3665,7 +3668,7 @@ function DepartmentDetail({
             value={rollSearch}
             onChange={(e) => setRollSearch(e.target.value)}
             placeholder="Search members…"
-            className={inputCls}
+            className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64 sm:flex-none"
           />
         </div>
       );
@@ -3703,13 +3706,13 @@ function DepartmentDetail({
       );
     } else if (subTab === "accounts") {
       setHeaderRightAction(
-        <div className="flex items-center gap-1.5">
+        <div className="flex w-full items-center gap-1.5 sm:w-auto">
           <input
             type="text"
             value={accountsSearch}
             onChange={(e) => setAccountsSearch(e.target.value)}
             placeholder="Search account…"
-            className="w-36 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56"
+            className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
             aria-label="Search account"
           />
           <AccountsFilterButton

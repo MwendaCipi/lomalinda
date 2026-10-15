@@ -13,6 +13,7 @@ import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst, firstDayOfMonth, localDate } from "@/lib/dates";
 import { RecordList } from "./record-list";
+import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
 import { ExpenditureManager, EXPENDITURE_CATEGORIES } from "./expenditure-manager";
 import { densityCellPad } from "@/lib/table-density";
@@ -961,30 +962,54 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       return () => setHeaderRightAction(null);
     }
     if (view === "expenditure") {
+      // The category and the two dates, written once and shown twice: in the
+      // phone's popover and in the open on a wide screen.
+      const categoryControl = (
+        <select
+          value={expenseCategory}
+          onChange={(e) => setExpenseCategory(e.target.value)}
+          className={FILTER_SELECT_CLASS}
+          aria-label="Filter expenditures by category"
+        >
+          <option value="all">All categories</option>
+          {EXPENDITURE_CATEGORIES.map((category) => (
+            <option key={category.key} value={category.key}>
+              {category.label}
+            </option>
+          ))}
+        </select>
+      );
+      const categoryLabel =
+        EXPENDITURE_CATEGORIES.find((category) => category.key === expenseCategory)?.label ?? "All categories";
+      const windowed = expenseFrom !== firstDayOfMonth() || expenseTo !== localDate();
       setHeaderRightAction(
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <input
             type="text"
             placeholder="Search by title, payee or receipt..."
             value={expenseSearch}
             onChange={(e) => setExpenseSearch(e.target.value)}
-            className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
+            className="w-full min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60 sm:flex-none"
             aria-label="Search expenditures"
           />
-          <select
-            value={expenseCategory}
-            onChange={(e) => setExpenseCategory(e.target.value)}
-            className="w-full rounded-xl border border-sand-mute bg-white px-2.5 py-1.5 text-xs font-semibold text-bark outline-none focus:border-ember sm:w-auto"
-            aria-label="Filter expenditures by category"
+          {/* The phone: one button, the same three controls inside. */}
+          <FilterPopover
+            title="Expense filters"
+            summary={expenseCategory === "all" ? (windowed ? "This window" : "All expenses") : categoryLabel}
+            active={expenseCategory !== "all" || windowed}
+            minW={272}
           >
-            <option value="all">All categories</option>
-            {EXPENDITURE_CATEGORIES.map((category) => (
-              <option key={category.key} value={category.key}>
-                {category.label}
-              </option>
-            ))}
-          </select>
-          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <FilterSet label="Category">{categoryControl}</FilterSet>
+            <FilterSet label="From">
+              <DateField value={expenseFrom} onChange={setExpenseFrom} label="Expenditures from date" />
+            </FilterSet>
+            <FilterSet label="To">
+              <DateField value={expenseTo} onChange={setExpenseTo} label="Expenditures to date" />
+            </FilterSet>
+          </FilterPopover>
+          {/* The wider screens: the same controls, in the open. */}
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+            <div className="w-44">{categoryControl}</div>
             <label className="flex items-center gap-1 text-xs font-medium text-moss">
               <span>From</span>
               <DateField value={expenseFrom} onChange={setExpenseFrom} label="Expenditures from date" />

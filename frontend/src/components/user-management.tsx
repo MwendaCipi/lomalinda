@@ -1964,7 +1964,9 @@ export function UserManagement() {
           ? rosterScoped.length
           : rosterScoped.filter((m) => accountTypeOf(m.account_type, m.is_disfellowshipped) === key).length;
     setHeaderRightAction(
-      <div className="flex items-center gap-2">
+      // One row on a phone: the record filter's own popover, then a search
+      // that takes what is left rather than a fixed width that did not fit.
+      <div className="flex w-full items-center gap-2 sm:w-auto">
         <div className="relative" ref={recordFilterRef}>
           <button
             type="button"
@@ -2010,7 +2012,7 @@ export function UserManagement() {
             </div>
           )}
         </div>
-        <div className="w-56 sm:w-64">
+        <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
           <input
             type="text"
             placeholder="Search by name, email, phone..."

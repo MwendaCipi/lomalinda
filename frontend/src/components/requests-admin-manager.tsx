@@ -10,6 +10,7 @@ import { pinnedMapHref } from "@/lib/places";
 import { Check, Handshake, MapPin, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
+import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { densityCellPad } from "@/lib/table-density";
 import { TransferManagement } from "./transfer-management";
 
@@ -288,8 +289,50 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     // Membership Requests reads every request and shows each row's state, so
     // it needs no review-state control — one popover, and a narrow one.
     const showStateFilter = activeTab !== "transfer";
+    const stateLabel = statusOpts.find((option) => option.value === statusFilter)?.label ?? "Pending";
+    const deskLabel = deskOpts.find((option) => option.value === activeTab)?.label ?? "All requests";
     setHeaderRightAction(
-      <div className="flex items-center gap-2">
+      <div className="flex w-full items-center gap-2 sm:w-auto">
+        {/* The phone: both filters behind one button beside the search, which
+            is what keeps this header to a single row — two menus and a search
+            together do not fit one. */}
+        <FilterPopover
+          title="Request filters"
+          summary={activeTab === "all" ? (showStateFilter ? stateLabel : deskLabel) : deskLabel}
+          active={activeTab !== "all" || (showStateFilter && statusFilter !== "pending")}
+        >
+          <FilterSet label="Show requests by desk">
+            <select
+              value={activeTab}
+              onChange={(e) => {
+                setActiveTab(e.target.value as KindFilter);
+                setStatusFilter("pending");
+              }}
+              className={FILTER_SELECT_CLASS}
+              aria-label="Show requests by desk"
+            >
+              {deskOpts.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </FilterSet>
+          {showStateFilter && (
+            <FilterSet label="Show by review state">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className={FILTER_SELECT_CLASS}
+                aria-label="Show by review state"
+              >
+                {statusOpts.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </FilterSet>
+          )}
+        </FilterPopover>
+        {/* The wider screens: the same two menus in the open. */}
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
         {showStateFilter && (
         <div className="relative" ref={statusRef}>
           <button
@@ -344,7 +387,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             </div>
           )}
         </div>
-        <div className="relative w-44 sm:w-56">
+        </div>
+        <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
           <svg className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
           </svg>
