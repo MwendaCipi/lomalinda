@@ -692,7 +692,8 @@ export function ChurchSettingsManager() {
             <MapPin size={16} aria-hidden="true" /> Church Location Map Pin &amp; GPS
           </h3>
           <p className="mt-1 text-xs text-moss">
-            Capture current GPS position or drop a pin on the map to set exact church coordinates for Google Maps navigation.
+            Paste the church&apos;s Google Maps link, use this device&apos;s GPS, or drop the pin on the map.
+            The point it pins is the place the website&apos;s directions open.
           </p>
           <div className="mt-4">
             <LocationMapPicker

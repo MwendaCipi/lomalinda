@@ -2,10 +2,11 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useState } from "react";
-import { HandHelping, Home, Phone, X } from "lucide-react";
+import { HandHelping, Home, MapPin, Phone, X } from "lucide-react";
 
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
+import { pinnedMapHref } from "@/lib/places";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -30,6 +31,9 @@ export type VisitationItem = {
   visitation_type: string;
   preferred_date?: string;
   preferred_time?: string;
+  /** The point the asker pinned for the visit, as the API stores it. */
+  latitude?: string | null;
+  longitude?: string | null;
   notes?: string;
   created_at?: string;
   status?: string;
@@ -573,6 +577,10 @@ export function PrayerRequestCard({ item }: { item: PrayerItem }) {
 
 /** One visitation request as a ledger card — the visitation page's list row. */
 export function VisitationRequestCard({ item }: { item: VisitationItem }) {
+  // A request that named a place says where it is: the pin is kept on the
+  // record, so the member can open the same point the elders will.
+  const placeHref = pinnedMapHref(item.latitude, item.longitude);
+
   return (
     <div className="flex flex-col justify-between space-y-3 rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
       <div>
@@ -590,6 +598,16 @@ export function VisitationRequestCard({ item }: { item: VisitationItem }) {
         </p>
         {item.notes && (
           <p className="mt-2 text-xs italic leading-relaxed text-bark">&ldquo;{item.notes}&rdquo;</p>
+        )}
+        {placeHref && (
+          <a
+            href={placeHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-ember hover:underline"
+          >
+            <MapPin size={11} aria-hidden="true" /> View the pinned location
+          </a>
         )}
       </div>
       <div className="flex items-center justify-between border-t border-sand-line pt-2 text-xs text-moss">

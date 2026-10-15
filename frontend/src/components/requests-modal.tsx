@@ -1,8 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+
+const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -74,6 +77,11 @@ export function RequestsModal({
     visitation_type: "pastoral",
     preferred_date: "",
     preferred_time: "",
+    // Where the visit is wanted. The app's own visitation form has always
+    // asked for the pin; a visitor arriving on the website asks for the same
+    // visit, so the same two coordinates go with the request.
+    latitude: null as number | null,
+    longitude: null as number | null,
     notes: "",
   });
   const [dedication, setDedication] = useState({
@@ -110,6 +118,8 @@ export function RequestsModal({
         visitation_type: "pastoral",
         preferred_date: "",
         preferred_time: "",
+        latitude: null,
+        longitude: null,
         notes: "",
       });
       setDedication({ child_name: "", child_dob: "", father_name: "", mother_name: "", phone_number: "", notes: "" });
@@ -170,6 +180,12 @@ export function RequestsModal({
         if (visitation.email.trim()) payload.email = visitation.email.trim();
         if (visitation.preferred_date) payload.preferred_date = visitation.preferred_date;
         if (visitation.preferred_time) payload.preferred_time = visitation.preferred_time;
+        // Both or neither: half a point is not an address, and the API reads a
+        // missing pair as a visit arranged by phone.
+        if (visitation.latitude != null && visitation.longitude != null) {
+          payload.latitude = visitation.latitude;
+          payload.longitude = visitation.longitude;
+        }
         return { endpoint: `${API_URL}/api/members/visitations/`, payload };
       }
 
@@ -456,6 +472,23 @@ export function RequestsModal({
                     value={visitation.preferred_time}
                     onChange={(e) => setVisitation({ ...visitation, preferred_time: e.target.value })}
                     className={fieldCls}
+                  />
+                </div>
+              </div>
+              {/* Where to come, pinned. The elders plan a visit around this
+                  point, and it rides the same map picker the app's visitation
+                  form uses; a visitor who would rather not pin one leaves the
+                  fields empty and is reached by phone instead. */}
+              <div>
+                <p className={labelCls} id="visit-place">
+                  Where should we come? <span className="text-moss">(optional)</span>
+                </p>
+                <div className="mt-2 overflow-hidden rounded-2xl border border-sand-mute" aria-labelledby="visit-place">
+                  <LocationMapPicker
+                    latitude={visitation.latitude}
+                    longitude={visitation.longitude}
+                    onChange={(lat, lng) => setVisitation({ ...visitation, latitude: lat, longitude: lng })}
+                    onClear={() => setVisitation({ ...visitation, latitude: null, longitude: null })}
                   />
                 </div>
               </div>

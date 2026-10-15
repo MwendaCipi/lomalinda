@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { showAlert } from "@/lib/alerts";
-import { Crosshair, Map } from "lucide-react";
+import { coordinatesFromMapLink, isShortMapLink } from "@/lib/places";
+import { Crosshair, Link2, Map, MapPin } from "lucide-react";
 
 // Default Leaflet icon fix for Next.js SSR
 const defaultIcon = L.icon({
@@ -27,11 +28,6 @@ function MapClickHandler({ onSelectLocation }: { onSelectLocation: (lat: number,
   return null;
 }
 
-/** How a coordinate is written into the manual fields (and back out). */
-function coordText(value: number | null) {
-  return value == null ? "" : String(value);
-}
-
 function ChangeView({ center }: { center: [number, number] }) {
   const map = useMap();
   useEffect(() => {
@@ -40,6 +36,20 @@ function ChangeView({ center }: { center: [number, number] }) {
   return null;
 }
 
+/** Meru, Kenya — where the map opens before anything is pinned. */
+const DEFAULT_POSITION: [number, number] = [-0.0463, 37.6562];
+
+/**
+ * Where something is, chosen the way people actually know it.
+ *
+ * A member asking for a home visit knows how to find their house in Google
+ * Maps and how to share it; they do not know their latitude. So the link is
+ * the input: paste the one Maps gives you, and the point it carries is put on
+ * the map, where it can be seen and moved. The coordinates themselves are
+ * stored and never shown — they are the map's business, not the asker's — and
+ * the two other ways to a point (a GPS fix, a tap on the map) need none
+ * either. Whatever ends up pinned is handed up as `latitude`/`longitude`.
+ */
 export default function LocationMapPicker({
   latitude,
   longitude,
@@ -51,170 +61,131 @@ export default function LocationMapPicker({
   onChange: (lat: number, lng: number) => void;
   onClear?: () => void;
 }) {
-  const defaultPosition: [number, number] = [-0.0463, 37.6562]; // Meru, Kenya default
-  const position: [number, number] = latitude && longitude ? [latitude, longitude] : defaultPosition;
+  const pinned = latitude != null && longitude != null;
+  const position: [number, number] = pinned ? [latitude, longitude] : DEFAULT_POSITION;
+  const [link, setLink] = useState("");
+  const [reading, setReading] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [showMap, setShowMap] = useState(false);
-
-  // Manual entry comes first: GPS needs permission and a signal, and a map tap
-  // needs a working tile server, so coordinates can always be typed instead.
-  // The two fields are the record of the chosen point — the buttons that fill
-  // them (GPS, Show Map) sit below, on one row.
-  const [latText, setLatText] = useState(coordText(latitude));
-  const [lngText, setLngText] = useState(coordText(longitude));
-  const latRef = useRef<HTMLInputElement>(null);
-  const lngRef = useRef<HTMLInputElement>(null);
   const fieldId = useId();
 
-  // Pins dropped elsewhere (map tap, GPS fix, a dragged marker) must appear in
-  // the fields — except while someone is halfway through typing one, when
-  // rewriting the text would eat a half-entered "37.".
-  useEffect(() => {
-    const active = document.activeElement;
-    if (active === latRef.current || active === lngRef.current) return;
-    setLatText(coordText(latitude));
-    setLngText(coordText(longitude));
-  }, [latitude, longitude]);
+  /**
+   * Read the field and pin the place it names.
+   *
+   * A link pasted from the Maps app is read outright. The short `maps.app.goo.gl`
+   * form points at the full link instead of carrying one, so it is followed
+   * once and re-read where it lands; when neither yields a point, the asker is
+   * told how to get one rather than left guessing at numbers.
+   */
+  const readLink = async () => {
+    const text = link.trim();
+    if (!text) return;
 
-  /** Read both fields and hand a valid pair up; warn and revert otherwise. */
-  const commitManual = () => {
-    const rawLat = latText.trim();
-    const rawLng = lngText.trim();
-
-    if (rawLat === "" && rawLng === "") {
-      if (latitude != null || longitude != null) onClear?.();
-      return;
+    let found = coordinatesFromMapLink(text);
+    if (!found && isShortMapLink(text)) {
+      setReading(true);
+      try {
+        const response = await fetch(text, { mode: "no-cors", redirect: "follow" });
+        found = coordinatesFromMapLink(response.url || "");
+      } catch {
+        found = null;
+      } finally {
+        setReading(false);
+      }
     }
 
-    const lat = Number(rawLat);
-    const lng = Number(rawLng);
-    const valid =
-      rawLat !== "" &&
-      rawLng !== "" &&
-      Number.isFinite(lat) &&
-      Number.isFinite(lng) &&
-      lat >= -90 &&
-      lat <= 90 &&
-      lng >= -180 &&
-      lng <= 180;
-
-    if (!valid) {
+    if (!found) {
       showAlert(
-        "Check the coordinates",
-        "Latitude must be a number from -90 to 90 and longitude from -180 to 180, for example -0.0463 and 37.6562.",
+        "We could not read a place from that link",
+        "Open the place in Google Maps, tap Share then Copy link, and paste the whole link here — or show the map and put the pin there yourself.",
         "warning"
       );
-      setLatText(coordText(latitude));
-      setLngText(coordText(longitude));
       return;
     }
 
-    onChange(lat, lng);
-    setLatText(String(lat));
-    setLngText(String(lng));
+    onChange(found.latitude, found.longitude);
+    // The link has done its work; the pin is what is kept, and the map is
+    // opened so the place can be checked at a glance before it is submitted.
+    setLink("");
+    setShowMap(true);
   };
 
   const handleDetectGPS = () => {
-    if ("geolocation" in navigator) {
-      setDetecting(true);
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          onChange(pos.coords.latitude, pos.coords.longitude);
-          setDetecting(false);
-          showAlert(
-            "GPS Location Captured",
-            `Your coordinates (${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}) were captured successfully.`,
-            "success"
-          );
-        },
-        (err) => {
-          setDetecting(false);
-          if (err.code === 1) {
-            showAlert(
-              "Location Permission Denied",
-              "Location access was not allowed. You can describe your location or show the map if you wish to drop a pin manually.",
-              "info"
-            );
-          } else {
-            showAlert(
-              "Location Unavailable",
-              "Unable to detect GPS position. You can show the map if you wish to drop a location pin manually.",
-              "warning"
-            );
-          }
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      showAlert("GPS unavailable", "GPS geolocation is not supported by your browser.", "warning");
+    if (!("geolocation" in navigator)) {
+      showAlert("GPS unavailable", "This browser cannot tell us where you are. Show the map and drop the pin instead.", "warning");
+      return;
     }
+    setDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        onChange(pos.coords.latitude, pos.coords.longitude);
+        setDetecting(false);
+        setShowMap(true);
+        showAlert("Location captured", "Your place is pinned on the map — move it if it landed a little off.", "success");
+      },
+      (err) => {
+        setDetecting(false);
+        showAlert(
+          err.code === 1 ? "Location permission denied" : "Location unavailable",
+          "We could not place you. Paste a Google Maps link, or show the map and drop the pin yourself.",
+          err.code === 1 ? "info" : "warning"
+        );
+      },
+      { enableHighAccuracy: true }
+    );
   };
 
   return (
     <div className="space-y-3">
-      {/* Enter the coordinates: the fallback for a phone with no signal, a
-          denied location permission, or a coordinate copied from elsewhere —
-          and it works with the map never opened. */}
+      {/* The way in: a link, copied out of Google Maps. */}
       <div className="rounded-2xl border border-sand-line bg-sand p-3">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wide text-moss" htmlFor={`${fieldId}-lat`}>
-              Latitude
-            </label>
-            <input
-              id={`${fieldId}-lat`}
-              ref={latRef}
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={latText}
-              placeholder="-0.0463"
-              onChange={(e) => setLatText(e.target.value)}
-              onBlur={(e) => {
-                // Tabbing across to longitude is not a finished edit.
-                if (e.relatedTarget === lngRef.current) return;
-                commitManual();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  commitManual();
-                }
-              }}
-              className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wide text-moss" htmlFor={`${fieldId}-lng`}>
-              Longitude
-            </label>
-            <input
-              id={`${fieldId}-lng`}
-              ref={lngRef}
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={lngText}
-              placeholder="37.6562"
-              onChange={(e) => setLngText(e.target.value)}
-              onBlur={(e) => {
-                if (e.relatedTarget === latRef.current) return;
-                commitManual();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  commitManual();
-                }
-              }}
-              className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-            />
-          </div>
+        <label
+          className="block text-[10px] font-bold uppercase tracking-wide text-moss"
+          htmlFor={`${fieldId}-link`}
+        >
+          Google Maps link
+        </label>
+        <div className="mt-1 flex items-center gap-2 rounded-xl border border-sand-mute bg-white px-3 py-2 focus-within:border-ember">
+          <Link2 size={14} className="shrink-0 text-moss" aria-hidden="true" />
+          <input
+            id={`${fieldId}-link`}
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            value={link}
+            placeholder="https://maps.app.goo.gl/…"
+            onChange={(e) => setLink(e.target.value)}
+            onBlur={() => {
+              // Only a link is worth reading: typing a place name or leaving
+              // the field after a half-finished thought should not nag.
+              if (/https?:\/\//i.test(link)) void readLink();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void readLink();
+              }
+            }}
+            className="w-full bg-transparent text-sm outline-none placeholder:text-moss-faint"
+          />
         </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-moss">
+          {reading
+            ? "Reading the link…"
+            : "In Google Maps, find the place, then Share \u2192 Copy link and paste it here."}
+        </p>
       </div>
 
-      {/* Both ways to fill those fields, side by side on one row. */}
-      <div className="flex items-center gap-2">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-moss">
+        <MapPin size={13} className={pinned ? "text-ember" : "text-moss-faint"} aria-hidden="true" />
+        {pinned
+          ? "Pinned. Open the map to check it, or tap the map to move it."
+          : "No pin yet — paste a link, use your GPS, or drop the pin on the map."}
+      </p>
+
+      {/* The three ways to a point, on one row. */}
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={handleDetectGPS}
@@ -232,6 +203,15 @@ export default function LocationMapPicker({
           <Map size={26} aria-hidden="true" />
           <span>{showMap ? "Hide Map" : "Show Map"}</span>
         </button>
+        {pinned && onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-full px-2 text-xs font-semibold text-alert hover:underline"
+          >
+            Clear the pin
+          </button>
+        )}
       </div>
 
       {showMap && (
@@ -245,7 +225,7 @@ export default function LocationMapPicker({
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapClickHandler onSelectLocation={onChange} />
-            {latitude && longitude && (
+            {pinned && (
               <Marker
                 position={[latitude, longitude]}
                 icon={defaultIcon}

@@ -6,7 +6,8 @@ import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
 import { reviewBucket, type StatusFilter } from "@/lib/requests";
-import { Check, Handshake, X } from "lucide-react";
+import { pinnedMapHref } from "@/lib/places";
+import { Check, Handshake, MapPin, X } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
@@ -31,7 +32,9 @@ type VisitationItem = {
   phone_number?: string;
   email?: string;
   visitation_type?: string;
-  address?: string;
+  /** The point the asker pinned, so the elders know where to come. */
+  latitude?: string | null;
+  longitude?: string | null;
   reason?: string;
   preferred_date?: string;
   preferred_time?: string;
@@ -129,6 +132,8 @@ type UnifiedRow = {
   summary: string;
   /** Optional second detail line (church, dates, category). */
   meta?: string;
+  /** A visitation's pinned point, as the map that opens it. */
+  placeHref?: string;
   status: string;
   /** Plain text for the status pill: "Awaiting approval", "New", ... */
   statusLabel: string;
@@ -642,6 +647,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       contact: contactLine(item.phone_number, item.email),
       summary: item.reason || `${item.visitation_type ? item.visitation_type.replace(/_/g, " ") : "Visit"} request`,
       meta: [item.preferred_date, item.preferred_time].filter(Boolean).join(" ") || undefined,
+      // Where the visit is wanted: a home visit is planned around the point
+      // the member pinned, so the desk opens it rather than reading the notes.
+      placeHref: pinnedMapHref(item.latitude, item.longitude) ?? undefined,
       status: item.status || "pending",
       statusLabel: (item.status || "pending").replace(/_/g, " "),
       created_at: item.created_at,
@@ -776,6 +784,9 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         row.contact.toLowerCase().includes(query) ||
         row.summary.toLowerCase().includes(query) ||
         (row.meta || "").toLowerCase().includes(query) ||
+        // A pinned visit answers to the word "location", which is what the
+        // desk reaches for when it wants the ones it can open on a map.
+        (Boolean(row.placeHref) && "location".includes(query)) ||
         row.statusLabel.toLowerCase().includes(query) ||
         KIND_META[row.kind].label.toLowerCase().includes(query)
       );
@@ -933,6 +944,16 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               <td className={`max-w-[280px] px-4 ${rowPad}`}>
                 <p className="line-clamp-2 text-moss-mid">{row.summary}</p>
                 {row.meta && <p className="mt-0.5 truncate text-xs text-moss">{row.meta}</p>}
+                {row.placeHref && (
+                  <a
+                    href={row.placeHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-ember hover:underline"
+                  >
+                    <MapPin size={11} aria-hidden="true" /> View the pin the member dropped
+                  </a>
+                )}
               </td>
               <td className={`px-4 ${rowPad}`}>
                 <span
@@ -1050,6 +1071,16 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
               </div>
               <p className="line-clamp-3 text-xs text-moss-mid">{row.summary}</p>
               {row.meta && <p className="truncate text-xs text-moss">{row.meta}</p>}
+              {row.placeHref && (
+                <a
+                  href={row.placeHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-ember hover:underline"
+                >
+                  <MapPin size={11} aria-hidden="true" /> View the pin the member dropped
+                </a>
+              )}
               <div className="flex items-center justify-between gap-2 border-t border-sand-soft pt-2">
                 <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusPillClass(row.status)}`}>
                   {row.statusLabel}
