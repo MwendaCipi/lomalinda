@@ -112,14 +112,26 @@ def request_audience(kind='', audience=''):
     return User.objects.filter(id__in=audience_ids, is_active=True).distinct()
 
 
+def request_desk_tab(kind: str) -> str:
+    """Which console tab answers a request of this kind.
+
+    A join ask — someone new asking to join the church — answers from
+    Administration's own Join Requests toggle, where every kind of join ask
+    stands in one queue: the office either admits a person or it does not,
+    and it should not have to remember which queue the person arrived in.
+    Every other request is still filed in the Requests queue it was read from.
+    """
+    return 'join-requests' if kind == 'join' else 'requests'
+
+
 def request_desk_link(kind, request_id):
     """The link that lands on the requests desk with one request open.
 
     Points straight at the desk, not at the sign-in page: a reader who is
-    already signed in goes straight there, and one who is not is bounced to
-    sign-in by the desk itself with the destination preserved.
+    already signed in goes straight there, and one who is not is bounced
+    to sign-in by the desk itself with the destination preserved.
     """
-    return f'{settings.FRONTEND_URL}/administration?tab=requests&request={kind}-{request_id}'
+    return f'{settings.FRONTEND_URL}/administration?tab={request_desk_tab(kind)}&request={kind}-{request_id}'
 
 
 def request_notification_template(settings_obj=None):
@@ -204,7 +216,7 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     if submitted_at is not None:
         subject = f'{subject} · {submitted_at.strftime("%d %b %Y")}'
 
-    desk_link = f'/administration?tab=requests&request={kind}-{request_id}'
+    desk_link = f'/administration?tab={request_desk_tab(kind)}&request={kind}-{request_id}'
     full_link = request_desk_link(kind, request_id)
     # The letter opens with the desk named, all caps, before anything else:
     # an inbox scan should read the desk before the sender's name registers.

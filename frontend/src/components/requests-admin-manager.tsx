@@ -151,7 +151,25 @@ type UnifiedRow = {
   property?: DeaconateRequestItem;
 };
 
-type KindFilter = "all" | RequestKind;
+/**
+ * Which desk is on screen.
+ *
+ * `joins` is the one view that is not a kind of its own: Administration's
+ * Join Requests toggle opens on both doors into the church at once — a new
+ * member asking to join, and a member asking to join a ministry — so one
+ * queue answers for whoever is holding the phone. It names no new row: every
+ * row keeps the kind it was filed under, and the view simply reads both.
+ */
+type KindFilter = "all" | RequestKind | "joins";
+
+/** The combined view's name in filters, counts and the header line. */
+const JOINS_VIEW_LABEL = "Join requests";
+
+function deskMatch(activeTab: KindFilter, kind: RequestKind): boolean {
+  if (activeTab === "all") return true;
+  if (activeTab === "joins") return kind === "join" || kind === "area";
+  return kind === activeTab;
+}
 
 /** The membership desk filters by its own statuses, not the shared buckets. */
 type TransferOnlyStatus = "under_review" | "completed" | "cancelled";
@@ -290,7 +308,10 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     // it needs no review-state control — one popover, and a narrow one.
     const showStateFilter = activeTab !== "transfer";
     const stateLabel = statusOpts.find((option) => option.value === statusFilter)?.label ?? "Pending";
-    const deskLabel = deskOpts.find((option) => option.value === activeTab)?.label ?? "All requests";
+    const deskLabel =
+      activeTab === "joins"
+        ? JOINS_VIEW_LABEL
+        : deskOpts.find((option) => option.value === activeTab)?.label ?? "All requests";
     setHeaderRightAction(
       <div className="flex w-full items-center gap-2 sm:w-auto">
         {/* The phone: both filters behind one button beside the search, which
@@ -798,10 +819,13 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     if (!row) return;
     focusApplied.current = focusRequest;
     setHighlightKey(focusRequest);
-    setActiveTab(row.kind);
+    // The combined view already reads every kind a link can point at, so a
+    // notice that arrives on it stays on it rather than renaming itself to
+    // the one row it landed on.
+    if (!deskMatch(activeTab, row.kind)) setActiveTab(row.kind);
     setStatusFilter("all");
     setSearch("");
-  }, [focusRequest, loading, rows]);
+  }, [focusRequest, loading, rows, activeTab]);
 
   // The Membership Requests desk carries no review-state control, so nothing
   // may hide its rows behind a state: it reads them all, and each row shows
@@ -814,7 +838,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return rows.filter((row) => {
-      if (activeTab !== "all" && row.kind !== activeTab) return false;
+      if (!deskMatch(activeTab, row.kind)) return false;
       if (reviewFilter !== "all") {
         if (activeTab === "transfer" && row.kind === "transfer") {
           if (row.status !== reviewFilter) return false;
@@ -862,11 +886,12 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     element?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [highlightKey, filteredRows]);
 
-  const kindCount = (kind: KindFilter) => (kind === "all" ? rows.length : rows.filter((r) => r.kind === kind).length);
+  const kindCount = (kind: KindFilter) =>
+    kind === "all" ? rows.length : rows.filter((r) => deskMatch(kind, r.kind)).length;
 
   const statusCount = (filter: string) =>
     rows.filter((row) => {
-      if (activeTab !== "all" && row.kind !== activeTab) return false;
+      if (!deskMatch(activeTab, row.kind)) return false;
       if (filter === "all") return true;
       // The membership desk reads its own statuses; everywhere else the
       // shared review buckets answer.
@@ -907,7 +932,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     { value: "property", label: "Property requests" },
   ];
 
-  const activeFilterLabel = activeTab === "all" ? "All requests" : KIND_META[activeTab].label;
+  const activeFilterLabel =
+    activeTab === "all" ? "All requests" : activeTab === "joins" ? JOINS_VIEW_LABEL : KIND_META[activeTab].label;
 
   return (
     <div className="flex h-full min-h-0 flex-col p-4 sm:p-6 lg:p-8">
@@ -920,9 +946,13 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           <BackToOverviewArrow />
           {/* Named by the strip above on a wide screen. */}
           <div className="md:hidden">
-            <h2 className="text-2xl font-semibold text-bark">Received Requests</h2>
+            <h2 className="text-2xl font-semibold text-bark">
+              {activeTab === "joins" ? "Join Requests" : "Received Requests"}
+            </h2>
             <p className="mt-0.5 text-sm text-moss">
-              Join requests, prayer, visitation, dedications, welfare and membership transfers.
+              {activeTab === "joins"
+                ? "New members and members asking to join a ministry, waiting on an answer."
+                : "Join requests, prayer, visitation, dedications, welfare and membership transfers."}
             </p>
           </div>
         </div>
@@ -1220,7 +1250,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         />
 
       {/* Still verifying their email — a hint the old joins tab carried. */}
-      {!loading && joinRequests.some((j) => j.status === "verification_pending") && (activeTab === "all" || activeTab === "join") && (
+      {!loading && joinRequests.some((j) => j.status === "verification_pending") && (activeTab === "all" || activeTab === "join" || activeTab === "joins") && (
         <p className="rounded-2xl bg-sand p-4 text-xs italic text-moss-mid">
           Requests marked <strong>Awaiting their email</strong> can be approved now. The account activates as soon as the person
           finishes signing up.

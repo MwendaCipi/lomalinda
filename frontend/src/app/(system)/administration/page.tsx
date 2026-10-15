@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -295,7 +295,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -343,8 +343,14 @@ function AdministrationContent() {
   // between the two. Desks that own their own strip (treasury, deaconate,
   // etc.) or ride a rail section are left alone.
   const { setCustomToggles } = usePageHeader();
+  const consoleTab = activeTab === "users" || activeTab === "settings" || activeTab === "join-requests";
+  // Who the toggle is for: the same people the requests desk already admits,
+  // because the API behind it answers to those roles and the notices for a
+  // join ask name them. The card on the phone overview sits with the console's
+  // own pages, under the office's wider gate.
+  const canAnswerJoins = isClerk || isElder || isAdmin || isRequestsDeskLead;
   useEffect(() => {
-    if (activeTab !== "users" && activeTab !== "settings") return;
+    if (!consoleTab) return;
     setCustomToggles(
       <SectionNav
         label="Administration pages"
@@ -364,11 +370,26 @@ function AdministrationContent() {
             short: "Settings",
             help: "The church's name, channels, meeting times and public record.",
           },
+          // The office's answer to a join ask is a toggle of the console's
+          // own — it is not a desk of any rail section — so it rides the same
+          // strip as the register and the settings, where whoever holds the
+          // console can find it without hunting a queue for it.
+          ...(canAnswerJoins
+            ? [
+                {
+                  key: "join-requests",
+                  href: "/administration?tab=join-requests",
+                  label: "Join Requests",
+                  short: "Join",
+                  help: "New members and ministry asks waiting on an answer.",
+                },
+              ]
+            : []),
         ]}
       />
     );
     return () => setCustomToggles(null);
-  }, [activeTab, setCustomToggles]);
+  }, [activeTab, consoleTab, canAnswerJoins, setCustomToggles]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is
@@ -386,6 +407,7 @@ function AdministrationContent() {
           description: "The church's members, their roles and the church's own settings.",
           cards: [
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
+            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
           ],
         }
@@ -558,6 +580,16 @@ function AdministrationContent() {
                   initialTab={activeTab === "transfers" ? "transfers" : "all"}
                   focusRequest={searchRequest}
                 />
+              </div>
+            )}
+
+            {/* Join Requests — the console's own door on both kinds of join
+                ask: a new member whose account waits on approval, and a
+                member asking to join a ministry. One queue, because the
+                office answers "may this person join" either way. */}
+            {activeTab === "join-requests" && canAnswerJoins && (
+              <div className="h-full min-h-0">
+                <RequestsAdminManager initialTab="joins" focusRequest={searchRequest} />
               </div>
             )}
 

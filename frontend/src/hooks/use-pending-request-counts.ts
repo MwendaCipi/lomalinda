@@ -10,8 +10,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * Everything leadership owes someone an answer on, per desk: a join request
  * nobody has approved (email-verified or not yet verified), a prayer request
  * still saying "new", a visitation or dedication not yet dealt with, a
- * membership transfer still pending or under review, and every welfare
- * submission — that desk has no status at all, because each one is an idea,
+ * membership transfer still pending or under review, a ministry ask to join
+ * a department or start a singing group, and every welfare submission — that
+ * desk has no status at all, because each one is an idea,
  * a request for prayer or an offer of partnership that somebody still has to
  * pick up.
  *
@@ -31,6 +32,10 @@ export type PendingRequestCounts = {
   dedication: number;
   welfare: number;
   transfers: number;
+  /** Ministry asks: a member asking to join a department, or to start a
+      singing group. Counted apart from `joins` because they answer from a
+      different ledger, and inside `total` because they are owed the same. */
+  ministry: number;
   /** The sidebar badge: everything a leader still owes an answer on. */
   total: number;
   loading: boolean;
@@ -43,7 +48,12 @@ async function fetchJsonArray(url: string, headers: Record<string, string>): Pro
     const res = await fetch(url, { headers });
     if (!res.ok) return [];
     const data: ArrayOrError = await res.json();
-    return Array.isArray(data) ? data : [];
+    // Most ledgers answer a bare array; the join review answers with its
+    // rows under a `requests` key. One reader, so a count never has to know
+    // which shape it was handed.
+    if (Array.isArray(data)) return data;
+    const wrapped = (data as { requests?: unknown } | null)?.requests;
+    return Array.isArray(wrapped) ? wrapped : [];
   } catch {
     return [];
   }
@@ -57,6 +67,7 @@ export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
     dedication: 0,
     welfare: 0,
     transfers: 0,
+    ministry: 0,
     total: 0,
     loading: true,
   });
@@ -72,13 +83,17 @@ export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
 
     let alive = true;
     (async () => {
-      const [joins, prayer, visitations, dedications, support, transfers] = await Promise.all([
+      const [joins, prayer, visitations, dedications, support, transfers, ministry] = await Promise.all([
         fetchJsonArray(`${API_URL}/api/members/enrollment-requests/`, headers),
         fetchJsonArray(`${API_URL}/api/members/prayer-requests/`, headers),
         fetchJsonArray(`${API_URL}/api/members/visitations/`, headers),
         fetchJsonArray(`${API_URL}/api/members/child-dedications/`, headers),
         fetchJsonArray(`${API_URL}/api/members/support-submissions/`, headers),
         fetchJsonArray(`${API_URL}/api/members/transfers/`, headers),
+        // Ministry asks, from the same review endpoint the Join Requests
+        // toggle answers them through. A reader who may not see any is
+        // handed an empty list, so this costs a member nothing but a call.
+        fetchJsonArray(`${API_URL}/api/members/department-join-requests/review/`, headers),
       ]);
       if (!alive) return;
 
@@ -94,9 +109,14 @@ export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
         dedication: waiting(dedications),
         welfare: waiting(support),
         transfers: waiting(transfers),
+        ministry: waiting(ministry),
         loading: false,
       };
-      setCounts({ ...next, total: next.joins + next.prayer + next.visitation + next.dedication + next.welfare + next.transfers });
+      setCounts({
+        ...next,
+        total:
+          next.joins + next.prayer + next.visitation + next.dedication + next.welfare + next.transfers + next.ministry,
+      });
     })();
 
     return () => {

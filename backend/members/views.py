@@ -11314,16 +11314,24 @@ class DepartmentJoinRequestView(APIView):
             note=str(request.data.get('note') or '').strip()[:500],
         )
         # The ask lands with the department's own leadership and the elders'
-        # desk — the people who answer for the area in church.
+        # desk — the people who answer for the area in church — and with the
+        # administrators, who answer join asks from Administration's Join
+        # Requests toggle. ``request_audience('join')`` is the office rule the
+        # other request desks already answer to; it is the one desk that
+        # reaches the admin role, because admitting a member is the office's
+        # to do. Dept leadership then widens it to the area's own leaders.
+        from .requests import request_audience
+
         audience_ids = set(DepartmentAssignment.objects.filter(
             department__code=department, department__is_active=True, member__is_active=True,
         ).values_list('member_id', flat=True))
-        audience_ids.update(User.objects.filter(
-            member_profile__role='elder', is_active=True,
-        ).values_list('id', flat=True))
+        audience_ids.update(request_audience('join').values_list('id', flat=True))
         audience_ids.discard(request.user.id)
         audience = User.objects.filter(id__in=audience_ids, is_active=True)
-        desk_link = f'{settings.FRONTEND_URL}/requests'
+        # The desk that answers it: Administration's Join Requests toggle,
+        # opened on this very request, so the notice is one tap from a
+        # decision rather than a hunt through a queue of other desks.
+        desk_link = f'{settings.FRONTEND_URL}/administration?tab=join-requests&request=area-{row.id}'
         ask = (
             f'wants to register the singing group "{group_name}" under'
             if kind == 'singing_group' else 'has asked to join'
@@ -11340,6 +11348,20 @@ class DepartmentJoinRequestView(APIView):
             ChurchNotification(user=person, title=subject, message=body, link=desk_link)
             for person in audience
         ])
+        # And the phone itself, to the very same people: the bell above is only
+        # read by someone who opens the site, while a request to join waits on
+        # an answer either way. The push carries the words of the in-app notice
+        # and lands on the same desk, so both doors open the same request.
+        # Keys are checked once, not per reader, and a push failure never fails
+        # the ask — the same covenant as the email.
+        try:
+            from .push import push_to_user, vapid_keys_ready
+
+            if vapid_keys_ready():
+                for person in audience:
+                    push_to_user(person, title=subject, body=body, link=desk_link)
+        except Exception:
+            pass
         try:
             send_mail(
                 subject, body, settings.DEFAULT_FROM_EMAIL,
@@ -11372,7 +11394,14 @@ class DepartmentJoinRequestReviewView(APIView):
         # through their DepartmentAssignment rows. Elders, clerks and pastors
         # do not get the "see all" treatment here — a join request for the
         # Music department goes to Music's leaders, not to the eldership.
-        if user.is_staff or getattr(user, 'is_superuser', False):
+        #
+        # The admin role counts beside Django staff: Administration's Join
+        # Requests toggle is the admin's own way in, and an admin who is not
+        # also ``is_staff`` would otherwise open the toggle to an empty queue
+        # while every notice the request sent named them as the person to
+        # answer it.
+        profile = getattr(user, 'member_profile', None)
+        if user.is_staff or getattr(user, 'is_superuser', False) or (profile and profile.has_role('admin')):
             codes.update(code for code in Department.objects.filter(is_active=True).values_list('code', flat=True))
         return DepartmentJoinRequest.objects.filter(department__in=codes).select_related('member', 'reviewed_by')
 

@@ -9160,7 +9160,7 @@ class RequestBellNotificationTests(APITestCase):
         notify_request_safely('join', 7, submitted_by='Jane Doe', church_name='Sda Loma Linda')
         notice = ChurchNotification.objects.filter(user=self.elder).latest('created_at')
         self.assertIn('join request', notice.title)
-        self.assertEqual(notice.link, '/administration?tab=requests&request=join-7')
+        self.assertEqual(notice.link, '/administration?tab=join-requests&request=join-7')
         # The letter names the desk first, in caps, and points at the desk —
         # not at the sign-in page, which would re-gate a signed-in reader.
         self.assertTrue(notice.message.startswith('JOIN REQUEST'))
@@ -10862,6 +10862,63 @@ class DepartmentRequestDeskTests(APITestCase):
             '/api/members/department-join-requests/1/', {'status': 'approved'}, format='json',
         )
         self.assertEqual(answer.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_an_admin_reads_and_answers_every_department_queue(self):
+        """The admin role is a seat of its own: no DepartmentAssignment rows,
+        every queue — the console's Join Requests toggle is the admin's door,
+        and it must not open on an empty list while the notices name them."""
+        admin = User.objects.create_user('desk.admin', 'desk.admin@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=admin, role='admin', roles='admin')
+
+        self.client.force_authenticate(self.member)
+        self.client.post('/api/members/department-join-requests/music/', {'kind': 'join'}, format='json')
+
+        self.client.force_authenticate(admin)
+        queue = self.client.get('/api/members/department-join-requests/review/')
+        self.assertEqual(queue.status_code, status.HTTP_200_OK)
+        row = next(r for r in queue.data['requests'] if r['department'] == 'music')
+        answered = self.client.patch(
+            f"/api/members/department-join-requests/{row['id']}/", {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answered.status_code, status.HTTP_200_OK, answered.data)
+
+        # A plain member still reads no queue at all — the door widened for
+        # the admin role only, not for everybody.
+        self.client.force_authenticate(self.member)
+        plain_queue = self.client.get('/api/members/department-join-requests/review/')
+        self.assertEqual(plain_queue.data['requests'], [])
+
+    def test_an_ask_rings_the_bell_and_the_phone_of_the_people_who_answer(self):
+        """Both doors, same people: the in-app bell and the push carry the
+        same words and open the same request, so an officer who never opens
+        the site still hears that somebody asked to join."""
+        from .models import ChurchNotification
+
+        admin = User.objects.create_user('desk.notice.admin', 'desk.notice.admin@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=admin, role='admin', roles='admin')
+
+        self.client.force_authenticate(self.member)
+        with patch('members.push.vapid_keys_ready', return_value=True), patch('members.push.push_to_user') as push:
+            raised = self.client.post('/api/members/department-join-requests/music/', {'kind': 'join'}, format='json')
+        self.assertEqual(raised.status_code, status.HTTP_201_CREATED, raised.data)
+
+        notified = set(ChurchNotification.objects.values_list('user_id', flat=True))
+        # The music leader, the elders' desk and the administrators are told.
+        self.assertIn(self.elder.id, notified)
+        self.assertIn(admin.id, notified)
+        # The member who asked is not the one answering their own ask.
+        self.assertNotIn(self.member.id, notified)
+
+        pushed = {call.args[0].id for call in push.call_args_list}
+        self.assertEqual(pushed, notified)
+
+        # The notice opens Administration's Join Requests toggle on this very
+        # request, so both doors land in the same place.
+        link = ChurchNotification.objects.filter(user=admin).latest('created_at').link
+        self.assertIn('/administration?tab=join-requests', link)
+        self.assertIn('request=area-', link)
+        pushed_link = push.call_args.kwargs['link']
+        self.assertEqual(pushed_link, link)
 
 
 class DeaconateSeatTests(APITestCase):
