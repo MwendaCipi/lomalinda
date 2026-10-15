@@ -146,24 +146,24 @@ function sameCalendarDay(left: Date, right: Date): boolean {
 }
 
 /**
- * How long until the gathering begins, in the card's words.
+ * How long until an instant, in the cards' words.
  *
- * A gathering still to come today is counted in hours — the day is already
- * understood, so "in 3 hours" beside the join button needs no weekday or
- * start time repeated at it. Anything farther out is counted in days, hours
- * and minutes, so a member reading on Sunday knows exactly how much of the
- * week is left. A gathering already under way has nothing to count down to,
- * and returns null; so does one with no clock behind it.
+ * Shared by the week's gathering and by a post's own event, so the countdown
+ * beside a link is one phrase wherever it stands. An instant still to come
+ * today is counted in hours — the day is already understood, so "in 3 hours"
+ * needs no weekday or start time repeated at it. Anything farther out is
+ * counted in days, hours and minutes, so a member reading on Sunday knows
+ * exactly how much of the week is left. An instant already passed has nothing
+ * to count down to, and returns null.
  */
-export function gatheringCountdown(gathering: Gathering, now: Date): string | null {
-  if (gathering.active) return null;
-  const remaining = gathering.date.getTime() - now.getTime();
+export function countdownTo(target: Date, now: Date): string | null {
+  const remaining = target.getTime() - now.getTime();
   if (remaining <= 0) return null;
 
   const plural = (value: number, unit: string) => `${value} ${unit}${value === 1 ? "" : "s"}`;
   const totalMinutes = Math.floor(remaining / 60_000);
 
-  if (sameCalendarDay(gathering.date, now)) {
+  if (sameCalendarDay(target, now)) {
     // Hours are the unit of a day already in progress; under the last hour the
     // minutes are what is left, and "in 0 hours" would say nothing.
     const hours = Math.floor(remaining / 3_600_000);
@@ -178,20 +178,30 @@ export function gatheringCountdown(gathering: Gathering, now: Date): string | nu
 }
 
 /**
+ * How long until the gathering begins.
+ *
+ * A meeting already under way has nothing to count down to; its own clock is
+ * what tells us that, so the counting itself is `countdownTo`'s.
+ */
+export function gatheringCountdown(gathering: Gathering, now: Date): string | null {
+  if (gathering.active) return null;
+  return countdownTo(gathering.date, now);
+}
+
+/**
  * What the join button calls the platform it opens.
  *
- * The button names the platform *and* says what tapping it does — "Open on
- * Google Meet", "Open on Zoom" — so it reads as an action rather than as a
- * bare product name. Every platform gets the same verb; a lone "Zoom" beside
- * "Open on Google Meet" would read as a different kind of control. "Join
- * online" stays the fallback when the link points somewhere unrecognised.
+ * The button names the platform in the church's own words — "Open Google
+ * Meet", "Open Zoom" — so it reads as the action it is rather than as a bare
+ * product name. Every platform gets the same verb, and "Join online" stays the
+ * fallback when the link points somewhere unrecognised.
  */
 export function platformLabel(href: string | null | undefined) {
   if (!href) return "Join online";
   const url = href.toLowerCase();
-  if (url.includes("meet.google.com")) return "Open on Google Meet";
-  if (url.includes("zoom.us") || url.includes("zoom.com")) return "Open on Zoom";
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "Open on YouTube";
-  if (url.includes("teams.microsoft.com")) return "Open on Teams";
+  if (url.includes("meet.google.com")) return "Open Google Meet";
+  if (url.includes("zoom.us") || url.includes("zoom.com")) return "Open Zoom";
+  if (url.includes("youtube.com") || url.includes("youtu.be")) return "Open YouTube";
+  if (url.includes("teams.microsoft.com")) return "Open Teams";
   return "Join online";
 }

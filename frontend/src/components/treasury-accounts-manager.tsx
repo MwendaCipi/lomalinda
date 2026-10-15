@@ -349,108 +349,169 @@ function WithdrawalRequestsPanel({
     return true;
   });
 
-  if (loading) {
-    return <p className="py-10 text-center text-xs text-moss">Loading the requests…</p>;
-  }
+  // The church writes money the same way everywhere on this desk.
+  const money = (value: string | number) =>
+    `KES ${Number(value).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
-  if (rows.length === 0) {
-    return (
-      <div className="m-5 rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
+  /* The two desks' trails on one ask: the elder who cleared it, and the
+     treasurer who settled it with the reply they gave. Both layouts read these
+     same lines, so a request says the same thing on a phone as on a desk. */
+  const trail = (row: WithdrawalRequestRow) => (
+    <>
+      {row.elder_approved_by && (
+        <p className="text-[10px] text-moss-faint">
+          Elder approved by {row.elder_approved_by}
+        </p>
+      )}
+      {row.decided_by && (row.status === "approved" || row.status === "declined") && (
+        <p className="text-[10px] italic text-moss-faint">
+          {row.status === "approved" ? "Approved" : "Rejected"} by {row.decided_by}
+          {row.reply ? `: “${row.reply}”` : ""}
+        </p>
+      )}
+    </>
+  );
+
+  /* Every request answers the same two ways — the desk replies to it, and it
+     prints as its own signable sheet — and whatever a status allows is decided
+     inside the reply. The pair is therefore the same on every row; the phone's
+     card only gives them the room a thumb needs. */
+  const actions = (row: WithdrawalRequestRow, roomy = false) => (
+    <div className={`flex gap-1.5 ${roomy ? "" : "justify-end"}`}>
+      <button
+        type="button"
+        onClick={() => setOpenAction(row.id)}
+        className={`rounded-lg border border-sand-mute font-semibold text-moss transition hover:border-ember hover:text-ember ${
+          roomy ? "px-3 py-2 text-xs" : "px-2.5 py-1 text-[11px]"
+        }`}
+      >
+        Respond
+      </button>
+      <button
+        type="button"
+        onClick={() => printRequest(row)}
+        disabled={printingId === row.id}
+        className={`inline-flex items-center justify-center gap-1 rounded-lg border border-sand-mute font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60 ${
+          roomy ? "px-3 py-2 text-xs" : "px-2.5 py-1 text-[11px]"
+        }`}
+        aria-label={`Print withdrawal request for ${row.department}`}
+      >
+        <Printer className={`h-3 w-3 ${printingId === row.id ? "animate-spin" : ""}`} />
+        <span>{printingId === row.id ? "Preparing…" : "Print"}</span>
+      </button>
+    </div>
+  );
+
+  /* An empty queue and a search that matches nothing are two different
+     answers — the church has nothing waiting, versus the desk filtered its own
+     list away — so they keep their own words. */
+  const emptyState =
+    rows.length === 0 ? (
+      <>
         <p className="text-sm font-semibold text-bark">Nothing waiting</p>
         <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
           When a department&apos;s leadership asks for money from its fund, the ask lands here.
         </p>
-      </div>
+      </>
+    ) : (
+      <>
+        <p className="text-sm font-semibold text-bark">No matching requests</p>
+        <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
+          Try adjusting your search query or filter selection.
+        </p>
+      </>
     );
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
-      {filteredRows.length === 0 ? (
-        <div className="flex-1 overflow-y-auto">
-          <div className="m-5 rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
-            <p className="text-sm font-semibold text-bark">No matching requests</p>
-            <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
-              Try adjusting your search query or filter selection.
-            </p>
+      {/* Table on a desk, cards on a phone — the queue is one list either way,
+          so `RecordList` owns the breakpoint pair and the four states. */}
+      <RecordList
+        rows={filteredRows}
+        loading={loading}
+        rowKey={(row) => row.id}
+        loadingLabel="Loading the requests…"
+        tableWrapperClassName="flex-1 min-h-0 overflow-auto custom-table-scrollbar"
+        tableClassName="w-full text-left text-xs"
+        headClassName="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs"
+        headRowClassName=""
+        headCellClassName="px-4 py-3"
+        headers={[
+          { label: "Date" },
+          { label: "Department & Account" },
+          { label: "Purpose & Details" },
+          { label: "Amount (KES)", className: "text-right" },
+          { label: "Status", className: "text-center" },
+          { label: "Actions", className: "text-right no-print" },
+        ]}
+        stateClassName="py-10 text-center text-xs text-moss"
+        tableEmptyClassName="py-10 text-center"
+        cardsStateClassName="py-10 text-center"
+        tableEmpty={emptyState}
+        cardsEmpty={
+          <div className="m-2 rounded-2xl border border-dashed border-sand-line px-4 py-10 text-center">
+            {emptyState}
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-sand text-xs font-semibold uppercase tracking-wider text-moss shadow-xs">
-              <tr>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Department & Account</th>
-                <th className="px-4 py-3">Purpose & Details</th>
-                <th className="px-4 py-3 text-right">Amount (KES)</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-right no-print">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sand-soft bg-white">
-              {filteredRows.map((row) => (
-                <tr key={row.id} className="transition hover:bg-sand-linen/60">
-                  <td className={`whitespace-nowrap px-4 ${rowPad} text-moss font-mono text-[11px]`}>
-                    {dayFirst(row.created_at)}
-                  </td>
-                  <td className={`px-4 ${rowPad} font-medium text-bark`}>
-                    <p className="font-semibold text-bark">{row.department}</p>
-                    <p className="text-[11px] text-moss-faint">{row.account_name}</p>
-                  </td>
-                  <td className={`px-4 ${rowPad} text-moss`}>
-                    <p className="font-medium text-bark">{row.reason}</p>
-                    <p className="text-[11px] text-moss-faint">
-                      Asked by {row.requested_by} · Bal: KES {Number(row.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                    </p>
-                    {row.elder_approved_by && (
-                      <p className="text-[10px] text-moss-faint">
-                        Elder approved by {row.elder_approved_by}
-                      </p>
-                    )}
-                    {row.decided_by && (row.status === "approved" || row.status === "declined") && (
-                      <p className="text-[10px] italic text-moss-faint">
-                        {row.status === "approved" ? "Approved" : "Rejected"} by {row.decided_by}
-                        {row.reply ? `: &ldquo;${row.reply}&rdquo;` : ""}
-                      </p>
-                    )}
-                  </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold text-bark`}>
-                    KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
-                    {statusBadge(row.status)}
-                  </td>
-                  <td className={`whitespace-nowrap px-4 ${rowPad} text-right no-print`}>
-                    {/* Every request answers the same two ways: the desk replies
-                        to it, and it prints as its own signable sheet. Whatever
-                        a status allows is decided inside the reply. */}
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setOpenAction(row.id)}
-                        className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                      >
-                        Respond
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => printRequest(row)}
-                        disabled={printingId === row.id}
-                        className="inline-flex items-center gap-1 rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
-                        aria-label={`Print withdrawal request for ${row.department}`}
-                      >
-                        <Printer className={`h-3 w-3 ${printingId === row.id ? "animate-spin" : ""}`} />
-                        <span>{printingId === row.id ? "Preparing…" : "Print"}</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        }
+        cardsClassName="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-3 custom-table-scrollbar"
+        renderCard={(row) => (
+          <div
+            key={row.id}
+            className="space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-xs shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2 border-b border-sand-soft pb-2.5">
+              <div className="min-w-0">
+                <h4 className="truncate text-sm font-bold text-bark">{row.department}</h4>
+                <p className="truncate text-[11px] text-moss-faint">{row.account_name}</p>
+              </div>
+              {statusBadge(row.status)}
+            </div>
+
+            <div className="space-y-1 text-moss">
+              <p className="font-medium text-bark">{row.reason}</p>
+              <p className="text-[11px] text-moss-faint">
+                Asked by {row.requested_by} · Bal: {money(row.account_balance)}
+              </p>
+              {trail(row)}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-sand-soft pt-2.5">
+              <div>
+                <p className="font-mono text-[11px] text-moss">{dayFirst(row.created_at)}</p>
+                <p className="text-sm font-bold text-bark">{money(row.amount)}</p>
+              </div>
+              <div className="no-print">{actions(row, true)}</div>
+            </div>
+          </div>
+        )}
+        renderRow={(row) => (
+          <tr key={row.id} className="transition hover:bg-sand-linen/60">
+            <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-[11px] text-moss`}>
+              {dayFirst(row.created_at)}
+            </td>
+            <td className={`px-4 ${rowPad} font-medium text-bark`}>
+              <p className="font-semibold text-bark">{row.department}</p>
+              <p className="text-[11px] text-moss-faint">{row.account_name}</p>
+            </td>
+            <td className={`px-4 ${rowPad} text-moss`}>
+              <p className="font-medium text-bark">{row.reason}</p>
+              <p className="text-[11px] text-moss-faint">
+                Asked by {row.requested_by} · Bal: {money(row.account_balance)}
+              </p>
+              {trail(row)}
+            </td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-right font-bold text-bark`}>
+              {money(row.amount)}
+            </td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-center`}>
+              {statusBadge(row.status)}
+            </td>
+            <td className={`whitespace-nowrap px-4 ${rowPad} text-right no-print`}>
+              {actions(row)}
+            </td>
+          </tr>
+        )}
+      />
 
       {/* Action modal: one request's decisions, and nowhere else. An elder
           clears a pending ask, the treasury then releases or declines it, and

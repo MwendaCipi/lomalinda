@@ -10,6 +10,7 @@ import { ChurchMission } from "@/components/church-mission";
 import { ChurchBeliefs } from "@/components/church-beliefs";
 import { WeeklySchedule } from "@/components/weekly-schedule";
 import { footerColumns, footerLinkOf } from "@/config/navigation";
+import { churchName, churchTown, useChurchSettings } from "@/hooks/use-church-settings";
 
 const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
 
@@ -48,6 +49,14 @@ const ways = [
 // destinations.
 
 export function MarketingHome() {
+  // The church's own record: what it calls itself, and where it meets. The
+  // welcome copy around it is the church's voice; the name, the street and the
+  // pin on this page are the church's facts, so a leader editing Church
+  // Settings changes what a visitor reads here without a redeploy.
+  const settings = useChurchSettings();
+  const address = settings?.address?.trim() || "";
+  const town = churchTown(settings);
+
   return (
     <main className="min-h-screen bg-sand text-bark">
       <section id="top" className="mx-auto max-w-6xl px-6 pb-14 pt-6 sm:pt-10 lg:px-8 lg:pt-14">
@@ -171,7 +180,9 @@ export function MarketingHome() {
           <div className="rounded-[2rem] bg-white/5 p-6 ring-1 ring-white/15 sm:p-8">
             <h3 className="text-xl font-semibold">Find us</h3>
             <p className="mt-3 text-sm leading-6 text-white/70">
-              Loma Linda, Meru, on the church grounds. Open the map for directions before you set off.
+              {address
+                ? `${address}. Open the map for directions before you set off.`
+                : "Open the map for directions before you set off."}
             </p>
             <div className="mt-6">
               <ChurchLocation />
@@ -217,8 +228,8 @@ export function MarketingHome() {
                   />
                 </div>
                 <div>
-                  <p className="leading-tight">SDA Church</p>
-                  <p className="text-xs text-white/60">Loma Linda</p>
+                  <p className="leading-tight">{churchName(settings, true)}</p>
+                  {town && <p className="text-xs text-white/60">{town}</p>}
                 </div>
               </div>
               <p className="mt-5 max-w-sm text-sm leading-6 text-white/70">
@@ -286,7 +297,7 @@ export function MarketingHome() {
           </div>
 
           <p className="mt-10 border-t border-white/10 pt-5 text-xs text-white/50">
-            &copy; 2026 SDA Loma Linda · Meru, Kenya
+            &copy; 2026 {churchName(settings)}
           </p>
         </div>
       </footer>

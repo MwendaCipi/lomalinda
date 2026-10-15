@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
+import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -14,6 +15,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * on the website without a redeploy and without a clerk.
  */
 export function WeeklySchedule() {
+  const settings = useChurchSettings();
   const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
 
   useEffect(() => {
@@ -43,7 +45,9 @@ export function WeeklySchedule() {
               <h3 className="mt-3 text-xl font-semibold">{meeting.title}</h3>
               <p className="mt-2 text-sm font-medium text-bark">{meetingHours(meeting)}</p>
               <p className="mt-1 text-sm text-moss">
-                {meeting.online ? "Online" : meeting.place || "Church grounds, Loma Linda, Meru"}
+                {meeting.online
+                  ? "Online"
+                  : meeting.place || churchWhere(settings) || "Church grounds"}
               </p>
             </article>
           ))}

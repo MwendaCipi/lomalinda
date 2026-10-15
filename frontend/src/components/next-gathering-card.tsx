@@ -4,13 +4,9 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, weekdayOf } from "@/lib/dates";
+import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-type ChurchSettings = {
-  latitude: string | null;
-  longitude: string | null;
-};
 
 type Announcement = {
   id: number;
@@ -40,7 +36,7 @@ type Announcement = {
  * which carries the goods form and the money form for a visitor.
  */
 export function NextGatheringCard() {
-  const [settings, setSettings] = useState<ChurchSettings | null>(null);
+  const settings = useChurchSettings();
   const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -56,11 +52,8 @@ export function NextGatheringCard() {
   const [pledgeOpen, setPledgeOpen] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/members/church-settings/`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then(setSettings)
-      .catch(() => setSettings(null));
-    // The week itself: the settings are read only for the church's map pin.
+    // The week itself; the church's own record — its name, address and map pin
+    // — arrives through `useChurchSettings`.
     fetch(`${API_URL}/api/members/weekly-meetings/`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => setMeetings(Array.isArray(data?.meetings) ? data.meetings : []))
@@ -220,7 +213,9 @@ export function NextGatheringCard() {
           <>
             <p className="mt-3 text-lg leading-7 text-moss-dark">{gathering.time}</p>
             <p className="mt-3 text-sm text-moss">
-              {gathering.online ? "Online" : gathering.place || "Church grounds, Loma Linda, Meru"}
+              {gathering.online
+                ? "Online"
+                : gathering.place || churchWhere(settings) || "Church grounds"}
             </p>
           </>
         ) : (

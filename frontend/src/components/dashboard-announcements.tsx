@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
+import { announcementCountdown } from "@/lib/announcement-dates";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -21,6 +23,8 @@ type Announcement = {
   /** The clock the pledge's own date is capped by. */
   event_date_from?: string | null;
   event_date_to?: string | null;
+  /** The hour the event begins at, when the post named one. */
+  event_time_from?: string | null;
 };
 
 /**
@@ -33,6 +37,9 @@ type Announcement = {
  * and the rail never goes empty either way.
  */
 export function DashboardAnnouncements() {
+  // The church's own record, for the place a gathering is held: the stand-in
+  // slide names the church's address rather than one written in code.
+  const settings = useChurchSettings();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [meetings, setMeetings] = useState<WeeklyMeeting[] | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -64,10 +71,6 @@ export function DashboardAnnouncements() {
   }, []);
 
   const gathering = useMemo(() => nextMeeting(meetings, now), [meetings, now]);
-  // How long until the meeting the conference button opens begins. The clock
-  // is the gathering's: an announcement carries only its event's day, while
-  // the week's meeting carries the hour it starts at.
-  const countdown = gathering ? gatheringCountdown(gathering, now) : null;
 
   // Announcements lead; the gathering stands in only when the church has
   // published nothing else.
@@ -75,6 +78,16 @@ export function DashboardAnnouncements() {
   const slideCount = hasAnnouncements ? announcements.length : 1;
   const index = Math.min(slide, slideCount - 1);
   const current = hasAnnouncements ? announcements[index] : undefined;
+
+  // The countdown belongs to whichever slide is on show: a post counts down to
+  // its own event, the week's gathering to its next meeting. Reading the
+  // gathering's clock at an announcement — the only clock this card used to
+  // have — is how a notice about the 21st came to say "in 1 day".
+  const countdown = current
+    ? announcementCountdown(current, now)
+    : gathering
+      ? gatheringCountdown(gathering, now)
+      : null;
   const canRotate = announcements.length > 1;
 
   // A modal over the rail holds the slides still — nothing should turn behind
@@ -176,7 +189,7 @@ export function DashboardAnnouncements() {
             {current
               ? current.text
               : gathering
-                ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || "Church grounds, Loma Linda, Meru"}`
+                ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || churchWhere(settings) || "Church grounds"}`
                 : "The week's meetings are still being set up."}
           </p>
           <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-moss">
