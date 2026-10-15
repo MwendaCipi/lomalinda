@@ -32,11 +32,14 @@ import {
   HeartPulse,
   Landmark,
   Mail,
+  Droplets,
   Megaphone,
+  MessageSquare,
   MicVocal,
   MoreVertical,
   Music,
   PenLine,
+  Phone,
   Plus,
   Pencil,
   Search,
@@ -67,6 +70,12 @@ import { SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
 import { formatOfficeRole } from "./roles-combobox";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
+import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
+import { DailyWordPanel } from "@/components/daily-word-panel";
+import { AnnouncementManager } from "@/components/announcement-manager";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
+import { openConversation } from "@/lib/chat";
+import { useRouter } from "next/navigation";
 import {
   CalendarViewToggle,
   MonthGrid,
@@ -203,6 +212,9 @@ type RollMember = {
   username: string;
   email: string;
   phone_number: string;
+  /** The WhatsApp number the roster holds, when it holds one — a second
+      door beside the call. */
+  whatsapp_number?: string;
   gender: string;
   role?: string;
   unit?: string;
@@ -261,6 +273,10 @@ type RollRow = {
   username: string;
   email: string;
   phone_number: string;
+  /** The WhatsApp number the roster holds for the person, falling back to
+      the phone where it does not — the same read the Ministry map's area
+      view gave each roll card. */
+  whatsapp_number?: string;
   /** The member's sex, where the roster records it — the age-based desks'
       roll reads it in a column of its own. */
   sex?: string;
@@ -3545,6 +3561,24 @@ export function DepartmentAccountsPanel({
 }
 
 
+/**
+ * The views a department desk reads: the strip's keys, and what a deep link
+ * may name. The elders' three (baptismal class, daily word, announcements)
+ * ride here so the area opens the same way whether it was entered from the
+ * dashboard, the rail, or the Ministry map — one desk, one set of views.
+ */
+type DeptSubTab =
+  | "members"
+  | "calendar"
+  | "meetings"
+  | "singing_groups"
+  | "choir"
+  | "accounts"
+  | "lesson-orders"
+  | "baptismal-class"
+  | "daily-word"
+  | "announcements";
+
 function DepartmentDetail({
   department,
   onChanged,
@@ -3552,7 +3586,7 @@ function DepartmentDetail({
 }: {
   department: DepartmentRow;
   onChanged: () => void;
-  initialTab?: "members" | "calendar";
+  initialTab?: DeptSubTab;
 }) {
   const units = department.units ?? [];
   // Personal Ministries runs the church's weekly rhythm, so the church's own
@@ -3599,7 +3633,23 @@ function DepartmentDetail({
     myUsername &&
       (department.leader?.username === myUsername || department.assistants.some((a) => a.username === myUsername))
   );
-  const [subTab, setSubTab] = useState<"members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "lesson-orders">(initialTab);
+  // The elders' own three — the register being prepared for the font, the
+  // thought the church reads today, and the board of announcements — are
+  // office desks of the eldership. They ride this desk's strip so an area
+  // opened from the dashboard, the rail or the Ministry map is one view with
+  // one set of views behind it, and they stay behind the roles the rail
+  // names for them: elder, clerk, admin.
+  const viewerRoles = (Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || ""]).map((role) =>
+    role.toLowerCase().trim()
+  );
+  const canOpenOfficeViews =
+    department.code === "eldership" && viewerRoles.some((role) => ["elder", "clerk", "admin"].includes(role));
+  const [subTab, setSubTab] = useState<DeptSubTab>(initialTab);
+  // A deep link may name a view the reader is not entitled to; the strip
+  // withholds it, and the desk says why rather than showing an empty panel.
+  const officeViewBlocked =
+    (subTab === "baptismal-class" || subTab === "daily-word" || subTab === "announcements") &&
+    !canOpenOfficeViews;
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // The members view holds the roll *and* the asks to join it, so the desk
   // reads one list and narrows it here rather than opening a second view.
@@ -3650,6 +3700,26 @@ function DepartmentDetail({
   // Inject the search bar into the AppFrame page header's right slot — the
   // shell draws the title and description; we slot the search beside them.
   const { setHeaderRightAction, setCustomToggles, setTogglesRightAction } = usePageHeader();
+  const router = useRouter();
+
+  /** A roll row's Chat here: open the DM, then land in it — the roster's
+      own flow, so a person is reached the same way from either view of the
+      ministry. */
+  const chatWith = async (memberId: number) => {
+    try {
+      await openConversation({ kind: "dm", member_id: memberId });
+      router.push(`/chat?dm=${memberId}`);
+    } catch (error) {
+      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
+  /** WhatsApp reaches them by whatever number the church holds, digits only
+      in the international form wa.me needs (07… becomes 2547…). */
+  const waOf = (row: RollRow) => {
+    const raw = (row.whatsapp_number || row.phone_number || "").replace(/\D/g, "");
+    return raw ? (raw.startsWith("0") ? `254${raw.slice(1)}` : raw) : "";
+  };
   useEffect(() => {
     const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
     if (subTab === "members") {
@@ -3801,8 +3871,16 @@ function DepartmentDetail({
       { key: "accounts", label: "Account Status", short: "Account", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
+      // The eldership's own three, gated to the roles that hold them.
+      ...(canOpenOfficeViews
+        ? [
+            { key: "baptismal-class", label: "Baptismal Class", short: "Baptism", icon: Droplets },
+            { key: "daily-word", label: "Daily Word", short: "Word", icon: BookOpen },
+            { key: "announcements", label: "Announcements", short: "News", icon: Megaphone },
+          ]
+        : []),
     ];
-  }, [unitsKey, isMusic, isSabbathSchool, keepsTheWeek, department.code]);
+  }, [unitsKey, isMusic, isSabbathSchool, keepsTheWeek, canOpenOfficeViews, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -3812,7 +3890,7 @@ function DepartmentDetail({
       setSubTab("members");
       return;
     }
-    setSubTab(key as "members" | "calendar" | "meetings" | "singing_groups" | "choir" | "accounts" | "lesson-orders");
+    setSubTab(key as DeptSubTab);
   }, []);
   useEffect(() => {
     if (isDeaconate) {
@@ -4110,9 +4188,6 @@ function DepartmentDetail({
   // its own seeded ones or a custom one it creates on the spot.
   const [assignFor, setAssignFor] = useState<RollRow | null>(null);
 
-  /** Quiet contact lines for the popover: only what the account carries. */
-  const contactOf = (row: RollRow) => [row.email, row.phone_number].filter(Boolean);
-
   /**
    * The table's rows: the department's board first — its leader, then each
    * assistant, each wearing the office they hold — and the roll's own members
@@ -4150,6 +4225,7 @@ function DepartmentDetail({
         username: holder.username,
         email: holder.email,
         phone_number: holder.phone_number,
+        whatsapp_number: memberMatch?.whatsapp_number ?? "",
         sex: holder.gender || memberMatch?.gender || "",
         office,
         role: office || memberMatch?.role || null,
@@ -4173,6 +4249,7 @@ function DepartmentDetail({
         username: member.username,
         email: member.email,
         phone_number: member.phone_number,
+        whatsapp_number: member.whatsapp_number ?? "",
         sex: member.gender,
         office: null,
         role: member.role || null,
@@ -4206,6 +4283,7 @@ function DepartmentDetail({
         username: "",
         email: ask.member_email,
         phone_number: ask.member_phone,
+        whatsapp_number: "",
         sex: "",
         office: null,
         role: null,
@@ -4413,23 +4491,51 @@ function DepartmentDetail({
                               >
                                 <UserCog className="h-4 w-4 text-ember" /> Assign role
                               </button>
-                              {contactOf(row).length > 0 && (
+                              {/* The roster's four doors to the person —
+                                  chat here, WhatsApp, call or mail — the same
+                                  set the Ministry map's area view offered, so
+                                  reaching someone does not depend on which
+                                  view of the ministry opened. */}
+                              {typeof row.id === "number" && (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setOpenMenuKey(null);
-                                    const [email, phone] = contactOf(row);
-                                    window.open(
-                                      email
-                                        ? `mailto:${email}?subject=${encodeURIComponent(`${department.label}: a word from your department`)}`
-                                        : `tel:${(phone ?? "").replace(/\s+/g, "")}`,
-                                      "_self",
-                                    );
+                                    void chatWith(row.id as number);
                                   }}
                                   className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
                                 >
-                                  <Mail className="h-4 w-4 text-sage-strong" /> Contact member
+                                  <MessageSquare className="h-4 w-4 text-sage-strong" /> Chat here
                                 </button>
+                              )}
+                              {waOf(row) && (
+                                <a
+                                  href={`https://wa.me/${waOf(row)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={() => setOpenMenuKey(null)}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                                >
+                                  <WhatsAppIcon className="h-4 w-4" /> WhatsApp
+                                </a>
+                              )}
+                              {row.phone_number && (
+                                <a
+                                  href={`tel:${row.phone_number.replace(/\s+/g, "")}`}
+                                  onClick={() => setOpenMenuKey(null)}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                                >
+                                  <Phone className="h-4 w-4 text-sage-strong" /> Call
+                                </a>
+                              )}
+                              {row.email && (
+                                <a
+                                  href={`mailto:${row.email}?subject=${encodeURIComponent(`${department.label}: a word from your department`)}`}
+                                  onClick={() => setOpenMenuKey(null)}
+                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                                >
+                                  <Mail className="h-4 w-4 text-sage-strong" /> Email
+                                </a>
                               )}
                               {row.is_child && row.child_id ? (
                                 <button
@@ -4642,6 +4748,54 @@ function DepartmentDetail({
 
       {/* Sabbath School Lesson Orders */}
       {subTab === "lesson-orders" && isSabbathSchool && <LessonOrdersPanel />}
+
+      {/* The eldership's own three — the same boards the Ministry map's area
+          view used to draw, now part of the one desk every door opens, so a
+          ministry reads the same whichever route opened it. */}
+      {officeViewBlocked && (
+        <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
+          This desk belongs to the eldership — ask one of the elders to open it for you.
+        </p>
+      )}
+      {subTab === "baptismal-class" && canOpenOfficeViews && (
+        <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
+          <div className="mb-4">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+              <Droplets className="h-4 w-4 text-ember" aria-hidden="true" /> Baptismal Class
+            </h3>
+            <p className="mt-0.5 text-xs text-moss">
+              The members being prepared for baptism, their walk from studying to the font, kept by the eldership desk.
+            </p>
+          </div>
+          <BaptismalClassPanel />
+        </div>
+      )}
+      {subTab === "daily-word" && canOpenOfficeViews && (
+        <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
+          <div className="mb-4">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+              <BookOpen className="h-4 w-4 text-ember" aria-hidden="true" /> Daily Word
+            </h3>
+            <p className="mt-0.5 text-xs text-moss">
+              A short devotional thought for the day, shared with the church by the eldership.
+            </p>
+          </div>
+          <DailyWordPanel />
+        </div>
+      )}
+      {subTab === "announcements" && canOpenOfficeViews && (
+        <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
+          <div className="mb-4">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+              <Megaphone className="h-4 w-4 text-ember" aria-hidden="true" /> Announcements
+            </h3>
+            <p className="mt-0.5 text-xs text-moss">
+              The notices published to the church family, the same board the announcements desk keeps.
+            </p>
+          </div>
+          <AnnouncementManager embedded />
+        </div>
+      )}
 
       {showAddChild && (
         <AddChildModal
