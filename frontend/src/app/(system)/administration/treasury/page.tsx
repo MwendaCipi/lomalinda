@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, ArrowLeft, Download, Loader2, Trash2, X } from "lucide-react";
+import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, ArrowLeft, Download, Loader2, Trash2, X } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
 import { ChurchLockup } from "@/components/church-lockup";
 import { TreasuryNav } from "@/components/treasury-nav";
+import { ComboboxPopover } from "@/components/combobox-popover";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
@@ -141,6 +142,16 @@ export default function TreasuryPage() {
 
   const { setHeaderRightAction, setCustomToggles, setCustomHeader } = usePageHeader();
   const [searchQuery, setSearchQuery] = useState("");
+  // A phone holds both dates behind one button in the header, so the desk
+  // keeps one row of controls where it used to spend two. The fields
+  // themselves live in the popover; this is only whether it is standing.
+  const [showDates, setShowDates] = useState(false);
+  const datesRef = useRef<HTMLDivElement>(null);
+  const datesPanelRef = useRef<HTMLDivElement>(null);
+  // Scanning a window other than this month so far. The phone folds the dates
+  // away, so the button itself has to say that a narrower window is standing —
+  // otherwise the only way to know is to open the popover and look.
+  const customWindow = fromDate !== firstDayOfMonth() || toDate !== localDate();
   // Pulling the paybill's transactions from Safaricom: manual "send money to
   // paybill" gifts land in the ledger without anyone typing them. Idempotent
   // on the server, so a double-press records nothing twice.
@@ -308,16 +319,116 @@ export default function TreasuryPage() {
     }
   };
 
-  // Position search bar and date range pickers to the RIGHT of the page header title & description
+  // The phone's date popover closes the way any popover does: a press outside
+  // it, Escape, the button again, or the band widening past the phone
+  // breakpoint, where the two fields stand in the open and the button is gone.
+  useEffect(() => {
+    if (!showDates) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (datesRef.current?.contains(target)) return;
+      if (datesPanelRef.current?.contains(target)) return;
+      setShowDates(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowDates(false);
+    };
+    const wide = window.matchMedia("(min-width: 640px)");
+    const onWide = () => {
+      if (wide.matches) setShowDates(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    wide.addEventListener("change", onWide);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      wide.removeEventListener("change", onWide);
+    };
+  }, [showDates]);
+
+  // Position the search bar and the date filters to the RIGHT of the page
+  // header title & description.
+  //
+  // A phone gets one row of controls: the search, and a button holding both
+  // dates in a popover. Two stacked rows of chrome spent height the ledger's
+  // own rows need, and the window is set far less often than it is read — so it
+  // folds away behind the button, which wears a mark while a window other than
+  // this month stands. The wider screens keep the fields in the open, beside
+  // the search where there is room for them.
   useEffect(() => {
     setHeaderRightAction(
-      <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
-        {/* The dates lead on a phone: the window is what the desk is reading,
-            and the search only narrows what is already in it. They are the
-            first in the markup too, so a phone's tab order walks down the
-            page as it reads; the wider screens swap them back, search first,
-            beside the rail. */}
-        <div className="order-1 flex items-center gap-2 w-full sm:order-2 sm:w-auto justify-between">
+      <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
+          <input
+            type="text"
+            placeholder="Search giver, receipt, mode..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
+          />
+        </div>
+
+        {/* The phone's dates: both fields behind one button. */}
+        <div ref={datesRef} className="shrink-0 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setShowDates((open) => !open)}
+            aria-expanded={showDates}
+            aria-label="Date range"
+            title="Date range"
+            className={`relative grid h-8 w-8 place-items-center rounded-xl border transition ${
+              showDates || customWindow
+                ? "border-ember bg-ember/10 text-ember"
+                : "border-sand-mute bg-white text-moss hover:text-bark"
+            }`}
+          >
+            <CalendarDays size={15} aria-hidden="true" />
+            {customWindow && (
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-ember ring-2 ring-white" />
+            )}
+          </button>
+          <ComboboxPopover
+            anchorRef={datesRef}
+            panelRef={datesPanelRef}
+            open={showDates}
+            minW={264}
+            align="right"
+            panelClassName="rounded-2xl border border-sand-line bg-white p-3 shadow-2xl"
+          >
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-bark">Date range</span>
+                <button
+                  type="button"
+                  onClick={() => setShowDates(false)}
+                  aria-label="Close date range"
+                  className="rounded p-0.5 text-moss transition hover:text-bark"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <label className="flex items-center justify-between gap-2 text-xs font-medium text-moss">
+                <span>From</span>
+                <DateField value={fromDate} onChange={changeFromDate} label="Ledger from date" />
+              </label>
+              <label className="flex items-center justify-between gap-2 text-xs font-medium text-moss">
+                <span>To</span>
+                <DateField value={toDate} onChange={changeToDate} label="Ledger to date" />
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowDates(false)}
+                className="w-full rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
+              >
+                Done
+              </button>
+            </div>
+          </ComboboxPopover>
+        </div>
+
+        {/* The wider screens: the same two fields, in the open. */}
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
           <label className="text-xs font-medium text-moss flex items-center gap-1">
             <span>From</span>
             <DateField value={fromDate} onChange={changeFromDate} label="Ledger from date" />
@@ -327,18 +438,9 @@ export default function TreasuryPage() {
             <DateField value={toDate} onChange={changeToDate} label="Ledger to date" />
           </label>
         </div>
-        <div className="order-2 w-full sm:order-1 sm:w-64">
-          <input
-            type="text"
-            placeholder="Search giver, receipt, mode..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
-          />
-        </div>
       </div>
     );
-  }, [setHeaderRightAction, searchQuery, fromDate, toDate]);
+  }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow]);
 
   // The treasury's views, as one line. The ledger owns Individual Givings and
   // Summary in place; the other three walk to the accounts desk, which is
@@ -1287,9 +1389,14 @@ export default function TreasuryPage() {
                       </table>
                     </div>
 
-                    {/* Fixed Totals Footer at the bottom of the card with the Print Report button — flush on the tab bar. The column totals belong to the table, so a phone (where the rows are cards) drops them and keeps the actions. */}
-                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark overflow-x-auto custom-table-scrollbar shadow-lg md:shadow-none">
-                      <table className="hidden w-full table-fixed text-left text-sm md:table">
+                    {/* The column totals belong to the table, so a phone — where
+                        the rows are cards — drops the whole strip, border and
+                        shadow with it, and the actions below carry the foot
+                        alone. The strip is pinned above the tab bar only where
+                        it is drawn at all, so its sticky and its shadow are the
+                        table's, not the phone's. */}
+                    <div className="hidden md:block shrink-0 z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark overflow-x-auto custom-table-scrollbar">
+                      <table className="w-full table-fixed text-left text-sm">
                         <colgroup>
                           <col className="w-12" />
                           <col className="w-56" />
@@ -1315,7 +1422,10 @@ export default function TreasuryPage() {
 
                     {/* Breakdown View Sticky Footer */}
                     <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-lg md:shadow-none">
-                      <span className="text-moss text-[11px] sm:text-xs">
+                      {/* A row count is the table's own vocabulary: with cards
+                          on a phone it says nothing the list does not already
+                          say, and it costs a line of the ledger's height. */}
+                      <span className="hidden text-moss text-[11px] md:inline md:text-xs">
                         Total Rows Available: <strong className="text-bark">{visibleRows.length}</strong>
                       </span>
                       <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
