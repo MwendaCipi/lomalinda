@@ -17,7 +17,7 @@ import dj_database_url
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
 
-from .mail_settings import resolve_announcement_email
+from .mail_settings import PURPOSE_ANNOUNCEMENT, resolve_senders
 
 load_dotenv()
 
@@ -62,6 +62,9 @@ TENANT_APPS = (
     'django.contrib.contenttypes',
     'members',
     'chat',
+    # The Emails desk reads and writes info@ on behalf of one church, so its
+    # letters belong to that church's schema like every other record here.
+    'maildesk',
 )
 
 INSTALLED_APPS = list(dict.fromkeys(list(SHARED_APPS) + list(TENANT_APPS)))
@@ -187,17 +190,23 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'SDA Loma Linda Meru <info@
 # and invitations keep the main mailbox above. An explicit ANNOUNCEMENT_EMAIL_*
 # override still wins, and with neither set the broadcast uses the main mailbox
 # unchanged. The rule lives in config/mail_settings.py so it can be tested.
-_announcement_email = resolve_announcement_email(
-    os.environ,
-    {
-        'host': EMAIL_HOST,
-        'port': EMAIL_PORT,
-        'user': EMAIL_HOST_USER,
-        'password': EMAIL_HOST_PASSWORD,
-        'use_tls': EMAIL_USE_TLS,
-        'from_email': DEFAULT_FROM_EMAIL,
-    },
-)
+# The main mailbox, as every purpose's resolver wants it: one dict rather than
+# the same six values spelled out per purpose.
+_mail_main = {
+    'host': EMAIL_HOST,
+    'port': EMAIL_PORT,
+    'user': EMAIL_HOST_USER,
+    'password': EMAIL_HOST_PASSWORD,
+    'use_tls': EMAIL_USE_TLS,
+    'from_email': DEFAULT_FROM_EMAIL,
+}
+# Which address each kind of mail leaves as — one entry per purpose, resolved by
+# config/mail_settings.py and read at send time through members/mailing.py.
+# DEFAULT_FROM_EMAIL above stays the human address (info@), which is what the
+# default connection already speaks as, so every caller that has not been moved
+# onto a purpose keeps behaving exactly as before.
+MAIL_SENDERS = resolve_senders(os.environ, _mail_main)
+_announcement_email = MAIL_SENDERS[PURPOSE_ANNOUNCEMENT]
 ANNOUNCEMENT_EMAIL_HOST = _announcement_email['host']
 ANNOUNCEMENT_EMAIL_PORT = _announcement_email['port']
 ANNOUNCEMENT_EMAIL_HOST_USER = _announcement_email['user']
@@ -213,6 +222,29 @@ ANNOUNCEMENT_SEND_DELAY = float(os.getenv('ANNOUNCEMENT_SEND_DELAY', '2'))
 # what it could not reach instead of walking the whole list against a closed
 # door.
 ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES = int(os.getenv('ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES', '3'))
+
+# The Emails desk *reads* info@ over IMAP. Sending was never the hard half:
+# the domain's MX records stay with Zoho, so no inbound provider can receive
+# for an address Zoho already answers, and a subdomain would give the church a
+# different address rather than this one. The mailbox itself is therefore
+# polled.
+#
+# Reading needs one thing the sending settings above do not cover: Zoho has
+# IMAP switched off until somebody turns it on (Settings → Mail Accounts → the
+# address → IMAP → IMAP Access), and Mail Free excludes IMAP for accounts
+# signed up since the change — so these come from the environment rather than
+# being assumed, and IMAP_USER/IMAP_PASSWORD fall back to the sending mailbox's
+# own credentials, which for Zoho is the same account. `imappro.zoho.com` is
+# the host Zoho lists for a domain-based organisation account; the account's
+# own Server Configuration Details are authoritative if its data centre is
+# somewhere else. With 2FA on, IMAP_PASSWORD must be an app password.
+IMAP_HOST = os.getenv('IMAP_HOST', 'imappro.zoho.com')
+IMAP_PORT = int(os.getenv('IMAP_PORT', '993'))
+IMAP_USER = os.getenv('IMAP_USER', '') or EMAIL_HOST_USER
+IMAP_PASSWORD = os.getenv('IMAP_PASSWORD', '') or EMAIL_HOST_PASSWORD
+IMAP_MAILBOX = os.getenv('IMAP_MAILBOX', 'INBOX')
+IMAP_TIMEOUT = int(os.getenv('IMAP_TIMEOUT', '30'))
+
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
 
 REST_FRAMEWORK = {

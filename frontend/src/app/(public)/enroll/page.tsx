@@ -66,7 +66,7 @@ export default function EnrollPage() {
               <div>
                 {/* The strip names the page; the h1 is for screen readers. */}
                 <h1 className="sr-only">Membership</h1>
-                <p className="sr-only">Manage membership transfer requests to join SDA Loma Linda or move to another SDA church.</p>
+                <p className="sr-only">Manage membership transfer requests to join SDA Church Loma Linda or move to another SDA church.</p>
               </div>
               {!showForm && (signedIn ? (
                 <button
@@ -121,7 +121,7 @@ export default function EnrollPage() {
                       No membership or transfer requests submitted yet
                     </h3>
                     <p className="mt-1 text-sm text-moss">
-                      Submit a request to join SDA Loma Linda through baptism or transfer, or request a transfer out.
+                      Submit a request to join SDA Church Loma Linda through baptism or transfer, or request a transfer out.
                     </p>
                     <button
                       type="button"

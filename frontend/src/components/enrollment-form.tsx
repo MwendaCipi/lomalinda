@@ -252,7 +252,7 @@ export function EnrollmentForm({
             }}
             className="mt-1.5 w-full rounded-xl border border-ember bg-sand px-4 py-3 text-sm font-semibold text-bark outline-none focus:ring-2 focus:ring-ember"
           >
-            <option value="transfer_in">Transfer In: Join SDA Loma Linda</option>
+            <option value="transfer_in">Transfer In: Join SDA Church Loma Linda</option>
             <option value="transfer_out">Transfer Out: Move to Another Church</option>
           </select>
         </div>
@@ -292,7 +292,7 @@ export function EnrollmentForm({
               <option value="baptism">Baptism</option>
               <option value="membership_transfer">A church member</option>
               <option value="transfer_in">Membership transfer</option>
-              <option value="friend">Friend of SDA Loma Linda</option>
+              <option value="friend">Friend of SDA Church Loma Linda</option>
               <option value="sabbath_school">Sabbath School</option>
             </select>
           </label>

@@ -5,6 +5,7 @@ import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, Han
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
+import { EmailsDesk } from "@/components/emails-desk";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
@@ -295,7 +296,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -569,6 +570,17 @@ function AdministrationContent() {
             {activeTab === "announcements" && (isClerk || isElder || isAdmin) && (
               <div className="h-full min-h-0">
                 <AnnouncementManager />
+              </div>
+            )}
+
+            {/* Emails — the church's own mailbox at info@. Announcements are
+                what the office says to everyone; this is what arrived for
+                somebody to answer, so it gets its own desk on the strip. The
+                API decides who may read it (elders, clerks, admin); the page
+                simply gives it the full height, since it scrolls itself. */}
+            {activeTab === "emails" && (isClerk || isElder || isAdmin) && (
+              <div className="h-full min-h-0">
+                <EmailsDesk />
               </div>
             )}
 

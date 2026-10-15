@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronDown, Printer, Receipt } from "lucide-react";
+import { ArrowRight, Printer, Receipt } from "lucide-react";
+import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
 import { showAlert } from "@/lib/alerts";
@@ -156,85 +157,6 @@ const STATUS_OPTIONS: { key: "successful" | "failed" | "all"; label: string }[] 
   { key: "failed", label: "Failed" },
   { key: "all", label: "All" },
 ];
-
-function FilterPopover<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { key: T; label: string }[];
-  onChange: (val: T) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  const activeOption = options.find((o) => o.key === value);
-  const isDefault = value === options[0].key;
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-label={`Filter by ${label}`}
-        className={`flex h-9 w-full items-center justify-between gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
-          !isDefault
-            ? "border-bark bg-bark text-white shadow-sm"
-            : "border-sand-line bg-sand text-bark hover:border-sand-mute"
-        }`}
-      >
-        <span className={!isDefault ? "font-normal text-sand-mute" : "font-normal text-moss"}>{label}:</span>
-        <span>{activeOption?.label ?? value}</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""} ${!isDefault ? "text-sand-mute" : "text-moss"}`} />
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 w-full min-w-40 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-xl ring-1 ring-black/5">
-          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss">{label}</p>
-          {options.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => {
-                onChange(item.key);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
-                value === item.key ? "bg-sand text-ember font-bold" : "text-bark hover:bg-sand/60"
-              }`}
-            >
-              <span>{item.label}</span>
-              {value === item.key && <Check className="h-3.5 w-3.5 text-ember" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * My Givings — the member's giving, as one timeline.
@@ -539,20 +461,44 @@ export function MyGivings() {
 
           <div className="min-w-0 flex-1">
             <FilterPopover
-              label="Type"
-              value={kindFilter}
-              options={KIND_OPTIONS}
-              onChange={setKindFilter}
-            />
+              title="Filter by type"
+              summary={kindFilter === "all" ? "All types" : KIND_OPTIONS.find((o) => o.key === kindFilter)?.label ?? "All types"}
+              active={kindFilter !== "all"}
+            >
+              <FilterSet label="Type">
+                <select
+                  value={kindFilter}
+                  onChange={(e) => setKindFilter(e.target.value as typeof kindFilter)}
+                  className={FILTER_SELECT_CLASS}
+                  aria-label="Filter by type"
+                >
+                  {KIND_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))}
+                </select>
+              </FilterSet>
+            </FilterPopover>
           </div>
 
           <div className="min-w-0 flex-1">
             <FilterPopover
-              label="Status"
-              value={statusFilter}
-              options={STATUS_OPTIONS}
-              onChange={setStatusFilter}
-            />
+              title="Filter by status"
+              summary={statusFilter === "all" ? "All statuses" : STATUS_OPTIONS.find((o) => o.key === statusFilter)?.label ?? "All statuses"}
+              active={statusFilter !== "all"}
+            >
+              <FilterSet label="Status">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                  className={FILTER_SELECT_CLASS}
+                  aria-label="Filter by status"
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>{option.label}</option>
+                  ))}
+                </select>
+              </FilterSet>
+            </FilterPopover>
           </div>
         </div>
 
@@ -616,7 +562,7 @@ export function MyGivings() {
             <Printer size={12} className="inline" aria-hidden="true" /> Print My Report
           </button>
           <Link
-            href={kindFilter === "in-kind" ? "/support/in-kind" : "/give"}
+            href={kindFilter === "in-kind" ? "/support/in-kind" : "/member/giving"}
             className="inline-flex flex-1 items-center justify-center rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:flex-none"
           >
             {kindFilter === "in-kind" ? "Give In-Kind" : "Give Now"}

@@ -6,7 +6,7 @@ import { AccessibilityProvider } from "@/context/accessibility-context";
 import { brand } from "@/lib/brand";
 import { authInitScript, themeInitScript } from "@/lib/theme";
 
-import { churchSchema, defaultMetadata } from "@/config/seo";
+import { CHURCH, churchSchema, defaultMetadata } from "@/config/seo";
 
 export const viewport: Viewport = {
   themeColor: brand.bark,
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Loma Linda SDA",
+    title: CHURCH.shortName,
   },
   icons: {
     // Brand-new file paths (not query-string versions): every cache layer
@@ -53,7 +53,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-KE" className="h-full antialiased" suppressHydrationWarning>
       <head>
-        {/* Schema.org Church JSON-LD structured data for search engines */}
+        {/* Schema.org structured data for search engines: the church, the
+            organization behind it and the site itself, as one @graph. */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(churchSchema) }}

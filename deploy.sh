@@ -90,6 +90,17 @@ CRON_LINE="0 3 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send
 crontab -l 2>/dev/null | grep -F 'send_pledge_reminders' > /dev/null \
   || fail "the pledge-reminder cron entry could not be installed."
 
+echo "⏰ Ensuring the Emails-desk mailbox poller is installed..."
+# info@ is read by polling IMAP (Zoho keeps the domain's MX, so no inbound
+# provider can receive for this address) — without this entry the desk deploys
+# and then never receives a letter. Every five minutes keeps it inside Zoho's
+# connection and fetch limits: one session, closed on the way out, per run.
+# Same idempotent shape as the line above: rewritten, never duplicated.
+MAILBOX_CRON="*/5 * * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py sync_mailbox --notify >> /var/log/loma_linda_mailbox.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'manage.py sync_mailbox' || true; echo "$MAILBOX_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'manage.py sync_mailbox' > /dev/null \
+  || fail "the mailbox-poller cron entry could not be installed."
+
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"
 

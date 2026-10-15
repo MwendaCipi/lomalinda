@@ -11,7 +11,7 @@ export default function FellowshipPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Fellowship hub</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Fellowship &amp; Community</h1>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
-            Connect with SDA Loma Linda through announcements, shared testimonies, and the everyday life of the
+            Connect with SDA Church Loma Linda through announcements, shared testimonies, and the everyday life of the
             church family.
           </p>
         </div>

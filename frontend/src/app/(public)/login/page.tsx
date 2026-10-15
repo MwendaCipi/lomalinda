@@ -135,7 +135,7 @@ function LoginContent() {
     <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-sand px-6 py-8 text-bark">
       <section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Welcome back</h1>
-        <p className="mt-2 text-sm text-moss">Sign in to your SDA Loma Linda account.</p>
+        <p className="mt-2 text-sm text-moss">Sign in to your SDA Church Loma Linda account.</p>
         {justCreated && (
           <p className="mt-4 rounded-xl bg-mist-select p-3 text-xs text-moss-dark sm:text-sm">
             Your account is ready. Sign in with the username and password you just chose.

@@ -19,6 +19,7 @@ import {
   HeartHandshake,
   Landmark,
   LayoutDashboard,
+  Mail,
   Megaphone,
   MessagesSquare,
   Music,
@@ -250,7 +251,10 @@ export const destinations = {
     match: ["/materials"],
   },
   give: {
-    href: "/give",
+    // The member's own Giving desk. The public Support Us page keeps /give
+    // on the marketing site — the two are separate pages so neither changes
+    // shape under its readers.
+    href: "/member/giving",
     label: "Giving",
     short: "Giving",
     // The bottom bar names the whole section, not just its front page.
@@ -262,7 +266,7 @@ export const destinations = {
     // belongs to Fellowship. Campaigns is deliberately absent: a fund drive
     // is Fund Drives' page, and claiming it here would keep the highlight
     // away from its own row.
-    match: ["/give", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
+    match: ["/member/giving", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
   },
   fundDrives: {
     href: "/support/campaigns",
@@ -662,6 +666,14 @@ export const eldershipItems: RailRow[] = [
     roles: ELDERSHIP_ROLES,
     short: "News",
     description: "Notices and updates shared with the church family.",
+  }),
+  // The church's own mailbox. Announcements are what the church says to
+  // everyone; this desk is what arrives for somebody to answer — so it sits
+  // beside the broadcast rather than behind it, and sends as info@ only.
+  officeTab("emails", "Emails", Mail, {
+    roles: ELDERSHIP_ROLES,
+    short: "Emails",
+    description: "Letters arriving at info@sdalomalinda.or.ke, with replies written from the desk.",
   }),
   officeTab("requests", "Requests", HeartHandshake, {
     roles: REQUESTS_DESK_ROLES,

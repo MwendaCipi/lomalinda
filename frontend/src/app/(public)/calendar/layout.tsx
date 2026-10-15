@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
 
+import { openGraphFor } from "@/config/seo";
+
+const CALENDAR_DESCRIPTION =
+  "View the SDA Church Loma Linda calendar: Sabbath School, Divine Service, Midweek vespers, and special church programmes in Meru.";
+
 export const metadata: Metadata = {
   title: "Church Calendar & Sabbath Programmes",
-  description:
-    "View the SDA Loma Linda church calendar: Sabbath School, Divine Service, Midweek vespers, and special church programmes in Meru.",
+  description: CALENDAR_DESCRIPTION,
   alternates: {
     canonical: "/calendar",
   },
-  openGraph: {
-    title: "Church Calendar & Sabbath Programmes | SDA Loma Linda",
-    description:
-      "View the SDA Loma Linda church calendar: Sabbath School, Divine Service, Midweek vespers, and special church programmes in Meru.",
-    url: "https://sdalomalinda.or.ke/calendar",
-  },
+  openGraph: openGraphFor({
+    title: "Church Calendar & Sabbath Programmes | SDA Church Loma Linda",
+    description: CALENDAR_DESCRIPTION,
+    path: "/calendar",
+  }),
 };
 
 export default function CalendarLayout({ children }: { children: React.ReactNode }) {

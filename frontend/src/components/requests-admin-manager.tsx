@@ -265,13 +265,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   // The one search box, matched against names, contacts and summaries.
   const [search, setSearch] = useState("");
 
-  // The filter popover, and the review-state one that rides beside it on the
-  // desks that read a queue. The Membership Requests desk keeps the funnel
-  // alone, so its header stays a single control.
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
-  const statusRef = useRef<HTMLDivElement>(null);
+  // The phone keeps both filters behind one shared FilterPopover button;
+  // the wide screen shows them in the open, like every other desk.
 
   const { setHeaderRightAction } = usePageHeader();
   useEffect(() => {
@@ -352,62 +347,42 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             </FilterSet>
           )}
         </FilterPopover>
-        {/* The wider screens: the same two menus in the open. */}
+        {/* The wider screens: the same two controls in the open, like every
+            other desk — a desk select and a review-state select. */}
         <div className="hidden shrink-0 items-center gap-2 sm:flex">
-        {showStateFilter && (
-        <div className="relative" ref={statusRef}>
-          <button
-            type="button"
-            onClick={() => setStatusOpen((open) => !open)}
-            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
-          >
-            <svg className={`h-2 w-2 shrink-0 rounded-full ${statusFilter === "pending" ? "bg-amber-500" : statusFilter === "approved" || statusFilter === "completed" ? "bg-emerald-600" : statusFilter === "rejected" || statusFilter === "cancelled" ? "bg-rose-500" : statusFilter === "under_review" ? "bg-blue-500" : "bg-moss"}`} viewBox="0 0 8 8" aria-hidden="true" />
-            {statusOpts.find((o) => o.value === statusFilter)?.label ?? "Pending"}
-            <svg className={`h-3 w-3 text-moss transition-transform ${statusOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-          </button>
-          {statusOpen && (
-            <div role="menu" className="absolute right-0 z-50 mt-2 w-52 rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
-              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">Show by review state</p>
-              {statusOpts.map((option) => (
-                <button key={option.value} type="button" role="menuitemradio" aria-checked={statusFilter === option.value}
-                  onClick={() => { setStatusFilter(option.value as StatusFilter); setStatusOpen(false); }}
-                  className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition ${statusFilter === option.value ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"}`}>
-                  <span className="flex items-center gap-2">
-                    {statusFilter === option.value && <svg className="h-3 w-3 text-ember" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
-                    <span className={statusFilter === option.value ? "" : "pl-4"}>{option.label}</span>
-                  </span>
-                </button>
-              ))}
+          {showStateFilter && (
+            <div className="w-44">
+              <FilterSet label="Review state">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                  className={FILTER_SELECT_CLASS}
+                  aria-label="Show by review state"
+                >
+                  {statusOpts.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </FilterSet>
             </div>
           )}
-        </div>
-        )}
-        <div className="relative" ref={filterRef}>
-          <button
-            type="button"
-            onClick={() => setFilterOpen((open) => !open)}
-            className="inline-flex items-center gap-2 rounded-full border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember"
-          >
-            <svg className="h-3.5 w-3.5 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 12h12M10 20h4" /></svg>
-            Filter
-            <svg className={`h-3 w-3 text-moss transition-transform ${filterOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-          </button>
-          {filterOpen && (
-            <div role="menu" className="absolute right-0 z-50 mt-2 max-h-80 w-44 overflow-y-auto rounded-2xl border border-sand-line bg-white py-2 shadow-xl">
-              <p className="px-4 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-moss">Show requests by desk</p>
-              {deskOpts.map((option) => (
-                <button key={option.value} type="button" role="menuitemradio" aria-checked={activeTab === option.value}
-                  onClick={() => { setActiveTab(option.value); setStatusFilter("pending"); setFilterOpen(false); }}
-                  className={`flex w-full items-center justify-between px-4 py-2 text-left text-xs transition ${activeTab === option.value ? "bg-sand font-semibold text-bark" : "text-moss-mid hover:bg-sand"}`}>
-                  <span className="flex items-center gap-2">
-                    {activeTab === option.value && <svg className="h-3 w-3 text-ember" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
-                    <span className={activeTab === option.value ? "" : "pl-4"}>{option.label}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          <div className="w-44">
+            <FilterSet label="Show requests by desk">
+              <select
+                value={activeTab}
+                onChange={(e) => {
+                  setActiveTab(e.target.value as KindFilter);
+                  setStatusFilter("pending");
+                }}
+                className={FILTER_SELECT_CLASS}
+                aria-label="Show requests by desk"
+              >
+                {deskOpts.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </FilterSet>
+          </div>
         </div>
         <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
           <svg className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -423,8 +398,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         </div>
       </div>
     );
-    return () => setHeaderRightAction(null);
-  }, [search, statusFilter, filterOpen, statusOpen, activeTab, setHeaderRightAction]);
+    return () => setHeaderRightAction(null);    }, [search, statusFilter, activeTab, setHeaderRightAction]);
+
 
   useEffect(() => {
     if (initialTab) {
@@ -432,20 +407,6 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     }
   }, [initialTab]);
 
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setFilterOpen(false);
-      }
-      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
-        setStatusOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const getToken = () =>
     typeof window !== "undefined" ? localStorage.getItem("access_token") : null;

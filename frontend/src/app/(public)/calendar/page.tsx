@@ -150,7 +150,7 @@ function EventActionsMenu({
         Give support
       </Link>
       <a
-        href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
+        href={`mailto:info@sdalomalinda.or.ke?subject=${encodeURIComponent(`Contact leader: ${row.title}`)}`}
         onClick={onClose}
         className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
       >
@@ -159,7 +159,7 @@ function EventActionsMenu({
       {variant === "row" && (
         <>
           <a
-            href={`mailto:hello@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
+            href={`mailto:info@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
             onClick={onClose}
             className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
           >

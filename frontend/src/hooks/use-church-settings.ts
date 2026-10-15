@@ -44,13 +44,14 @@ export function useChurchSettings(): ChurchSettings | null {
 /**
  * What the church calls itself.
  *
- * The record holds the full name with its town — "SDA Loma Linda, Meru" — and
- * a line that stands alone reads better without the town, so `short` keeps the
- * part before the comma. A church that has never named itself still reads as
- * the church the site is about, which is what the built-in wording was.
+ * The record holds the full name with its town — "SDA Church Loma Linda,
+ * Meru" — and a line that stands alone reads better without the town, so
+ * `short` keeps the part before the comma. A church that has never named
+ * itself still reads as the church the site is about, which is what the
+ * built-in wording was.
  */
 export function churchName(settings: ChurchSettings | null, short = false): string {
-  const name = settings?.church_name?.trim() || "SDA Loma Linda";
+  const name = settings?.church_name?.trim() || "SDA Church Loma Linda";
   if (!short) return name;
   return name.split(",")[0]?.trim() || name;
 }

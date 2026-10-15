@@ -2,13 +2,19 @@
 
 Setting up an email relay is guesswork until something actually leaves the box
 and comes back with the server's answer. This command opens the same connection
-the app uses — the main mailbox by default, the announcement broadcast's relay
-with ``--announcement`` — sends one message, and reports which host answered, so
-a ZeptoMail token or a mistyped mailbox is found here rather than mid-broadcast.
+the app uses — the main mailbox by default, or any purpose's — sends one message
+from the address that purpose speaks as, and reports which host answered, so a
+ZeptoMail token, a mistyped mailbox or a sender address still missing from the
+ZeptoMail agent is found here rather than mid-broadcast.
+
+``--purpose treasury`` is the one to run after adding ``treasury@`` to the
+ZeptoMail agent: it exercises the exact path a receipt takes.
 """
 from django.conf import settings
 from django.core.mail import EmailMessage, get_connection
 from django.core.management.base import BaseCommand, CommandError
+
+from config.mail_settings import DISPLAY_NAME, PURPOSES
 
 
 class Command(BaseCommand):
@@ -17,22 +23,41 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--to", required=True, help="Recipient address for the test message.")
         parser.add_argument(
+            "--purpose",
+            choices=sorted(PURPOSES),
+            help="Send as this purpose's address over its own transport "
+            "(treasury, verify, info, announcement). Defaults to the main mailbox.",
+        )
+        parser.add_argument(
             "--announcement",
             action="store_true",
-            help="Use the announcement broadcast's transport (ZeptoMail when configured) "
-            "instead of the main mailbox.",
+            help="Alias for --purpose announcement. Kept for the deployments whose "
+            "runbook already names it.",
         )
+
+    def _settings_for(self, purpose):
+        """The resolved sender settings for one purpose, straight from the app."""
+        entry = (getattr(settings, "MAIL_SENDERS", None) or {}).get(purpose)
+        if not entry:
+            raise CommandError(
+                f"No settings resolved for the {purpose!r} purpose. "
+                "Check that MAIL_SENDERS is built in settings.py."
+            )
+        return entry
 
     def handle(self, *args, **options):
         to = options["to"]
-        if options["announcement"]:
-            label = "announcement broadcast"
-            host = settings.ANNOUNCEMENT_EMAIL_HOST
-            port = settings.ANNOUNCEMENT_EMAIL_PORT
-            user = settings.ANNOUNCEMENT_EMAIL_HOST_USER
-            password = settings.ANNOUNCEMENT_EMAIL_HOST_PASSWORD
-            use_tls = settings.ANNOUNCEMENT_EMAIL_USE_TLS
-            from_email = settings.ANNOUNCEMENT_FROM_EMAIL
+        purpose = options["purpose"] or ("announcement" if options["announcement"] else None)
+
+        if purpose:
+            label = f"the {purpose} purpose"
+            resolved = self._settings_for(purpose)
+            host = resolved["host"]
+            port = resolved["port"]
+            user = resolved["user"]
+            password = resolved["password"]
+            use_tls = resolved["use_tls"]
+            from_email = resolved["from_email"]
         else:
             label = "main mailbox"
             host = settings.EMAIL_HOST
@@ -49,7 +74,7 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(
-            f"Sending through the {label}: {host}:{port} "
+            f"Sending through {label}: {host}:{port} "
             f"as {user or '(no username)'}, TLS {'on' if use_tls else 'off'}, "
             f"from {from_email}"
         )
@@ -64,7 +89,7 @@ class Command(BaseCommand):
             fail_silently=False,
         )
         message = EmailMessage(
-            "Test email from SDA Loma Linda",
+            f"Test email from {DISPLAY_NAME}",
             "This is a test message sent by `manage.py send_test_email` to check "
             "that the church's email settings work. If you received it, the transport "
             "is configured correctly.",

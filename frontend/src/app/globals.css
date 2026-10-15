@@ -556,8 +556,14 @@ body {
    cold load they would catch a frame of them before React knew the token.
    `data-auth` is stamped by authInitScript before the first paint, so this
    rule holds the grids back from that very first frame on every page and every
-   viewport, and it needs no `.app-shell` ancestor to be true. */
-html[data-auth="in"] .public-section-nav {
+   viewport.
+
+   Scoped to `.app-content` on purpose: that is the shell's own column, so the
+   rule hides the grids only where the app chrome already names the places
+   (a member on the public side of Materials or Requests). The marketing pages
+   — beliefs, About, Support Us — render bare under the marketing header for a
+   signed-in reader, outside the shell, and keep their section cards. */
+html[data-auth="in"] .app-content .public-section-nav {
   display: none;
 }
 

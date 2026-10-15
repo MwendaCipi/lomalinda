@@ -50,6 +50,10 @@ from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_pu
 from .validators import validate_phone_number
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
+# Which address each kind of letter leaves as: a receipt answers from the
+# treasury's address, a verification code from the church's identity one, and
+# info@ stays the mailbox a person writes to (see members/mailing.py).
+from .mailing import IDENTITY, MONEY, connection_for, sender_for
 from .pledges import (
     redeem_campaign_pledges_matched_by_giving,
     redeem_due_pledges,
@@ -217,8 +221,9 @@ def send_enrollment_email(enrollment):
         f"Enter this code on the create-account page to continue setting up your account. "
         f"It is valid for 48 hours.\n\n"
         f"Warm regards,\n{church_name}",
-        settings.DEFAULT_FROM_EMAIL,
+        sender_for(IDENTITY),
         [enrollment.email],
+        connection=connection_for(IDENTITY),
         fail_silently=True,
     )
 
@@ -335,7 +340,10 @@ def send_invitation_email(invitation):
         f"{settings.FRONTEND_URL}/login\n\n"
         f"Warm regards,\n{church_name}"
     )
-    send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [invitation.email], fail_silently=False)
+    send_mail(
+        subject, body, sender_for(IDENTITY), [invitation.email],
+        connection=connection_for(IDENTITY), fail_silently=False,
+    )
 
 
 #: The area every church member belongs to by default: the Sabbath School
@@ -385,8 +393,9 @@ def send_password_reset_email(user, uid, token):
         f"Click the link below to choose a new one:\n{link}\n\n"
         "If you did not request this, you can ignore this email — your password stays as it is.\n\n"
         f"Warm regards,\n{church_name}",
-        settings.DEFAULT_FROM_EMAIL,
+        sender_for(IDENTITY),
         [user.email],
+        connection=connection_for(IDENTITY),
         fail_silently=False,
     )
 
@@ -404,12 +413,18 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
     if email:
         try:
             if attachments:
-                message = EmailMessage(subject, email_body or body, settings.DEFAULT_FROM_EMAIL, [email])
+                message = EmailMessage(
+                    subject, email_body or body, sender_for(MONEY), [email],
+                    connection=connection_for(MONEY),
+                )
                 for filename, content, mimetype in attachments:
                     message.attach(filename, content, mimetype)
                 message.send(fail_silently=False)
             else:
-                send_mail(subject, email_body or body, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+                send_mail(
+                    subject, email_body or body, sender_for(MONEY), [email],
+                    connection=connection_for(MONEY), fail_silently=False,
+                )
             email_sent = True
         except Exception:
             # A receipt that never went out must not read as sent — and the
@@ -2980,8 +2995,9 @@ def send_email_change_verification(user, change_request):
         f"It is valid for 30 minutes.\n\n"
         f"If you did not request this change, you can safely ignore this email.\n\n"
         f"Warm regards,\n{church_name}",
-        settings.DEFAULT_FROM_EMAIL,
+        sender_for(IDENTITY),
         [change_request.new_email],
+        connection=connection_for(IDENTITY),
         fail_silently=False,
     )
 
@@ -4904,7 +4920,10 @@ def alert_payment_callback_failure(label, payload, exc):
             if not address or address.lower() in sent:
                 continue
             sent.add(address.lower())
-            send_mail(title, body, settings.DEFAULT_FROM_EMAIL, [address], fail_silently=True)
+            send_mail(
+                title, body, sender_for(MONEY), [address],
+                connection=connection_for(MONEY), fail_silently=True,
+            )
         try:
             from .push import push_to_user, vapid_keys_ready
             if vapid_keys_ready():
@@ -6010,8 +6029,9 @@ def send_testimony_verification_email(pending):
         f"Confirm your email and continue sharing your testimony with {church_name}:\n{link}\n\n"
         "This link expires in 30 minutes.\n\n"
         f"Warm regards,\n{church_name}",
-        settings.DEFAULT_FROM_EMAIL,
+        sender_for(IDENTITY),
         [pending.email],
+        connection=connection_for(IDENTITY),
         fail_silently=False,
     )
 
@@ -8365,8 +8385,9 @@ class GivingRequestView(APIView):
             send_mail(
                 f"{requester_name} has asked you to give",
                 ''.join(lines),
-                settings.DEFAULT_FROM_EMAIL,
+                sender_for(MONEY),
                 [target_email],
+                connection=connection_for(MONEY),
                 fail_silently=True,
             )
         try:

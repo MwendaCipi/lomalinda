@@ -13,7 +13,7 @@ export default function PrivacyPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">Legal &amp; safeguarding</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Privacy Policy</h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-moss">
-            How SDA Loma Linda, Meru handles the information you share through our website and church services.
+            How SDA Church Loma Linda, Meru handles the information you share through our website and church services.
           </p>
           <p className="mt-3 text-xs font-semibold text-moss">Policy version: {POLICY_VERSION}</p>
         </div>
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
           <div className="space-y-7 text-sm leading-7 text-moss">
             <section>
               <h2 className="text-xl font-semibold text-bark">Who we are</h2>
-              <p className="mt-2">This website is operated by SDA Loma Linda, Meru, Kenya. The church is responsible for the personal information submitted through its website, forms, member accounts and church services.</p>
+              <p className="mt-2">This website is operated by SDA Church Loma Linda, Meru, Kenya. The church is responsible for the personal information submitted through its website, forms, member accounts and church services.</p>
             </section>
             <section>
               <h2 className="text-xl font-semibold text-bark">Information we collect</h2>
@@ -47,7 +47,7 @@ export default function PrivacyPage() {
             </section>
             <section>
               <h2 className="text-xl font-semibold text-bark">Your choices and rights</h2>
-              <p className="mt-2">You may ask what personal information we hold about you, request correction of inaccurate information, ask us to delete information where appropriate, withdraw optional communications, or raise a concern about how information is used. Contact us at <a className="font-semibold text-ember hover:underline" href="mailto:hello@sdalomalinda.or.ke">hello@sdalomalinda.or.ke</a>.</p>
+              <p className="mt-2">You may ask what personal information we hold about you, request correction of inaccurate information, ask us to delete information where appropriate, withdraw optional communications, or raise a concern about how information is used. Contact us at <a className="font-semibold text-ember hover:underline" href="mailto:info@sdalomalinda.or.ke">info@sdalomalinda.or.ke</a>.</p>
             </section>
             <section>
               <h2 className="text-xl font-semibold text-bark">Children and safeguarding</h2>

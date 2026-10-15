@@ -80,7 +80,7 @@ export function MarketingHome() {
           </h2>
           <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:gap-10">
             <p className="text-base leading-8 text-moss">
-              SDA Loma Linda is a congregation shaped by worship, prayer, Bible study, fellowship and
+              SDA Church Loma Linda is a congregation shaped by worship, prayer, Bible study, fellowship and
               service. We keep the Sabbath as a gift, study Scripture seriously, and carry the hope of
               Christ&apos;s return into everyday life in Meru and beyond.
             </p>
@@ -168,8 +168,8 @@ export function MarketingHome() {
               ))}
             </ul>
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm font-semibold">
-              <a className="text-gold hover:underline" href="mailto:hello@sdalomalinda.or.ke">
-                hello@sdalomalinda.or.ke
+              <a className="text-gold hover:underline" href="mailto:info@sdalomalinda.or.ke">
+                info@sdalomalinda.or.ke
               </a>
               <Link href="/login" className="text-white/80 hover:text-white">
                 Member sign in &rarr;
@@ -237,8 +237,8 @@ export function MarketingHome() {
                 hear from you.
               </p>
               <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
-                <a className="text-gold hover:underline" href="mailto:hello@sdalomalinda.or.ke">
-                  hello@sdalomalinda.or.ke
+                <a className="text-gold hover:underline" href="mailto:info@sdalomalinda.or.ke">
+                  info@sdalomalinda.or.ke
                 </a>
                 <Link href="/login" className="text-white/80 hover:text-white">
                   Member sign in &rarr;

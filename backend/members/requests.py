@@ -18,6 +18,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives, send_mail
 
+from .mailing import IDENTITY, connection_for, sender_for
+
 from .meetings import eat_greeting, recipient_name, render_message
 from .roles import ADMIN_ROLE
 
@@ -292,8 +294,9 @@ def send_membership_approval_email(user, *, church_name, name=None):
         send_mail(
             f'Your request to join {church_name} has been approved',
             body,
-            settings.DEFAULT_FROM_EMAIL,
+            sender_for(IDENTITY),
             [address],
+            connection=connection_for(IDENTITY),
             fail_silently=True,
         )
         return True

@@ -17,12 +17,12 @@ type RoleRight = { code: string; label: string; description: string };
 type RoleRightsPayload = { rights: RoleRight[]; by_role: Record<string, string[]> };
 
 export function ChurchSettingsManager() {
-  const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
+  const [churchName, setChurchName] = useState("SDA Church Loma Linda, Meru");
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
-  const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
+  const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Church Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly");
   const [splitReceiptMessage, setSplitReceiptMessage] = useState(
     "Dear {name},\n\nYour contribution of {amount} has been received and distributed accordingly as follows\n\n{distribution}\n\nThank you, and may God bless you abundantly"
@@ -80,7 +80,7 @@ export function ChurchSettingsManager() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) {
-          setChurchName(data.church_name || "SDA Loma Linda, Meru");
+          setChurchName(data.church_name || "SDA Church Loma Linda, Meru");
           setAddress(data.address || "");
           if (data.latitude) setLatitude(Number(data.latitude));
           if (data.longitude) setLongitude(Number(data.longitude));

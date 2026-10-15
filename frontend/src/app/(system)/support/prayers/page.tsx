@@ -118,7 +118,7 @@ export default function PrayersPage() {
 
       if (res.ok) {
         const successText =
-          "Thank you for supporting SDA Loma Linda in prayer and moral commitment! May God richly bless your faithful dedication.";
+          "Thank you for supporting SDA Church Loma Linda in prayer and moral commitment! May God richly bless your faithful dedication.";
         setMessage({ type: "success", text: successText });
         showAlert("Prayer & Moral Support Received", successText, "success");
         setPledgeText("");
@@ -150,7 +150,7 @@ export default function PrayersPage() {
             <div>
               {/* The strip names the page; the h1 is for screen readers. */}
               <h1 className="sr-only">Prayer &amp; Moral Support</h1>
-              <p className="sr-only">Support SDA Loma Linda through intercessory prayer, encouragement, and spiritual commitment.</p>
+              <p className="sr-only">Support SDA Church Loma Linda through intercessory prayer, encouragement, and spiritual commitment.</p>
             </div>
             {!showForm && (
               <button

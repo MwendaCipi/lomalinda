@@ -40,7 +40,7 @@ export const aboutSectionLinks: SectionLink[] = [
   {
     key: "about",
     href: "/about",
-    label: "About SDA Loma Linda",
+    label: "About SDA Church Loma Linda",
     description: "Our story, mission, vision and the values that guide us.",
     icon: Building2,
   },

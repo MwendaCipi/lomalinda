@@ -14,7 +14,17 @@ from django.test import TestCase, override_settings
 # state one that comfortably brackets today.
 ANNOUNCEMENT_WINDOW = {'starts_at': '2020-01-01', 'expires_at': '2099-12-31'}
 
-from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_invitation_email, GivingAccountsView
+from .mailing import IDENTITY, MONEY, purpose_for_sender, sender_for
+from .requests import send_membership_approval_email
+from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_invitation_email, GivingAccountsView, _deliver_receipt_message, send_password_reset_email
+from config.mail_settings import (
+    PURPOSES,
+    PURPOSE_INFO,
+    PURPOSE_TREASURY,
+    PURPOSE_VERIFY,
+    resolve_announcement_email,
+    resolve_senders,
+)
 
 
 class WeeklyLessonParserTests(TestCase):
@@ -13727,4 +13737,135 @@ class EmailChangeVerificationTests(APITestCase):
 
         me_resp = self.client.get(self.ME_URL)
         self.assertEqual(me_resp.data['pending_email_change'], '')
+
+
+class MailSenderSplitTests(TestCase):
+    """Who each kind of letter answers from.
+
+    The church answers three questions from three addresses: money from the
+    treasury's, joining and identity from the verify address, and a person's
+    letter from the mailbox a person actually reads. These tests pin that
+    split, so a later refactor cannot quietly send a receipt as info@ and let
+    automation bury a pastoral reply.
+    """
+
+    #: The main mailbox of the shape settings.py hands the resolver.
+    MAIN = {
+        'host': 'smtp.zoho.com',
+        'port': 587,
+        'user': 'info@sdalomalinda.or.ke',
+        'password': 'secret',
+        'use_tls': True,
+        'from_email': 'SDA Loma Linda Meru <info@sdalomalinda.or.ke>',
+    }
+
+    def resolve(self, **env):
+        return resolve_senders(env, dict(self.MAIN))
+
+    def test_each_purpose_answers_from_its_own_address(self):
+        senders = self.resolve()
+        self.assertEqual(senders[PURPOSE_INFO]['from_email'], self.MAIN['from_email'])
+        self.assertIn('<treasury@sdalomalinda.or.ke>', senders[PURPOSE_TREASURY]['from_email'])
+        self.assertIn('<verify@sdalomalinda.or.ke>', senders[PURPOSE_VERIFY]['from_email'])
+
+    def test_human_correspondence_never_leaves_the_churchs_own_mailbox(self):
+        """info@ stays on the mailbox a person reads, token or no token.
+
+        This is the whole point of the split: the relay exists so machine mail
+        stops competing with a person's letter, so info@ must not be moved onto
+        it by the same switch that moves the others.
+        """
+        for env in ({}, {'ZEPTOMAIL_SEND_TOKEN': 'tok-123'}):
+            with self.subTest(env=env):
+                info = self.resolve(**env)[PURPOSE_INFO]
+                self.assertEqual(info['host'], self.MAIN['host'])
+                self.assertFalse(info['via_relay'])
+
+    def test_a_relay_token_moves_the_machine_written_purposes_off_the_mailbox(self):
+        senders = self.resolve(ZEPTOMAIL_SEND_TOKEN='tok-123')
+        for purpose in (PURPOSE_TREASURY, PURPOSE_VERIFY):
+            with self.subTest(purpose=purpose):
+                resolved = senders[purpose]
+                self.assertEqual(resolved['host'], 'smtp.zeptomail.com')
+                self.assertEqual(resolved['user'], 'emailapikey')
+                self.assertEqual(resolved['password'], 'tok-123')
+                self.assertTrue(resolved['via_relay'])
+
+    def test_without_a_token_everything_rides_the_main_mailbox_as_before(self):
+        """Setting nothing at all changes nothing — including who sends."""
+        senders = self.resolve()
+        for purpose in PURPOSES:
+            with self.subTest(purpose=purpose):
+                self.assertFalse(senders[purpose]['via_relay'])
+        # The address is still the purpose's own: the mailbox that carries a
+        # letter changes, never who the letter is from.
+        self.assertIn('<treasury@sdalomalinda.or.ke>', senders[PURPOSE_TREASURY]['from_email'])
+        self.assertIn('<verify@sdalomalinda.or.ke>', senders[PURPOSE_VERIFY]['from_email'])
+
+    def test_an_explicit_override_still_wins_and_is_not_contagious(self):
+        senders = self.resolve(
+            ZEPTOMAIL_SEND_TOKEN='tok-123',
+            TREASURY_FROM_EMAIL='Parish Purse <purse@example.com>',
+            TREASURY_EMAIL_HOST='smtp.example.com',
+        )
+        treasury = senders[PURPOSE_TREASURY]
+        self.assertEqual(treasury['from_email'], 'Parish Purse <purse@example.com>')
+        self.assertEqual(treasury['host'], 'smtp.example.com')
+        self.assertTrue(treasury['via_relay'])
+        self.assertIn('<verify@sdalomalinda.or.ke>', senders[PURPOSE_VERIFY]['from_email'])
+
+    def test_the_domain_follows_the_main_mailbox(self):
+        """A church that renames its domain moves every sender with it."""
+        main = dict(self.MAIN, from_email='SDA Loma Linda Meru <info@anotherchurch.org>')
+        senders = resolve_senders({}, main)
+        self.assertIn('<treasury@anotherchurch.org>', senders[PURPOSE_TREASURY]['from_email'])
+        self.assertIn('<verify@anotherchurch.org>', senders[PURPOSE_VERIFY]['from_email'])
+
+    def test_the_broadcast_keeps_its_own_rule(self):
+        resolved = resolve_announcement_email({'ZEPTOMAIL_SEND_TOKEN': 'tok-123'}, dict(self.MAIN))
+        self.assertEqual(resolved['host'], 'smtp.zeptomail.com')
+        self.assertEqual(resolved['from_email'], self.MAIN['from_email'])
+
+
+class MailSenderDeliveryTests(TestCase):
+    """The split as the letters actually leave: the address on the message."""
+
+    def setUp(self):
+        mail.outbox.clear()
+
+    def test_a_receipt_answers_from_the_treasury(self):
+        _deliver_receipt_message(
+            subject='Your gift', body='Thank you for your gift.',
+            email='giver@example.com', mark_sent=lambda: None,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('treasury@', mail.outbox[0].from_email)
+
+    def test_a_password_reset_answers_from_verify(self):
+        user = User.objects.create_user(
+            username='resetme', email='reset@example.com', password='secure-password', first_name='Ann',
+        )
+        send_password_reset_email(user, 'uid-1', 'tok-1')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('verify@', mail.outbox[0].from_email)
+
+    def test_a_join_approval_answers_from_verify(self):
+        user = User.objects.create_user(username='joiner', email='join@example.com', password='secure-password')
+        self.assertTrue(send_membership_approval_email(user, church_name='SDA Loma Linda', name='Ann'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('verify@', mail.outbox[0].from_email)
+
+    def test_a_letter_about_money_is_not_sent_as_a_verification(self):
+        """The two machine addresses are not interchangeable."""
+        _deliver_receipt_message(
+            subject='Your gift', body='Thank you.',
+            email='giver@example.com', mark_sent=lambda: None,
+        )
+        self.assertEqual(purpose_for_sender(mail.outbox[0].from_email), MONEY)
+        self.assertNotEqual(purpose_for_sender(mail.outbox[0].from_email), IDENTITY)
+
+    def test_the_split_survives_a_lookup_by_address(self):
+        self.assertEqual(purpose_for_sender(sender_for(MONEY)), MONEY)
+        self.assertEqual(purpose_for_sender(sender_for(IDENTITY)), IDENTITY)
+        self.assertIsNone(purpose_for_sender('nobody@example.com'))
 

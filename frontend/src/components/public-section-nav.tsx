@@ -13,12 +13,15 @@ import type { SectionLink } from "@/config/site-sections";
  * already on is marked without the component needing to read the route.
  *
  * These cards are marketing chrome — a first-time visitor's map of the site.
- * A signed-in member already has the app's rail and top bar (AppFrame draws
- * them around these same public pages), so the grid is redundant for them and
- * reads as a marketing interlude inside the app. It steps out for them via the
- * `html[data-auth="in"]` rule in globals.css, stamped before the first paint by
- * `authInitScript` — which is why this component stays a server component: the
- * pages can pass lucide icon components straight through as props.
+ * On the app side of a public page a signed-in member already has the rail
+ * and top bar (AppFrame draws them around these same pages), so the grid is
+ * redundant for them and reads as a marketing interlude inside the app. It
+ * steps out for them via the `html[data-auth="in"] .app-content` rule in
+ * globals.css, stamped before the first paint by `authInitScript` — scoped to
+ * the shell's own column, so the marketing pages (beliefs, About) keep their
+ * cards even for a signed-in reader. This is why the component stays a server
+ * component: the pages can pass lucide icon components straight through as
+ * props.
  */
 export function PublicSectionNav({
   eyebrow,

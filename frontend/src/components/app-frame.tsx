@@ -9,6 +9,7 @@ import { MobileTabBar } from "./mobile-tab-bar";
 import { SectionNav } from "./sub-nav";
 import { pageHeaderFor, railFor, type RailRow } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
+import { isMarketingPage } from "@/lib/route-visibility";
 import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
@@ -69,7 +70,7 @@ export type ScrollMode = "panel" | "pinned";
 
 export function scrollModeForPath(pathname: string): ScrollMode {
   if (pathname.startsWith("/administration")) return "pinned";
-  if (pathname === "/give") return "pinned";
+  if (pathname === "/member/giving") return "pinned";
   if (pathname === "/support/in-kind") return "pinned";
   // Chat is app-like at every width: the viewport holds still and the rooms
   // list and the thread scroll inside it, so the compose box can sit at the
@@ -83,12 +84,6 @@ export function scrollModeForPath(pathname: string): ScrollMode {
   // toggles and heading stay put while the rows move under them.
   if (pathname === "/calendar") return "pinned";
   return "panel";
-}
-
-const WEBSITE_PREFIXES = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
-
-export function isPublicWebsite(pathname: string): boolean {
-  return pathname === "/" || WEBSITE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
 const LOCKED_PREFIXES = ["/complete-profile"];
@@ -174,7 +169,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     }));
 
   const locked = LOCKED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-  const showRail = hasToken && !isPublicWebsite(pathname) && !locked;
+  const showRail = hasToken && !isMarketingPage(pathname) && !locked;
 
   if (!showRail) return <>{children}</>;
 

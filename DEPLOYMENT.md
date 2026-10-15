@@ -55,33 +55,88 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST \
 
 A `401` means the body reached Django (correct — the endpoint needs a bearer token); a `413` means the ceiling is still too low.
 
-## Email: the announcement broadcast
+## Email: which address each kind of mail leaves as
 
-Transactional mail (receipts, invitations, pledge reminders) sends through the main mailbox set by `EMAIL_HOST`/`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`. The congregation-wide **announcement broadcast** should not: a shared mailbox is policed by a sending-velocity rule — Zoho Mail blocks it mid-broadcast with `SMTP 550 5.4.6` — while a transactional relay is built for that volume.
+Four kinds of mail leave this app, and each answers from the address that owns the question it carries:
 
-[ZeptoMail](https://www.zoho.com/zeptomail/) is Zoho's transactional relay and drops in over SMTP. To route the broadcast through it, set one variable on the server:
+| Purpose | Address | Transport | What sends as it |
+| --- | --- | --- | --- |
+| `info` | `info@sdalomalinda.or.ke` | main mailbox (`EMAIL_HOST*`) | Human correspondence — replies, pastoral letters, anything a person reads and answers |
+| `treasury` | `treasury@sdalomalinda.or.ke` | ZeptoMail | Receipts, giving acknowledgements, pledge reminders |
+| `verify` | `verify@sdalomalinda.or.ke` | ZeptoMail | Invitations, verify-your-account codes, password / email-change links |
+| `announcement` | `ZEPTOMAIL_FROM_EMAIL` (falls back to the main mailbox's address) | ZeptoMail | The congregation-wide broadcast |
+
+The last three are machines writing, and a shared mailbox is policed by a sending-velocity rule — Zoho Mail blocks a burst mid-broadcast with `SMTP 550 5.4.6` — so they ride [ZeptoMail](https://www.zoho.com/zeptomail/), Zoho's transactional relay, over SMTP. Only `info` keeps the shared mailbox, which is what keeps it a human mailbox: its unread count means somebody is waiting for an answer. A member replying to a receipt reaches the treasurer rather than the general inbox, and a member who ignores an invitation cannot bury a pastoral letter under automation.
+
+**One thing to do in ZeptoMail itself:** the split is authorised in the *agent*, not in the code. Open the ZeptoMail agent and add `treasury@sdalomalinda.or.ke` and `verify@sdalomalinda.or.ke` as sender addresses alongside the one already sending the announcements. The domain is already verified, so this is adding two addresses — no new DNS records.
+
+Then set one variable on the server:
 
 ```text
 ZEPTOMAIL_SEND_TOKEN=<the Send Mail Token from the ZeptoMail agent>
 ```
 
-Optionally name the sender (otherwise the main `DEFAULT_FROM_EMAIL` is used — its address must be a verified sender in ZeptoMail):
+With the token set, `treasury`, `verify` and `announcement` ride `smtp.zeptomail.com:587` (STARTTLS) as `emailapikey`, while `info` keeps the main mailbox. Any purpose can be re-pointed without touching code — the address, or the whole transport:
 
 ```text
-ZEPTOMAIL_FROM_EMAIL=SDA Loma Linda Meru <noreply@sdalomalinda.or.ke>
+TREASURY_FROM_EMAIL=SDA Loma Linda Meru <treasurer@sdalomalinda.or.ke>
+VERIFY_EMAIL_HOST=...      # any <PURPOSE>_EMAIL_HOST / _PORT / _HOST_USER / _HOST_PASSWORD / _FROM_EMAIL
 ```
 
-With the token set, the broadcast rides `smtp.zeptomail.com:587` (STARTTLS) as `emailapikey`, while receipts and invitations keep the main mailbox. An explicit `ANNOUNCEMENT_EMAIL_*` override still wins, and with neither set the broadcast falls back to the main mailbox unchanged. The relay choice lives in `backend/config/mail_settings.py`, and `backend/config/settings.py` resolves it once at import.
+With no token and no overrides, every purpose sends from the main mailbox exactly as before — so this ships safely ahead of the ZeptoMail agent being updated. The rule lives in `backend/config/mail_settings.py`, its call-site names in `backend/members/mailing.py`, and `backend/config/settings.py` resolves it once at import.
 
-Verify the transport before a broadcast:
+Verify each transport before relying on it:
 
 ```bash
 cd backend
-venv/bin/python manage.py send_test_email --to you@example.com              # main mailbox
-venv/bin/python manage.py send_test_email --to you@example.com --announcement  # the broadcast's relay
+venv/bin/python manage.py send_test_email --to you@example.com                      # the main mailbox (info@)
+venv/bin/python manage.py send_test_email --to you@example.com --purpose treasury    # receipts
+venv/bin/python manage.py send_test_email --to you@example.com --purpose verify      # join links
+venv/bin/python manage.py send_test_email --to you@example.com --purpose announcement
 ```
 
-The command prints which host answered, so a mistyped token or an unverified sender is found here rather than mid-broadcast. The broadcast also pauses between messages and aborts after repeated refusals (`ANNOUNCEMENT_SEND_DELAY`, `ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES`), and a failed recipient is logged with the server's own answer.
+Each prints which host answered and which address it spoke as, so a mistyped token or a sender still missing from the ZeptoMail agent is found here rather than mid-broadcast. The broadcast also pauses between messages and aborts after repeated refusals (`ANNOUNCEMENT_SEND_DELAY`, `ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES`), and a failed recipient is logged with the server's own answer.
+
+## The Emails desk: receiving at info@
+
+**Sending** at `info@` already works — that is the main mailbox above. **Receiving** is the half that needs one decision in Zoho, because the domain's MX records stay with Zoho and no inbound provider can take an address Zoho already answers (a subdomain would give a *different* address, not this one). So the desk reads the mailbox over **IMAP**: a poller pulls new letters into a shared inbox that elders, clerks and the administrator open from the Eldership strip → **Emails**.
+
+### 1. Check the plan first — this is the real gate
+
+Zoho's **Mail Free excludes IMAP/POP** for accounts signed up since the change; Mail Lite, Mail Premium and paid Workplace include it. If IMAP is unavailable on this account, the desk cannot receive and will say so plainly rather than show an empty inbox. ([plan comparison](https://www.zoho.com/mail/zohomail-pricing.html), [IMAP help](https://www.zoho.com/mail/help/imap-access.html))
+
+### 2. Turn IMAP on for the mailbox
+
+Zoho Mail → **Settings → Mail Accounts** → the address (`info@sdalomalinda.or.ke`) → **IMAP** → tick **IMAP Access** → Save. If two-factor sign-in is on, use an **app password** for step 3 rather than the mailbox password. An organisation email policy can also block it.
+
+### 3. Configure the connection
+
+The sending settings already carry the account, so reading usually needs nothing at all. If it does:
+
+```text
+IMAP_HOST=imappro.zoho.com     # Zoho's host for a domain-based organisation account
+IMAP_USER=info@sdalomalinda.or.ke
+IMAP_PASSWORD=<mailbox password, or an app password with 2FA>
+```
+
+`imappro.zoho.com:993` (SSL) is Zoho's documented host for a domain organisation account; regional data centres differ (`imappro.zoho.eu`, `imappro.zoho.in`, …), so the account's own **Server Configuration Details** are authoritative if login is refused. With nothing set, the desk falls back to `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` — the same account it already sends with.
+
+### 4. Poll on a schedule
+
+The desk reads by polling, so it needs a cron entry — see [`backend/deploy/sync-mailbox.cron.example`](backend/deploy/sync-mailbox.cron.example):
+
+```bash
+cd backend
+venv/bin/python manage.py sync_mailbox --notify    # one poll, by hand
+```
+
+Every five minutes is a good cadence. Each run opens **one** connection and closes it on the way out (Zoho allows 100 concurrent and caps fetch volume per 15 minutes), keeps a cursor against the folder's `UIDVALIDITY`, and stores each letter once — so overlapping or interrupted runs are safe. `--notify` mails the administrators when the mailbox cannot be reached.
+
+Replies and new letters written from the desk leave as `info@` over the main mailbox — deliberately **not** through ZeptoMail: Zoho's usage policy forbids automated and bulk mail from Zoho Mail, so the relay stays for receipts, verification and announcements, and this desk is for human correspondence.
+
+### What the desk is
+
+Eldership → **Emails** (`/administration?tab=emails`) — a folder strip (Inbox / Starred / Archived / All), a thread list with per-officer unread counts, the full conversation with its attachments, and a reply box. Read state is **per officer** (one elder having read a letter says nothing about the others); starred and archived are shared by the desk. The API refuses anyone who is not an elder, clerk or administrator.
 
 ## M-Pesa: reading every paybill transaction
 

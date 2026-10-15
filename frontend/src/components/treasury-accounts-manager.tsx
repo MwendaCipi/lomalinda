@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, SlidersHorizontal } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
@@ -90,90 +90,6 @@ type WithdrawalRequestRow = {
   reply: string;
   created_at: string;
 };
-
-/**
- * Popover filter near the search input to toggle between All, Pending, Approved, and Rejected requests.
- */
-function WithdrawalFilterPopover({
-  value,
-  onChange,
-}: {
-  value: "all" | "pending" | "approved" | "rejected";
-  onChange: (v: "all" | "pending" | "approved" | "rejected") => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  const labels: Record<string, string> = {
-    all: "All",
-    pending: "Pending",
-    approved: "Approved",
-    rejected: "Rejected",
-  };
-
-  return (
-    <div className="relative inline-block shrink-0" ref={popoverRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
-          value !== "all"
-            ? "border-ember bg-ember/10 text-ember"
-            : "border-sand-mute bg-white text-bark hover:bg-sand"
-        }`}
-        aria-label="Filter withdrawal requests"
-        aria-expanded={open}
-      >
-        <SlidersHorizontal className="h-3.5 w-3.5" />
-        <span>{labels[value] ?? "All"}</span>
-      </button>
-      {open && (
-        <div className="absolute right-0 sm:right-auto sm:left-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
-          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">
-            Filter by status
-          </p>
-          {(
-            [
-              { key: "all", label: "All requests" },
-              { key: "pending", label: "Pending" },
-              { key: "approved", label: "Approved" },
-              { key: "rejected", label: "Rejected" },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => {
-                onChange(item.key);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
-                value === item.key
-                  ? "bg-sand-linen text-ember"
-                  : "text-bark hover:bg-sand"
-              }`}
-            >
-              <span>{item.label}</span>
-              {value === item.key && <span className="text-ember font-bold">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * The departments' withdrawal queue — showing every request across every
@@ -947,7 +863,25 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     if (view === "withdrawals") {
       setHeaderRightAction(
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          <WithdrawalFilterPopover value={withdrawalFilter} onChange={setWithdrawalFilter} />
+          <FilterPopover
+            title="Filter by status"
+            summary={withdrawalFilter === "all" ? "All requests" : withdrawalFilter === "pending" ? "Pending" : withdrawalFilter === "approved" ? "Approved" : "Rejected"}
+            active={withdrawalFilter !== "all"}
+          >
+            <FilterSet label="Status">
+              <select
+                value={withdrawalFilter}
+                onChange={(e) => setWithdrawalFilter(e.target.value as typeof withdrawalFilter)}
+                className={FILTER_SELECT_CLASS}
+                aria-label="Filter by status"
+              >
+                <option value="all">All requests</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </FilterSet>
+          </FilterPopover>
           <input
             type="text"
             placeholder="Search department, purpose, requester..."

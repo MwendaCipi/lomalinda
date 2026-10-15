@@ -1,0 +1,13 @@
+# Install this entry on the VPS with `crontab -e`.
+# Adjust the project and virtualenv paths to match the deployment.
+#
+# The Emails desk reads info@ by polling IMAP — Zoho keeps the domain's MX
+# records, so no inbound provider can receive for this address and the mailbox
+# itself has to be read. Polling every five minutes puts the desk within a few
+# minutes of any letter and stays far inside Zoho's connection and fetch limits
+# (one session, closed on the way out, on each run).
+#
+# --notify mails the administrators when the mailbox cannot be reached, so a
+# turned-off IMAP access setting is noticed rather than discovered weeks later.
+CRON_TZ=Africa/Nairobi
+*/5 * * * * cd /var/www/loma_linda/backend && /var/www/loma_linda/backend/venv/bin/python manage.py sync_mailbox --notify >> /var/log/loma_linda-mailbox.log 2>&1

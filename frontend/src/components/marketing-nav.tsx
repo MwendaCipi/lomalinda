@@ -23,25 +23,6 @@ const marketingLinks = [
 ];
 
 /**
- * The public website: what a visitor (or a signed-out member) sees first.
- *
- * The site home is reached through the brand above it, so the header carries
- * only the three places a visitor has a reason to look for — and the header
- * itself carries the way in (its button reads "Dashboard" for a signed-in
- * member), so nothing is stranded here.
- *
- * Everywhere else on the public side a member keeps the app chrome; the
- * sign-in surfaces are the exception because the app would be a detour on the
- * way to signing in.
- */
-const publicWebsitePrefixes = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
-
-/** The site home, and the sign-in surfaces below it. */
-const isPublicWebsite = (path: string) =>
-  path === "/" || publicWebsitePrefixes.some((prefix) => path.startsWith(prefix));
-
-
-/**
  * Header for the public website (the marketing pages).
  *
  * Deliberately free of system chrome: no notifications bell, no account
@@ -62,16 +43,13 @@ export function MarketingNav() {
     setMenuOpen(false);
   }, [pathname]);
 
-  // A signed-in member roaming these pages is in the app: AppFrame draws the
-  // rail around the page, so the marketing header steps aside entirely rather
-  // than sitting above it as a second navigation. This used to test a list of
-  // the sections that happened to look app-like, so tapping the mobile
-  // Fellowship (/share) or Requests (/requests) tab dropped the tab bar and
-  // stranded the member on the marketing site with no way back. Inverting the
-  // test means a new public page cannot reintroduce that.
-  if (signedIn && !isPublicWebsite(pathname)) {
-    return null;
-  }
+  // The marketing header is always shown on the public site — a signed-in
+  // member roaming /beliefs, /about, /give and the rest keeps the marketing
+  // header because those pages are the church's public site, not their desk.
+  // The member's own desk for the same topics lives under /member/... (the
+  // Giving desk, say), rendered by the system layout with the rail. The public
+  // layout never wraps its pages in AppFrame, so the marketing header never
+  // has to step aside for the rail.
 
   const accountHref = signedIn ? "/dashboard" : "/login";
   const accountLabel = signedIn ? "Dashboard" : "Sign in";

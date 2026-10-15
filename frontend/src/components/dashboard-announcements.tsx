@@ -7,6 +7,7 @@ import { announcementCountdown } from "@/lib/announcement-dates";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
+import { isImageAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -25,6 +26,9 @@ type Announcement = {
   event_date_to?: string | null;
   /** The hour the event begins at, when the post named one. */
   event_time_from?: string | null;
+  /** The post's image, when it carries one — the same shape the announcement
+      manager and the full-feed modal use, so one helper reads all three. */
+  attachment?: string | null;
 };
 
 /**
@@ -104,6 +108,13 @@ export function DashboardAnnouncements() {
   const isOpinion = current?.announcement_type === "opinion";
   const isConference = current?.announcement_type === "web_conference" && Boolean(current.href);
   const giveMoneyHref = `/give?purpose=${encodeURIComponent(current?.support_account_display || current?.title || "")}`;
+
+  /** Show "see more" on an awareness notice when the body is longer than the
+      card's three-line window or when the notice carries an image a visitor
+      can enlarge. Other slide types already carry their own action. */
+  const isAwareness = current?.announcement_type === "awareness";
+  const textLong = current && current.text.length > 220;
+  const hasImage = current && isImageAttachment(current.attachment);
 
   /** The pledge modal's view of the slide the member is looking at. */
   const pledgeTargetFor = (announcement: Announcement): PledgeTarget => ({
@@ -195,6 +206,22 @@ export function DashboardAnnouncements() {
           <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-moss">
             {current?.detail || ""}
           </p>
+
+          {/* A notice that runs past the card's three lines, or one that
+              carries a flyer image, asks the reader to open the full feed. */}
+          {current && isAwareness && (textLong || hasImage) && (
+            <div className="mt-2 flex items-center justify-end gap-1.5">
+              {hasImage && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sand px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:bg-sand-soft">
+                  Has image
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20">
+                See more
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* The announcement's own actions. Clicking the card opens the full

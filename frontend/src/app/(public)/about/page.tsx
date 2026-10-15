@@ -1,7 +1,25 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { aboutSectionLinks } from "@/config/site-sections";
+import { openGraphFor } from "@/config/seo";
+
+const ABOUT_DESCRIPTION =
+  "Learn about SDA Church Loma Linda, an English-speaking Seventh-day Adventist church in Meru, Kenya: our history, our values, and how to visit us.";
+
+export const metadata: Metadata = {
+  title: "About Our Church in Meru",
+  description: ABOUT_DESCRIPTION,
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: openGraphFor({
+    title: "About SDA Church Loma Linda | Seventh-day Adventist Church in Meru",
+    description: ABOUT_DESCRIPTION,
+    path: "/about",
+  }),
+};
 
 const values = [
   ["Faith", "We follow Jesus, trust Scripture, and make room for questions, growth, and grace."],
@@ -16,9 +34,9 @@ export default function AboutPage() {
       <section className="px-6 pt-14 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">About us</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">About SDA Loma Linda</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">About SDA Church Loma Linda</h1>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-moss">
-            A welcoming Seventh-day church family in Meru, growing together in faith, hope, and love.
+            A welcoming Seventh-day Adventist church family in Meru, growing together in faith, hope, and love.
           </p>
         </div>
       </section>
@@ -28,7 +46,7 @@ export default function AboutPage() {
           <article className="rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-sand-line sm:p-9">
             <h2 className="text-2xl font-semibold tracking-tight">Our history</h2>
             <p className="mt-4 text-base leading-8 text-moss">
-              SDA Loma Linda is a community shaped by worship, prayer, Bible study, fellowship, and service. Our
+              SDA Church Loma Linda is a community shaped by worship, prayer, Bible study, fellowship, and service. Our
               story continues through the people who gather here, the families we support, and the neighbours we serve.
             </p>
             <p className="mt-4 text-base leading-8 text-moss">
@@ -85,7 +103,7 @@ export default function AboutPage() {
 
       {/* The old About sidebar, now part of the page: the same four destinations. */}          <PublicSectionNav
         eyebrow="Explore"
-        title="About SDA Loma Linda"
+        title="About SDA Church Loma Linda"
         description="Our story, our mission and the pages a first-time visitor reaches: the calendar, study materials and privacy."
         links={aboutSectionLinks}
         activeKey="about"

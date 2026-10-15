@@ -61,7 +61,7 @@ export default function ChurchWelfarePage() {
                   Request care or visit
                 </Link>
                 <Link
-                  href="/give"
+                  href="/member/giving"
                   className="rounded-full border border-white/30 px-6 py-3 text-xs sm:text-sm font-semibold text-white transition hover:bg-white/10"
                 >
                   Support welfare fund

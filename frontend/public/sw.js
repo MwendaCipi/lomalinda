@@ -613,7 +613,7 @@ self.addEventListener("push", (event) => {
   } catch {
     payload = { body: event.data ? event.data.text() : "" };
   }
-  const title = payload.title || "SDA Loma Linda";
+  const title = payload.title || "SDA Church Loma Linda";
   const options = {
     body: payload.body || "",
     icon: "/icons/meru/app-icon-192.png",

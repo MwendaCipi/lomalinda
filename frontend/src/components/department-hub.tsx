@@ -3618,7 +3618,7 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
-  const [churchName, setChurchName] = useState("SDA Loma Linda, Meru");
+  const [churchName, setChurchName] = useState("SDA Church Loma Linda, Meru");
   const [showLeadership, setShowLeadership] = useState(false);
   // A member reading the area who is not on its roll can ask to join from
   // right here — the request goes to the desk, not to the street.

@@ -127,7 +127,7 @@ export default function SupportCampaignsPage() {
                 <p className="text-sm font-semibold text-bark">No fund drives are open right now.</p>
                 <p className="mt-1 text-xs text-moss">When the office opens one, it will appear here.</p>
                 <Link
-                  href="/give"
+                  href="/member/giving"
                   className="mt-5 inline-block rounded-full bg-sage px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-sage-deep"
                 >
                   Go to Giving

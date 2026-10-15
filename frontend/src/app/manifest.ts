@@ -1,13 +1,14 @@
 import type { MetadataRoute } from "next";
 import { brand } from "@/lib/brand";
+import { CHURCH } from "@/config/seo";
 
 export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Loma Linda SDA",
-    short_name: "Loma Linda SDA",
-    description: "A vibrant, English-speaking Seventh-day Adventist church in Meru, Kenya.",
+    name: CHURCH.name,
+    short_name: CHURCH.shortName,
+    description: CHURCH.description,
     start_url: "/dashboard",
     display: "standalone",
     background_color: brand.sand,

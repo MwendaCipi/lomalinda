@@ -2,20 +2,22 @@ import type { Metadata } from "next";
 import { ChurchBeliefs } from "@/components/church-beliefs";
 import { PublicSectionNav } from "@/components/public-section-nav";
 import { aboutSectionLinks } from "@/config/site-sections";
+import { openGraphFor } from "@/config/seo";
+
+const BELIEFS_DESCRIPTION =
+  "Explore the foundational biblical beliefs of Seventh-day Adventists at SDA Church Loma Linda, Meru.";
 
 export const metadata: Metadata = {
   title: "Fundamental Beliefs",
-  description:
-    "Explore the foundational biblical beliefs of Seventh-day Adventists at SDA Loma Linda, Meru.",
+  description: BELIEFS_DESCRIPTION,
   alternates: {
     canonical: "/beliefs",
   },
-  openGraph: {
-    title: "Fundamental Beliefs | SDA Loma Linda",
-    description:
-      "Explore the foundational biblical beliefs of Seventh-day Adventists at SDA Loma Linda, Meru.",
-    url: "https://sdalomalinda.or.ke/beliefs",
-  },
+  openGraph: openGraphFor({
+    title: "Fundamental Beliefs | SDA Church Loma Linda",
+    description: BELIEFS_DESCRIPTION,
+    path: "/beliefs",
+  }),
 };
 
 /**

@@ -29,6 +29,7 @@ const POST_TO_OPTIONS: { value: string; label: string }[] = [
   { value: "youth_leader", label: "AYM (Youth & Children)" },
   { value: "apm_leader", label: "APM (Possibility Ministries)" },
   { value: "chaplaincy", label: "Chaplaincy" },
+  { value: "welfare_ministry", label: "Welfare Ministry" },
 ];
 
 const REACH_LABELS: Record<string, string> = {

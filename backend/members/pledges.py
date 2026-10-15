@@ -35,6 +35,8 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import send_mail
+
+from .mailing import MONEY, connection_for, sender_for
 from django.utils import timezone
 
 from .models import AnnouncementResponse, CampaignPledge, Contribution
@@ -226,8 +228,9 @@ def send_pledge_reminder(pledge, church_name: str) -> bool:
         sent = send_mail(
             subject,
             pledge_reminder_body(pledge, church_name),
-            settings.DEFAULT_FROM_EMAIL,
+            sender_for(MONEY),
             [pledge.user.email],
+            connection=connection_for(MONEY),
             fail_silently=False,
         )
     except Exception:

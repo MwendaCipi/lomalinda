@@ -34,7 +34,7 @@ const VISITATION_TYPES = [
 
 /** The transfer desk reads both directions: joining us, or moving on. */
 const TRANSFER_TYPES = [
-  ["incoming", "Joining SDA Loma Linda from another church"],
+  ["incoming", "Joining SDA Church Loma Linda from another church"],
   ["outgoing", "Requesting a transfer out to another church"],
 ] as const;
 
