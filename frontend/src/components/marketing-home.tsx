@@ -91,9 +91,17 @@ export function MarketingHome() {
             </p>
           </div>
           <div className="mt-9 flex flex-wrap gap-3">
+            {/* The About page carries this section's story further — history,
+                purpose, mission, vision and the values that guide us. */}
+            <Link
+              href="/about"
+              className="rounded-full bg-ember px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-ember-dark"
+            >
+              About us
+            </Link>
             <Link
               href="#contact"
-              className="rounded-full bg-ember px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-ember-dark"
+              className="rounded-full border border-sand-mute bg-white px-6 py-3.5 text-sm font-semibold transition hover:border-bark"
             >
               Plan your visit
             </Link>

@@ -8,15 +8,17 @@ import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { normalizePath } from "@/lib/paths";
 
-// Three links, and every one of them a page a visitor can open without
-// signing in: the calendar the public reads to know when we meet, the beliefs
-// the landing page states (a page of their own, since the header must work
-// from anywhere on the site, not only from the landing), and the way to
-// support the church — which the marketing side calls "Support Us" (the app
-// keeps its own "Giving" for members). Everything else the church has —
-// About, study materials, contact — lives in the footer and in the landing
-// page's own body, which is where a first-time visitor reads it.
+// Four links, and every one of them a page a visitor can open without
+// signing in: About Us (the church's story, mission and vision — the first
+// question a first-time visitor has, and a page of its own so the header can
+// reach it from anywhere on the site, not only from the landing), the
+// calendar the public reads to know when we meet, the beliefs the landing
+// page states, and the way to support the church — which the marketing side
+// calls "Support Us" (the app keeps its own "Giving" for members). Everything
+// else the church has — study materials, contact — lives in the footer and in
+// the landing page's own body.
 const marketingLinks = [
+  { href: "/about", label: "About Us" },
   { href: "/calendar", label: "Calendar" },
   { href: "/beliefs", label: "Beliefs" },
   { href: "/give", label: "Support Us" },
