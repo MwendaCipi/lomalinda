@@ -11,6 +11,34 @@ interface BeforeInstallPromptEvent extends Event {
 
 let globalDeferredPrompt: BeforeInstallPromptEvent | null = null;
 
+/**
+ * What this device calls installing.
+ *
+ * iOS and macOS Safari have no install icon and never fire
+ * `beforeinstallprompt` — Safari's Share sheet (iOS) and File menu (macOS)
+ * offer "Add to Home Screen" instead, so a row that raises it should use the
+ * words the reader will actually find on screen. Everywhere else the browser's
+ * own prompt says "Install", and so does the row.
+ *
+ * The answer lives in `navigator`, so a caller renders the default and asks
+ * after paint rather than guessing at the server's blank user agent.
+ */
+export function pwaInstallLabel(): string {
+  if (typeof navigator === "undefined") return "Install the app";
+  const ua = navigator.userAgent;
+  // iPadOS 13 and up present themselves as a Mac; the give-away is a desktop
+  // Safari string on a device that reports more than one touch point.
+  const isIpadOs = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  if (/iPad|iPhone|iPod/.test(ua) || isIpadOs) return "Add to Home Screen";
+  // Safari proper on a Mac — not Chrome, Edge, Firefox or an Electron shell
+  // wearing the same platform string, each of which keeps the install icon.
+  const isMacSafari =
+    /Macintosh/.test(ua) &&
+    /Safari\//.test(ua) &&
+    !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS|Electron/.test(ua);
+  return isMacSafari ? "Add to Home Screen" : "Install the app";
+}
+
 export function triggerPwaInstall() {
   if (globalDeferredPrompt) {
     globalDeferredPrompt.prompt().then(() => {

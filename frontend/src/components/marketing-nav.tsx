@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { AccessibilityMenu } from "./accessibility-menu";
 import { normalizePath } from "@/lib/paths";
+import { isMarketingPage } from "@/lib/route-visibility";
 
 // Four links, and every one of them a page a visitor can open without
 // signing in: About Us (the church's story, mission and vision — the first
@@ -45,13 +46,20 @@ export function MarketingNav() {
     setMenuOpen(false);
   }, [pathname]);
 
-  // The marketing header is always shown on the public site — a signed-in
-  // member roaming /beliefs, /about, /give and the rest keeps the marketing
-  // header because those pages are the church's public site, not their desk.
-  // The member's own desk for the same topics lives under /member/... (the
-  // Giving desk, say), rendered by the system layout with the rail. The public
-  // layout never wraps its pages in AppFrame, so the marketing header never
-  // has to step aside for the rail.
+  // The marketing header belongs to the church's public pages — the site a
+  // visitor reads, and the same site a signed-in member reads when they wander
+  // back onto it. The pages the app also opens from its own links (Calendar,
+  // Requests, Materials, the Fellowship hub) are the exception: AppFrame draws
+  // the rail and the tab bar around them for a signed-in member, so the website
+  // header steps aside rather than sitting above the rail as a second
+  // navigation.
+  //
+  // `isMarketingPage` is the one list that decides this, and AppFrame reads the
+  // same one, so the header and the rail can never both show or both step away
+  // — the failure this replaced, where tapping the phone's Requests or
+  // Fellowship tab dropped the tab bar and stranded the member on the
+  // marketing site with no way back.
+  if (signedIn && !isMarketingPage(pathname)) return null;
 
   const accountHref = signedIn ? "/dashboard" : "/login";
   const accountLabel = signedIn ? "Dashboard" : "Sign in";

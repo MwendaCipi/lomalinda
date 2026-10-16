@@ -17,7 +17,7 @@ import Swal from "sweetalert2";
 
 import { AccessibilityMenu } from "./accessibility-menu";
 import { resolveAttachmentUrl } from "./announcement-attachment";
-import { triggerPwaInstall } from "./pwa-register";
+import { pwaInstallLabel, triggerPwaInstall } from "./pwa-register";
 import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
@@ -68,6 +68,19 @@ function readIdsSnapshot(): string {
   }
 }
 
+/**
+ * What this device calls installing, read once and never changing.
+ *
+ * The answer lives in `navigator`, which server rendering does not have and
+ * hydration begins without, so it is read through `useSyncExternalStore` — the
+ * server and the first client pass get "Install the app", and React re-renders
+ * with the real label the moment the browser's own answer is available. There
+ * is nothing to subscribe to: a device does not change what its menu is called
+ * while the page is open.
+ */
+const subscribeToNothing = () => () => {};
+const installLabelOnServer = () => "Install the app";
+
 export function useUnreadNotifications(): number {
   const { announcements, notifications } = useHeaderData();
   const stored = useSyncExternalStore(subscribeToReadIds, readIdsSnapshot, () => "[]");
@@ -89,12 +102,18 @@ export function useUnreadNotifications(): number {
 /**
  * The member's identity controls, sitting at the right end of the top bar.
  *
- * This is the bell, the accessibility menu, install and the account menu —
- * everything the bar carries that is *not* navigation. The colour mode is not
- * here: it follows the device by default and is chosen on My Profile, so the
- * bar no longer spends a control on it. The rail owns the map, so these are the
- * only things that ever load a page from here: the member's own profile and
- * its givings, and the console for staff.
+ * This is the bell, the accessibility menu and the account menu — everything
+ * the bar carries that is *not* navigation. The colour mode is not here: it
+ * follows the device by default and is chosen on My Profile, so the bar no
+ * longer spends a control on it. The rail owns the map, so these are the only
+ * things that ever load a page from here: the member's own profile and its
+ * givings, and the console for staff.
+ *
+ * Installing the app is an action on the account rather than a place, so it
+ * rides inside the account menu beside the member's own pages instead of
+ * taking a tile of its own in the bar — and the same menu is what a phone and
+ * a PC both open, where a bare control in the bar could only ever serve one
+ * of them.
  */
 export function NavIdentity() {
   const router = useRouter();
@@ -106,6 +125,10 @@ export function NavIdentity() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [pushState, setPushState] = useState<PushSupport | null>(null);
+  // What this device calls installing: "Install the app" where the browser
+  // raises its own prompt, "Add to Home Screen" on iOS and macOS Safari, which
+  // have no prompt to raise.
+  const installLabel = useSyncExternalStore(subscribeToNothing, pwaInstallLabel, installLabelOnServer);
   const unreadCount = useUnreadNotifications();
   const controlsRef = useRef<HTMLDivElement>(null);
 
@@ -516,16 +539,6 @@ export function NavIdentity() {
         </div>
 
         <AccessibilityMenu buttonClassName={barButton} />
-
-        <button
-          type="button"
-          onClick={triggerPwaInstall}
-          title="Install the app"
-          aria-label="Install the app"
-          className={`${barButton} hidden sm:flex`}
-        >
-          <Download className="h-4 w-4 text-ember" />
-        </button>
       </div>
 
       {/* The account control: who you are, and the way out. The name rides
@@ -585,6 +598,26 @@ export function NavIdentity() {
                     </Link>
                   );
                 })}
+
+              {/* Installing the app is an action, not a page, so it is a row
+                  of its own in the list rather than a destination. The menu
+                  closes first: the browser's own install prompt (or, where
+                  there is none, the how-to alert) is the thing to read, not
+                  a popover hanging over it. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUserMenu(false);
+                  triggerPwaInstall();
+                }}
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                <span className="flex items-center gap-2.5">
+                  <Download className="h-4 w-4 text-slate-500" />
+                  {installLabel}
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+              </button>
             </div>
 
             <div className="border-t border-slate-100 pt-3">

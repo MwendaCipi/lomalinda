@@ -340,11 +340,30 @@ class InvitationAcceptSerializer(serializers.Serializer):
 
 class AnnouncementResponseSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True, default='')
+    author_label = serializers.SerializerMethodField()
+    author_kind = serializers.SerializerMethodField()
 
     class Meta:
         model = AnnouncementResponse
-        fields = ('id', 'announcement', 'user', 'username', 'action_type', 'pledge_amount', 'response_text', 'response_choice', 'respondent_name', 'respondent_phone', 'created_at')
+        fields = ('id', 'announcement', 'user', 'username', 'author_label', 'author_kind', 'action_type', 'pledge_amount', 'response_text', 'response_choice', 'respondent_name', 'respondent_phone', 'created_at')
         read_only_fields = ('id', 'user', 'created_at')
+
+    def get_author_label(self, obj):
+        if obj.user_id:
+            return 'Member'
+        if obj.respondent_name:
+            return 'Guest'
+        return 'Guest'
+
+    def get_author_kind(self, obj):
+        if obj.user_id:
+            return 'member'
+        return 'guest'
+
+    @classmethod
+    def for_list(cls, qs, request):
+        serializer = cls(qs, many=True, context={'request': request})
+        return serializer.data
 
 
 class EnrollmentAdminSerializer(serializers.ModelSerializer):

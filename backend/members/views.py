@@ -47,6 +47,8 @@ from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
+
+from chat.realtime import broadcast_announcement_response
 from .validators import validate_phone_number
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
@@ -2321,11 +2323,58 @@ class AnnouncementActionView(APIView):
             respondent_phone=respondent_phone,
         )
 
+        try:
+            broadcast_announcement_response(announcement, response_obj)
+        except Exception:
+            # A dead bus must not break the write: the response is already in
+            # the database, and the REST comments endpoint still serves it.
+            logger.exception('Could not broadcast announcement response %s', response_obj.pk)
+
         return Response({
             'detail': 'Action recorded successfully.',
             'id': response_obj.id,
             'action_type': response_obj.action_type,
         }, status=status.HTTP_201_CREATED)
+
+
+class AnnouncementResponsesView(APIView):
+    """The reader-facing mirror of an announcement's comments and questions.
+
+    A public post shows its comments to anybody; a members-only post keeps them
+    behind the sign-in. A member's name comes from their account; a guest's from
+    what they typed when they answered. The office already has the CSV export
+    for the same rows — this view is the reader-facing mirror.
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, pk):
+        try:
+            announcement = Announcement.objects.get(pk=pk, published=True)
+        except Announcement.DoesNotExist:
+            return Response({'detail': 'Announcement not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # A members-only post keeps its comments behind the sign-in, the same
+        # as its text does.
+        if announcement.visibility == 'members_only' and not request.user.is_authenticated:
+            return Response({'detail': 'Sign in to read the comments on this announcement.'}, status=status.HTTP_403_FORBIDDEN)
+
+        responses = announcement.responses.select_related('user').order_by('created_at')
+        data = []
+        for r in responses:
+            name = r.respondent_name
+            if not name and r.user:
+                name = r.user.get_full_name() or r.user.username
+            data.append({
+                'id': r.id,
+                'author_name': name or 'Anonymous',
+                'author_phone': r.respondent_phone or '',
+                'text': r.response_text,
+                'choice': r.response_choice,
+                'created_at': r.created_at,
+                'is_member': bool(r.user_id),
+            })
+        return Response({'announcement': AnnouncementSerializer(announcement, context={'request': request}).data, 'comments': data})
 
 
 def pledge_payload(pledge):

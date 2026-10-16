@@ -7,6 +7,7 @@ import { ClipboardList, UserRoundCheck, type LucideIcon } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigation";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
+import { DashboardThoughtOfTheDay } from "@/components/dashboard-thought-of-the-day";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
 import { useDepartments, useMyTies, type DepartmentRow } from "@/hooks/use-departments";
@@ -285,6 +286,11 @@ export function MemberHome() {
           )}
         </section>
       </div>
+
+      {/* The day's thought, after the four everyday cards and the week's
+          announcements: the same word the popup carries, shaped like the card
+          it follows. A day nobody has written for draws nothing at all. */}
+      <DashboardThoughtOfTheDay />
 
       {loading || !me ? (
         <p className="text-center text-sm text-moss">Loading your dashboard…</p>

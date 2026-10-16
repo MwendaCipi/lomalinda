@@ -5,16 +5,29 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { useAnnouncementCommentsSocket } from "@/lib/chat-socket";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type AnnouncementResponseItem = {
   id: number;
   action_type: string;
-  pledge_amount?: string | number;
-  response_text?: string;
+  username?: string;
   respondent_name?: string;
+  response_text?: string;
+  response_choice?: string;
   created_at: string;
+};
+
+type CommentsFeed = {
+  announcement: {
+    id: number;
+    title: string;
+    visibility: string;
+    response_mode: string;
+  };
+  comments: AnnouncementResponseItem[];
+  count: number;
 };
 
 type Announcement = {
@@ -47,17 +60,31 @@ export function PopupAnnouncementModal() {
   const router = useRouter();
   const [queue, setQueue] = useState<Announcement[]>([]);
   const [current, setCurrent] = useState<Announcement | null>(null);
-  // Pledging and in-kind giving open over the popup, so the member gives from
-  // the announcement that asked instead of being sent to another page.
-  const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
-  const [inKindOpen, setInKindOpen] = useState(false);
+  const [comments, setComments] = useState<CommentsFeed | null>(null);
+  const [commentsError, setCommentsError] = useState("" as string);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
   const [responseText, setResponseText] = useState("");
   const [responseChoice, setResponseChoice] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
+  const [inKindOpen, setInKindOpen] = useState(false);
   const [isLoggedIn] = useState(() => typeof window !== "undefined" && Boolean(localStorage.getItem("access_token")));
+
+  const currentId = current?.id ?? null;
+  // A comment thread belongs to the announcement it was fetched for. When the
+  // popup moves to the next post, the old thread is cleared in the same
+  // render — before the new fetch lands — so the previous post's replies
+  // never sit under the next post's title.
+  const [commentsForId, setCommentsForId] = useState<number | null>(null);
+  if (currentId !== commentsForId) {
+    setCommentsForId(currentId);
+    setComments(null);
+    setCommentsError("");
+  }
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -82,13 +109,99 @@ export function PopupAnnouncementModal() {
       .catch(() => undefined);
   }, []);
 
-  // Each announcement starts with its forms closed.
+  // Refresh the comment thread when the popup moves on.
   useEffect(() => {
-    setPledgeTarget(null);
-    setInKindOpen(false);
-    setResponseText("");
-    setResponseChoice("");
-  }, [current?.id]);
+    if (currentId === null) return;
+    let cancelled = false;
+    let inflight: Promise<void> | null = null;
+
+    async function load() {
+      setCommentsLoading(true);
+      setCommentsError("");
+      try {
+        const token = localStorage.getItem("access_token");
+        const url = token
+          ? `${API_URL}/api/members/chat/announcements/${currentId}/comments/member/`
+          : `${API_URL}/api/members/chat/announcements/${currentId}/comments/`;
+
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (res.status === 401) {
+          if (cancelled) return;
+          // The member-only reader wants a session; fall back to the public
+          // reader so a signed-out browser does not show a hard error.
+          const publicRes = await fetch(`${API_URL}/api/members/chat/announcements/${currentId}/comments/`);
+          if (!publicRes.ok) {
+            throw new Error(publicRes.status === 404 ? "This post is no longer open for comments." : "Comments could not be loaded.");
+          }
+          const body: CommentsFeed = await publicRes.json();
+          if (!cancelled) {
+            setComments(body);
+            if (!token) setCommentsError("");
+          }
+          return;
+        }
+
+        if (res.status === 403) {
+          // Signed-in but not allowed past the members-only barrier from here.
+          // Fall back to the public reader, which is the right shape for a
+          // members-only thread the member is not cleared for.
+          const publicRes = await fetch(`${API_URL}/api/members/chat/announcements/${currentId}/comments/`);
+          if (!publicRes.ok) {
+            throw new Error(publicRes.status === 404 ? "This post is no longer open for comments." : "Comments could not be loaded.");
+          }
+          const body: CommentsFeed = await publicRes.json();
+          if (!cancelled) {
+            setComments(body);
+            setCommentsError('This post is only open to church members.');
+          }
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(res.status === 404 ? "This post is no longer open for comments." : "Comments could not be loaded.");
+        }
+        const body: CommentsFeed = await res.json();
+        if (!cancelled) setComments(body);
+      } catch (err) {
+        if (!cancelled) setCommentsError(err instanceof Error ? err.message : "Comments could not be loaded.");
+      } finally {
+        if (!cancelled) setCommentsLoading(false);
+      }
+    }
+
+    inflight = load();
+    return () => {
+      cancelled = true;
+      if (inflight) inflight.catch(() => {});
+    };
+  }, [currentId]);
+
+  // The reply feed is pushed, not polled: the moment a reply lands — from
+  // this box, another reader's box, or anywhere else — the server sends it
+  // down the socket and the thread grows in place. Deduped by id so the
+  // writer's own echo (the server broadcasts to everyone, writer included)
+  // does not double the line their submit already showed.
+  useAnnouncementCommentsSocket(currentId, {
+    onResponse: (response) => {
+      setComments((prev) => {
+        if (!prev) return prev;
+        if (prev.comments.some((comment) => comment.id === response.id)) return prev;
+        const pushed: AnnouncementResponseItem = {
+          id: response.id,
+          action_type: response.action_type,
+          username: response.username,
+          respondent_name: response.respondent_name,
+          response_text: response.response_text,
+          response_choice: response.response_choice,
+          created_at: response.created_at,
+        };
+        return { ...prev, comments: [...prev.comments, pushed], count: prev.count + 1 };
+      });
+    },
+  });
 
   if (pathname === "/" || !current) return null;
 
@@ -157,8 +270,10 @@ export function PopupAnnouncementModal() {
 
       setResponseText("");
       setResponseChoice("");
-      setName("");
       setPhone("");
+
+      // No refetch here: the socket push carries the new line into the
+      // thread wherever the reader's eye already is.
 
       const remaining = queue.filter((item) => item.id !== current.id);
       setQueue(remaining);
@@ -172,6 +287,43 @@ export function PopupAnnouncementModal() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function  submitComment() {
+    if (!current || !newComment.trim() || submitting) return;
+    setSubmitting(true);
+    setStatusMessage("");
+
+    const token = localStorage.getItem("access_token");
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    fetch(`${API_URL}/api/members/announcements/${current!.id}/action/`, {
+      method: "POST",
+      headers,        body: JSON.stringify({
+        action_type: "respond",
+        response_text: newComment.trim(),
+        respondent_name: isLoggedIn ? undefined : name,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Comment could not be added.");
+        }
+        return res;
+      })
+      .then(() => {
+        // No refetch: the socket push carries the new line into the thread,
+        // and the dedupe in its handler keeps the writer's own echo from
+        // doubling it.
+        setNewComment("");
+        setStatusMessage("");
+      })
+      .catch((err) => setStatusMessage(err instanceof Error ? err.message : "Comment could not be added."))
+      .finally(() => setSubmitting(false));
   }
 
   return (
@@ -292,18 +444,27 @@ export function PopupAnnouncementModal() {
               </div>
             ) : actionType === "respond" && (
               <div className="mt-3 space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-bark">
-                    Your Response
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Type your message, response, or commitment..."
-                    value={responseText}
-                    onChange={(e) => setResponseText(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember"
-                  />
-                </div>
+                {comments && comments.announcement.response_mode === 'closed' ? (
+                  <div className="rounded-xl border border-sand-mute bg-sand-airy p-3">
+                    <p className="text-xs font-semibold text-moss">The church has closed comments on this question. Add your reply through the response box below, and the office will post it.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-bark">
+                        Your Response
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="Type your message, response, or commitment..."
+                        value={responseText}
+                        onChange={(e) => setResponseText(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -333,6 +494,84 @@ export function PopupAnnouncementModal() {
                     className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember"
                   />
                 </div>
+              </div>
+            )}
+
+            {comments && comments.announcement && comments.announcement.visibility !== 'members_only' && (
+              <div className="mt-4 pt-4 border-t border-sand-line">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-ember">
+                  Replies · {comments.count}
+                </p>
+
+                {commentsLoading && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-moss">
+                    <span className="inline-block h-4 w-4 animate-pulse rounded-full bg-sand-line" />
+                    Loading replies...
+                  </div>
+                )}
+
+                {commentsError && (
+                  <p className="mt-2 text-xs text-red-600">{commentsError}</p>
+                )}
+
+                {!commentsLoading && commentsError === '' && comments.comments.length === 0 && (
+                  <p className="mt-2 text-xs text-moss">No replies yet — be the first to ask or comment.</p>
+                )}
+
+                {!commentsLoading && commentsError === '' && comments.comments.length > 0 && (
+                  <ul className="mt-2 space-y-3">
+                    {comments.comments.map((comment) => (
+                      <li key={comment.id} className="rounded-xl border border-sand-line bg-white p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-ember">
+                            {comment.username || comment.respondent_name || 'Guest'}
+                          </span>
+                          <time className="text-[11px] text-moss" suppressHydrationWarning>
+                            {new Date(comment.created_at).toLocaleString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </time>
+                        </div>
+                        {comment.response_text && (
+                          <p className="mt-1 text-sm text-moss-mid leading-relaxed">
+                            {comment.response_text}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Add a reply…"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        submitComment();
+                      }
+                    }}
+                    className="flex-1 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-sm text-bark outline-none focus:border-ember placeholder:text-moss"
+                  />
+                  <button
+                    type="button"
+                    onClick={submitComment}
+                    disabled={!newComment.trim() || submitting}
+                    className="shrink-0 rounded-xl border border-ember text-ember font-semibold text-sm transition hover:bg-ember hover:text-white disabled:text-moss-mute disabled:border-sand-mute disabled:hover:bg-white disabled:hover:text-moss disabled:hover:border-sand-mute"
+                  >
+                    Reply
+                  </button>
+                </div>
+
+                {statusMessage && (
+                  <p className="mt-2 text-xs text-red-600">{statusMessage}</p>
+                )}
               </div>
             )}
           </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AppFrame } from "@/components/app-frame";
 import { PopupAnnouncementModal } from "@/components/popup-announcement-modal";
+import { ThoughtOfTheDayModal } from "@/components/thought-of-the-day-modal";
 import { SystemGate } from "@/components/system-gate";
 
 // Sections behind the sign-in wall are not for search engines. `robots` is
@@ -23,6 +24,7 @@ export default function SystemLayout({ children }: { children: React.ReactNode }
   return (
     <>
       <PopupAnnouncementModal />
+      <ThoughtOfTheDayModal />
       <AppFrame>
         <SystemGate>{children}</SystemGate>
       </AppFrame>

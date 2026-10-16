@@ -1,16 +1,97 @@
 from django.contrib.auth.models import User
 from django.db.models import Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from members.models import Department
+from members.models import Announcement, AnnouncementResponse, Department
+from members.serializers import AnnouncementResponseSerializer
+
+import logging
+logger = logging.getLogger(__name__)
 
 from . import realtime, services
 from .models import Conversation
 from .serializers import ChatConversationSerializer, ChatMessageSerializer, ChatPersonSerializer
+
+
+class AnnouncementCommentsView(APIView):
+    """The spirit of the old announcement-channels project — a read-only
+    chat thread attached to a published announcement, where members raise
+    questions and read each other's replies. Friends without accounts land
+    via the same query string the website's share link passes through.
+
+    A response line carries an id, the member or guest who wrote it, the
+    body and the moment it landed. The response_mode is folded in so the
+    reader-facing layer can shade a closed opinion post the same way the
+    action handler does.
+
+    Public posts are readable by anybody. Members-only posts are also
+    readable by a signed-in member — the office's own members are the
+    intended audience, not a write barrier, so a member can see the thread
+    that belongs to their church without the response visibility being
+    lifted for the rest of the world. That distinction stays on the wire: a
+    public reader still gets a plain 404 for a members-only thread, and a
+    signed-in member gets membership's reader view.
+
+    This is a read-only mirror. New lines still go through the /action/
+    endpoint, which is where the survey-style opinion path and the pledge
+    path already live."""
+
+    authentication_classes = []
+
+    def get(self, request, pk):
+        try:
+            announcement = Announcement.objects.get(published=True, pk=pk)
+        except Announcement.DoesNotExist:
+            raise Http404('No announcement matches that id.')
+
+        if announcement.visibility == 'members_only' and not request.user.is_authenticated:
+            # A members-only thread is simply not there for a public reader.
+            logger.warning('Public reader asked for a members-only announcement %s.', pk)
+            raise Http404('No announcement matches that id.')
+
+        return _announcement_comment_response(announcement, request)
+
+
+class AnnouncementCommentsForMemberView(APIView):
+    """A signed-in member's reader view of a published thread, including
+    members-only posts.
+
+    Same shape as the public endpoint, same order, same reply lines — only
+    this door requires sign-in. It exists so the public endpoint can keep
+    answering 404 for a members-only post when nobody is signed in, while a
+    signed-in member still gets the thread for their church.
+
+    The message is the same as the public endpoint's, including the
+    members-only posts the public endpoint would have hidden."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            announcement = Announcement.objects.get(published=True, pk=pk)
+        except Announcement.DoesNotExist:
+            raise Http404('No announcement matches that id.')
+
+        return _announcement_comment_response(announcement, request)
+
+
+def _announcement_comment_response(announcement, request):
+    comments = AnnouncementResponseSerializer.for_list(announcement.responses.order_by('created_at'), request)
+    return Response({
+        'announcement': {
+            'id': announcement.pk,
+            'title': announcement.title,
+            'visibility': announcement.get_visibility_display(),
+            'response_mode': announcement.response_mode,
+        },
+        'comments': comments,
+        'count': len(comments),
+    })
 
 #: How many messages one page of history holds. Older pages come from `before`.
 PAGE_SIZE = 50

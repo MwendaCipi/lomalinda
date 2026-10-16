@@ -13869,3 +13869,123 @@ class MailSenderDeliveryTests(TestCase):
         self.assertEqual(purpose_for_sender(sender_for(IDENTITY)), IDENTITY)
         self.assertIsNone(purpose_for_sender('nobody@example.com'))
 
+
+class AnnouncementResponsesViewTests(APITestCase):
+    """The reader-facing mirror of an announcement's comments and questions.
+
+    A public post shows its comments to anybody; a members-only post keeps them
+    behind the sign-in. A signed-in member's name comes from their account; a
+    guest's from what they typed when they answered. The POST endpoint used for
+    answers and pledges already accepts a free-text response, so a comment or
+    question lands there with action_type=respond.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_user('resp.admin', 'resp.admin@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin,member')
+        self.member = User.objects.create_user('resp.member', 'resp.member@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.public = Announcement.objects.create(
+            title='Public question',
+            text='The church is moving the vespers time. What works for you?',
+            visibility='public_website',
+            announcement_type='opinion',
+            response_mode='open',
+            action_type='respond',
+            event_date_from=timezone.localdate(),
+        )
+        self.members_only = Announcement.objects.create(
+            title='Members question',
+            text='Which ministry should we prioritise next quarter?',
+            visibility='members_only',
+            announcement_type='opinion',
+            response_mode='open',
+            action_type='respond',
+            event_date_from=timezone.localdate(),
+        )
+
+    def _public_get(self, pk):
+        self.client.force_authenticate(None)
+        return self.client.get(f'/api/members/announcements/{pk}/responses/')
+
+    def _member_get(self, pk):
+        self.client.force_authenticate(self.member)
+        return self.client.get(f'/api/members/announcements/{pk}/responses/')
+
+    def _post_comment(self, pk, *, user=None, text, name='', phone='', action_type='respond'):
+        body = {'action_type': action_type, 'response_text': text}
+        if name:
+            body['respondent_name'] = name
+        if phone:
+            body['respondent_phone'] = phone
+        if user:
+            self.client.force_authenticate(user)
+        else:
+            self.client.force_authenticate(None)
+        return self.client.post(f'/api/members/announcements/{pk}/action/', body, format='json')
+
+    def test_a_public_post_shows_its_comments_to_anybody(self):
+        self._post_comment(self.public.pk, text='Vespers at 6 works for me.', name='John K', phone='0712345678')
+        self._post_comment(self.public.pk, user=self.member, text='Could we keep the current time?')
+        response = self._public_get(self.public.pk)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['announcement']['id'], self.public.id)
+        comments = response.data['comments']
+        self.assertEqual(len(comments), 2)
+        self.assertEqual(comments[0]['author_name'], 'John K')
+        self.assertEqual(comments[0]['author_phone'], '0712345678')
+        self.assertEqual(comments[0]['text'], 'Vespers at 6 works for me.')
+        self.assertFalse(comments[0]['is_member'])
+        self.assertEqual(comments[1]['author_name'], 'resp.member')
+        self.assertTrue(comments[1]['is_member'])
+
+    def test_a_members_only_post_keeps_its_comments_behind_sign_in(self):
+        self._post_comment(self.members_only.pk, user=self.member, text='Let us try the outreach ministry.')
+        response = self._public_get(self.members_only.pk)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = self._member_get(self.members_only.pk)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['comments']), 1)
+        self.assertEqual(response.data['comments'][0]['author_name'], 'resp.member')
+
+    def test_a_guest_may_leave_a_question_without_an_account(self):
+        response = self._post_comment(self.public.pk, text='Will the change affect the youth?', name='Mary W', phone='0798765432')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        comment = AnnouncementResponse.objects.get(pk=response.data['id'])
+        self.assertEqual(comment.respondent_name, 'Mary W')
+        self.assertEqual(comment.respondent_phone, '0798765432')
+        self.assertIsNone(comment.user_id)
+
+    def test_a_signed_in_member_needs_no_name_fields(self):
+        response = self._post_comment(self.public.pk, user=self.member, text='I prefer 5:30 p.m.')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        comment = AnnouncementResponse.objects.get(pk=response.data['id'])
+        self.assertEqual(comment.respondent_name, 'resp.member')
+        self.assertTrue(comment.is_member)
+
+    def test_draft_and_removed_posts_are_not_found(self):
+        draft = Announcement.objects.create(
+            title='Draft question',
+            text='Not published yet.',
+            visibility='public_website',
+            announcement_type='opinion',
+            response_mode='open',
+            action_type='respond',
+            published=False,
+            event_date_from=timezone.localdate(),
+        )
+        removed = Announcement.objects.create(
+            title='Removed question',
+            text='Taken down.',
+            visibility='public_website',
+            announcement_type='opinion',
+            response_mode='open',
+            action_type='respond',
+            published=False,
+            event_date_from=timezone.localdate(),
+        )
+        self._post_comment(self.public.pk, text='A real comment.')
+        self.assertEqual(self._public_get(draft.pk).status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self._public_get(removed.pk).status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self._public_get(self.public.pk).status_code, status.HTTP_200_OK)
+

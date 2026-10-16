@@ -1066,6 +1066,10 @@ class AnnouncementResponse(models.Model):
     respondent_phone = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def is_member(self):
+        return bool(self.user_id)
+
     class Meta:
         ordering = ['-created_at']
 

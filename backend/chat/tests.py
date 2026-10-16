@@ -1,6 +1,6 @@
 from unittest import mock
 
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth.models import User
 from django.test import TransactionTestCase
@@ -14,6 +14,7 @@ from config.asgi import application
 from . import realtime, views
 
 from members.models import (
+    Announcement,
     Department,
     DepartmentAssignment,
     DepartmentMembership,
@@ -354,6 +355,125 @@ class ChatSocketTests(TransactionTestCase):
         room_event = next(event for group, event in sent if group == realtime.room_group(self.room.id))
         self.assertEqual(room_event['type'], 'chat.message')
         self.assertEqual(room_event['message']['body'], 'Straight to the layer')
+
+
+class AnnouncementCommentsSocketTests(TransactionTestCase):
+    """The live reply feed on one announcement: who may hold it open, and
+    what arrives when a reply lands."""
+
+    def setUp(self):
+        self.alice = make_member('alice')
+        self.alice_token = str(AccessToken.for_user(self.alice))
+        self.public = Announcement.objects.create(
+            title='Vespers time',
+            text='The church is moving vespers to 6 p.m.',
+            visibility='public_website',
+            announcement_type='opinion',
+            response_mode='open',
+            action_type='respond',
+        )
+        self.members_only = Announcement.objects.create(
+            title='Ministry priorities',
+            text='Which ministry should we prioritise?',
+            visibility='members_only',
+            announcement_type='opinion',
+            response_mode='open',
+            action_type='respond',
+        )
+
+    def _socket(self, announcement, token=None):
+        query = f'?token={token}' if token else ''
+        return WebsocketCommunicator(
+            application,
+            f'/ws/announcements/{announcement.id}/comments/{query}',
+            headers=WEBSOCKET_HEADERS,
+        )
+
+    @staticmethod
+    async def _ready(communicator):
+        connected, _ = await communicator.connect()
+        if connected:
+            await communicator.receive_json_from(timeout=5)
+        return connected
+
+    def test_a_reply_posted_through_the_api_reaches_a_listening_socket(self):
+        """The REST write fans out live, the way a room message does."""
+        async def scenario():
+            guest = self._socket(self.public)
+            try:
+                self.assertTrue(await self._ready(guest))
+                client = APIClient()
+                # The POST carries Django's ORM, which refuses to run on the
+                # event loop's thread; sync_to_async moves it off-thread and
+                # the view's own async_to_sync lands the push back on this
+                # loop, so the socket below hears it.
+                response = await sync_to_async(client.post)(
+                    f'/api/members/announcements/{self.public.id}/action/',
+                    {'action_type': 'respond', 'response_text': 'Six works for me.'},
+                    format='json',
+                )
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                pushed = await guest.receive_json_from(timeout=5)
+                self.assertEqual(pushed['type'], 'response')
+                self.assertEqual(pushed['response']['response_text'], 'Six works for me.')
+            finally:
+                await guest.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_a_members_only_feed_is_refused_to_a_reader_with_no_token(self):
+        async def scenario():
+            socket = self._socket(self.members_only)
+            connected, code = await socket.connect()
+            self.assertFalse(connected)
+            self.assertEqual(code, 4403)
+
+        async_to_sync(scenario)()
+
+    def test_a_signed_in_member_may_hold_open_a_members_only_feed(self):
+        async def scenario():
+            socket = self._socket(self.members_only, self.alice_token)
+            try:
+                self.assertTrue(await self._ready(socket))
+            finally:
+                await socket.disconnect()
+
+        async_to_sync(scenario)()
+
+    def test_an_unpublished_or_missing_announcement_is_refused(self):
+        draft = Announcement.objects.create(
+            title='Draft', text='Not out yet.', visibility='public_website',
+            announcement_type='opinion', response_mode='open', action_type='respond',
+            published=False,
+        )
+
+        async def scenario():
+            for target in (draft, type('Missing', (), {'id': 999999})()):
+                socket = self._socket(target, self.alice_token)
+                connected, code = await socket.connect()
+                self.assertFalse(connected)
+                self.assertEqual(code, 4403)
+
+        async_to_sync(scenario)()
+
+    def test_the_broadcast_helper_serializes_and_sends_to_the_feed_group(self):
+        sent = []
+
+        class FakeLayer:
+            async def group_send(self, group, event):
+                sent.append((group, event))
+
+        response = self.public.responses.create(
+            action_type='respond', response_text='Straight to the layer',
+        )
+        with mock.patch.object(realtime, 'get_channel_layer', return_value=FakeLayer()):
+            realtime.broadcast_announcement_response(self.public, response)
+
+        self.assertEqual(len(sent), 1)
+        group, event = sent[0]
+        self.assertEqual(group, realtime.announcement_comment_group(self.public.id))
+        self.assertEqual(event['type'], 'announcement.response')
+        self.assertEqual(event['response']['response_text'], 'Straight to the layer')
 
 
 class ChatContactTests(APITestCase):

@@ -22,11 +22,82 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import User
 
 from config.tenancy import host_from_scope, tenant_for_host, tenant_scope
+from members.models import Announcement
 
 from . import services
 from .models import Conversation
-from .realtime import broadcast_message, room_group, user_group
+from .realtime import announcement_comment_group, broadcast_message, room_group, user_group
 from .views import MAX_MESSAGE_LENGTH
+
+
+class AnnouncementCommentsConsumer(AsyncJsonWebsocketConsumer):
+    """A read-only live feed of replies on one published announcement.
+
+    The tab the reader has open on the popup holds this socket, and the server
+    pushes a new reply the moment it lands — no poll, no post-submit refetch.
+
+    The socket rides the same rules as the REST comments endpoints: a public
+    thread is open to anybody, and a members-only thread is open only to a
+    signed-in account. The token rides the query string because a browser
+    cannot set a header on a WebSocket handshake; it is decoded exactly the
+    way the room consumer decodes it, so one token check serves both doors.
+
+    The socket does not accept writes. A reply still goes through the REST
+    ``/action/`` endpoint — that is where the opinion-survey and pledge
+    checks already live, and mixing the two would give the same row two
+    write contracts.
+    """
+
+    async def connect(self):
+        self.announcement_id = int(self.scope['url_route']['kwargs']['announcement_id'])
+        self.group = None
+        self.tenant = await database_sync_to_async(tenant_for_host)(host_from_scope(self.scope))
+        user_id = user_id_from_token(self._query_token())
+        self.user = await database_sync_to_async(self._user_for)(user_id)
+        if not await database_sync_to_async(self._may_listen)():
+            await self.close(code=4403)
+            return
+        self.group = announcement_comment_group(self.announcement_id)
+        await self.channel_layer.group_add(self.group, self.channel_name)
+        await self.accept()
+        await self.send_json({'type': 'ready', 'announcement_id': self.announcement_id})
+
+    async def disconnect(self, close_code):
+        if self.group:
+            await self.channel_layer.group_discard(self.group, self.channel_name)
+
+    async def receive_json(self, content, **kwargs):
+        # This socket is a listener, not a writer.
+        return
+
+    async def announcement_response(self, event):
+        """A reply landed on this announcement — from any door."""
+        await self.send_json({'type': 'response', 'response': event['response']})
+
+    # ── The database side, always inside the church's schema ───────────────
+
+    def _query_token(self):
+        try:
+            query = parse_qs(self.scope.get('query_string', b'').decode('latin-1'))
+        except (UnicodeDecodeError, AttributeError):
+            return ''
+        return (query.get('token') or [''])[0]
+
+    def _user_for(self, user_id):
+        if user_id is None:
+            return None
+        with tenant_scope(self.tenant):
+            return User.objects.filter(pk=user_id, is_active=True).first()
+
+    def _may_listen(self):
+        """Whether this socket may hold open on this announcement."""
+        with tenant_scope(self.tenant):
+            announcement = Announcement.objects.filter(pk=self.announcement_id, published=True).first()
+            if announcement is None:
+                return False
+            if announcement.visibility == 'members_only' and self.user is None:
+                return False
+            return True
 
 
 def user_id_from_token(token):
