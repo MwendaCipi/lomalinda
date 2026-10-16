@@ -18,6 +18,12 @@ import { ComboboxPopover } from "./combobox-popover";
  * The panel is the shell's own popover (`ComboboxPopover`), so it is anchored
  * to the button and rendered through a portal like every other panel in the
  * app, whatever the header does around it.
+ *
+ * Keyboard: opening hands the panel the focus (it is portalled to the end of
+ * the document, so a keyboard left on the button would tab the whole page
+ * before reaching a filter), and Escape — or the panel's own close and Done
+ * buttons — closes it and returns focus to the button that opened it, so the
+ * key is never left on a panel that has unmounted.
  */
 export function FilterPopover({
   summary,
@@ -38,6 +44,56 @@ export function FilterPopover({
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * Close the panel, handing focus back to the button that opened it when the
+   * close came from inside the panel — the panel unmounts through its portal,
+   * so without this the key would drop onto the page body.
+   */
+  const closeFromPanel = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  // The keyboard joins the panel itself as soon as it has rendered: the first
+  // filter control, or the panel's own close button when a desk's panel holds
+  // none — so Tab and the arrow keys answer to the filters, not the page.
+  useEffect(() => {
+    if (!open) return;
+    // The panel is positioned after paint (its height matters), so it can
+    // take a few frames to exist — keep looking for it, the way
+    // ComboboxPopover keeps re-measuring, and hand it the focus the moment
+    // it does. Bounded so a panel that never appears cannot spin.
+    let frame = 0;
+    let tries = 0;
+    const handOver = () => {
+      const panel = panelRef.current;
+      if (panel) {
+        (
+          panel.querySelector<HTMLElement>("select, input, textarea") ??
+          panel.querySelector<HTMLElement>("button")
+        )?.focus();
+        return;
+      }
+      if (++tries < 60) frame = requestAnimationFrame(handOver);
+    };
+    frame = requestAnimationFrame(handOver);
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  // Escape closes the panel from wherever the keyboard stands in it, and
+  // focus goes back to the button that opened it.
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   // A press anywhere else — the other controls in the header, or the list
   // under the panel — closes it, the way the desks' own menus do.
@@ -56,6 +112,7 @@ export function FilterPopover({
   return (
     <div ref={anchorRef} className="shrink-0 sm:hidden">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((standing) => !standing)}
         aria-expanded={open}
@@ -86,7 +143,7 @@ export function FilterPopover({
             <span className="text-xs font-bold text-bark">{title}</span>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={closeFromPanel}
               aria-label={`Close ${title.toLowerCase()}`}
               className="rounded p-0.5 text-moss transition hover:text-bark"
             >
@@ -96,7 +153,7 @@ export function FilterPopover({
           {children}
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={closeFromPanel}
             className="w-full rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
           >
             Done
