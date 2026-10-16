@@ -724,9 +724,9 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
   return (
     <main className={memberDesk ? "flex h-full min-h-0 flex-col overflow-hidden bg-white text-bark" : "min-h-screen bg-sand text-bark"}>
       {/* The desk pins at every width (scrollModeForPath): the document never
-          scrolls, so the page carries its own scroller — the button and the
-          two manual-giving cards move as one, whatever the viewport. The
-          visitor page keeps the marketing site's own scrolling. */}
+          scrolls, so the page carries its own scroller — the paybill band, the
+          button block and the bank band move as one, whatever the viewport.
+          The visitor page keeps the marketing site's own scrolling. */}
       <div className={memberDesk ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-8 pt-4 sm:px-8 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
           <div className="space-y-6">
             {/* The strip names the page on the desk; the public page keeps the title. */}
@@ -734,20 +734,54 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
               Giving
             </h1>
 
-            {/* ── Give Now: the direct path, in the middle of the page ── */}
+            {/* ── Paying the church directly: Safaricom's paybill ──
+                The paybill stands on its own band above the two giving
+                buttons — a giver pushing the money themselves reads where to
+                send it before the form's own doors — and the band it takes
+                above them is half of what sits the button block in the middle
+                of the page, the bank account holding the other half under it.
+                It disappears while the church has not set a paybill. */}
+            {churchBankDetails.mpesa_paybill_number && (
+              <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+                <p className="flex items-center gap-2 text-sm font-bold text-bark">
+                  <Smartphone size={14} aria-hidden="true" /> Pay with Safaricom M-Pesa
+                </p>
+                <dl className="mt-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-moss">Pay Bill number</dt>
+                    <dd className="font-mono text-base font-bold text-bark">{churchBankDetails.mpesa_paybill_number}</dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="shrink-0 text-moss">Account number</dt>
+                    <dd className="text-right font-semibold text-bark">
+                      The account you are giving for, e.g. TITHE or Combined Offering
+                    </dd>
+                  </div>
+                </dl>
+                <p className="mt-3 border-t border-sand-line pt-3 text-[11px] text-moss">
+                  M-Pesa → Lipa na M-Pesa → Pay Bill, then enter the account above.
+                </p>
+              </article>
+            )}
+
+            {/* ── Give Now: the direct path, in the middle of the page ──
+                The line over the two doors names the ways to give and nothing
+                else — the form explains itself when it opens. */}
             <div className="flex flex-col items-center justify-center gap-3 py-6 text-center sm:py-8">
               <p className="max-w-md text-sm text-moss">
-                Give by M-Pesa or bank transfer in a moment: the form sends the M-Pesa prompt
-                straight to your phone and records the gift against your account.
+                Give in Kind, Give by M-Pesa or record bank transfer.
               </p>
               {/* The two ways to give itself: goods, services and time,
                   or money. In-kind opens the same modal the announcements
-                  and drives open; money opens the giving form. */}
+                  and drives open; money opens the giving form. They sit on
+                  one row in a hand too — the pills give up their desk-sized
+                  padding and type on a phone rather than stacking, so both
+                  doors are read in the same glance. */}
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
                   onClick={() => setShowInKindModal(true)}
-                  className="rounded-full border border-ember/50 bg-white px-10 py-4 text-base font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white"
+                  className="rounded-full border border-ember/50 bg-white px-6 py-3 text-sm font-semibold text-ember transition hover:border-ember hover:bg-ember hover:text-white sm:px-10 sm:py-4 sm:text-base"
                 >
                   Give in Kind
                 </button>
@@ -762,7 +796,7 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
                     setPhoneNumber(payerPhoneRef.current);
                     setShowGiveModal(true);
                   }}
-                  className="rounded-full bg-ember px-10 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-ember-deep"
+                  className="rounded-full bg-ember px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-ember-deep sm:px-10 sm:py-4 sm:text-base"
                 >
                   Give Money
                 </button>
@@ -774,62 +808,37 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
               )}
             </div>
 
-            {/* ── Give manually: the church's own accounts ──
-                For a giver who would rather push the money themselves, both
-                ways in sit under the button — Safaricom's paybill, which
-                disappears while the church has not set one, and the bank. */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              {churchBankDetails.mpesa_paybill_number && (
-                <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
-                  <p className="flex items-center gap-2 text-sm font-bold text-bark">
-                    <Smartphone size={14} aria-hidden="true" /> Pay with Safaricom M-Pesa
-                  </p>
-                  <dl className="mt-3 space-y-2 text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-moss">Pay Bill number</dt>
-                      <dd className="font-mono text-base font-bold text-bark">{churchBankDetails.mpesa_paybill_number}</dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <dt className="shrink-0 text-moss">Account number</dt>
-                      <dd className="text-right font-semibold text-bark">
-                        The account you are giving for, e.g. TITHE or Combined Offering
-                      </dd>
-                    </div>
-                  </dl>
-                  <p className="mt-3 border-t border-sand-line pt-3 text-[11px] text-moss">
-                    M-Pesa → Lipa na M-Pesa → Pay Bill, then enter the account above.
-                  </p>
-                </article>
-              )}
-
-              <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
-                <p className="flex items-center gap-2 text-sm font-bold text-bark">
-                  <Landmark size={14} aria-hidden="true" /> Pay by bank transfer
-                </p>
-                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-                  <div>
-                    <dt className="text-moss">Bank</dt>
-                    <dd className="font-semibold text-bark">{churchBankDetails.bank_name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-moss">Account name</dt>
-                    <dd className="font-semibold text-bark">{churchBankDetails.bank_account_name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-moss">Account no</dt>
-                    <dd className="font-mono font-semibold text-bark">{churchBankDetails.bank_account_number}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-moss">Branch / Swift</dt>
-                    <dd className="font-semibold text-bark">{churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</dd>
-                  </div>
-                </dl>
-                <p className="mt-3 border-t border-sand-line pt-3 text-[11px] text-moss">
-                  After transferring, tap Give Now → Bank-to-Bank and enter the reference so the
-                  gift is recorded against your account.
-                </p>
-              </article>
-            </div>
+            {/* ── Paying the church directly: the bank ──
+                The bank account is the band under the buttons — the second of
+                the two that hold the button block between them — for a giver
+                who would rather push the money themselves. */}
+            <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+              <p className="flex items-center gap-2 text-sm font-bold text-bark">
+                <Landmark size={14} aria-hidden="true" /> Pay by bank transfer
+              </p>
+              <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                <div>
+                  <dt className="text-moss">Bank</dt>
+                  <dd className="font-semibold text-bark">{churchBankDetails.bank_name}</dd>
+                </div>
+                <div>
+                  <dt className="text-moss">Account name</dt>
+                  <dd className="font-semibold text-bark">{churchBankDetails.bank_account_name}</dd>
+                </div>
+                <div>
+                  <dt className="text-moss">Account no</dt>
+                  <dd className="font-mono font-semibold text-bark">{churchBankDetails.bank_account_number}</dd>
+                </div>
+                <div>
+                  <dt className="text-moss">Branch / Swift</dt>
+                  <dd className="font-semibold text-bark">{churchBankDetails.bank_branch} / {churchBankDetails.bank_swift_code}</dd>
+                </div>
+              </dl>
+              <p className="mt-3 border-t border-sand-line pt-3 text-[11px] text-moss">
+                After transferring, tap Give Now → Bank-to-Bank and enter the reference so the
+                gift is recorded against your account.
+              </p>
+            </article>
 
           </div>
       </div>

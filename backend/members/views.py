@@ -45,7 +45,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
 from chat.realtime import broadcast_announcement_response
@@ -10057,7 +10057,7 @@ class DepartmentDirectoryView(APIView):
                         'id': role.id,
                         'name': role.name,
                         'has_assistant': role.has_assistant,
-                        'is_custom': role.is_custom,
+                        'is_optional': role.is_optional,
                         'holders': [
                             {
                                 'id': assignment.member.id,
@@ -10179,7 +10179,9 @@ class DepartmentBudgetView(APIView):
 #: old role-flag system carried, so every permission check, announcement
 #: audience and report that reads role flags keeps working while areas become
 #: the way roles are assigned. Titles not listed here (Secretary, Treasurer,
-#: a choir's Pianist) are area-scoped offices only.
+#: a choir's Pianist, an area's Choir Leader) are area-scoped offices only —
+#: the church's own Choir Director is the 'choir director' entry below, and
+#: an area's Choir Leader is deliberately not it.
 OFFICE_ROLE_CODES = {
     'first elder': 'first_elder',
     'second elder': 'second_elder',
@@ -10287,11 +10289,13 @@ class DepartmentCreateView(APIView):
     """Add a department from the desk.
 
     The body carries the name (required) and optionally a description. Every
-    department is created with the Leader (assistant-capable), Secretary and
-    Treasurer roles to start; the desk fills them through Edit leadership or
-    leaves them open. The code is a slug of the name — it names the API path
-    and the ``dept_<code>`` audience — and is never reused, even after
-    deactivation.
+    department is seeded with the same offices the church's areas carry —
+    ``DEPARTMENT_ROLE_SEED``: the Leader and Assistant positions the
+    leadership desk appoints by search, then the catalogue (Secretary,
+    Treasurer, Choir Leader, Pianist) — and the desk fills them through Edit
+    leadership or leaves them open. The code is a slug of the name — it names
+    the API path and the ``dept_<code>`` audience — and is never reused, even
+    after deactivation.
     """
 
     permission_classes = [IsAuthenticated]
@@ -10329,15 +10333,21 @@ class DepartmentCreateView(APIView):
             code=code, name=name, description=description, group=group, units=units,
         )
         DepartmentRole.objects.bulk_create([
-            DepartmentRole(department=department, name=role_name, has_assistant=assistant, sort_order=index)
-            for index, (role_name, assistant) in enumerate(DEFAULT_DEPARTMENT_ROLES)
+            DepartmentRole(
+                department=department, name=role_name, has_assistant=assistant,
+                sort_order=index,
+                # The base pair stays with every area; the catalogue offices
+                # are the area's own to keep or drop.
+                is_optional=index >= len(DEFAULT_DEPARTMENT_ROLES),
+            )
+            for index, (role_name, assistant) in enumerate(DEPARTMENT_ROLE_SEED)
         ])
         return Response({
             'code': department.code,
             'name': department.name,
             'group': department.group,
             'units': department.unit_names,
-            'roles': [role_name for role_name, _assistant in DEFAULT_DEPARTMENT_ROLES],
+            'roles': [role_name for role_name, _assistant in DEPARTMENT_ROLE_SEED],
         }, status=status.HTTP_201_CREATED)
 
 
@@ -10389,14 +10399,20 @@ def send_appointment_emails(department, appointment_notes):
 
 
 class DepartmentLeadershipView(APIView):
-    """A department's leadership: read it, appoint and release, add roles.
+    """A department's leadership: read it, appoint and release.
 
     The PUT body is ``assignments: [{role_id, member_id, kind}]`` — one entry
     per person being appointed, ``kind`` either ``leader`` or ``assistant``.
     Appointing replaces whoever held that leader seat; releasing is a DELETE
-    by assignment id. The desk creates department-specific roles with
-    ``name`` and removes the ones it added. Every save reconciles the
-    church-wide role flags so permissions and audiences follow at once.
+    by assignment id.
+
+    The offices themselves are not the desk's to name: every area is seeded
+    with the base Leader and Assistant pair and the catalogue beside it
+    (``DEPARTMENT_ROLE_SEED``), and the desk picks the person for an office
+    rather than inventing one, so there is no create here. A catalogue office
+    an area does not use is removed with ``role_id`` like an appointment.
+    Every save reconciles the church-wide role flags so permissions and
+    audiences follow at once.
     """
 
     permission_classes = [IsAuthenticated]
@@ -10424,7 +10440,7 @@ class DepartmentLeadershipView(APIView):
                     'id': role.id,
                     'name': role.name,
                     'has_assistant': role.has_assistant,
-                    'is_custom': role.is_custom,
+                    'is_optional': role.is_optional,
                     'assignments': [
                         {'id': a.id, 'member_id': a.member_id, 'kind': a.kind}
                         for a in role.assignments.filter(unit=unit)
@@ -10504,8 +10520,8 @@ class DepartmentLeadershipView(APIView):
                 already = DepartmentAssignment.objects.filter(role=role, kind='assistant', member=member, unit=unit).exists()
                 if not already:
                     # The seat is named once: the generic Assistant role is
-                    # itself called "Assistant", and a custom role may open
-                    # with the word too — prefixing again would read
+                    # itself called "Assistant", and a role on the books may
+                    # open with the word too — prefixing again would read
                     # "Assistant Assistant" in the subject and the letter.
                     seat_name = role.name.strip().lower()
                     position = role.name if seat_name.startswith('assistant') else f"Assistant {role.name}"
@@ -10530,12 +10546,12 @@ class DepartmentLeadershipView(APIView):
         return Response({'detail': 'Leadership updated.', 'code': target.code, 'unit': unit})
 
     def delete(self, request, department):
-        """Release one person, or remove a role the desk added.
+        """Release one person, or drop a catalogue office the area does not use.
 
         A body of ``assignment_id`` releases that appointment; a body of
-        ``role_id`` removes a custom role ("Music Leader") and every
-        appointment in it. Seeded roles stay — every department keeps the
-        same shape at its base.
+        ``role_id`` removes an optional office ("Choir Leader") and every
+        appointment in it. The base pair and the church's own elected offices
+        stay — every area keeps the same two seats at its base.
         """
         if not can_manage_department(request.user, department):
             return Response({'detail': "Only church officers or this department's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
@@ -10544,13 +10560,13 @@ class DepartmentLeadershipView(APIView):
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         if request.data.get('role_id'):
             role = DepartmentRole.objects.filter(
-                department=target, pk=request.data.get('role_id'), is_custom=True,
+                department=target, pk=request.data.get('role_id'), is_optional=True,
             ).first()
             if role is None:
-                return Response({'detail': 'Role not found (only added roles can be removed).'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'detail': 'Office not found (the Leader and Assistant seats stay with every area).'}, status=status.HTTP_404_NOT_FOUND)
             role.delete()
             sync_role_flags_from_assignments()
-            return Response({'detail': 'Role removed.'})
+            return Response({'detail': 'Office removed.'})
         assignment = DepartmentAssignment.objects.filter(
             department=target, pk=request.data.get('assignment_id'),
         ).first()
@@ -10559,27 +10575,6 @@ class DepartmentLeadershipView(APIView):
         assignment.delete()
         sync_role_flags_from_assignments()
         return Response({'detail': 'Appointment released.'})
-
-    def post(self, request, department):
-        """Add a role to the department — "Music Leader" with its assistant
-        switch, a "Sponsor", whatever the department needs."""
-        if not can_manage_department(request.user, department):
-            return Response({'detail': "Only church officers or this department's leadership can edit leadership."}, status=status.HTTP_403_FORBIDDEN)
-        target = self._department(department)
-        if target is None:
-            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        name = str(request.data.get('name') or '').strip()[:80]
-        if not name:
-            return Response({'name': 'Name the role.'}, status=status.HTTP_400_BAD_REQUEST)
-        if DepartmentRole.objects.filter(department=target, name__iexact=name).exists():
-            return Response({'name': 'That role already exists here.'}, status=status.HTTP_400_BAD_REQUEST)
-        last = DepartmentRole.objects.filter(department=target).order_by('-sort_order').first()
-        role = DepartmentRole.objects.create(
-            department=target, name=name,
-            has_assistant=bool(request.data.get('has_assistant')),
-            sort_order=(last.sort_order + 1) if last else 0, is_custom=True,
-        )
-        return Response({'id': role.id, 'name': role.name, 'has_assistant': role.has_assistant}, status=status.HTTP_201_CREATED)
 
 
 def drop_area_filing(user, code):

@@ -266,7 +266,10 @@ export const destinations = {
     // belongs to Fellowship. Campaigns is deliberately absent: a fund drive
     // is Fund Drives' page, and claiming it here would keep the highlight
     // away from its own row.
-    match: ["/member/giving", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
+    // The member's own record of giving rides here too: My Givings is a page
+    // of this section now (see the Stewardship section below), so the bars and
+    // the strip read the same place while it is open.
+    match: ["/member/giving", "/member/givings", "/support/in-kind", "/support/budget", "/support/financial", "/support/reports", "/support/periodical-reports"],
   },
   fundDrives: {
     href: "/support/campaigns",
@@ -664,7 +667,8 @@ export const eldershipItems: RailRow[] = [
   }),
   officeTab("announcements", "Announcements", Megaphone, {
     roles: ELDERSHIP_ROLES,
-    short: "News",
+    // The desk's own name rides every width: it is the church's board, and a
+    // phone reads the five toggles on two level rows, which the word fits.
     description: "Notices and updates shared with the church family.",
   }),
   // The church's own mailbox. Announcements are what the church says to
@@ -768,10 +772,12 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   welfare: "Practical support and compassion for church members and neighbours in need.",
   dorcas: "Providing food, clothing, and compassionate service in the spirit of Dorcas.",
   development: "Planning, infrastructure, sanctuary building, and church plot development.",
-  // Loma Linda says "Church Choir", but the area code is "choir" — the desk's
-  // own page and the rail both label it Church Choir.
   music: "The church's music.",
-  choir: "The church's choir.",
+  // Loma Linda calls the choir the Church Choir — the name rides the
+  // department's own row (`use-departments` reads it as Church Choir) — and it
+  // reads without a line under its name at all: the name, who leads it and the
+  // roll say what the area is, so nothing is written here for it.
+  choir: "",
 };
 
 /**
@@ -867,7 +873,17 @@ export const railEntries: RailEntry[] = [
     // here. In-Kind is no longer a chip of its own: the Giving page carries
     // a "Give in Kind" button that opens the same form as a modal, so the
     // destination stays in the registry for the links that name it.
-    items: [page("give"), page("fundDrives"), page("budget"), page("financial"), page("reports")],
+    // My Givings sits beside Giving — the act, then its record — so the
+    // member's own giving is a door of this section, not only a row of the
+    // account menu.
+    items: [
+      page("give"),
+      page("myGivings"),
+      page("fundDrives"),
+      page("budget"),
+      page("financial"),
+      page("reports"),
+    ],
   },
   // The church's offices, each on the row it belongs to — an elder's work, a
   // clerk's work and the deacons' work are three different jobs, and the

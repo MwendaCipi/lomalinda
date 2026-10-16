@@ -177,13 +177,15 @@ type Holder = {
   kind?: string;
 };
 
-/** One role in a department, as the directory returns it. */
+/** One office in a department, as the directory returns it. */
 type DepartmentRoleRow = {
   id: number;
   name: string;
   /** The department may appoint assistants of this role beside its leader. */
   has_assistant: boolean;
-  is_custom: boolean;
+  /** A seeded catalogue office the area may drop; the base Leader and
+      Assistant pair stays with every area. */
+  is_optional: boolean;
   /** Everyone serving this role, leaders first as the API orders them. */
   holders: { id: number; name: string; username: string; kind: "leader" | "assistant" }[];
   /** The appointments behind those holders — only the unit-scoped read
@@ -1770,7 +1772,7 @@ type RoleDraft = {
   id: number;
   name: string;
   has_assistant: boolean;
-  is_custom: boolean;
+  is_optional: boolean;
   people: RolePerson[];
 };
 
@@ -1803,7 +1805,7 @@ function LeadershipEditModal({
       id: role.id,
       name: role.name,
       has_assistant: role.has_assistant,
-      is_custom: role.is_custom,
+      is_optional: role.is_optional,
       people: role.holders.map((h) => ({ id: h.id, name: h.name, username: h.username, kind: h.kind })),
     }))
   );
@@ -1823,7 +1825,7 @@ function LeadershipEditModal({
             id: role.id,
             name: role.name,
             has_assistant: role.has_assistant,
-            is_custom: role.is_custom,
+            is_optional: role.is_optional,
             people: (role.assignments ?? [])
               .map((assignment): RolePerson | null => {
                 const holder = role.holders.find((h) => h.id === assignment.member_id);
@@ -1840,20 +1842,18 @@ function LeadershipEditModal({
       cancelled = true;
     };
   }, [department.code, unit]);
-  // The two positions the desk appoints by: the Leader role and the role
-  // that takes the extra seats — the area's own "Assistant" row, falling
-  // back to a custom role when a reshape left none. Eldership sits under
-  // its three named offices instead of a generic Leader.
-  const leaderRole = draft.find((r) => !r.is_custom && r.name.toLowerCase() === "leader") ?? null;
-  const assistantRole =
-    draft.find((r) => !r.is_custom && r.name.toLowerCase() === "assistant") ??
-    draft.find((r) => r.is_custom) ??
-    null;
-  // The area's named offices — everything seeded that is not the generic
-  // Leader or Assistant row: Eldership's three elders, the deaconate's Head
-  // Deacon and Head Deaconess. Their seats are set by name, and (on the
-  // deaconate) by the member's sex, the way the church reads the office.
-  const officeRoles = draft.filter((r) => !r.is_custom && r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
+  // The two base positions the desk appoints by: the Leader seat every area
+  // keeps, and the "Assistant" seat beside it where the area carries one.
+  // Eldership sits under its three named offices instead of a generic
+  // Leader, so neither is there.
+  const leaderRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "leader") ?? null;
+  const assistantRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "assistant") ?? null;
+  // The area's own offices — every row that is not the base Leader or
+  // Assistant: the seeded catalogue (Secretary, Treasurer, Choir Leader,
+  // Pianist), Eldership's three elders and the deaconate's two head seats.
+  // Their seats are set by name, and (on the deaconate) by the member's sex,
+  // the way the church reads the office.
+  const officeRoles = draft.filter((r) => r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -2078,9 +2078,10 @@ function LeadershipEditModal({
                       </button>
                     );
                   })}
-                  {/* Eldership seats no assistants — its three offices are
-                      the whole board, so no Set assistant there. */}
-                  {assistantRole && officeRoles.length === 0 && (
+                  {/* Only where the area carries the base Assistant seat
+                      beside its Leader — Eldership's three offices are the
+                      whole board, so no Set assistant there. */}
+                  {assistantRole && (
                     <button
                       type="button"
                       onClick={() => appoint(assistantRole, "assistant", member, clearSearch)}
@@ -2150,11 +2151,12 @@ function LeadershipEditModal({
 /**
  * Assign a roll member to a role — one person, one seat, one save.
  *
- * The roll's Actions popover opens this: the desk picks the position — the
- * area's own roles, or a custom one it names on the spot (created here by
- * the same POST the leadership modal uses) — and the save seats the member
- * through the leadership endpoint, so the derived flags, audiences and the
- * appointment letters all follow the one path every other seat takes.
+ * The roll's Actions popover opens this: the desk picks the position from
+ * the offices the area carries — the base Leader and Assistant pair and the
+ * seeded catalogue beside it (Secretary, Treasurer, Choir Leader, Pianist) —
+ * and the save seats the member through the leadership endpoint, so the
+ * derived flags, audiences and the appointment letters all follow the one
+ * path every other seat takes.
  */
 function AssignRoleModal({
   department,
@@ -2170,12 +2172,10 @@ function AssignRoleModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [roles, setRoles] = useState<DepartmentRoleRow[]>(department.roles);
-  const [roleId, setRoleId] = useState<number | "custom">(
-    department.roles.find((r) => !r.is_custom)?.id ?? (department.roles[0]?.id as number | undefined) ?? "custom"
+  const roles = department.roles;
+  const [roleId, setRoleId] = useState<number | null>(
+    department.roles.find((r) => !r.is_optional)?.id ?? department.roles[0]?.id ?? null
   );
-  const [customName, setCustomName] = useState("");
-  const [hasAssistant, setHasAssistant] = useState(false);
   const [saving, setSaving] = useState(false);
   const chosen = roles.find((r) => r.id === roleId) ?? null;
   const seated = chosen?.holders.filter((h) => h.kind === "leader") ?? [];
@@ -2196,28 +2196,11 @@ function AssignRoleModal({
     }
     setSaving(true);
     try {
-      let targetId = roleId;
-      if (targetId === "custom") {
-        const name = customName.trim();
-        if (name.length < 2) {
-          showAlert("Name the role", "Give the custom role a name of at least two characters.", "warning");
-          setSaving(false);
-          return;
-        }
-        const created = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
-          method: "POST",
-          headers: { ...authHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({ name, has_assistant: hasAssistant }),
-        });
-        const createdData = await created.json().catch(() => ({}));
-        if (!created.ok) throw new Error(createdData.name?.[0] || createdData.detail || "Could not create the role.");
-        targetId = createdData.id;
-      }
       const res = await fetch(`${API_URL}/api/members/departments/${department.code}/leadership/`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          assignments: [{ role_id: targetId, member_id: member.id, kind: "leader" }],
+          assignments: [{ role_id: roleId, member_id: member.id, kind: "leader" }],
           unit: unit ?? "",
         }),
       });
@@ -2225,7 +2208,7 @@ function AssignRoleModal({
       if (!res.ok) throw new Error(data.detail || "Could not assign the role.");
       showAlert(
         "Role assigned",
-        `${member.name} now holds ${chosen ? chosen.name : customName.trim()} in ${department.label}.`,
+        `${member.name} now holds ${chosen ? chosen.name : "this office"} in ${department.label}.`,
         "success",
         { toast: true, timer: 4000, showConfirmButton: false },
       );
@@ -2289,41 +2272,12 @@ function AssignRoleModal({
             );
           })}
 
-          {/* A role the desk names on the spot — created by the same POST
-              the leadership modal uses, then seated here. */}
-          <button
-            type="button"
-            onClick={() => setRoleId("custom")}
-            aria-pressed={roleId === "custom"}
-            className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-xs transition ${
-              roleId === "custom"
-                ? "border-ember bg-sand"
-                : "border-sand-line bg-white hover:border-ember"
-            }`}
-          >
-            <span className="font-semibold text-bark">A role of its own…</span>
-            <Plus className={`h-3.5 w-3.5 shrink-0 ${roleId === "custom" ? "text-ember" : "text-moss"}`} />
-          </button>
-          {roleId === "custom" && (
-            <div className="space-y-2 rounded-xl border border-sand-line bg-sand px-3 py-3">
-              <input
-                type="text"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="e.g. Pianist, Sponsor, Pathfinders Captain"
-                maxLength={80}
-                className="w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
-              />
-              <label className="flex items-center gap-2 text-[11px] text-moss">
-                <input
-                  type="checkbox"
-                  checked={hasAssistant}
-                  onChange={(e) => setHasAssistant(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-sand-mute text-ember focus:ring-ember"
-                />
-                This role may take assistants beside its holder
-              </label>
-            </div>
+          {/* The offices are the church's list, not the desk's: every one
+              this area carries is already above, so nothing is added here. */}
+          {roles.length === 0 && (
+            <p className="rounded-xl border border-dashed border-sand-line px-3 py-2 text-[11px] italic text-moss-faint">
+              This area carries no offices yet.
+            </p>
           )}
 
           {/* A leader seat replaces its holder — the same rule the
@@ -2346,7 +2300,7 @@ function AssignRoleModal({
           <button
             type="button"
             onClick={save}
-            disabled={saving}
+            disabled={saving || !chosen}
             className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
           >
             {saving ? "Assigning…" : "Assign role"}

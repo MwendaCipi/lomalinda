@@ -122,12 +122,17 @@ export function SubNav({
   const band = sticky
     ? "flex shrink-0 flex-wrap items-center gap-2 px-4 py-3 sm:px-6 md:sticky md:top-0 md:z-20 md:border-b md:border-sand-line md:bg-white/95 md:backdrop-blur-sm"
     : "flex shrink-0 flex-wrap items-center gap-2";
+  // The strip always says where the reader stands: a view the items do not
+  // name — a key an old link kept, a desk read before its own view is settled —
+  // marks the strip's first toggle, which is the view a page opens on by
+  // default, rather than leaving every chip without an underscore.
+  const activeKey = items.some((item) => item.key === value) ? value : items[0]?.key;
 
   return (
     <div className={`${band} ${className}`}>
       <div role="group" aria-label={label} className={stripLayout(items)}>
         {items.map((item) => {
-          const active = item.key === value;
+          const active = item.key === activeKey;
           return (
             <button
               key={item.key}
@@ -169,6 +174,11 @@ export function SectionNav({
   className?: string;
 }) {
   const router = useRouter();
+  // As in `SubNav`: a page the section's rows do not name marks the first of
+  // them, so the strip never opens without an underscore. The press below
+  // still answers to the address bar rather than to this mark, so a chip held
+  // up this way still leads where it says.
+  const currentHref = items.some((item) => item.href === activeHref) ? activeHref : items[0]?.href ?? null;
   return (
     <nav aria-label={label} className={className}>
       {/* The grid class carries its own display (`grid`, `sm:flex`); the
@@ -176,7 +186,7 @@ export function SectionNav({
           shared layout already does. */}
       <div className={stripLayout(items)}>
         {items.map((item) => {
-          const active = item.href === activeHref;
+          const active = item.href === currentHref;
           return (
             <button
               key={item.href}
@@ -185,7 +195,7 @@ export function SectionNav({
               aria-pressed={active}
               title={item.help}
               onClick={() => {
-                if (!active) router.replace(item.href, { scroll: false });
+                if (item.href !== activeHref) router.replace(item.href, { scroll: false });
               }}
               className={tabClass(active)}
             >

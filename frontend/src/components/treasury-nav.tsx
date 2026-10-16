@@ -67,6 +67,11 @@ export function TreasuryNav({
   const displayCount = typeof requestsCount === "number" ? requestsCount : fetchedCount;
   const displayUnassigned = typeof unassignedCount === "number" ? unassignedCount : fetchedUnassigned;
   const displayFailed = typeof failedCount === "number" ? failedCount : fetchedFailed;
+  // The strip always says where the treasurer stands: a view the list does not
+  // name — an old link's key, a view retired since it was filed — marks the
+  // first toggle, Individual Givings, rather than leaving the strip with no
+  // underscore under it at all.
+  const shown: TreasuryView = TREASURY_VIEWS.some((view) => view.key === active) ? active : "givings";
 
   useEffect(() => {
     // If the parent supplies a count there is nothing to fetch.
@@ -145,8 +150,8 @@ export function TreasuryNav({
           key={view.key}
           type="button"
           onClick={() => onSelect(view.key)}
-          aria-pressed={active === view.key}
-          className={tabClass(active === view.key)}
+          aria-pressed={shown === view.key}
+          className={tabClass(shown === view.key)}
         >
           <span className="sm:hidden">{view.short}</span>
           <span className="hidden sm:inline">{view.label}</span>

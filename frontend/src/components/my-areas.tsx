@@ -127,6 +127,24 @@ export function MyAreas() {
     [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
   );
 
+  // The map's own search: the cards are a short list, but the church keeps
+  // growing areas and a phone scrolls them one at a time. It rides the shell's
+  // header band beside the heading — the space the name leaves open on a phone
+  // — and narrows the list to the areas whose name, line or leadership matches.
+  const [search, setSearch] = useState("");
+  const searchNeedle = search.trim().toLowerCase();
+  const matches = useMemo(
+    () =>
+      searchNeedle
+        ? visible.filter((area) =>
+            `${area.label} ${area.description} ${area.holders.map((holder) => holder.name).join(" ")}`
+              .toLowerCase()
+              .includes(searchNeedle)
+          )
+        : visible,
+    [searchNeedle, visible]
+  );
+
   // The Treasury is filed in this list, but it is a desk of the console,
   // not an area of the map — it has no Members/Calendar/Accounts views of
   // its own, and drawing them under the treasury's name is what made the
@@ -135,7 +153,7 @@ export function MyAreas() {
   // effect below walks it to the desk instead.
   const openArea = openCode && openCode !== "treasury" ? rows.find((row) => row.code === openCode) ?? null : null;
 
-  const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
+  const { setCustomToggles, setCustomHeader, setHeadingFirst, setHeaderRightAction } = usePageHeader();
   const router = useRouter();
 
   // Reading the address bar: an area opens as a real step in the phone's
@@ -211,6 +229,26 @@ export function MyAreas() {
     setHeadingFirst(!openArea);
     return () => setHeadingFirst(false);
   }, [openArea, setHeadingFirst]);
+
+  // The map's search, on the heading's own row: it takes the space beside the
+  // name rather than a row of its own beneath the strip, so the map on a phone
+  // spends its height on the cards. An open area leaves the slot to the desk
+  // under it — the hub sets its own search for whichever view is open, so this
+  // only ever writes while the map itself is the page.
+  useEffect(() => {
+    if (openArea) return;
+    setHeaderRightAction(
+      <input
+        type="search"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search ministries and departments…"
+        aria-label="Search ministries and departments"
+        className="min-w-0 w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64"
+      />
+    );
+    return () => setHeaderRightAction(null);
+  }, [openArea, search, setHeaderRightAction]);
 
   // The shell names the area the member opened, or the map they are on. On a
   // phone the way back out of an area rides above that name: back link, the
@@ -329,15 +367,21 @@ export function MyAreas() {
 // ── The map: one card per area ─────────────────────────────────────────
   return (
     <div className="flex-1 min-w-0 h-full w-full px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10 md:overflow-y-auto custom-hover-scrollbar">
-      {!openCode && visible.length === 0 ? (
+      {!openCode && matches.length === 0 ? (
         <div className="mx-auto max-w-2xl rounded-2xl border border-dashed border-sand-line px-5 py-12 text-center">
           <Users className="mx-auto h-9 w-9 text-moss" aria-hidden="true" />
           <p className="mt-3 text-sm font-semibold text-bark">
-            {rows.length === 0 ? "Loading the church's ministries and departments…" : "Nothing here yet"}
+            {rows.length === 0
+              ? "Loading the church's ministries and departments…"
+              : searchNeedle
+              ? "No area matches that search"
+              : "Nothing here yet"}
           </p>
           <p className="mt-1 text-xs text-moss">
             {rows.length === 0
               ? "One moment."
+              : searchNeedle
+              ? "Try another name, or clear the search to read the whole map."
               : tab === "mine"
               ? "Your department and ministries will appear here once the church office files them."
               : "There are no other ministries or departments available to join."}
@@ -345,7 +389,7 @@ export function MyAreas() {
         </div>
       ) : (
         <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-2">
-          {visible.map((area) => {
+          {matches.map((area) => {
             const inArea = isMyMinistry(area);
             const leaders = area.holders.filter((holder) => holder.kind === "leader").map((h) => h.name);
             return (

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   // at the dashboard, so the launch entry is the floor of the app's back
   // stack. The query string is the only lever for making an install re-read
   // it — bump it whenever the manifest changes.
-  manifest: "/manifest.json?v=4-dashboard",
+  manifest: "/manifest.json?v=5-app-name",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -40,10 +40,10 @@ export const metadata: Metadata = {
     // Chrome's WebAPK minting server — has never seen these URLs, so a
     // reinstall is guaranteed to fetch the current Meru artwork.
     icon: [
-      { url: "/icons/meru/app-icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/meru/app-icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/meru/church-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/meru/church-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/meru/apple-touch-icon.png",
+    apple: "/icons/meru/church-apple-touch-icon.png",
   },
 };
 

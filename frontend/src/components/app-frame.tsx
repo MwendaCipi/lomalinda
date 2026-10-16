@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
@@ -93,11 +93,44 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const { me, hasToken } = useHeaderData();
   const mode = scrollModeForPath(pathname);
 
+  /**
+   * The places whose strip steps aside while the page is read by scrolling.
+   *
+   * Stewardship is read that way — the giving page, the member's own record of
+   * it, the drives, the budget and the published figures — so its strip gives
+   * the screen back on the way down and returns on any upward move, the way the
+   * phone's own bar does (see `MobileTabBar`); the difference is that this band
+   * hands its height to the page rather than floating over it, which is why it
+   * answers only a page that scrolls inside itself (see the effect below) — on
+   * a phone the drives, budget, balances and reports ride the window instead,
+   * and their strip leaves the screen with the page it belongs to. The desks
+   * that switch a table between views keep their strip: there the toggles *are*
+   * the page, and the calendar asks for the same by holding its own list still.
+   */
+  const togglesHideOnScroll =
+    pathname === "/member/giving" ||
+    pathname === "/member/givings" ||
+    pathname === "/support/campaigns" ||
+    pathname === "/support/budget" ||
+    pathname === "/support/financial" ||
+    pathname === "/support/reports";
+
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
   const [togglesRightAction, setTogglesRightAction] = useState<React.ReactNode>(null);
   const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
   const [headingFirst, setHeadingFirst] = useState(false);
+  // Whether the strip is currently out of sight because the reader is moving
+  // down the page (see the scroll effect below).
+  const [togglesScrolledDown, setTogglesScrolledDown] = useState(false);
+  // The band's own element, and when it last moved: a scroll *inside* the band
+  // (its content is taller than the row while the row shrinks) is the band
+  // collapsing, not the reader going anywhere, and the browser's own
+  // compensation for the height it gives back is not the reader either —
+  // answering either would set the scroll and the strip chasing each other.
+  const togglesBandRef = useRef<HTMLDivElement | null>(null);
+  const togglesMovedAt = useRef(0);
+  const togglesScrolledRef = useRef(false);
 
   // The setters never change identity, so the context value must not either.
   // A fresh object on every shell render re-renders every page that injects a
@@ -125,7 +158,70 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     setTogglesRightAction(null);
     setCustomHeader(null);
     setHeadingFirst(false);
+    setTogglesScrolledDown(false);
   }
+
+  // The scroll the band answers belongs to the page it was read on, so a new
+  // page starts with its strip in sight. (The ref itself is written here, never
+  // while rendering — the state above is what the band draws.)
+  useEffect(() => {
+    togglesScrolledRef.current = false;
+    togglesMovedAt.current = 0;
+  }, [pathname]);
+
+  /** Show or hide the strip, and remember when it last moved — nothing the
+      browser says in the next few hundred milliseconds is the reader. */
+  const setTogglesHidden = useCallback((hidden: boolean) => {
+    if (togglesScrolledRef.current === hidden) return;
+    togglesScrolledRef.current = hidden;
+    togglesMovedAt.current = Date.now();
+    setTogglesScrolledDown(hidden);
+  }, []);
+
+  // Whatever scrolls, scrolls: a pinned page moves its own inner list, a phone's
+  // panel page moves the window, and a desk's table moves the panel card. The
+  // event names which, so one listener reads them all — registered in the
+  // capture phase, because a scroll event does not bubble.
+  useEffect(() => {
+    if (!togglesHideOnScroll) return;
+    let lastTarget: EventTarget | null = null;
+    let lastY = 0;
+    const onScroll = (event: Event) => {
+      // The band's own box scrolls as it collapses — its content is taller than
+      // the row while the row shrinks — and that is the band moving, not the
+      // reader. It leaves the reading position untouched.
+      if (event.target instanceof Node && togglesBandRef.current?.contains(event.target)) return;
+      // Only a scroller *inside* the page counts. When the window is what
+      // moves, the strip is riding away with the page already — it is the
+      // page's first row, not chrome pinned over it — and taking its height
+      // away under a moving page would only shift what the reader is reading.
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      if (!element || element === document.documentElement || element === document.body) return;
+      const y = element.scrollTop;
+      // A different scroller takes over: the move is measured from here.
+      if (event.target !== lastTarget) {
+        lastTarget = event.target;
+        lastY = y;
+        return;
+      }
+      const moved = y - lastY;
+      lastY = y;
+      // The browser keeps the page where it was reading while the band gives
+      // its height back; those moves are not answered, but the position above
+      // is left current so the reader's own next move is measured from it.
+      if (Date.now() - togglesMovedAt.current < 400) return;
+      // Near the top the strip is always shown, whatever the last move was.
+      if (y <= 64) {
+        setTogglesHidden(false);
+        return;
+      }
+      // A few pixels of jitter is not a scroll: without this the strip flickers.
+      if (Math.abs(moved) < 8) return;
+      setTogglesHidden(moved > 0);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, [togglesHideOnScroll, setTogglesHidden]);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   const myDepartments = useMyDepartments();
@@ -199,13 +295,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 // the wider screens keep the heading first, controls to its right.
                 // A page that asks to be named first (`setHeadingFirst`) swaps
                 // those two on the phone: heading, then its own strip beneath.
+                //
+                // The band is one row at every width. Where the strip names the
+                // page, the heading is left to the wider screens and the row
+                // holds the page's control alone, exactly as it did; where the
+                // page names itself first, its control takes the space beside
+                // the name — the room a phone was leaving empty beside the
+                // heading (the Ministry map's search).
                 <div
-                  className={`${headingFirst ? "order-1" : "order-2"} sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  className={`${headingFirst ? "order-1" : "order-2"} sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex items-center justify-between gap-3 ${
                     headerRightAction || headingFirst ? "" : "hidden sm:flex"
                   }`}
                 >
                   {header && (
-                    <div className={headingFirst ? "" : "hidden sm:block"}>
+                    <div className={`min-w-0 ${headingFirst ? "" : "hidden sm:block"}`}>
                       {/* Above the name on a phone: the way back out of an
                           opened area, which is read before the name it
                           returns from. The node carries its own breakpoints. */}
@@ -217,30 +320,48 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                     </div>
                   )}
                   {headerRightAction && (
-                    <div className="shrink-0 w-full sm:w-auto flex flex-wrap items-center gap-2">
+                    <div
+                      className={
+                        // Beside a name the page is drawing itself: share the
+                        // row, and let the control sit at its right edge.
+                        headingFirst
+                          ? "flex min-w-0 flex-1 items-center justify-end gap-2"
+                          : "flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto"
+                      }
+                    >
                       {headerRightAction}
                     </div>
                   )}
                 </div>
               )}
               {(customToggles || sectionPages.length > 1) && (
+                // The band gives its height back when it hides: a grid row that
+                // runs from 1fr to 0fr, with the strip clipped inside it, so the
+                // page keeps the whole screen while it is read and gets its
+                // toggles back the moment the reader turns upward.
                 <div
-                  className={`${headingFirst ? "order-2" : "order-1"} sm:order-none flex shrink-0 items-center gap-3 border-b border-sand-line bg-white px-3 sm:px-5`}
+                  ref={togglesBandRef}
+                  inert={togglesHideOnScroll && togglesScrolledDown}
+                  className={`${headingFirst ? "order-2" : "order-1"} sm:order-none grid shrink-0 transition-[grid-template-rows] duration-300 ease-out ${
+                    togglesHideOnScroll && togglesScrolledDown ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+                  }`}
                 >
-                  <div className="min-w-0 flex-1">
-                    {customToggles ? (
-                      <div className="pt-2">{customToggles}</div>
-                    ) : (
-                      <SectionNav
-                        label={`${section?.label ?? ""} pages`}
-                        activeHref={here.href}
-                        items={sectionPages}
-                      />
+                  <div className="flex min-h-0 items-center gap-3 overflow-hidden border-b border-sand-line bg-white px-3 sm:px-5">
+                    <div className="min-w-0 flex-1">
+                      {customToggles ? (
+                        <div className="pt-2">{customToggles}</div>
+                      ) : (
+                        <SectionNav
+                          label={`${section?.label ?? ""} pages`}
+                          activeHref={here.href}
+                          items={sectionPages}
+                        />
+                      )}
+                    </div>
+                    {togglesRightAction && (
+                      <div className="hidden shrink-0 items-center lg:flex">{togglesRightAction}</div>
                     )}
                   </div>
-                  {togglesRightAction && (
-                    <div className="hidden shrink-0 items-center lg:flex">{togglesRightAction}</div>
-                  )}
                 </div>
               )}
               <div className="app-panel order-3 sm:order-none">{children}</div>

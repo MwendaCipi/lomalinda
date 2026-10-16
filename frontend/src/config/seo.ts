@@ -14,7 +14,7 @@ export const CHURCH = {
   /** The full name with its town, the way the church signs itself. */
   nameWithTown: "SDA Church Loma Linda, Meru",
   /** The short label for the installed app's home-screen icon. */
-  shortName: "Loma Linda SDA",
+  shortName: "Loma Linda",
   email: "info@sdalomalinda.or.ke",
   url: "https://sdalomalinda.or.ke",
   town: "Meru",
@@ -80,8 +80,8 @@ export const churchSchema = {
       ],
       description: CHURCH.description,
       url: CHURCH.url,
-      logo: `${CHURCH.url}/icons/meru/app-icon-512.png`,
-      image: `${CHURCH.url}/icons/meru/app-icon-512.png`,
+      logo: `${CHURCH.url}/icons/meru/church-icon-512.png`,
+      image: `${CHURCH.url}/icons/meru/church-icon-512.png`,
       email: CHURCH.email,
       hasMap: MAPS_URL,
       address: {
@@ -173,7 +173,7 @@ export const defaultMetadata: Metadata = {
     description: CHURCH.description,
     images: [
       {
-        url: "/icons/meru/app-icon-512.png",
+        url: "/icons/meru/church-icon-512.png",
         width: 512,
         height: 512,
         alt: `${CHURCH.name} logo`,
@@ -184,7 +184,7 @@ export const defaultMetadata: Metadata = {
     card: "summary",
     title: `${CHURCH.name} | Seventh-day Adventist Church in Meru, Kenya`,
     description: CHURCH.description,
-    images: ["/icons/meru/app-icon-512.png"],
+    images: ["/icons/meru/church-icon-512.png"],
   },
   /**
    * The town, named as plain meta. Only statements that are true of the place
@@ -229,7 +229,7 @@ export function openGraphFor({
     description,
     images: [
       {
-        url: "/icons/meru/app-icon-512.png",
+        url: "/icons/meru/church-icon-512.png",
         width: 512,
         height: 512,
         alt: `${CHURCH.name} logo`,

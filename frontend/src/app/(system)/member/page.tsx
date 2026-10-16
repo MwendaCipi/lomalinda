@@ -8,7 +8,9 @@ import { useAccessibility } from "@/context/accessibility-context";
 import type { ThemeChoice } from "@/lib/theme";
 import { offlineFetch } from "@/lib/offline-fetch";
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
-import { patchCachedMe } from "@/hooks/use-header-data";
+import { patchCachedMe, useHeaderData } from "@/hooks/use-header-data";
+import { useAllDepartments } from "@/hooks/use-departments";
+import { AreaJoinModal } from "@/components/area-modals";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; residence: string; current_church: string };
@@ -29,6 +31,12 @@ const RELATIONSHIP_CHOICES = [
 
 export default function MemberPage() {
   const { theme, setTheme } = useAccessibility();
+  // The header's identity read, reused rather than fetched twice: the join
+  // picker needs the roles to know whether Treasury is theirs to knock on.
+  const { me: headerMe } = useHeaderData();
+  // The church's whole directory of areas — the labels behind the ministry
+  // and department rows below, and the list the join picker draws from.
+  const directory = useAllDepartments();
   const [details, setDetails] = useState<Details | null>(null);
   const [token] = useState(() => typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
   const [detailsMessage, setDetailsMessage] = useState("");
@@ -67,6 +75,18 @@ export default function MemberPage() {
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
 
+  // The church's own record of this member's service: the gifts and talents
+  // they serve with, and the department and ministries they belong to. Read
+  // with identity below, shown on the card under the header.
+  const [churchLife, setChurchLife] = useState<{
+    gifts: string;
+    departmentRef: string;
+    department: string;
+    ministries: string[];
+    ties: string[];
+  } | null>(null);
+  const [joinMinistryOpen, setJoinMinistryOpen] = useState(false);
+
   // The people this member gives for or asks to give: declared here once,
   // read by the giving form instead of being asked on every gift.
   const [relationships, setRelationships] = useState<DeclaredRelationship[]>([]);
@@ -93,6 +113,13 @@ export default function MemberPage() {
           setPendingEmail(data.pending_email_change || "");
           setGender(data.gender || "");
           setPhotoUrl(data.photo_url || "");
+          setChurchLife({
+            gifts: typeof data.gifts === "string" ? data.gifts : "",
+            departmentRef: typeof data.department_ref === "string" ? data.department_ref : "",
+            department: typeof data.department === "string" ? data.department : "",
+            ministries: Array.isArray(data.ministries) ? data.ministries.map(String) : [],
+            ties: Array.isArray(data.my_ties) ? data.my_ties.map(String) : [],
+          });
         }
       })
       .catch(() => {});
@@ -428,6 +455,63 @@ export default function MemberPage() {
     }
   }
 
+  // ── The card below the header: gifts, department, ministry ──────────────
+  // The record speaks in area codes; the directory speaks in the names
+  // members read ("Adventist Youth", not "aym"). A code the directory does
+  // not carry yet still reads as words rather than as itself.
+  const labelOf = (code: string) =>
+    directory.find((row) => row.code === code)?.label ??
+    code.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+  // The one department the profile files them under — the real record first,
+  // the legacy age-bucket string beside it for an account never re-filed.
+  const LEGACY_DEPARTMENT_CODES: Record<string, string> = { young_adults: "aym" };
+  const departmentCode = churchLife
+    ? churchLife.departmentRef ||
+      LEGACY_DEPARTMENT_CODES[churchLife.department] ||
+      churchLife.department ||
+      ""
+    : "";
+
+  // Their ministries: the areas named as theirs, kept to the ones the
+  // directory files under Ministries — a tie the church has since re-filed
+  // out of the heading stops reading as a ministry here too. The M2M picks
+  // survive even when the directory read has not landed yet.
+  const ministryCodes = churchLife
+    ? Array.from(new Set([...churchLife.ministries, ...churchLife.ties])).filter((code) => {
+        const row = directory.find((entry) => entry.code === code);
+        return row ? row.group === "ministry" : churchLife.ministries.includes(code);
+      })
+    : [];
+
+  // Gifts arrive as one comma-joined line, the way the office writes them.
+  const giftList = (churchLife?.gifts ?? "")
+    .split(",")
+    .map((gift) => gift.trim())
+    .filter(Boolean);
+
+  // What the join picker may not offer: everything they are already part of,
+  // the Treasury (held by office — the same gate the Ministry map keeps),
+  // and the two sex-only fellowships that are not theirs to ask for.
+  const headerRoles =
+    Array.isArray(headerMe?.roles) && headerMe.roles.length > 0 ? headerMe.roles : [headerMe?.role || "member"];
+  const holdsTreasury = headerRoles.some((role) => role === "treasurer" || role === "admin");
+  const SEX_ONLY_AREAS: Record<string, "male" | "female"> = { amm: "male", awm: "female" };
+  const recordedSex = gender.trim().toLowerCase();
+  const joinExclude = Array.from(
+    new Set([
+      ...(churchLife?.ties ?? []),
+      ...(churchLife?.ministries ?? []),
+      ...(holdsTreasury ? [] : ["treasury"]),
+      ...Object.keys(SEX_ONLY_AREAS).filter((code) => recordedSex && SEX_ONLY_AREAS[code] !== recordedSex),
+    ])
+  );
+  const joinExcludeSet = new Set(joinExclude);
+  // A member already in every ministry the church runs should not meet a
+  // button that opens an empty picker. While the directory is still
+  // loading the count is unknown, so the button stays open.
+  const ministriesToOffer = directory.filter((row) => row.group === "ministry" && !joinExcludeSet.has(row.code));
+
   return (
     <main className="min-h-full bg-sand text-bark">
       <div className="p-4 sm:p-8 lg:p-10">
@@ -488,6 +572,89 @@ export default function MemberPage() {
             </div>
             {photoMessage && <p className="mt-3 text-sm text-moss">{photoMessage}</p>}
           </section>
+
+          {/* The church's record of this member's service — gifts, the
+              department they are filed under, and the ministries they serve
+              in — read with identity and shown before the forms, with the
+              one way to ask for a ministry they are not yet on. */}
+          <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl font-semibold">Gifts &amp; ministry</h2>
+                <p className="mt-2 text-sm leading-6 text-moss">
+                  What the church has on record for you: the gifts and talents you serve with, and
+                  the department and the ministries you belong to.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setJoinMinistryOpen(true)}
+                disabled={directory.length > 0 && ministriesToOffer.length === 0}
+                className="shrink-0 rounded-full bg-bark px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-ember disabled:opacity-50"
+              >
+                Join a ministry
+              </button>
+            </div>
+            {!churchLife ? (
+              <p className="mt-5 text-sm text-moss">Loading…</p>
+            ) : (
+              <div className="mt-5 grid gap-5 sm:grid-cols-3">
+                <div className="min-w-0">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-ember">
+                    Gifts &amp; talents
+                  </h3>
+                  {giftList.length > 0 ? (
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                      {giftList.map((gift) => (
+                        <li
+                          key={gift}
+                          className="rounded-full bg-sand px-2.5 py-1 text-xs font-semibold text-bark"
+                        >
+                          {gift}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-moss">
+                      Not on record yet — the office adds these when they are known.
+                    </p>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-ember">Department</h3>
+                  {departmentCode ? (
+                    <p className="mt-2 text-sm font-semibold text-bark">{labelOf(departmentCode)}</p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-moss">Not on record yet.</p>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-ember">Ministry</h3>
+                  {ministryCodes.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {ministryCodes.map((code) => (
+                        <li key={code} className="text-sm font-semibold text-bark">
+                          {labelOf(code)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-moss">No ministry on record yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Asking for a ministry is the same ask the Ministry map and the
+              rail make — one modal, its picker filtered to the ministries
+              they are not already part of. */}
+          <AreaJoinModal
+            open={joinMinistryOpen}
+            area="Ministries"
+            exclude={joinExclude}
+            onClose={() => setJoinMinistryOpen(false)}
+          />
 
           <form onSubmit={saveContact} className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
             <h2 className="text-xl font-semibold">Contact details</h2>

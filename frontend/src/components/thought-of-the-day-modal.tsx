@@ -4,7 +4,6 @@ import { useCallback, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 
 import { useDailyWord } from "@/hooks/use-daily-word";
-import { dayFirst } from "@/lib/dates";
 
 /** The day a member has already closed, so one word pops once, not once a page. */
 const DISMISSED_KEY = "daily_word_dismissed";
@@ -111,14 +110,7 @@ export function ThoughtOfTheDayModal() {
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
     >
       <div className="relative w-full max-w-lg rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8">
-        <div className="flex items-center gap-2 border-b border-sand-line pb-4">
-          <span className="inline-flex h-3 w-3 rounded-full bg-ember" />
-          <span className="text-xs font-bold uppercase tracking-wider text-ember">
-            The daily word · {dayFirst(word.date)}
-          </span>
-        </div>
-
-        <h2 id="thought-of-the-day-title" className="mt-4 text-xl font-bold text-bark sm:text-2xl">
+        <h2 id="thought-of-the-day-title" className="text-xl font-bold text-bark sm:text-2xl">
           Thought of the Day
         </h2>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-moss-mid">{word.text}</p>

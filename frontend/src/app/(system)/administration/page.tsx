@@ -314,25 +314,39 @@ function AdministrationContent() {
     // lands on a real desk, never the overview of cards: on a phone that is
     // the register itself, so the console opens where the work is.
     const onDesk = typeof window !== "undefined" && window.innerWidth >= 1024;
-    const fallback = onDesk
-      ? isClerk
-        ? "users"
-        : isElder
-          ? "announcements"
+    // The treasury is the exception to the desk a hand opens on. Its first
+    // toggle — Individual Givings — is the contributions ledger, a page of its
+    // own rather than a tab of this console, so a treasurer opening the console
+    // in a hand is sent to the ledger: the treasury's strip then opens with the
+    // toggle that names their work underscored, instead of the accounts desk
+    // where Church Accounts, the fourth, would be the one lit.
+    const opensTreasuryLedger = !onDesk && isFinance && !isClerk && !isElder && !isAdmin;
+    const fallback = opensTreasuryLedger
+      ? "treasury"
+      : onDesk
+        ? isClerk
+          ? "users"
+          : isElder
+            ? "announcements"
+            : isFinance
+              ? "accounts"
+              : "settings"
+        : isClerk || isElder || isAdmin
+          ? "users"
           : isFinance
             ? "accounts"
-            : "settings"
-      : isClerk || isElder || isAdmin
-        ? "users"
-        : isFinance
-          ? "accounts"
-          : "settings";
-    setDefaultTab(fallback);
+            : "settings";
+    // Until the gate answers, the hand reads the overview's cards — the landing
+    // a phone gets — and the ledger under it takes over once access is granted.
+    setDefaultTab(fallback === "treasury" ? "overview" : fallback);
     // The desk is written into the URL on every screen now, so a reload, a
     // shared link and the page heading all agree on the page without a
     // second read of the role.
     if (status === "authorized") {
-      router.replace(`/administration?tab=${fallback}`, { scroll: false });
+      router.replace(
+        fallback === "treasury" ? "/administration/treasury" : `/administration?tab=${fallback}`,
+        { scroll: false }
+      );
     }
   }, [searchTab, isClerk, isElder, isAdmin, isFinance, status, router]);
 

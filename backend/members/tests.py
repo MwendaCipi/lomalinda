@@ -69,7 +69,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -8872,21 +8872,33 @@ class DepartmentApiTests(APITestCase):
     def test_me_reports_the_departments_an_account_belongs_to(self):
         """The feed's addressed tab keys off /me: roll membership plus lead
         and assistant roles, the same relationships a ``dept_*`` audience
-        resolves. Labels ride along so tabs read as members see them."""
+        resolves. Labels ride along so tabs read as members see them.
+
+        Every member carries the Sabbath School tie besides — the school is
+        theirs by belonging, not by a roll row (8a6ef31), and its lesson asks
+        address ``dept_sabbath_school`` — so it rides beside the filed roll.
+        """
         DepartmentMembership.objects.create(member=self.plain, department='amm')
         self._auth(self.plain)
         res = self.client.get('/api/members/me/')
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data['my_departments'], [
-            {'code': 'amm', 'label': 'Adventist Men Ministry', 'audience_code': 'dept_amm'},
-        ])
+        self.assertEqual(
+            {(row['code'], row['label'], row['audience_code']) for row in res.data['my_departments']},
+            {
+                ('amm', 'Adventist Men Ministry', 'dept_amm'),
+                ('sabbath_school', 'Sabbath School', 'dept_sabbath_school'),
+            },
+        )
 
         # A lead role belongs to its department even without a roll entry.
         self._auth(self.leader)
         res = self.client.get('/api/members/me/')
         self.assertEqual(
-            [(row['code'], row['audience_code']) for row in res.data['my_departments']],
-            [('amm', 'dept_amm')],
+            {(row['code'], row['label'], row['audience_code']) for row in res.data['my_departments']},
+            {
+                ('amm', 'Adventist Men Ministry', 'dept_amm'),
+                ('sabbath_school', 'Sabbath School', 'dept_sabbath_school'),
+            },
         )
 
     def test_roll_add_remove_and_permission(self):
@@ -9085,9 +9097,9 @@ class DepartmentApiTests(APITestCase):
 
     def test_assistant_email_names_the_seat_once(self):
         """The appointment letter names the seat once: the generic Assistant
-        role is itself called "Assistant", and a custom role may open with
-        the word too — neither may read "Assistant Assistant" in the subject
-        or the body."""
+        role is itself called "Assistant", and an office on the books may
+        open with the word too — neither may read "Assistant Assistant" in
+        the subject or the body."""
         self._auth(self.elder)
         directory = self.client.get('/api/members/departments/').json()['departments']
         amm_row = next(d for d in directory if d['code'] == 'amm')
@@ -9102,15 +9114,17 @@ class DepartmentApiTests(APITestCase):
         self.assertNotIn('Assistant Assistant', appointment.subject)
         self.assertNotIn('Assistant Assistant', appointment.body)
 
-        # A custom role that opens with the word keeps the seat named once.
-        created = self.client.post('/api/members/departments/amm/leadership/', {
-            'name': 'Assistant Sponsor', 'has_assistant': True,
-        }, format='json')
-        self.assertEqual(created.status_code, 201)
+        # An office on the books that opens with the word — an area that
+        # carried one before the church settled the catalogue — keeps the
+        # seat named once there too.
+        legacy = DepartmentRole.objects.create(
+            department=Department.objects.get(code='amm'), name='Assistant Sponsor',
+            has_assistant=True, sort_order=90, is_optional=True,
+        )
         mail.outbox.clear()
         res = self.client.put('/api/members/departments/amm/leadership/', {
             'assignments': [
-                {'role_id': created.data['id'], 'member_id': self.assistant.id, 'kind': 'assistant'},
+                {'role_id': legacy.id, 'member_id': self.assistant.id, 'kind': 'assistant'},
             ],
         }, format='json')
         self.assertEqual(res.status_code, 200)
@@ -9118,23 +9132,39 @@ class DepartmentApiTests(APITestCase):
         self.assertIn('Assistant Sponsor', appointment.subject)
         self.assertNotIn('Assistant Assistant', appointment.subject)
 
-    def test_role_add_and_remove(self):
+    def test_area_offices_are_seeded_not_typed(self):
+        """The office list is the church's, not the desk's: every area carries
+        the base pair and the catalogue beside it, nothing can be created by
+        name any more, and a catalogue office an area does not use is dropped
+        whole — while the base pair stays."""
         self._auth(self.elder)
+        amm = Department.objects.get(code='amm')
+        self.assertEqual(
+            list(amm.roles.values_list('name', flat=True)),
+            ['Leader', 'Assistant', 'Secretary', 'Treasurer', 'Choir Leader', 'Pianist'],
+        )
+        # The base pair is the area's always; the catalogue is its own to
+        # keep or drop.
+        self.assertFalse(amm.roles.get(name='Leader').is_optional)
+        self.assertTrue(amm.roles.get(name='Pianist').is_optional)
+        # A title is no longer something a desk writes.
         res = self.client.post('/api/members/departments/amm/leadership/', {
-            'name': 'Pianist',
+            'name': 'Music Leader',
         }, format='json')
-        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.status_code, 405)
+        # A catalogue office the area does not use goes, with its seats.
         res = self.client.delete('/api/members/departments/amm/leadership/', {
-            'role_id': res.data['id'],
+            'role_id': amm.roles.get(name='Pianist').id,
         }, format='json')
         self.assertEqual(res.status_code, 200)
-        # Seeded roles cannot be removed.
+        self.assertFalse(amm.roles.filter(name='Pianist').exists())
+        # The base pair cannot be removed.
         res = self.client.delete('/api/members/departments/amm/leadership/', {
             'role_id': self.amm_leader_role.id,
         }, format='json')
         self.assertEqual(res.status_code, 404)
 
-    def test_create_department_seeds_default_roles(self):
+    def test_create_department_seeds_the_area_offices(self):
         self._auth(self.elder)
         res = self.client.post('/api/members/departments/create/', {
             'name': 'Stewardship',
@@ -9143,11 +9173,87 @@ class DepartmentApiTests(APITestCase):
         department = Department.objects.get(code=res.data['code'])
         self.assertEqual(
             list(department.roles.values_list('name', flat=True)),
+            [role_name for role_name, _assistant in DEPARTMENT_ROLE_SEED],
+        )
+        # The base pair is the area's; the catalogue rides beside it.
+        self.assertEqual(
+            list(department.roles.filter(is_optional=False).values_list('name', flat=True)),
             ['Leader', 'Assistant'],
         )
         # Duplicate names are refused.
         res = self.client.post('/api/members/departments/create/', {'name': 'stewardship'}, format='json')
         self.assertEqual(res.status_code, 400)
+
+
+class WelfareMinistrySeedTests(TestCase):
+    """Welfare exists as a ministry of the record.
+
+    The rail's Ministries heading is not written in the frontend — it
+    expands the church's own Department rows — so asking for Welfare on the
+    rail is answered only when the row exists, filed under Ministries, with
+    the two seats its leadership modal renders. 0208 settles exactly that.
+    """
+
+    def test_welfare_is_a_ministry_with_the_seats_its_desk_renders(self):
+        welfare = Department.objects.get(code='welfare')
+        self.assertEqual(welfare.group, 'ministry')
+        self.assertTrue(welfare.is_active)
+        self.assertIn('Leader', set(welfare.roles.values_list('name', flat=True)))
+        self.assertIn('Assistant', set(welfare.roles.values_list('name', flat=True)))
+
+    def test_rerunning_the_seed_never_mints_a_second_welfare(self):
+        from importlib import import_module
+        seed = import_module('members.migrations.0208_seed_welfare_ministry').seed_welfare
+
+        seed(django_apps, None)
+        seed(django_apps, None)
+        self.assertEqual(Department.objects.filter(code='welfare').count(), 1)
+        self.assertEqual(Department.objects.get(code='welfare').group, 'ministry')
+
+    def test_a_row_an_office_created_by_hand_keeps_its_name_and_seats(self):
+        from importlib import import_module
+        seed = import_module('members.migrations.0208_seed_welfare_ministry').seed_welfare
+
+        # A hand-created Welfare arrived as a department under some other
+        # name: the seed files it under Ministries but rewrites neither the
+        # office's wording nor its already-seeded seats.
+        Department.objects.filter(code='welfare').update(group='department', name='Welfare Team')
+        seed(django_apps, None)
+        welfare = Department.objects.get(code='welfare')
+        self.assertEqual(welfare.group, 'ministry')
+        self.assertEqual(welfare.name, 'Welfare Team')
+        self.assertIn('Leader', set(welfare.roles.values_list('name', flat=True)))
+        self.assertIn('Assistant', set(welfare.roles.values_list('name', flat=True)))
+
+
+class AreaOfficeCatalogueSeedTests(TestCase):
+    """Every area carries the church's office list; the desk does not write it.
+
+    0209 seeds the catalogue into the areas that already exist and renames
+    ``is_custom`` to ``is_optional`` — the flag says "a catalogue office this
+    area may drop" now, not "a title the desk typed". An office an area
+    already carries under one of those names keeps the row it has, and a
+    second run adds nothing.
+    """
+
+    def test_a_second_run_adds_no_second_office(self):
+        from importlib import import_module
+        seed = import_module('members.migrations.0209_area_office_catalogue').seed_area_offices
+
+        amm = Department.objects.get(code='amm')
+        # The area's own Secretary stands where the church's list would put
+        # one, written earlier and ordered differently.
+        amm.roles.filter(name='Secretary').delete()
+        own = DepartmentRole.objects.create(
+            department=amm, name='Secretary', has_assistant=False, sort_order=40,
+            is_optional=True,
+        )
+        before = DepartmentRole.objects.filter(department=amm).count()
+        seed(django_apps, None)
+        self.assertEqual(DepartmentRole.objects.filter(department=amm).count(), before)
+        own.refresh_from_db()
+        self.assertEqual((own.sort_order, own.has_assistant), (40, False))
+        self.assertTrue(own.is_optional)
 
 
 class RequestBellNotificationTests(APITestCase):
@@ -12408,9 +12514,14 @@ class DevelopmentAndDorcasLeadershipSeatsTests(APITestCase):
         for code in ('development', 'dorcas'):
             department = Department.objects.get(code=code, is_active=True)
             self.assertEqual(
-                list(department.roles.values_list('name', flat=True)),
+                list(department.roles.values_list('name', flat=True))[:2],
                 ['Leader', 'Assistant'],
                 f'{code} should start with a Leader and an Assistant seat',
+            )
+            self.assertEqual(
+                list(department.roles.values_list('name', flat=True))[2:],
+                [role_name for role_name, _assistant in DEPARTMENT_ROLE_SEED][2:],
+                f'{code} should carry the catalogue offices beside them',
             )
 
     def test_development_is_read_by_its_short_name(self):

@@ -346,13 +346,13 @@ SEED_DEPARTMENTS = (
 )
 
 #: The roles each area carries — (name, has_assistant). Every area keeps
-#: just its Leader and its Assistant: those two positions are what the
-#: leadership desk appoints by search (one leader, two assistants). Areas
-#: added before this shape carried named offices (Head Deacon, Church
-#: Clerk, Secretary, Treasurer…); 0146 prunes them, and old appointments
-#: under those names keep syncing their church-wide flags by title, so no
-#: permission is lost. Eldership is its own shape — the three elders the
-#: church elects, each an office of its own.
+#: the base pair below: those two positions are what the leadership desk
+#: appoints by search (one leader, two assistants). Areas added before this
+#: shape carried named offices (Head Deacon, Church Clerk, Secretary,
+#: Treasurer…); 0146 prunes them, and old appointments under those names
+#: keep syncing their church-wide flags by title, so no permission is lost.
+#: Eldership is its own shape — the three elders the church elects, each an
+#: office of its own.
 SEED_DEPARTMENT_ROLES = {
     'eldership': (('First Elder', False), ('Second Elder', False), ('Third Elder', False)),
 }
@@ -361,14 +361,34 @@ SEED_DEPARTMENT_ROLES = {
 #: appointed beside them.
 DEFAULT_DEPARTMENT_ROLES = (('Leader', True), ('Assistant', True))
 
+#: The offices every area carries beside that pair — (name, has_assistant),
+#: in the order the desk reads them.
+#:
+#: The list is code, not a sheet the desk writes: 0209 seeds it into every
+#: area, and the desk picks the person for an office rather than inventing
+#: one. The wording keeps each office the area's own — a "Choir Leader" is
+#: the area's choir where the church's Choir Director is a church-wide
+#: office assigned in User Management, and an area's Secretary or Treasurer
+#: carries no church-wide flag (see OFFICE_ROLE_CODES in members.views).
+DEPARTMENT_ROLE_CATALOGUE = (
+    ('Secretary', True),
+    ('Treasurer', True),
+    ('Choir Leader', True),
+    ('Pianist', False),
+)
+
+#: What an area is seeded with: the base pair, then the catalogue.
+DEPARTMENT_ROLE_SEED = DEFAULT_DEPARTMENT_ROLES + DEPARTMENT_ROLE_CATALOGUE
+
 
 class Department(models.Model):
     """A department of the church, as the elder's desk defines it.
 
     Every leadership body is a department — ministries like the AYM and
     office bodies like Eldership and Deaconate alike. Each carries its own
-    roles (its leader, an assistant where the role takes one, a secretary,
-    whatever the office adds), the roll of members who belong to it, and a
+    offices (its leader, an assistant where the role takes one, and the
+    seeded catalogue of secretary, treasurer and the rest), the roll of
+    members who belong to it, and a
     calendar; the announcement audience ``dept_<code>`` addresses roll and
     office holders together. The church itself is deliberately not a row
     here — church-wide roles are assigned from User Management.
@@ -421,14 +441,17 @@ class Department(models.Model):
 
 
 class DepartmentRole(models.Model):
-    """One role inside a department, and whether it takes an assistant.
+    """One office inside a department, and whether it takes an assistant.
 
-    A department's roles live here — "Leader", "Assistant", a custom
-    "Music Leader" — each scoped to its department, so two departments can
-    both have a Music Leader without the titles colliding. The desk seeds
-    every area with a Leader and an Assistant and lets its leaders add the
-    roles the area needs; ``has_assistant`` stays on the row for old data
-    but no longer gates anything — any seat can be filled leader-side or
+    A department's offices live here — the base "Leader" and "Assistant",
+    then the seeded catalogue (Secretary, Treasurer, Choir Leader, Pianist),
+    each scoped to its department, so two departments can both have a
+    Secretary without the titles colliding. Every area is seeded with the
+    same list (``DEPARTMENT_ROLE_SEED``) and the desk fills each office with
+    a person; the list itself is not something a desk names, so ``is_optional``
+    is what tells the area's own base pair — which stays — from a catalogue
+    office it may drop. ``has_assistant`` stays on the row for old data but no
+    longer gates anything — any seat can be filled leader-side or
     assistant-side.
     """
 
@@ -436,7 +459,7 @@ class DepartmentRole(models.Model):
     name = models.CharField(max_length=80)
     has_assistant = models.BooleanField(default=False, help_text="The department may appoint assistants of this role beside its holder")
     sort_order = models.PositiveIntegerField(default=0)
-    is_custom = models.BooleanField(default=False, help_text="Added by the office beyond the seeded roles")
+    is_optional = models.BooleanField(default=False, help_text="One of the seeded catalogue offices, which an area may drop; the base Leader and Assistant stay")
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

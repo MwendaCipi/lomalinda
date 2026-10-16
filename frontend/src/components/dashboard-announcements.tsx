@@ -139,8 +139,11 @@ export function DashboardAnnouncements() {
       }}
       className="relative h-full rounded-3xl border border-sand-line bg-white px-6 py-5 shadow-sm sm:px-8"
     >
-      {/* The whole card opens the Fellowship feed. The overlay sits under the
-          controls, so the arrows and action buttons keep working on top. */}
+      {/* The whole card opens the Fellowship feed: this overlay link fills the
+          card and the content above it is given back to the pointer, so a
+          click anywhere — the title, the body, the empty space — lands here.
+          Only the controls take their own clicks (they carry
+          `pointer-events-auto`). */}
       <Link
         href="/announcements"
         aria-label="Open announcements"
@@ -148,7 +151,10 @@ export function DashboardAnnouncements() {
         style={{ zIndex: 0 }}
       />
 
-      <div className="relative" style={{ zIndex: 1 }}>
+      {/* `pointer-events-none`: the content rides above the overlay for the
+          eye but lets the pointer fall through to it, so the card reads as
+          one pressable surface. */}
+      <div className="pointer-events-none relative" style={{ zIndex: 1 }}>
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-ember">
             {current ? "Announcement" : "Next gathering"}
@@ -159,7 +165,7 @@ export function DashboardAnnouncements() {
               <button
                 type="button"
                 onClick={() => setSlide((prev) => (prev - 1 + slideCount) % slideCount)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-sand-line text-sm text-moss transition hover:border-ember hover:text-ember"
+                className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-sand-line text-sm text-moss transition hover:border-ember hover:text-ember"
                 aria-label="Previous"
               >
                 &larr;
@@ -171,14 +177,14 @@ export function DashboardAnnouncements() {
                     type="button"
                     onClick={() => setSlide(dot)}
                     aria-label={hasAnnouncements ? `Announcement ${dot + 1}` : "Next gathering"}
-                    className={`h-1.5 rounded-full transition-all ${dot === index ? "w-4 bg-ember" : "w-1.5 bg-sand-line"}`}
+                    className={`pointer-events-auto h-1.5 rounded-full transition-all ${dot === index ? "w-4 bg-ember" : "w-1.5 bg-sand-line"}`}
                   />
                 ))}
               </div>
               <button
                 type="button"
                 onClick={() => setSlide((prev) => (prev + 1) % slideCount)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-sand-line text-sm text-moss transition hover:border-ember hover:text-ember"
+                className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-sand-line text-sm text-moss transition hover:border-ember hover:text-ember"
                 aria-label="Next"
               >
                 &rarr;
@@ -208,18 +214,18 @@ export function DashboardAnnouncements() {
           </p>
 
           {/* A notice that runs past the card's three lines, or one that
-              carries a flyer image, asks the reader to open the full feed. */}
+              carries a flyer image, asks the reader to open the full feed.
+              The ask is a small button of its own, so pressing it reads as a
+              press and not as a label that merely looks pressable. */}
           {current && isAwareness && (textLong || hasImage) && (
-            <div className="mt-2 flex items-center justify-end gap-1.5">
-              {hasImage && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sand px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:bg-sand-soft">
-                  Has image
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20">
+            <div className="mt-2 flex items-center justify-end">
+              <Link
+                href="/announcements"
+                className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20"
+              >
                 See more
                 <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
-              </span>
+              </Link>
             </div>
           )}
         </div>
@@ -234,20 +240,20 @@ export function DashboardAnnouncements() {
                 <button
                   type="button"
                   onClick={() => { if (current) setPledgeTarget(pledgeTargetFor(current)); }}
-                  className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                  className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                 >
                   Pledge
                 </button>
                 <button
                   type="button"
                   onClick={() => setInKindOpen(true)}
-                  className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                  className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                 >
                   In-kind
                 </button>
                 <Link
                   href={giveMoneyHref}
-                  className="rounded-full bg-sage-strong px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-sage-shade"
+                  className="pointer-events-auto rounded-full bg-sage-strong px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-sage-shade"
                 >
                   Give Money
                 </Link>
@@ -257,7 +263,7 @@ export function DashboardAnnouncements() {
           {isOpinion && (
             <Link
               href="/announcements"
-              className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+              className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
             >
               Give input
             </Link>
@@ -275,7 +281,7 @@ export function DashboardAnnouncements() {
                 href={current.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+                className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
               >
                 {platformLabel(current.href)}
               </a>
@@ -294,7 +300,7 @@ export function DashboardAnnouncements() {
                 href={gathering.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+                className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
               >
                 {platformLabel(gathering.link)}
               </a>
@@ -303,7 +309,7 @@ export function DashboardAnnouncements() {
           {!current && (
             <Link
               href="/calendar"
-              className="text-sm font-semibold text-ember transition hover:underline"
+              className="pointer-events-auto text-sm font-semibold text-ember transition hover:underline"
             >
               View calendar &rarr;
             </Link>

@@ -1,6 +1,6 @@
 {
   "name": "SDA Church Loma Linda",
-  "short_name": "Loma Linda SDA",
+  "short_name": "Loma Linda",
   "description": "A warm, English-speaking Seventh-day Adventist (SDA) church in Meru, Kenya. Join us for Sabbath School and Divine Service every Saturday, Friday vespers, Bible study and fellowship — visitors are always welcome.",
   "start_url": "/dashboard",
   "id": "/",
@@ -11,19 +11,19 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/icons/meru/app-icon-192.png",
+      "src": "/icons/meru/church-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/meru/app-icon-512.png",
+      "src": "/icons/meru/church-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/meru/app-icon-512-maskable.png",
+      "src": "/icons/meru/church-icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

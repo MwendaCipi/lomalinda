@@ -6,8 +6,23 @@ import type { DepartmentSummary } from "@/config/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const TTL = 60 * 1000;
 
+/**
+ * The names the church reads a row by, where the record's own name is not the
+ * name on the door: the directorate files the choir as Ensemble, while the rail
+ * and the choir's own desk call it the Church Choir.
+ */
 const DEPARTMENT_LABEL_OVERRIDES: Record<string, string> = {
   development: "Development",
+  choir: "Church Choir",
+};
+
+/**
+ * The rows that read without a description. The choir's yearbook line about
+ * anthems and special music was saying what the name already says, so its card
+ * and its heading carry the name, who leads it and the roll — nothing else.
+ */
+const DEPARTMENT_DESCRIPTION_OVERRIDES: Record<string, string> = {
+  choir: "",
 };
 
 /**
@@ -61,7 +76,7 @@ function mapDepartmentRows(data: unknown): DepartmentRow[] {
   }[]).map((row) => ({
     code: row.code,
     label: DEPARTMENT_LABEL_OVERRIDES[row.code] ?? row.label,
-    description: String(row.description ?? ""),
+    description: DEPARTMENT_DESCRIPTION_OVERRIDES[row.code] ?? String(row.description ?? ""),
     group: row.group === "ministry" || row.group === "office" ? row.group : "department",
     memberCount: Number(row.member_count ?? 0),
     eventCount: Number(row.event_count ?? 0),

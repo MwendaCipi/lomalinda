@@ -26,6 +26,13 @@ export type AreaJoinModalProps = {
   area: string | null;
   /** An area opened for: the picker arrives on it instead of a blank choice. */
   initialCode?: string | null;
+  /**
+   * Areas the reader already belongs to — kept out of the picker, so the
+   * list only offers somewhere new to serve. The server still refuses an
+   * area they are on, but a choice the member cannot meaningfully make
+   * should never be offered them.
+   */
+  exclude?: readonly string[];
   onClose: () => void;
 };
 
@@ -36,7 +43,7 @@ export type AreaJoinModalProps = {
  * area from a list of what the church actually runs — and an area's own page
  * opens it with that area already chosen.
  */
-export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModalProps) {
+export function AreaJoinModal({ open, area, initialCode, exclude = [], onClose }: AreaJoinModalProps) {
   const [areas, setAreas] = useState<{ code: string; label: string }[]>([]);
   const [chosen, setChosen] = useState("");
   const [note, setNote] = useState("");
@@ -75,6 +82,11 @@ export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModa
   }, [open, area, initialCode]);
 
   if (!open) return null;
+
+  // The reader's own areas are never offered back to them as somewhere to
+  // join — filtered here rather than in the fetch, so a parent passing an
+  // inline array does not refetch the directory on every render.
+  const excluded = new Set(exclude);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -137,7 +149,7 @@ export function AreaJoinModal({ open, area, initialCode, onClose }: AreaJoinModa
               className="mt-1.5 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-sm focus:border-ember focus:outline-none"
             >
               <option value="">Choose a ministry or department…</option>
-              {areas.map((a) => (
+              {areas.filter((a) => !excluded.has(a.code)).map((a) => (
                 <option key={a.code} value={a.code}>{a.label}</option>
               ))}
             </select>
