@@ -62,6 +62,7 @@ import { dayFirst, dayFirstTime } from "@/lib/dates";
 
 import { invalidateDepartments } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
+import { FilterPopover, FilterSet } from "./filter-popover";
 import { usePageHeader } from "@/components/app-frame";
 import { densityCellPad } from "@/lib/table-density";
 import { AreaJoinModal } from "./area-modals";
@@ -2758,21 +2759,6 @@ function AccountsFilterButton({
   value: "all" | "contributions" | "withdrawals";
   onChange: (v: "all" | "contributions" | "withdrawals") => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
   const labels = {
     all: "All",
     contributions: "Contributions",
@@ -2780,45 +2766,35 @@ function AccountsFilterButton({
   };
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition sm:px-2.5 sm:text-xs ${
-          value !== "all"
-            ? "border-ember bg-ember/10 text-ember"
-            : "border-sand-mute bg-white text-bark hover:bg-sand"
-        }`}
-        aria-label="Filter transactions"
-        aria-expanded={open}
-      >
-        <SlidersHorizontal className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">{labels[value]}</span>
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
-          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">Filter transactions</p>
-          {[
-            { key: "all" as const, label: "All" },
-            { key: "contributions" as const, label: "Contributions" },
-            { key: "withdrawals" as const, label: "Withdrawals" },
-          ].map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => {
-                onChange(item.key);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${value === item.key ? "bg-sand-linen text-ember" : "text-bark hover:bg-sand"}`}
-            >
-              <span>{item.label}</span>
-              {value === item.key && <span className="text-ember font-bold">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <FilterPopover
+      summary={
+        value !== "all"
+          ? value === "contributions"
+            ? "Contributions"
+            : "Withdrawals"
+          : "All"
+      }
+      active={value !== "all"}
+      title="Filter transactions"
+    >
+      {[
+        { key: "all" as const, label: "All" },
+        { key: "contributions" as const, label: "Contributions" },
+        { key: "withdrawals" as const, label: "Withdrawals" },
+      ].map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => {
+            onChange(item.key);
+          }}
+          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${value === item.key ? "bg-sand-linen text-ember" : "text-bark hover:bg-sand"}`}
+        >
+          <span>{item.label}</span>
+          {value === item.key && <span className="text-ember font-bold">✓</span>}
+        </button>
+      ))}
+    </FilterPopover>
   );
 }
 
@@ -5520,21 +5496,6 @@ function MembersFilterButton({
   onChange: (v: MemberFilter) => void;
   pending: number;
 }) {
-  const [open, setOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
   const labels: Record<MemberFilter, string> = {
     all: "All",
     approved: "Approved",
@@ -5542,51 +5503,32 @@ function MembersFilterButton({
   };
 
   return (
-    <div className="relative" ref={popoverRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
-          value !== "all"
-            ? "border-ember bg-ember/10 text-ember"
-            : "border-sand-mute bg-white text-bark hover:bg-sand"
-        }`}
-        aria-label="Filter members"
-        aria-expanded={open}
-      >
-        <SlidersHorizontal className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">{labels[value]}</span>
-        {pending > 0 && (
-          <span className="rounded-full bg-ember px-1.5 text-[10px] font-bold text-white">{pending}</span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-40 mt-1.5 w-52 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5">
-          <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-moss-faint">Show members</p>
-          {(["all", "approved", "requests"] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                onChange(key);
-                setOpen(false);
-              }}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
-                value === key ? "bg-sand-linen text-ember" : "text-bark hover:bg-sand"
-              }`}
-            >
-              <span>
-                {labels[key]}
-                {key === "requests" && pending > 0 ? ` (${pending})` : ""}
-              </span>
-              {value === key && <span className="font-bold text-ember">✓</span>}
-            </button>
-          ))}
-          <p className="px-3 pb-1 pt-1.5 text-[10px] leading-snug text-moss-faint">
-            All reads the roll and the asks. Approved is the roll; Requests is who is still waiting.
-          </p>
-        </div>
+    <FilterPopover
+      summary={labels[value]}
+      active={value !== "all"}
+      title="Show members"
+    >
+      {(["all", "approved", "requests"] as const).map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => {
+            onChange(key);
+          }}
+          className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+            value === key ? "bg-sand-linen text-ember" : "text-bark hover:bg-sand"
+          }`}
+        >
+          <span>
+            {labels[key]}
+            {key === "requests" && pending > 0 ? ` (${pending})` : ""}
+          </span>
+          {value === key && <span className="font-bold text-ember">✓</span>}
+        </button>
+      ))}
+      {pending > 0 && (
+        <span className="rounded-full bg-ember px-1.5 text-[10px] font-bold text-white">{pending}</span>
       )}
-    </div>
+    </FilterPopover>
   );
 }
