@@ -62,10 +62,10 @@ export function MyAreas() {
   // rail offers its desk only to the treasurer and the admin, and this list
   // files it the same way rather than offering every member a door to knock
   // on with a join request.
-  const holdsTreasury = useMemo(
-    () => ["treasurer", "admin"].some((role) => roles.includes(role)),
-    [roles]
-  );
+  // Plainly computed rather than memoised: `roles` is rebuilt each render, so
+  // a memo here would re-run every time anyway and buy nothing — this is a
+  // two-element scan.
+  const holdsTreasury = ["treasurer", "admin"].some((role) => roles.includes(role));
 
   const [tab, setTab] = useState<AreaTab>("mine");
   // The area open, and the view of it being read, are the address bar's own
@@ -94,6 +94,24 @@ export function MyAreas() {
     return area.code === ownDepartmentCode || ties.includes(area.code);
   }, [ownDepartmentCode, ties]);
 
+  /**
+   * May the other half offer this area at all? Two gates stand between the map
+   * and a row: the treasury's desk is held by office, so only the treasurer and
+   * the admin are offered it (the same pair the rail gates it to), and the two
+   * sex-only fellowships are withheld from the other sex.
+   *
+   * It is one predicate rather than a rule spelled into the list below because
+   * the search asks the same question of every area (see `searchable`), and two
+   * copies of a gate are two chances for them to disagree.
+   */
+  const mayOffer = useCallback(
+    (area: (typeof rows)[number]) => {
+      if (area.code === "treasury" && !holdsTreasury) return false;
+      return staff || canJoin(area.code);
+    },
+    [canJoin, holdsTreasury, staff]
+  );
+
   // What the member sees: first the areas they belong to or serve in, then
   // other areas open for a join request. Sex-only ministries stay hidden from
   // people who may not request them. One rule at every width — the two toggles
@@ -102,14 +120,9 @@ export function MyAreas() {
   const visible = useMemo(
     () =>
       rows
-        .filter((area) => {
-          const mine = isMyMinistry(area);
-          if (tab === "mine") return mine;
-          // The treasury's desk is held by office: only the treasurer and the
-          // admin are offered it here, the same pair the rail gates it to.
-          if (area.code === "treasury" && !holdsTreasury) return false;
-          return !mine && !ties.includes(area.code) && (staff || canJoin(area.code));
-        })
+        .filter((area) =>
+          tab === "mine" ? isMyMinistry(area) : !isMyMinistry(area) && mayOffer(area)
+        )
         .sort((a, b) => {
           if (tab === "mine") {
             const departmentA = a.code === ownDepartmentCode ? 0 : 1;
@@ -124,25 +137,59 @@ export function MyAreas() {
           // department appears.
           return a.label.localeCompare(b.label);
         }),
-    [canJoin, holdsTreasury, isMyMinistry, ownDepartmentCode, rows, staff, tab, ties],
+    [isMyMinistry, mayOffer, ownDepartmentCode, rows, tab],
+  );
+
+  /**
+   * The whole map the member may see, both halves in one list — the union of
+   * the two toggles, and what the search runs against.
+   *
+   * Naming an area is a different way of asking for it than toggling for it, so
+   * a search that reached only the half on show would answer "no area matches"
+   * to a ministry the member can plainly see one tap away, and would make
+   * finding an area depend on guessing which half the church filed it under.
+   * The results lead with the member's own areas, their department at the head,
+   * then A–Z, so a search for one word answers with what is theirs first
+   * whichever half each match came from. The toggles' own lists keep their
+   * groupings (above); this is only the order a mixed match set needs.
+   */
+  const searchable = useMemo(
+    () =>
+      rows
+        .filter((area) => isMyMinistry(area) || mayOffer(area))
+        .sort((a, b) => {
+          const mineA = isMyMinistry(a) ? 0 : 1;
+          const mineB = isMyMinistry(b) ? 0 : 1;
+          if (mineA !== mineB) return mineA - mineB;
+          const ownA = a.code === ownDepartmentCode ? 0 : 1;
+          const ownB = b.code === ownDepartmentCode ? 0 : 1;
+          return ownA - ownB || a.label.localeCompare(b.label);
+        }),
+    [isMyMinistry, mayOffer, ownDepartmentCode, rows]
   );
 
   // The map's own search: the cards are a short list, but the church keeps
   // growing areas and a phone scrolls them one at a time. It rides the shell's
   // header band beside the heading — the space the name leaves open on a phone
   // — and narrows the list to the areas whose name, line or leadership matches.
+  //
+  // It narrows `searchable`, not the toggled half: the box searches the whole
+  // map the member may see, so an area is as findable from "My Ministry" as
+  // from "Other Ministries". The toggle keeps naming the half being browsed —
+  // it is the list beside the search, not a fence around it — and clearing the
+  // box puts that half back exactly as it was.
   const [search, setSearch] = useState("");
   const searchNeedle = search.trim().toLowerCase();
   const matches = useMemo(
     () =>
       searchNeedle
-        ? visible.filter((area) =>
+        ? searchable.filter((area) =>
             `${area.label} ${area.description} ${area.holders.map((holder) => holder.name).join(" ")}`
               .toLowerCase()
               .includes(searchNeedle)
           )
         : visible,
-    [searchNeedle, visible]
+    [searchNeedle, searchable, visible]
   );
 
   // The Treasury is filed in this list, but it is a desk of the console,
@@ -221,14 +268,14 @@ export function MyAreas() {
   }, [openMenuCode]);
 
   // A phone reads the map top-down: the place is named first, then the views
-  // it answers to, so the map asks for its own heading-first order while it
-  // is the page on screen. An open area hands the order back to the shell —
-  // the desk draws its own strip, and it sits above its heading exactly as
-  // the dashboard's ministry card draws it.
+  // it answers to, so the map asks for its own heading-first order — and it
+  // keeps that order when an area opens, where the desk's strip now draws
+  // under the area's own name with the way back beside it (the same band the
+  // map's cards sit under), rather than over the heading.
   useEffect(() => {
-    setHeadingFirst(!openArea);
+    setHeadingFirst(true);
     return () => setHeadingFirst(false);
-  }, [openArea, setHeadingFirst]);
+  }, [setHeadingFirst]);
 
   // The map's search, on the heading's own row: it takes the space beside the
   // name rather than a row of its own beneath the strip, so the map on a phone
@@ -272,14 +319,18 @@ export function MyAreas() {
           }
         : {
             label: "Ministry",
-            description:
-              tab === "mine"
-                ? "The ministries and departments you are part of or serve in."
-                : "Other ministries and departments you can ask to join.",
+            // A search reads across both halves, so the line under the name says
+            // so while one is running: results from the half not on show would
+            // otherwise read as cards from nowhere.
+            description: searchNeedle
+              ? "Every ministry and department you can see, both halves of the map."
+              : tab === "mine"
+              ? "The ministries and departments you are part of or serve in."
+              : "Other ministries and departments you can ask to join.",
           }
     );
     return () => setCustomHeader(null);
-  }, [openArea, tab, setCustomHeader, showMap]);
+  }, [openArea, searchNeedle, tab, setCustomHeader, showMap]);
 
   async function requestToJoin(code: string, label: string) {
     setJoining(code);
@@ -357,7 +408,7 @@ export function MyAreas() {
             Ministry
           </button>
           <div className="min-h-0 w-full flex-1">
-            <DepartmentHub key={openArea.code} initialDept={openArea.code} />
+            <DepartmentHub key={openArea.code} initialDept={openArea.code} onBack={showMap} />
           </div>
         </div>
       </div>

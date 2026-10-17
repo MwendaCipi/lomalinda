@@ -18,10 +18,12 @@ import { brand } from "@/lib/brand";
 import {
   Accessibility,
   ArrowDownLeft,
+  ArrowLeft,
   ArrowUpRight,
   Baby,
   BookOpen,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Church,
@@ -31,7 +33,6 @@ import {
   Heart,
   HeartPulse,
   Landmark,
-  Mail,
   Droplets,
   Megaphone,
   MessageSquare,
@@ -69,7 +70,8 @@ import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
-import { formatOfficeRole } from "./roles-combobox";
+import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles-combobox";
+import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
@@ -1849,8 +1851,8 @@ function LeadershipEditModal({
   const leaderRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "leader") ?? null;
   const assistantRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "assistant") ?? null;
   // The area's own offices — every row that is not the base Leader or
-  // Assistant: the seeded catalogue (Secretary, Treasurer, Choir Leader,
-  // Pianist), Eldership's three elders and the deaconate's two head seats.
+  // Assistant: the seeded catalogue (Secretary, Treasurer, Choir Leader),
+  // Eldership's three elders and the deaconate's two head seats.
   // Their seats are set by name, and (on the deaconate) by the member's sex,
   // the way the church reads the office.
   const officeRoles = draft.filter((r) => r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
@@ -1908,7 +1910,7 @@ function LeadershipEditModal({
     const before = department.roles.find((r) => r.id === role.id);
     for (const p of role.people) {
       if (!before?.holders.some((h) => h.id === p.id && h.kind === p.kind)) {
-        staged.push({ roleId: role.id, positionLabel: formatOfficeRole(role.name, p.kind), person: p });
+        staged.push({ roleId: role.id, positionLabel: seatTitle(department.code, role.name, p.kind), person: p });
       }
     }
   }
@@ -1945,7 +1947,7 @@ function LeadershipEditModal({
     if (seat === "leader" && seatSex && member.gender && member.gender.toLowerCase() !== seatSex) {
       showAlert(
         "Not this office's to hold",
-        `The ${role.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
+        `The ${seatTitle(department.code, role.name, seat)} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
         "warning"
       );
       return;
@@ -1956,7 +1958,7 @@ function LeadershipEditModal({
       if (holder && holder.id !== member.id) {
         showAlert(
           "Seat is taken",
-          `${role.name} is ${holder.name}. Appointing ${member.name} replaces them at save.`,
+          `${seatTitle(department.code, role.name, seat)} is ${holder.name}. Appointing ${member.name} replaces them at save.`,
           "warning",
           { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
         ).then((answer) => {
@@ -2051,7 +2053,9 @@ function LeadershipEditModal({
                       onClick={() => appoint(leaderRole, "leader", member, clearSearch)}
                       className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
                     >
-                      Set leader
+                      {/* The seat's own word for its leader: Sabbath School
+                          seats a superintendent, everywhere else a leader. */}
+                      Set {seatTitle(department.code, leaderRole.name, "leader").toLowerCase()}
                     </button>
                   )}
                   {officeRoles.map((role) => {
@@ -2149,14 +2153,17 @@ function LeadershipEditModal({
 }
 
 /**
- * Assign a roll member to a role — one person, one seat, one save.
+ * Give a roll member one or more of the area's seats — picked in one combo,
+ * saved in one call.
  *
- * The roll's Actions popover opens this: the desk picks the position from
- * the offices the area carries — the base Leader and Assistant pair and the
- * seeded catalogue beside it (Secretary, Treasurer, Choir Leader, Pianist) —
- * and the save seats the member through the leadership endpoint, so the
- * derived flags, audiences and the appointment letters all follow the one
- * path every other seat takes.
+ * The roll's Actions popover opens this, and the modal is about the person
+ * rather than the place: it names them and the roles they already hold, and
+ * the seats they may be seated into ride a single combo with a checkbox
+ * each. The offices are still the church's list — the base Leader and
+ * Assistant pair and the seeded catalogue beside it (Secretary, Treasurer,
+ * Choir Leader) — so nothing is typed here, and the save seats the member
+ * through the leadership endpoint, so the derived flags, audiences and the
+ * appointment letters all follow the one path every other seat takes.
  */
 function AssignRoleModal({
   department,
@@ -2166,30 +2173,104 @@ function AssignRoleModal({
   onSaved,
 }: {
   department: DepartmentRow;
-  member: { id: number; name: string; sex?: string };
+  member: { id: number; name: string; sex?: string; office?: string | null };
   /** The unit the roll was reading, for a department that runs as units. */
   unit: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const roles = department.roles;
-  const [roleId, setRoleId] = useState<number | null>(
-    department.roles.find((r) => !r.is_optional)?.id ?? department.roles[0]?.id ?? null
-  );
+  // The seats ticked for this save — one person may hold more than one
+  // office in the same area (its Treasurer and its Choir Leader, say), so
+  // the combo ticks rather than switches.
+  const [picked, setPicked] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
-  const chosen = roles.find((r) => r.id === roleId) ?? null;
-  const seated = chosen?.holders.filter((h) => h.kind === "leader") ?? [];
-  // The same sex rule the leadership modal and the server keep: the
-  // deaconate's Head Deacon is a man's office, its Head Deaconess a woman's.
-  // A profile that does not record a sex leaves the desk to know.
-  const seatSex = chosen ? SEAT_SEX_BY_OFFICE[chosen.name.toLowerCase()] : undefined;
-  const offSex = Boolean(seatSex && member.sex && member.sex.toLowerCase() !== seatSex);
+  const [openCombo, setOpenCombo] = useState(false);
+  const comboRef = useRef<HTMLDivElement>(null);
+  const comboPanelRef = useRef<HTMLDivElement>(null);
+  // What the person already holds, church-wide: read from the same roster
+  // the roll's other pickers read, so the modal says who they are before a
+  // new seat is given them. ``null`` is "still reading".
+  const [heldRoles, setHeldRoles] = useState<string[] | null>(null);
+  const [heldAssistants, setHeldAssistants] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (!alive) return;
+        const row = (Array.isArray(rows) ? rows : []).find((u: { id: number }) => u.id === member.id);
+        setHeldRoles(row ? row.roles ?? (row.role ? [row.role] : []) : []);
+        setHeldAssistants(row ? (row.assistant_roles ?? []) : []);
+      })
+      .catch(() => {
+        if (alive) setHeldRoles([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [member.id]);
+
+  // The combo's panel lives in the body (see ComboboxPopover), so a click
+  // outside has to count the panel as inside — and Escape closes it from
+  // wherever the reader is standing.
+  useEffect(() => {
+    if (!openCombo) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        comboRef.current && !comboRef.current.contains(target) &&
+        !(comboPanelRef.current && comboPanelRef.current.contains(target))
+      ) {
+        setOpenCombo(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenCombo(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openCombo]);
+
+  const chosen = roles.filter((role) => picked.includes(role.id));
+  const toggleSeat = (roleId: number) =>
+    setPicked((current) =>
+      current.includes(roleId) ? current.filter((id) => id !== roleId) : [...current, roleId],
+    );
+
+  // The seats that ask the desk to know better: the deaconate's Head Deacon
+  // is a man's office, its Head Deaconess a woman's — the same rule the
+  // leadership modal and the server keep. A profile that records no sex
+  // leaves the seat open and the desk to know.
+  const seatSexOf = (role: DepartmentRoleRow) => SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
+  const offSexSeat = (role: DepartmentRoleRow) => {
+    const seatSex = seatSexOf(role);
+    return Boolean(seatSex && member.sex && member.sex.toLowerCase() !== seatSex);
+  };
+
+  // What they hold, in one line: the seat this area already gave them (a
+  // board row carries it), then their church-wide roles. "None" is the
+  // roster's own word for holding no office at all.
+  const wideRoles = heldRoles === null ? null : formatRoles(heldRoles, heldAssistants);
+  const heldLine =
+    wideRoles === null
+      ? "Reading the roles they hold…"
+      : [member.office, wideRoles === NO_ROLE_LABEL ? null : wideRoles].filter(Boolean).join(" · ") ||
+        "No role held yet";
 
   const save = async () => {
-    if (offSex) {
+    if (chosen.length === 0) return;
+    const refused = chosen.find(offSexSeat);
+    if (refused) {
+      const seatSex = seatSexOf(refused);
       showAlert(
         "Not this office's to hold",
-        `The ${chosen?.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
+        `The ${refused.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
         "warning"
       );
       return;
@@ -2200,7 +2281,7 @@ function AssignRoleModal({
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
-          assignments: [{ role_id: roleId, member_id: member.id, kind: "leader" }],
+          assignments: chosen.map((role) => ({ role_id: role.id, member_id: member.id, kind: "leader" })),
           unit: unit ?? "",
         }),
       });
@@ -2208,7 +2289,7 @@ function AssignRoleModal({
       if (!res.ok) throw new Error(data.detail || "Could not assign the role.");
       showAlert(
         "Role assigned",
-        `${member.name} now holds ${chosen ? chosen.name : "this office"} in ${department.label}.`,
+        `${member.name} now holds ${chosen.map((role) => seatTitle(department.code, role.name, "leader")).join(", ")} in ${department.label}.`,
         "success",
         { toast: true, timer: 4000, showConfirmButton: false },
       );
@@ -2229,64 +2310,119 @@ function AssignRoleModal({
         aria-label={`Assign a role to ${member.name}`}
         className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
-          <div>
+        <div className="flex items-center justify-between gap-3 border-b border-sand-line pb-3">
+          <div className="min-w-0">
             <h3 className="text-lg font-bold text-bark">Assign role</h3>
-            <p className="text-[11px] text-moss">{member.name}: {department.label}</p>
+            {/* The person, not the place: their name and what they already
+                hold. The area's own name rides the heading above the
+                toggles, so it is not repeated here. */}
+            <p className="truncate text-sm font-semibold text-bark">{member.name}</p>
+            <p className="truncate text-[11px] text-moss">{heldLine}</p>
           </div>
-          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+          <button type="button" onClick={onClose} className="shrink-0 text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="mt-4 space-y-2">
-          {roles.map((role) => {
-            const roleSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
-            const roleOffSex = Boolean(roleSex && member.sex && member.sex.toLowerCase() !== roleSex);
-            return (
-            <button
-              key={role.id}
-              type="button"
-              disabled={roleOffSex}
-              title={roleOffSex ? `The ${role.name} is a ${roleSex === "male" ? "man" : "woman"}'s office.` : undefined}
-              onClick={() => setRoleId(role.id)}
-              aria-pressed={roleId === role.id}
-              className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-left text-xs transition ${
-                roleOffSex
-                  ? "cursor-not-allowed border-sand-line bg-sand text-moss-faint"
-                  : roleId === role.id
-                    ? "border-ember bg-sand"
-                    : "border-sand-line bg-white hover:border-ember"
-              }`}
-            >
-              <span className="min-w-0">
-                <span className="block font-semibold text-bark">{role.name}</span>
-                {role.holders.length > 0 && (
-                  <span className="block truncate text-[11px] text-moss">
-                    {role.holders.map((h) => h.name).join(", ")}
-                  </span>
-                )}
-              </span>
-              {roleId === role.id && <span className="shrink-0 text-[11px] font-bold text-ember">Selected</span>}
-            </button>
-            );
-          })}
+        <div className="mt-4 space-y-3">
+          <div>
+            <span className="text-xs font-semibold text-bark">Seats to give</span>
+            {/* One combo with a checkbox per seat: the area's offices in a
+                list the desk ticks through, rather than a stack of buttons
+                that ran the modal the length of the screen. */}
+            <div className="relative mt-1.5" ref={comboRef}>
+              <button
+                type="button"
+                onClick={() => setOpenCombo((open) => !open)}
+                aria-haspopup="listbox"
+                aria-expanded={openCombo}
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-sand-line bg-white px-3.5 py-2.5 text-left text-xs font-medium text-bark transition hover:border-ember focus:border-ember focus:outline-none"
+              >
+                <span className="min-w-0 truncate">
+                  {chosen.length === 0
+                    ? "Choose the seats to give…"
+                    : chosen.map((role) => seatTitle(department.code, role.name, "leader")).join(", ")}
+                </span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 text-moss transition-transform ${openCombo ? "rotate-180" : ""}`}
+                  aria-hidden="true"
+                />
+              </button>
+              <ComboboxPopover
+                anchorRef={comboRef}
+                panelRef={comboPanelRef}
+                open={openCombo}
+                minW={288}
+                panelClassName="rounded-xl border border-sand-line bg-white shadow-lg overflow-hidden"
+              >
+                <div role="listbox" aria-multiselectable="true" className="max-h-72 w-72 overflow-y-auto">
+                  {roles.map((role) => {
+                    const checked = picked.includes(role.id);
+                    const blocked = offSexSeat(role);
+                    const seatSex = seatSexOf(role);
+                    const seated = role.holders.filter((h) => h.kind === "leader" && h.id !== member.id);
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        role="option"
+                        aria-selected={checked}
+                        aria-disabled={blocked}
+                        disabled={blocked}
+                        title={blocked ? `The ${role.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.` : undefined}
+                        onClick={() => toggleSeat(role.id)}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition ${
+                          checked ? "bg-mist-select font-semibold text-bark" : "text-moss-dark hover:bg-sand"
+                        } ${blocked ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                            checked ? "border-ember bg-ember text-white" : "border-sand-mute bg-white"
+                          }`}
+                        >
+                          {checked && (
+                            <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{seatTitle(department.code, role.name, "leader")}</span>
+                          {seated.length > 0 && (
+                            <span className="block truncate text-[10px] font-normal text-moss">
+                              {seated.map((h) => h.name).join(", ")}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
 
-          {/* The offices are the church's list, not the desk's: every one
-              this area carries is already above, so nothing is added here. */}
-          {roles.length === 0 && (
-            <p className="rounded-xl border border-dashed border-sand-line px-3 py-2 text-[11px] italic text-moss-faint">
-              This area carries no offices yet.
-            </p>
-          )}
+                  {/* The offices are the church's list, not the desk's: every
+                      one this area carries is already above, so nothing is
+                      added here. */}
+                  {roles.length === 0 && (
+                    <p className="px-3 py-2 text-[11px] italic text-moss-faint">
+                      This area carries no offices yet.
+                    </p>
+                  )}
+                </div>
+              </ComboboxPopover>
+            </div>
+          </div>
 
           {/* A leader seat replaces its holder — the same rule the
               leadership modal asks about before staging. */}
-          {chosen && seated.length > 0 && !seated.some((h) => h.id === member.id) && (
-            <p className="rounded-xl border border-gold-soft bg-sand-cream px-3 py-2 text-[11px] text-bark">
-              {chosen.name} is {seated.map((h) => h.name).join(", ")}. Saving gives it to {member.name}.
-            </p>
-          )}
+          {chosen.map((role) => {
+            const seated = role.holders.filter((h) => h.kind === "leader" && h.id !== member.id);
+            if (seated.length === 0) return null;
+            const title = seatTitle(department.code, role.name, "leader");
+            return (
+              <p key={role.id} className="rounded-xl border border-gold-soft bg-sand-cream px-3 py-2 text-[11px] text-bark">
+                {title} is {seated.map((h) => h.name).join(", ")}. Saving gives it to {member.name}.
+              </p>
+            );
+          })}
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
@@ -2300,10 +2436,10 @@ function AssignRoleModal({
           <button
             type="button"
             onClick={save}
-            disabled={saving || !chosen}
+            disabled={saving || chosen.length === 0}
             className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
           >
-            {saving ? "Assigning…" : "Assign role"}
+            {saving ? "Assigning…" : chosen.length > 1 ? `Assign ${chosen.length} roles` : "Assign role"}
           </button>
         </div>
       </div>
@@ -3208,7 +3344,16 @@ export function DepartmentAccountsPanel({
             </div>
           )}
 
-          {/* Contained Scrollable Unified Ledger Table: Only Rows Scroll */}
+          {/* Contained Scrollable Unified Ledger Table: Only Rows Scroll.
+
+              A phone reads two of these columns: the description, and the
+              amount the panel exists to show. The description's own box is
+              what carries the width (see the row below), because a table
+              column is never narrower than its content and the description's
+              is nowrap — a long payee's name would otherwise widen the row and
+              carry the amount off the card, where the card's overflow leaves
+              it with nowhere to scroll to. From sm the other three columns are
+              back and every column sizes itself as before. */}
           <div className={`flex-1 min-h-0 overflow-x-auto overflow-y-auto custom-table-scrollbar ${showInlineControls || accounts.length > 1 ? "" : "rounded-t-2xl"}`}>
             {unifiedItems.length === 0 ? (
               <p className="px-4 py-16 text-center text-xs text-moss">No transactions recorded in this fund yet.</p>
@@ -3238,13 +3383,22 @@ export function DepartmentAccountsPanel({
                           ) : (
                             <ArrowDownLeft className="h-3.5 w-3.5 shrink-0 text-moss-dark" />
                           )}
-                          <div className="min-w-0">
+                            {/* A phone holds this box to a width of its own: the
+                                viewport less the amount column's own room and
+                                the two paddings beside it. The column then
+                                sizes to that box rather than to the name's own
+                                width, so the name ellipsises and the amount
+                                keeps its place on screen however long the name
+                                is. Written against the viewport because the
+                                card's width is the device's; from sm the box is
+                                auto again and the cell sizes as it always did. */}
+                          <div className="w-[calc(100vw-16rem)] min-w-0 sm:w-auto">
                             {/* The line trimmed to what this panel doesn't
                                 already say — see ledgerLine. */}
                             <span className="hidden truncate sm:inline" title={ledgerLine(item, true, isDeaconate ? "Funding" : "Withdrawal")}>
                               {ledgerLine(item, true, isDeaconate ? "Funding" : "Withdrawal")}
                             </span>
-                            <span className="truncate sm:hidden">
+                            <span className="block truncate sm:hidden">
                               {ledgerLine(item, false, isDeaconate ? "Funding" : "Withdrawal")}
                             </span>
                             {item.requestedBy && item.status !== "completed" && (
@@ -3513,10 +3667,17 @@ function DepartmentDetail({
   department,
   onChanged,
   initialTab = "members",
+  onBack,
 }: {
   department: DepartmentRow;
   onChanged: () => void;
   initialTab?: DeptSubTab;
+  /**
+   * The way back out of the area, shown as the heading's leading arrow on a
+   * phone — where the rail that opened it is out of sight. Left unset the
+   * desk falls back to the hub's own directory.
+   */
+  onBack?: (() => void) | null;
 }) {
   const units = department.units ?? [];
   // Personal Ministries runs the church's weekly rhythm, so the church's own
@@ -3629,7 +3790,7 @@ function DepartmentDetail({
 
   // Inject the search bar into the AppFrame page header's right slot — the
   // shell draws the title and description; we slot the search beside them.
-  const { setHeaderRightAction, setCustomToggles, setTogglesRightAction } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
   const router = useRouter();
 
   /** A roll row's Chat here: open the DM, then land in it — the roster's
@@ -3651,7 +3812,7 @@ function DepartmentDetail({
     return raw ? (raw.startsWith("0") ? `254${raw.slice(1)}` : raw) : "";
   };
   useEffect(() => {
-    const inputCls = "rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember w-56 sm:w-64";
+    const inputCls = "min-w-0 w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64";
     if (subTab === "members") {
       setHeaderRightAction(
         // One row on a phone: the roll's filter is already a popover of its
@@ -3822,6 +3983,41 @@ function DepartmentDetail({
     }
     setSubTab(key as DeptSubTab);
   }, []);
+  // On a phone the area names itself above the strip it answers to: the
+  // shell's heading band carries the area's name — with the way back out of
+  // it on its own line, where the rail that opened the desk is out of sight —
+  // and sits over the toggles rather than under them, so a ministry opened
+  // from the map, the rail or a deep link always says where the reader is.
+  //
+  // The back handler rides a ref: a caller passing an inline arrow would
+  // otherwise hand this effect a new dependency on every render and loop it
+  // through the shell's header state, exactly as the header warns.
+  const onBackRef = useRef(onBack);
+  useEffect(() => {
+    onBackRef.current = onBack;
+  }, [onBack]);
+  useEffect(() => {
+    setHeadingFirst(true);
+    setCustomHeader({
+      label: department.label,
+      description: department.description,
+      leading: onBackRef.current ? (
+        <button
+          type="button"
+          onClick={() => onBackRef.current?.()}
+          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Back
+        </button>
+      ) : undefined,
+    });
+    return () => {
+      setCustomHeader(null);
+      setHeadingFirst(false);
+    };
+  }, [department.label, department.description, setCustomHeader, setHeadingFirst]);
+
   useEffect(() => {
     if (isDeaconate) {
       setCustomToggles(null);
@@ -4133,14 +4329,16 @@ function DepartmentDetail({
     const seen = new Set<string>();
     const rows: RollRow[] = [];
     const boardPeople: { holder: Holder; office: string }[] = [
-      ...(board.leader ? [{ holder: board.leader, office: board.leader.position || "Leader" }] : []),
+      ...(board.leader
+        ? [{ holder: board.leader, office: seatTitle(department.code, board.leader.position, "leader") }]
+        : []),
       ...board.assistants.map((assistant) => ({
         holder: assistant,
         // A leader-kind row here is the department's second office (the
         // deaconate's Head Deaconess beside its Head Deacon), not someone
         // assisting one — so it keeps its own name rather than reading
         // "Head Deaconess · Assistant" for a seat that takes no assistant.
-        office: formatOfficeRole(assistant.position, assistant.kind),
+        office: seatTitle(department.code, assistant.position, assistant.kind),
       })),
     ];
     for (const { holder, office } of boardPeople) {
@@ -4421,9 +4619,9 @@ function DepartmentDetail({
                               >
                                 <UserCog className="h-4 w-4 text-ember" /> Assign role
                               </button>
-                              {/* The roster's four doors to the person —
-                                  chat here, WhatsApp, call or mail — the same
-                                  set the Ministry map's area view offered, so
+                              {/* The roster's three doors to the person —
+                                  chat here, WhatsApp or call — the same set
+                                  the Ministry map's area view offered, so
                                   reaching someone does not depend on which
                                   view of the ministry opened. */}
                               {typeof row.id === "number" && (
@@ -4456,15 +4654,6 @@ function DepartmentDetail({
                                   className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
                                 >
                                   <Phone className="h-4 w-4 text-sage-strong" /> Call
-                                </a>
-                              )}
-                              {row.email && (
-                                <a
-                                  href={`mailto:${row.email}?subject=${encodeURIComponent(`${department.label}: a word from your department`)}`}
-                                  onClick={() => setOpenMenuKey(null)}
-                                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
-                                >
-                                  <Mail className="h-4 w-4 text-sage-strong" /> Email
                                 </a>
                               )}
                               {row.is_child && row.child_id ? (
@@ -4751,7 +4940,7 @@ function DepartmentDetail({
       {assignFor && typeof assignFor.id === "number" && (
         <AssignRoleModal
           department={department}
-          member={{ id: assignFor.id, name: assignFor.name, sex: assignFor.sex }}
+          member={{ id: assignFor.id, name: assignFor.name, sex: assignFor.sex, office: assignFor.office }}
           unit={unit}
           onClose={() => setAssignFor(null)}
           onSaved={() => {
@@ -4797,7 +4986,18 @@ function DepartmentDetail({
   );
 }
 
-export function DepartmentHub({ initialDept = null }: { initialDept?: string | null } = {}) {
+export function DepartmentHub({
+  initialDept = null,
+  onBack,
+}: {
+  initialDept?: string | null;
+  /**
+   * Where the way out of an opened area leads — the ministry map, or the
+   * desk the hub sits inside. Left unset it is the hub's own directory: the
+   * list the detail was opened from.
+   */
+  onBack?: (() => void) | null;
+} = {}) {
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   // Which department detail (and which of its tabs) is open; the row's
@@ -4868,6 +5068,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
         department={selected}
         onChanged={loadDirectory}
         initialTab={detailTab}
+        onBack={onBack ?? (() => setSelected(null))}
       />
     );
   }
@@ -4920,6 +5121,15 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
                     {department.leader ? (
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-bark" title={department.leader.name}>{department.leader.name}</p>
+                        {/* An area whose lead seat carries its own word for
+                            it — Sabbath School's Superintendent — says so
+                            under the name, so the row never reads as a plain
+                            "Leader" where the church names it otherwise. */}
+                        {seatTitle(department.code, department.leader.position, "leader") !== "Leader" && (
+                          <p className="truncate text-[11px] font-semibold text-ember">
+                            {seatTitle(department.code, department.leader.position, "leader")}
+                          </p>
+                        )}
                         <p className="truncate text-[11px] text-moss">{department.leader.phone_number || department.leader.email || ""}</p>
                       </div>
                     ) : (
@@ -4999,7 +5209,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
               </div>
               <div className="mt-2 space-y-1 text-xs">
                 <p className="text-bark">
-                  <span className="font-semibold text-moss">Leader:</span>{" "}
+                  <span className="font-semibold text-moss">{seatTitle(department.code, department.leader?.position, "leader")}:</span>{" "}
                   {department.leader ? (
                     <span className="font-semibold">{department.leader.name}</span>
                   ) : (
@@ -5011,7 +5221,7 @@ export function DepartmentHub({ initialDept = null }: { initialDept?: string | n
                   {department.assistants.length > 0 ? (
                     <span className="font-semibold">
                       {department.assistants
-                        .map((a) => `${a.name}${a.position && a.position.toLowerCase() !== "assistant" ? ` (${formatOfficeRole(a.position, a.kind)})` : ""}`)
+                        .map((a) => `${a.name}${a.position && a.position.toLowerCase() !== "assistant" ? ` (${seatTitle(department.code, a.position, a.kind)})` : ""}`)
                         .join(", ")}
                     </span>
                   ) : (

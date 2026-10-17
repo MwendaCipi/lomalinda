@@ -34,11 +34,6 @@ export const CHURCH = {
     "A warm, English-speaking Seventh-day Adventist (SDA) church in Meru, Kenya. Join us for Sabbath School and Divine Service every Saturday, Friday vespers, Bible study and fellowship — visitors are always welcome.",
 } as const;
 
-/** A Google Maps search for the church, which needs no API key. */
-const MAPS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-  `${CHURCH.name}, ${CHURCH.town}, Kenya`,
-)}`;
-
 /**
  * Schema.org structured data for search engines.
  *
@@ -47,10 +42,15 @@ const MAPS_URL = `https://www.google.com/maps/search/?api=1&query=${encodeURICom
  * behind it, and the website itself — each with its own `@id` other pages and
  * crawlers can point back at.
  *
- * Two deliberate omissions, because inventing them would be worse than going
+ * Three deliberate omissions, because inventing them would be worse than going
  * without: there is no `geo` (GeoCoordinates) until someone gives the church's
- * verified latitude and longitude, and no `sameAs` until the church's social
- * profiles actually exist. `areaServed` is absent on the place node because
+ * verified latitude and longitude; no `hasMap` until that same record can be
+ * read here — a map link built from the church's *name* was resolving to the
+ * plot the church no longer worships at, so the schema now carries none
+ * rather than one that sends a searcher to the wrong place (the public pages
+ * build their map links from Church Settings instead, through
+ * `churchMapHref`); and no `sameAs` until the church's social profiles
+ * actually exist. `areaServed` is absent on the place node because
  * schema.org does not define it on `Place`, which `Church` inherits from.
  */
 export const churchSchema = {
@@ -83,7 +83,6 @@ export const churchSchema = {
       logo: `${CHURCH.url}/icons/meru/church-icon-512.png`,
       image: `${CHURCH.url}/icons/meru/church-icon-512.png`,
       email: CHURCH.email,
-      hasMap: MAPS_URL,
       address: {
         "@type": "PostalAddress",
         streetAddress: CHURCH.streetAddress,

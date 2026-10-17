@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { AnnouncementCommentModal } from "@/components/announcement-comment-modal";
+import { GiveMethodModal } from "@/components/give-method-modal";
 import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
@@ -72,6 +74,15 @@ export default function AnnouncementsPage() {
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindFor, setInKindFor] = useState<FeedItem | null>(null);
   const [pledgeDone, setPledgeDone] = useState<number[]>([]);
+  // A contribution card's Give Now opens the money-or-goods choice here, so
+  // the card keeps three buttons (Give Now, Pledge, Comment) instead of the
+  // old inline combo of Pledge / In-kind / Give Money.
+  const [methodFor, setMethodFor] = useState<FeedItem | null>(null);
+  // Every card can be commented on: its Comment button opens this thread.
+  const [commentFor, setCommentFor] = useState<FeedItem | null>(null);
+  // A drive's money gift still leaves for the giving page with its purpose
+  // named; the other cards open the money modal in place.
+  const router = useRouter();
   // Opinion answering: which card's form is open, what is typed or picked.
   const [opinionId, setOpinionId] = useState<number | null>(null);
   const [opinionText, setOpinionText] = useState("");
@@ -318,14 +329,20 @@ export default function AnnouncementsPage() {
                         </div>
                       )}
 
-                      {/* The giving actions, always one row, left to right:
-                          Pledge, In-kind, Give Money. A support-account post
-                          opens the giving form with that account already
-                          chosen; a drive opens straight into its own giving
-                          modal. */}
+                      {/* The giving actions, one row: Give Now, Pledge,
+                          Comment. The money-or-goods choice lives inside
+                          Give Now's own modal, so three buttons still carry
+                          everything the old four-wide combo said. */}
                       {supportGives && (
                         <div className="mt-3 border-t border-sand-line pt-3">
                           <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setMethodFor(item)}
+                              className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
+                            >
+                              Give Now
+                            </button>
                             <button
                               type="button"
                               onClick={() => setPledgeTarget(pledgeTargetFor(item))}
@@ -335,17 +352,10 @@ export default function AnnouncementsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setInKindFor(item)}
+                              onClick={() => setCommentFor(item)}
                               className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                             >
-                              In-kind
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSupportAccount(item.support_account_display ?? null)}
-                              className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
-                            >
-                              Give Money
+                              Comment
                             </button>
                           </div>
                         </div>
@@ -356,6 +366,13 @@ export default function AnnouncementsPage() {
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               type="button"
+                              onClick={() => setMethodFor(item)}
+                              className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
+                            >
+                              Give Now
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setPledgeTarget(pledgeTargetFor(item))}
                               className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                             >
@@ -363,18 +380,27 @@ export default function AnnouncementsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setInKindFor(item)}
+                              onClick={() => setCommentFor(item)}
                               className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                             >
-                              In-kind
+                              Comment
                             </button>
-                            <Link
-                              href={driveGiveHref(drive)}
-                              className="rounded-full bg-sage-strong px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-sage-shade"
-                            >
-                              Give Money
-                            </Link>
                           </div>
+                        </div>
+                      )}
+
+                      {/* A card with nothing to give still carries the one
+                          Comment button at its foot — the thread is the same
+                          one a giving card's Comment opens. */}
+                      {!supportGives && !isDrive && (
+                        <div className="mt-3 border-t border-sand-line pt-3">
+                          <button
+                            type="button"
+                            onClick={() => setCommentFor(item)}
+                            className="rounded-full border border-sand-mute bg-white px-4 py-1.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                          >
+                            Comment
+                          </button>
                         </div>
                       )}
 
@@ -419,6 +445,36 @@ export default function AnnouncementsPage() {
         onClose={() => setInKindFor(null)}
         defaultPurpose={inKindFor?.support_account_display || inKindFor?.fund_drive?.title || undefined}
         announcementTitle={inKindFor?.title}
+      />
+
+      {/* The money-or-goods choice behind a contribution card's Give Now.
+          Each option runs the same form the old inline button opened — a
+          drive's money still leaves for the giving page with its purpose
+          named, a support post opens the money modal with its account chosen. */}
+      <GiveMethodModal
+        open={Boolean(methodFor)}
+        onClose={() => setMethodFor(null)}
+        title={methodFor?.fund_drive?.title || methodFor?.title || null}
+        onGiveMoney={() => {
+          const item = methodFor;
+          setMethodFor(null);
+          if (!item) return;
+          if (item.kind === "fund_drive" && item.fund_drive) router.push(driveGiveHref(item.fund_drive));
+          else setSupportAccount(item.support_account_display ?? null);
+        }}
+        onGiveInKind={() => {
+          const item = methodFor;
+          setMethodFor(null);
+          if (item) setInKindFor(item);
+        }}
+      />
+
+      {/* A comment on any card opens this box: the thread above, a
+          500-character composer beneath. */}
+      <AnnouncementCommentModal
+        open={Boolean(commentFor)}
+        onClose={() => setCommentFor(null)}
+        announcement={commentFor}
       />
     </main>
   );

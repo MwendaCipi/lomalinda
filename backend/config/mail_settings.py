@@ -1,6 +1,6 @@
 """Resolve which mailbox each kind of mail leaves this app through.
 
-Four kinds of mail leave here, and each answers from the address that owns the
+Five kinds of mail leave here, and each answers from the address that owns the
 question it carries:
 
 ``info``
@@ -14,11 +14,19 @@ question it carries:
     password / email-change links.
 ``announcement``
     The congregation-wide broadcast.
+``appointments``
+    Leadership: the letter an appointment causes and the thank-you a release
+    does. Written by the app from the Church Settings templates, so it keeps
+    the machine-written purposes' company below — and it answers from an
+    address that says what it is about rather than from the general inbox,
+    because it is a letter a member keeps and may reply to months later.
 
-The last three are machines writing, and a shared mailbox is policed by a
+The last four are machines writing, and a shared mailbox is policed by a
 sending-velocity rule — Zoho Mail blocks a burst mid-broadcast with
 ``SMTP 550 5.4.6`` — so they ride a transactional relay (ZeptoMail, Zoho's
-transactional service) instead. Only ``info`` keeps the shared mailbox.
+transactional service) instead. Only ``info`` keeps the shared mailbox. Seating
+a whole board in one save is exactly the burst that rule watches for, which is
+why ``appointments`` rides beside the broadcast rather than the mailbox.
 
 Why the addresses are split rather than all sending as ``info@``: a member
 replying to a receipt should reach the treasurer, not the general inbox, and a
@@ -32,18 +40,19 @@ once at import; the management command ``send_test_email`` prints what it
 resolved.
 """
 
-#: The four purposes. Strings rather than an enum so a value read off the
+#: The five purposes. Strings rather than an enum so a value read off the
 #: environment or passed across a call site stays a plain, loggable word.
 PURPOSE_INFO = 'info'
 PURPOSE_TREASURY = 'treasury'
 PURPOSE_VERIFY = 'verify'
 PURPOSE_ANNOUNCEMENT = 'announcement'
+PURPOSE_APPOINTMENT = 'appointments'
 
-PURPOSES = (PURPOSE_INFO, PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_ANNOUNCEMENT)
+PURPOSES = (PURPOSE_INFO, PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_ANNOUNCEMENT, PURPOSE_APPOINTMENT)
 
 #: The purposes a machine writes. These are the ones offered the relay; the
 #: others speak with the church's own voice and keep its mailbox.
-TRANSACTIONAL_PURPOSES = (PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_ANNOUNCEMENT)
+TRANSACTIONAL_PURPOSES = (PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_ANNOUNCEMENT, PURPOSE_APPOINTMENT)
 
 #: The name every message is sent under. Spelled without the comma
 #: ('SDA Loma Linda Meru'): a bare comma inside a From display name is an
@@ -59,6 +68,7 @@ DISPLAY_NAME = 'SDA Loma Linda Meru'
 DEFAULT_LOCAL_PARTS = {
     PURPOSE_TREASURY: 'treasury',
     PURPOSE_VERIFY: 'verify',
+    PURPOSE_APPOINTMENT: 'appointments',
 }
 
 # How the relay is reached. ZeptoMail's values are fixed; only the send token
@@ -76,6 +86,7 @@ ENV_PREFIX = {
     PURPOSE_TREASURY: 'TREASURY',
     PURPOSE_VERIFY: 'VERIFY',
     PURPOSE_ANNOUNCEMENT: 'ANNOUNCEMENT',
+    PURPOSE_APPOINTMENT: 'APPOINTMENTS',
 }
 
 

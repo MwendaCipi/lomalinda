@@ -14,11 +14,12 @@ from django.test import TestCase, override_settings
 # state one that comfortably brackets today.
 ANNOUNCEMENT_WINDOW = {'starts_at': '2020-01-01', 'expires_at': '2099-12-31'}
 
-from .mailing import IDENTITY, MONEY, purpose_for_sender, sender_for
+from .mailing import APPOINTMENT, IDENTITY, MONEY, purpose_for_sender, sender_for
 from .requests import send_membership_approval_email
-from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_invitation_email, GivingAccountsView, _deliver_receipt_message, send_password_reset_email
+from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_appointment_emails, send_invitation_email, GivingAccountsView, _deliver_receipt_message, send_password_reset_email
 from config.mail_settings import (
     PURPOSES,
+    PURPOSE_APPOINTMENT,
     PURPOSE_INFO,
     PURPOSE_TREASURY,
     PURPOSE_VERIFY,
@@ -1016,8 +1017,9 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('friend@example.com', mail.outbox[0].to)
         self.assertIn('Thank you for your gift towards the welfare fund.', mail.outbox[0].body)
-        # The letter points the giver at the paper riding with it.
-        self.assertIn('Find your receipt attached', mail.outbox[0].body)
+        # The letter no longer points at the paper in words — the slip
+        # rides with it, and that is explanation enough.
+        self.assertNotIn('Find your receipt attached', mail.outbox[0].body)
         # The structured tail still rides along, so the receipt reads like
         # every other receipt the church sends.
         self.assertIn('Receipt Summary:', mail.outbox[0].body)
@@ -4796,7 +4798,8 @@ class PledgeLifecycleTests(APITestCase):
 
 
 class AnnouncementEventDatesAPITests(APITestCase):
-    """Event windows date an announcement; the nearest event leads the feed."""
+    """Event windows date an announcement; the post that runs out soonest
+    leads the feed, however long its event is and whenever it began."""
 
     def setUp(self):
         self.admin = User.objects.create_user('event.admin', 'event.admin@example.com', 'ChurchAdmin#2026')
@@ -4807,7 +4810,7 @@ class AnnouncementEventDatesAPITests(APITestCase):
         from .models import Announcement
         return Announcement.objects.create(title=title, text=f'{title} body', visibility='members_only', **dates)
 
-    def test_listing_prioritises_the_event_closest_in_time(self):
+    def test_the_event_that_ends_soonest_leads_the_feed(self):
         today = timezone.localdate()
         self._announcement('General notice')
         self._announcement('Happening now', event_date_from=today - timedelta(days=1), event_date_to=today + timedelta(days=1))
@@ -4821,6 +4824,40 @@ class AnnouncementEventDatesAPITests(APITestCase):
             [row['title'] for row in response.data],
             ['Happening now', 'Next week program', 'Far camp', 'General notice'],
         )
+
+    def test_an_event_under_way_does_not_outrank_a_later_one_that_ends_first(self):
+        """The day a post runs out is its rank, not the day it began: an event
+        that started days ago and runs another month stands behind one that
+        begins later and is over before it."""
+        today = timezone.localdate()
+        # Under way today, and still running long after the weekend below —
+        # the post that led the feed on the old rule simply for being current.
+        self._announcement(
+            'Month of camp',
+            event_date_from=today - timedelta(days=2),
+            event_date_to=today + timedelta(days=30),
+        )
+        # Begins later, ends sooner.
+        self._announcement(
+            'Weekend program',
+            event_date_from=today + timedelta(days=1),
+            event_date_to=today + timedelta(days=3),
+        )
+
+        response = self.client.get('/api/members/announcements/')
+
+        titles = [row['title'] for row in response.data]
+        self.assertLess(titles.index('Weekend program'), titles.index('Month of camp'))
+
+    def test_posts_running_out_on_one_day_keep_the_newest_posting_first(self):
+        """One end day is one rank; the posting order decides inside it."""
+        today = timezone.localdate()
+        self._announcement('Posted first', event_date_from=today + timedelta(days=5), event_date_to=today + timedelta(days=5))
+        self._announcement('Posted second', event_date_from=today + timedelta(days=5), event_date_to=today + timedelta(days=5))
+
+        response = self.client.get('/api/members/announcements/')
+
+        self.assertEqual([row['title'] for row in response.data], ['Posted second', 'Posted first'])
 
     def test_an_event_whose_last_day_has_passed_leaves_the_feed(self):
         """The event's own end retires the post; nobody comes back to delete it."""
@@ -4838,8 +4875,8 @@ class AnnouncementEventDatesAPITests(APITestCase):
         self.assertIn('No event, no window', titles)
         self.assertNotIn('Ended yesterday', titles)
 
-    def test_the_event_start_date_sets_the_position_not_the_posting_date(self):
-        """A post created earlier but about a sooner event leads the feed."""
+    def test_the_event_date_sets_the_position_not_the_posting_date(self):
+        """A post created earlier but about the sooner event leads the feed."""
         today = timezone.localdate()
         # Created first, but its event starts later.
         first = self._announcement('Later event', event_date_from=today + timedelta(days=30), event_date_to=today + timedelta(days=30))
@@ -9113,6 +9150,10 @@ class DepartmentApiTests(APITestCase):
         appointment = next(m for m in mail.outbox if self.plain.email in m.to)
         self.assertNotIn('Assistant Assistant', appointment.subject)
         self.assertNotIn('Assistant Assistant', appointment.body)
+        # The desk's save is what writes the letter, so the address on it is
+        # the appointments one rather than the general inbox.
+        self.assertIn('appointments@', appointment.from_email)
+        self.assertEqual(purpose_for_sender(appointment.from_email), APPOINTMENT)
 
         # An office on the books that opens with the word — an area that
         # carried one before the church settled the catalogue — keeps the
@@ -9141,12 +9182,12 @@ class DepartmentApiTests(APITestCase):
         amm = Department.objects.get(code='amm')
         self.assertEqual(
             list(amm.roles.values_list('name', flat=True)),
-            ['Leader', 'Assistant', 'Secretary', 'Treasurer', 'Choir Leader', 'Pianist'],
+            ['Leader', 'Assistant', 'Secretary', 'Treasurer', 'Choir Leader'],
         )
         # The base pair is the area's always; the catalogue is its own to
         # keep or drop.
         self.assertFalse(amm.roles.get(name='Leader').is_optional)
-        self.assertTrue(amm.roles.get(name='Pianist').is_optional)
+        self.assertTrue(amm.roles.get(name='Choir Leader').is_optional)
         # A title is no longer something a desk writes.
         res = self.client.post('/api/members/departments/amm/leadership/', {
             'name': 'Music Leader',
@@ -9154,10 +9195,10 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(res.status_code, 405)
         # A catalogue office the area does not use goes, with its seats.
         res = self.client.delete('/api/members/departments/amm/leadership/', {
-            'role_id': amm.roles.get(name='Pianist').id,
+            'role_id': amm.roles.get(name='Choir Leader').id,
         }, format='json')
         self.assertEqual(res.status_code, 200)
-        self.assertFalse(amm.roles.filter(name='Pianist').exists())
+        self.assertFalse(amm.roles.filter(name='Choir Leader').exists())
         # The base pair cannot be removed.
         res = self.client.delete('/api/members/departments/amm/leadership/', {
             'role_id': self.amm_leader_role.id,
@@ -13853,11 +13894,11 @@ class EmailChangeVerificationTests(APITestCase):
 class MailSenderSplitTests(TestCase):
     """Who each kind of letter answers from.
 
-    The church answers three questions from three addresses: money from the
-    treasury's, joining and identity from the verify address, and a person's
-    letter from the mailbox a person actually reads. These tests pin that
-    split, so a later refactor cannot quietly send a receipt as info@ and let
-    automation bury a pastoral reply.
+    The church answers four questions from four addresses: money from the
+    treasury's, joining and identity from the verify address, leadership from
+    the appointments address, and a person's letter from the mailbox a person
+    actually reads. These tests pin that split, so a later refactor cannot
+    quietly send a receipt as info@ and let automation bury a pastoral reply.
     """
 
     #: The main mailbox of the shape settings.py hands the resolver.
@@ -13878,6 +13919,9 @@ class MailSenderSplitTests(TestCase):
         self.assertEqual(senders[PURPOSE_INFO]['from_email'], self.MAIN['from_email'])
         self.assertIn('<treasury@sdalomalinda.or.ke>', senders[PURPOSE_TREASURY]['from_email'])
         self.assertIn('<verify@sdalomalinda.or.ke>', senders[PURPOSE_VERIFY]['from_email'])
+        # The leadership letters answer from their own address, not the
+        # general inbox an appointment letter used to leave as.
+        self.assertIn('<appointments@sdalomalinda.or.ke>', senders[PURPOSE_APPOINTMENT]['from_email'])
 
     def test_human_correspondence_never_leaves_the_churchs_own_mailbox(self):
         """info@ stays on the mailbox a person reads, token or no token.
@@ -13894,7 +13938,7 @@ class MailSenderSplitTests(TestCase):
 
     def test_a_relay_token_moves_the_machine_written_purposes_off_the_mailbox(self):
         senders = self.resolve(ZEPTOMAIL_SEND_TOKEN='tok-123')
-        for purpose in (PURPOSE_TREASURY, PURPOSE_VERIFY):
+        for purpose in (PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_APPOINTMENT):
             with self.subTest(purpose=purpose):
                 resolved = senders[purpose]
                 self.assertEqual(resolved['host'], 'smtp.zeptomail.com')
@@ -13912,6 +13956,7 @@ class MailSenderSplitTests(TestCase):
         # letter changes, never who the letter is from.
         self.assertIn('<treasury@sdalomalinda.or.ke>', senders[PURPOSE_TREASURY]['from_email'])
         self.assertIn('<verify@sdalomalinda.or.ke>', senders[PURPOSE_VERIFY]['from_email'])
+        self.assertIn('<appointments@sdalomalinda.or.ke>', senders[PURPOSE_APPOINTMENT]['from_email'])
 
     def test_an_explicit_override_still_wins_and_is_not_contagious(self):
         senders = self.resolve(
@@ -13931,6 +13976,7 @@ class MailSenderSplitTests(TestCase):
         senders = resolve_senders({}, main)
         self.assertIn('<treasury@anotherchurch.org>', senders[PURPOSE_TREASURY]['from_email'])
         self.assertIn('<verify@anotherchurch.org>', senders[PURPOSE_VERIFY]['from_email'])
+        self.assertIn('<appointments@anotherchurch.org>', senders[PURPOSE_APPOINTMENT]['from_email'])
 
     def test_the_broadcast_keeps_its_own_rule(self):
         resolved = resolve_announcement_email({'ZEPTOMAIL_SEND_TOKEN': 'tok-123'}, dict(self.MAIN))
@@ -13975,9 +14021,35 @@ class MailSenderDeliveryTests(TestCase):
         self.assertEqual(purpose_for_sender(mail.outbox[0].from_email), MONEY)
         self.assertNotEqual(purpose_for_sender(mail.outbox[0].from_email), IDENTITY)
 
+    def test_a_leadership_letter_answers_from_the_appointments_address(self):
+        """One leadership save writes two letters — the welcome to whoever
+        took the seat and the thank-you to whoever held it — and both leave as
+        the church's appointments address rather than the general inbox."""
+        department = Department.objects.create(code='stewardship', name='Stewardship')
+        seated = User.objects.create_user(
+            'seated.leader', 'seated@example.com', 'StrongPass#2026', first_name='Seated',
+        )
+        released = User.objects.create_user(
+            'released.leader', 'released@example.com', 'StrongPass#2026', first_name='Released',
+        )
+        send_appointment_emails(department, [
+            {'member': seated, 'position': 'Leader', 'kind': 'leader', 'replaced': released},
+        ])
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(
+            {message.to[0] for message in mail.outbox},
+            {seated.email, released.email},
+        )
+        for message in mail.outbox:
+            with self.subTest(letter=message.subject):
+                self.assertIn('appointments@sdalomalinda.or.ke', message.from_email)
+                self.assertEqual(purpose_for_sender(message.from_email), APPOINTMENT)
+                self.assertNotEqual(purpose_for_sender(message.from_email), MONEY)
+
     def test_the_split_survives_a_lookup_by_address(self):
         self.assertEqual(purpose_for_sender(sender_for(MONEY)), MONEY)
         self.assertEqual(purpose_for_sender(sender_for(IDENTITY)), IDENTITY)
+        self.assertEqual(purpose_for_sender(sender_for(APPOINTMENT)), APPOINTMENT)
         self.assertIsNone(purpose_for_sender('nobody@example.com'))
 
 

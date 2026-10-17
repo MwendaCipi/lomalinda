@@ -53,9 +53,10 @@ from .validators import validate_phone_number
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 # Which address each kind of letter leaves as: a receipt answers from the
-# treasury's address, a verification code from the church's identity one, and
-# info@ stays the mailbox a person writes to (see members/mailing.py).
-from .mailing import IDENTITY, MONEY, connection_for, sender_for
+# treasury's address, a verification code from the church's identity one, a
+# leadership letter from the appointments one, and info@ stays the mailbox a
+# person writes to (see members/mailing.py).
+from .mailing import APPOINTMENT, IDENTITY, MONEY, connection_for, sender_for
 from .pledges import (
     redeem_campaign_pledges_matched_by_giving,
     redeem_due_pledges,
@@ -159,15 +160,6 @@ def receipt_summary(*, account, amount, payment_channel, receipt_ref, date_displ
         f"Receipt No: {receipt_ref}\n"
         f"Date: {date_display}"
     )
-
-
-#: The line that points the giver at the paper riding with the letter. Only
-#: the email carries it — a text message cannot carry a file — so the SMS
-#: keeps the letter without the promise.
-RECEIPT_ATTACHED_NOTE = (
-    'Find your receipt attached to this message. It carries the same details '
-    'in print-ready form, for your records.'
-)
 
 
 def contribution_receipt_attachment(contribution):
@@ -402,12 +394,12 @@ def send_password_reset_email(user, uid, token):
     )
 
 
-def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, attachments=None, email_body=None):
+def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, attachments=None):
     """Attempt every available receipt channel and report whether one succeeded.
 
-    ``attachments`` ride the email only — SMS cannot carry files — so the
-    email may carry its own ``email_body`` (the same letter plus the line
-    pointing at the paper) while the text message keeps the plain letter.
+    ``attachments`` ride the email only — SMS cannot carry files — but the
+    letter itself is the same on both channels: it no longer names the paper
+    in words, so there is nothing to say on one channel and not the other.
     """
     email_sent = False
     sms_sent = False
@@ -416,7 +408,7 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
         try:
             if attachments:
                 message = EmailMessage(
-                    subject, email_body or body, sender_for(MONEY), [email],
+                    subject, body, sender_for(MONEY), [email],
                     connection=connection_for(MONEY),
                 )
                 for filename, content, mimetype in attachments:
@@ -424,7 +416,7 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
                 message.send(fail_silently=False)
             else:
                 send_mail(
-                    subject, email_body or body, sender_for(MONEY), [email],
+                    subject, body, sender_for(MONEY), [email],
                     connection=connection_for(MONEY), fail_silently=False,
                 )
             email_sent = True
@@ -494,20 +486,14 @@ def send_contribution_receipt(contribution, receipt_email=''):
         or (usable_email(contribution.member.email) if contribution.member else '')
         or usable_email(receipt_email)
     )
-    # The email carries the thermal paper and points at it; the SMS gets the
-    # same letter without the promise — a text cannot carry a file.
+    # The email carries the thermal paper the SMS cannot; the letter itself
+    # is the same on both channels.
     attachment = contribution_receipt_attachment(contribution) if email else None
     body = (
         f"{receipt_message}\n\n"
         f"{summary}\n\n"
         f"{receipt_email_signature()}"
     )
-    email_body = (
-        f"{receipt_message}\n\n"
-        f"{RECEIPT_ATTACHED_NOTE}\n\n"
-        f"{summary}\n\n"
-        f"{receipt_email_signature()}"
-    ) if attachment else body
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {contribution.purpose}",
         body=body,
@@ -515,7 +501,6 @@ def send_contribution_receipt(contribution, receipt_email=''):
         phone=contribution.phone_number,
         mark_sent=lambda: None,
         attachments=[attachment] if attachment else None,
-        email_body=email_body,
     )
     if delivery['email_sent'] or delivery['sms_sent']:
         contribution.receipt_sent_at = timezone.now()
@@ -576,12 +561,6 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
         f"{summary}\n\n"
         f"{receipt_email_signature()}"
     )
-    email_body = (
-        f"{receipt_message}\n\n"
-        f"{RECEIPT_ATTACHED_NOTE}\n\n"
-        f"{summary}\n\n"
-        f"{receipt_email_signature()}"
-    ) if attachment else body
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {account_list}",
         body=body,
@@ -589,7 +568,6 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
         phone=first.phone_number,
         mark_sent=lambda: None,
         attachments=[attachment] if attachment else None,
-        email_body=email_body,
     )
     if delivery['email_sent'] or delivery['sms_sent']:
         Contribution.objects.filter(id__in=[row.id for row in completed]).update(receipt_sent_at=timezone.now())
@@ -2064,8 +2042,9 @@ class AnnouncementView(generics.ListCreateAPIView):
             )
             queryset = queryset.filter(dated_alive | undated_alive)
         if self.request.query_params.get('include_scheduled') != 'true':
-            # An event dated in the future is not hidden — it leads the feed —
-            # but a legacy start date still holds older posts back.
+            # An event dated in the future is not hidden — it takes its place in
+            # the feed by when it ends (see list()) — but a legacy start date
+            # still holds older posts back.
             queryset = queryset.filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
         search = self.request.query_params.get('search', '').strip()
         if search:
@@ -2075,30 +2054,33 @@ class AnnouncementView(generics.ListCreateAPIView):
         return queryset.filter(visibility__in=['public_website', 'all'])
 
     def list(self, request, *args, **kwargs):
-        """The event's start date is the announcement's position.
+        """The day the event ends is the announcement's position.
 
-        The starting date of the event determines where a post sits in the
-        feed: the soonest-starting event leads, and a running event (today
-        inside its range) leads those. Announcements without an event keep
-        their posting order (newest first) behind the dated ones.
+        A post is ranked by the day it runs out, the soonest first: the notice
+        whose window closes next is the one a reader can still act on. Ranking
+        by the end rather than the beginning is what keeps a long event that
+        began earlier from sitting above a later one that finishes before it:
+        a month of camp is not more urgent than next weekend's programme merely
+        for being under way today.
+
+        Announcements without an event keep their posting order (newest first)
+        behind the dated ones.
         """
         queryset = list(self.filter_queryset(self.get_queryset()))
-        today = timezone.localdate()
 
-        def urgency(announcement):
+        def finishes(announcement):
+            """The day this post's event runs out; ``None`` for a post with no
+            event. A single-day event ends on the day it starts."""
             if announcement.event_date_from is None:
                 return None
-            start = announcement.event_date_from
-            end = announcement.event_date_to or announcement.event_date_from
-            if start <= today <= end:
-                return 0  # running: today is the day
-            return (start - today).days  # days until it begins
+            return announcement.event_date_to or announcement.event_date_from
 
         queryset.sort(key=lambda a: a.created_at, reverse=True)
-        dated = [a for a in queryset if urgency(a) is not None]
-        # Stable sort: ties inside one distance band keep newest posting first.
-        dated.sort(key=urgency)
-        undated = [a for a in queryset if urgency(a) is None]
+        dated = [a for a in queryset if finishes(a) is not None]
+        # Stable sort: posts that run out on the same day keep the newest
+        # posting first.
+        dated.sort(key=finishes)
+        undated = [a for a in queryset if finishes(a) is None]
         return Response(self.get_serializer(dated + undated, many=True).data)
 
     def perform_create(self, serializer):
@@ -4582,12 +4564,6 @@ class ResendContributionReceiptView(APIView):
                 f"{summary}\n\n"
                 f"{receipt_email_signature()}"
             )
-            email_body = (
-                f"{receipt_message}\n\n"
-                f"{RECEIPT_ATTACHED_NOTE}\n\n"
-                f"{summary}\n\n"
-                f"{receipt_email_signature()}"
-            ) if attachment else body
             delivery = _deliver_receipt_message(
                 subject=f"Receipt Copy — {contribution.purpose}",
                 body=body,
@@ -4595,7 +4571,6 @@ class ResendContributionReceiptView(APIView):
                 phone=phone if send_sms else '',
                 mark_sent=lambda: None,
                 attachments=[attachment] if attachment else None,
-                email_body=email_body,
             )
             sent = bool(delivery['email_sent'] or delivery['sms_sent'])
             # The corrected contacts are kept even if the send itself failed,
@@ -5719,12 +5694,6 @@ class AssignContributionAccountView(APIView):
             f"{summary}\n\n"
             f"{receipt_email_signature()}"
         )
-        email_body = (
-            f"{receipt_message}\n\n"
-            f"{RECEIPT_ATTACHED_NOTE}\n\n"
-            f"{summary}\n\n"
-            f"{receipt_email_signature()}"
-        ) if attachment else body
         delivery = _deliver_receipt_message(
             subject=f"Giving receipt — {account_list}",
             body=body,
@@ -5732,7 +5701,6 @@ class AssignContributionAccountView(APIView):
             phone=phone,
             mark_sent=lambda: None,
             attachments=[attachment] if attachment else None,
-            email_body=email_body,
         )
         if delivery['email_sent'] or delivery['sms_sent']:
             contribution.receipt_sent_at = timezone.now()
@@ -10179,7 +10147,7 @@ class DepartmentBudgetView(APIView):
 #: old role-flag system carried, so every permission check, announcement
 #: audience and report that reads role flags keeps working while areas become
 #: the way roles are assigned. Titles not listed here (Secretary, Treasurer,
-#: a choir's Pianist, an area's Choir Leader) are area-scoped offices only —
+#: an area's Choir Leader) are area-scoped offices only —
 #: the church's own Choir Director is the 'choir director' entry below, and
 #: an area's Choir Leader is deliberately not it.
 OFFICE_ROLE_CODES = {
@@ -10292,7 +10260,7 @@ class DepartmentCreateView(APIView):
     department is seeded with the same offices the church's areas carry —
     ``DEPARTMENT_ROLE_SEED``: the Leader and Assistant positions the
     leadership desk appoints by search, then the catalogue (Secretary,
-    Treasurer, Choir Leader, Pianist) — and the desk fills them through Edit
+    Treasurer, Choir Leader) — and the desk fills them through Edit
     leadership or leaves them open. The code is a slug of the name — it names
     the API path and the ``dept_<code>`` audience — and is never reused, even
     after deactivation.
@@ -10359,9 +10327,15 @@ def send_appointment_emails(department, appointment_notes):
     Each appointee gets the welcome letter; each replaced holder the thank-you,
     which names who takes up the role. Wordings are Church Settings templates
     (default_appointment_message / default_release_thank_you_message), filled
-    with the same placeholder machinery the meeting invitations use. Failure
-    to send never fails the save — the letters are a courtesy, and the mail
-    backend logs what it could not deliver.
+    with the same placeholder machinery the meeting invitations use.
+
+    Both letters leave as the church's appointments address rather than the
+    general inbox (members/mailing.py): a member keeps the letter that seated
+    them and may answer it months later, and one save can seat a whole board —
+    the burst of letters a shared mailbox's sending-velocity rule refuses, so
+    the purpose rides the relay. Failure to send never fails the save — the
+    letters are a courtesy, and the mail backend logs what it could not
+    deliver.
     """
     if not appointment_notes:
         return
@@ -10382,16 +10356,18 @@ def send_appointment_emails(department, appointment_notes):
             send_mail(
                 f"{note['position']} — {department.name}",
                 render_message(appointment_template, context),
-                settings.DEFAULT_FROM_EMAIL,
+                sender_for(APPOINTMENT),
                 [note['member'].email],
+                connection=connection_for(APPOINTMENT),
                 fail_silently=True,
             )
             if note['replaced'] and note['replaced'].email:
                 send_mail(
                     f"Thank you — {note['position']}, {department.name}",
                     render_message(release_template, {**context, 'name': recipient_name(note['replaced'])}),
-                    settings.DEFAULT_FROM_EMAIL,
+                    sender_for(APPOINTMENT),
                     [note['replaced'].email],
+                    connection=connection_for(APPOINTMENT),
                     fail_silently=True,
                 )
         except Exception:

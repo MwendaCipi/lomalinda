@@ -19,6 +19,7 @@ from django.core.mail import get_connection
 #: ``config`` from deep inside the app.
 from config.mail_settings import (  # noqa: F401  (re-exported on purpose)
     PURPOSE_ANNOUNCEMENT,
+    PURPOSE_APPOINTMENT,
     PURPOSE_INFO,
     PURPOSE_TREASURY,
     PURPOSE_VERIFY,
@@ -32,6 +33,9 @@ HUMAN = PURPOSE_INFO
 MONEY = PURPOSE_TREASURY
 #: Joining and identity: invitations, verify-your-account codes, resets.
 IDENTITY = PURPOSE_VERIFY
+#: Leadership: the letter an appointment causes and the thank-you a release
+#: does, both sent by the department leadership desk.
+APPOINTMENT = PURPOSE_APPOINTMENT
 
 
 def resolved(purpose):
@@ -85,7 +89,7 @@ def purpose_for_sender(address):
     wanted = _address_only(address)
     if not wanted:
         return None
-    for purpose in (HUMAN, MONEY, IDENTITY, PURPOSE_ANNOUNCEMENT):
+    for purpose in (HUMAN, MONEY, IDENTITY, PURPOSE_ANNOUNCEMENT, APPOINTMENT):
         if _address_only(sender_for(purpose)) == wanted:
             return purpose
     return None

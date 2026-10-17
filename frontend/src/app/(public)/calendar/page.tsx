@@ -15,6 +15,7 @@ import {
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { dayFirst, weekdayOf } from "@/lib/dates";
+import { churchMapHref } from "@/hooks/use-church-settings";
 
 import { ChurchLockup } from "@/components/church-lockup";
 
@@ -71,11 +72,12 @@ type CalendarEvent = {
   program_file?: string | null;
 };
 
-function mapsLink(settings: ChurchSettings | null) {
-  return settings?.latitude && settings.longitude
-    ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`
-    : "";
-}
+/**
+ * The map every physical event's actions menu offers: the church's own pin,
+ * or a search for its address. Never a search for the church's name — that
+ * listing is the plot the church no longer worships at — and null when the
+ * record carries neither, in which case the menu simply offers no map.
+ */
 
 /**
  * The arrow back to the section the calendar belongs to. It leads the page —
@@ -123,7 +125,7 @@ function EventActionsMenu({
   row, mapUrl, variant, onClose, onProgram,
 }: {
   row: CalendarEvent;
-  mapUrl: string;
+  mapUrl: string | null;
   /** The table's row keeps the full menu; the tighter the listing, the fewer words. */
   variant: "row" | "card";
   onClose: () => void;
@@ -316,7 +318,7 @@ function CalendarPageContent() {
       .finally(() => setLoaded(true));
   }, []);
 
-  const mapUrl = mapsLink(settings);
+  const mapUrl = churchMapHref(settings);
   const monthYear = monthDate.getFullYear();
   const monthIndex = monthDate.getMonth();
 

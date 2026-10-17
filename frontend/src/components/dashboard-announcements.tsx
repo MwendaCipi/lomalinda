@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { announcementCountdown } from "@/lib/announcement-dates";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { GiveMethodModal } from "@/components/give-method-modal";
+import { AnnouncementCommentModal } from "@/components/announcement-comment-modal";
 import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 import { isImageAttachment } from "@/components/announcement-attachment";
 
@@ -41,6 +44,7 @@ type Announcement = {
  * and the rail never goes empty either way.
  */
 export function DashboardAnnouncements() {
+  const router = useRouter();
   // The church's own record, for the place a gathering is held: the stand-in
   // slide names the church's address rather than one written in code.
   const settings = useChurchSettings();
@@ -54,6 +58,13 @@ export function DashboardAnnouncements() {
   // never loses their place to give — the same two forms the feed opens.
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindOpen, setInKindOpen] = useState(false);
+  // A contribution card's Give Now opens the money-or-goods choice here, so
+  // the rail keeps one button instead of the old inline combo of Pledge /
+  // In-kind / Give Money. A Comment button on every card opens this thread.
+  // Pledge, Give Now and Comment ride the same card so the member can take
+  // any of the three without leaving the rail.
+  const [methodFor, setMethodFor] = useState<Announcement | null>(null);
+  const [commentFor, setCommentFor] = useState<Announcement | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -96,7 +107,7 @@ export function DashboardAnnouncements() {
 
   // A modal over the rail holds the slides still — nothing should turn behind
   // a form the member is filling in.
-  const modalOpen = Boolean(pledgeTarget) || inKindOpen;
+  const modalOpen = Boolean(pledgeTarget) || inKindOpen || Boolean(methodFor) || Boolean(commentFor);
 
   useEffect(() => {
     if (!canRotate || isPaused || isInteracting || modalOpen) return;
@@ -107,7 +118,6 @@ export function DashboardAnnouncements() {
   const isGiving = current?.announcement_type === "promotion";
   const isOpinion = current?.announcement_type === "opinion";
   const isConference = current?.announcement_type === "web_conference" && Boolean(current.href);
-  const giveMoneyHref = `/give?purpose=${encodeURIComponent(current?.support_account_display || current?.title || "")}`;
 
   /** Show "see more" on an awareness notice when the body is longer than the
       card's three-line window or when the notice carries an image a visitor
@@ -125,6 +135,12 @@ export function DashboardAnnouncements() {
     event_date_from: announcement.event_date_from,
     event_date_to: announcement.event_date_to,
   });
+
+  /** The money-or-goods choice's target — a drive leaves for the giving page,
+      a support post opens the money modal with its account chosen. */
+  const giveMoneyFor = (announcement: Announcement) => {
+    router.push(`/give?purpose=${encodeURIComponent(announcement.support_account_display || announcement.title || "")}`);
+  };
 
   return (
     // `h-full`: on a wide screen the card shares a row with the pages beside
@@ -231,12 +247,20 @@ export function DashboardAnnouncements() {
         </div>
 
         {/* The announcement's own actions. Clicking the card opens the full
-            announcement in the feed; a giving call carries the giving row
-            itself — Pledge, In-kind, Give Money, left to right. */}
+            announcement in the feed; a giving call carries one Give Now button
+            whose modal offers money or goods — the same two forms the old
+            three-wide combo opened — plus Pledge and Comment. */}
         <div className="flex items-center justify-between gap-3">
           {isGiving && (
             <div className="flex-1">
               <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { if (current) setMethodFor(current); }}
+                  className="pointer-events-auto rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
+                >
+                  Give Now
+                </button>
                 <button
                   type="button"
                   onClick={() => { if (current) setPledgeTarget(pledgeTargetFor(current)); }}
@@ -246,27 +270,37 @@ export function DashboardAnnouncements() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setInKindOpen(true)}
+                  onClick={() => { if (current) setCommentFor(current); }}
                   className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                 >
-                  In-kind
+                  Comment
                 </button>
-                <Link
-                  href={giveMoneyHref}
-                  className="pointer-events-auto rounded-full bg-sage-strong px-2 py-2 text-center text-xs font-bold text-white transition hover:bg-sage-shade"
-                >
-                  Give Money
-                </Link>
               </div>
             </div>
           )}
           {isOpinion && (
-            <Link
-              href="/announcements"
+            <button
+              type="button"
+              onClick={() => { if (current) setCommentFor(current); }}
               className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
             >
               Give input
-            </Link>
+            </button>
+          )}
+          {/* A notice with no action of its own still takes a comment: the
+              feed's rule — every card carries the Comment button — reaches
+              the rail too, so a member reading a plain notice can answer it
+              without first opening the full feed. The giving, opinion and
+              conference slides already carry their own controls, so this sits
+              only on the slides that would otherwise go without. */}
+          {current && !isGiving && !isOpinion && !isConference && (
+            <button
+              type="button"
+              onClick={() => { if (current) setCommentFor(current); }}
+              className="pointer-events-auto rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+            >
+              Comment
+            </button>
           )}
           {isConference && current?.href && (
             <div className="ml-auto flex items-center gap-3">
@@ -327,6 +361,36 @@ export function DashboardAnnouncements() {
         onClose={() => setInKindOpen(false)}
         defaultPurpose={current?.support_account_display || undefined}
         announcementTitle={current?.title}
+      />
+
+      {/* The money-or-goods choice behind a contribution card's Give Now.
+          Each option runs the same form the old inline button opened — a
+          drive's money still leaves for the giving page with its purpose
+          named, a support post opens the money modal in place.
+          The box only shows the doors the card actually offers: a photo-only
+          announcement has no money door, so it never carries the modal at all. */}
+      <GiveMethodModal
+        open={Boolean(methodFor) && isGiving}
+        onClose={() => setMethodFor(null)}
+        title={methodFor?.title || null}
+        onGiveMoney={isGiving ? () => {
+          const item = methodFor;
+          setMethodFor(null);
+          if (item) giveMoneyFor(item);
+        } : undefined}
+        onGiveInKind={isGiving ? () => {
+          const item = methodFor;
+          setMethodFor(null);
+          if (item) setInKindOpen(true);
+        } : undefined}
+      />
+
+      {/* A comment on any card opens this box: the thread above, a
+          500-character composer beneath. */}
+      <AnnouncementCommentModal
+        open={Boolean(commentFor)}
+        onClose={() => setCommentFor(null)}
+        announcement={commentFor ? { id: commentFor.id, title: commentFor.title } : null}
       />
     </div>
   );

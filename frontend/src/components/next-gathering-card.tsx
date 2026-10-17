@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, weekdayOf } from "@/lib/dates";
-import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
+import { churchMapHref, churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -91,9 +91,10 @@ export function NextGatheringCard() {
     return () => window.clearInterval(timer);
   }, [canRotate, isPaused, isInteracting, slideCount]);
 
-  const mapsUrl = settings?.latitude && settings.longitude
-    ? `https://www.google.com/maps/search/?api=1&query=${settings.latitude},${settings.longitude}`
-    : null;
+  // The map the church's own record backs: its pin, or its address. Never a
+  // search for the church's name, whose listing is the plot it used to meet
+  // at; with neither, the location card sends a visitor to the calendar.
+  const mapsUrl = churchMapHref(settings);
   const actionType = current?.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
 

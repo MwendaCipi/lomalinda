@@ -374,7 +374,6 @@ DEPARTMENT_ROLE_CATALOGUE = (
     ('Secretary', True),
     ('Treasurer', True),
     ('Choir Leader', True),
-    ('Pianist', False),
 )
 
 #: What an area is seeded with: the base pair, then the catalogue.
@@ -444,7 +443,7 @@ class DepartmentRole(models.Model):
     """One office inside a department, and whether it takes an assistant.
 
     A department's offices live here — the base "Leader" and "Assistant",
-    then the seeded catalogue (Secretary, Treasurer, Choir Leader, Pianist),
+    then the seeded catalogue (Secretary, Treasurer, Choir Leader),
     each scoped to its department, so two departments can both have a
     Secretary without the titles colliding. Every area is seeded with the
     same list (``DEPARTMENT_ROLE_SEED``) and the desk fills each office with

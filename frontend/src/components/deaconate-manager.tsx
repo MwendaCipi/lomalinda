@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { usePageHeader } from "@/components/app-frame";
 import {
   AlertTriangle,
@@ -224,6 +225,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   }, []);
 
   const { setHeaderRightAction } = usePageHeader();
+  const router = useRouter();
   useEffect(() => {
     if (activeTab !== "inventory") return;
     // The two filters, written once and shown twice: inside the phone's
@@ -654,8 +656,15 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
           Deacon and Head Deaconess lead the page as the department's board,
           the roll reads the same endpoint every other desk reads, and Add
           member — batch picking included — works exactly as the other
-          departments' rolls do. */}
-      {activeTab === "members" && <DepartmentHub initialDept="deaconate" />}
+          departments' rolls do. The way out of the opened area leads back to
+          the administration overview, the same place every other tab's back
+          arrow goes — the desk's own directory has no place here. */}
+      {activeTab === "members" && (
+        <DepartmentHub
+          initialDept="deaconate"
+          onBack={() => router.replace("/administration?tab=overview", { scroll: false })}
+        />
+      )}
 
       {/* ── TAB: CALENDAR & ORDINANCES ── */}
       {activeTab === "calendar" && (

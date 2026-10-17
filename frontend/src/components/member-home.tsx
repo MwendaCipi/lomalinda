@@ -14,7 +14,7 @@ import { useDepartments, useMyTies, type DepartmentRow } from "@/hooks/use-depar
 import { useHeaderData } from "@/hooks/use-header-data";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
-import { formatOfficeRole } from "@/components/roles-combobox";
+import { seatTitle } from "@/components/roles-combobox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -199,7 +199,7 @@ export function MemberHome() {
     ? departments.flatMap((department) => {
         const offices = department.holders
           .filter((holder) => holder.username === myUsername)
-          .map((holder) => formatOfficeRole(holder.role, holder.kind));
+          .map((holder) => seatTitle(department.code, holder.role, holder.kind));
         const belongs = myMembershipCodes.includes(department.code);
         if (offices.length === 0 && !belongs) return [];
         return [{ ...department, as: offices.length > 0 ? offices.join(" · ") : "Member" }];

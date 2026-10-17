@@ -26,7 +26,8 @@ class Command(BaseCommand):
             "--purpose",
             choices=sorted(PURPOSES),
             help="Send as this purpose's address over its own transport "
-            "(treasury, verify, info, announcement). Defaults to the main mailbox.",
+            "(treasury, verify, info, announcement, appointments). Defaults to "
+            "the main mailbox.",
         )
         parser.add_argument(
             "--announcement",

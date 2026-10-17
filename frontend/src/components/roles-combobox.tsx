@@ -212,6 +212,34 @@ export function formatOfficeRole(position?: string | null, kind?: "leader" | "as
 }
 
 /**
+ * How one of an area's seats reads wherever the church names it.
+ *
+ * Every area carries the same base Leader/Assistant pair, but the church
+ * does not call every leader "Leader": **Sabbath School's** is its
+ * Superintendent — the word the school's lesson orders, letters and office
+ * already use — so that area's base seats read Superintendent (and Assistant
+ * Superintendent) in full, while every other area keeps the plain title.
+ * The seat is still the area's own base Leader row; this is only the name
+ * it wears on screen.
+ */
+export function seatTitle(
+  departmentCode: string,
+  position?: string | null,
+  kind: "leader" | "assistant" | string = "leader",
+): string {
+  const pos = (position || "").trim().toLowerCase();
+  const isSchool = departmentCode === "sabbath_school" || departmentCode === "sabbath-school";
+  // The base seats are the ones every area is seeded with: an unnamed seat,
+  // "Leader" or "Assistant". Any other title is the office's own
+  // (Secretary, Head Deacon, an elder's name) and stays as it reads.
+  const isBaseSeat = pos === "" || pos === "leader" || pos === "assistant";
+  if (isSchool && isBaseSeat) {
+    return kind === "assistant" || pos === "assistant" ? "Assistant Superintendent" : "Superintendent";
+  }
+  return formatOfficeRole(position, kind);
+}
+
+/**
  * How someone who holds no office reads.
  *
  * `member` is the stored default for "holds no leadership role" — the picker

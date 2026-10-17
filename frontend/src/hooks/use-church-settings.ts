@@ -79,3 +79,30 @@ export function churchWhere(settings: ChurchSettings | null): string | null {
   if (address) return address;
   return settings?.church_name?.trim() || null;
 }
+
+/**
+ * The map link the church's own record supports, or null when it supports none.
+ *
+ * A pin opens the exact point the church placed. Without one, the address —
+ * and only the address — is what a search may use. The church's *name* never
+ * is: a search for "SDA Loma Linda" answers to the listing Google already
+ * has, which is the plot the church used to meet at, and that link was
+ * sending visitors to the wrong building. With neither pin nor address there
+ * is no link, because a map that opens somewhere else is worse than no map.
+ */
+export function churchMapHref(settings: ChurchSettings | null): string | null {
+  const rawLat = settings?.latitude;
+  const rawLng = settings?.longitude;
+  // A blank pair is "no pin", not the null island: an empty string would
+  // otherwise read as 0 and send everyone to the Gulf of Guinea.
+  if (rawLat != null && rawLng != null && String(rawLat).trim() !== "" && String(rawLng).trim() !== "") {
+    const latitude = Number(rawLat);
+    const longitude = Number(rawLng);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+    }
+  }
+  const address = settings?.address?.trim();
+  if (!address) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}

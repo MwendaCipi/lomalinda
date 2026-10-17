@@ -57,7 +57,7 @@ A `401` means the body reached Django (correct — the endpoint needs a bearer t
 
 ## Email: which address each kind of mail leaves as
 
-Four kinds of mail leave this app, and each answers from the address that owns the question it carries:
+Five kinds of mail leave this app, and each answers from the address that owns the question it carries:
 
 | Purpose | Address | Transport | What sends as it |
 | --- | --- | --- | --- |
@@ -65,10 +65,11 @@ Four kinds of mail leave this app, and each answers from the address that owns t
 | `treasury` | `treasury@sdalomalinda.or.ke` | ZeptoMail | Receipts, giving acknowledgements, pledge reminders |
 | `verify` | `verify@sdalomalinda.or.ke` | ZeptoMail | Invitations, verify-your-account codes, password / email-change links |
 | `announcement` | `ZEPTOMAIL_FROM_EMAIL` (falls back to the main mailbox's address) | ZeptoMail | The congregation-wide broadcast |
+| `appointments` | `appointments@sdalomalinda.or.ke` | ZeptoMail | The letters a leadership change causes: an appointment, and the thank-you to the person it replaced |
 
-The last three are machines writing, and a shared mailbox is policed by a sending-velocity rule — Zoho Mail blocks a burst mid-broadcast with `SMTP 550 5.4.6` — so they ride [ZeptoMail](https://www.zoho.com/zeptomail/), Zoho's transactional relay, over SMTP. Only `info` keeps the shared mailbox, which is what keeps it a human mailbox: its unread count means somebody is waiting for an answer. A member replying to a receipt reaches the treasurer rather than the general inbox, and a member who ignores an invitation cannot bury a pastoral letter under automation.
+The last four are machines writing, and a shared mailbox is policed by a sending-velocity rule — Zoho Mail blocks a burst mid-broadcast with `SMTP 550 5.4.6` — so they ride [ZeptoMail](https://www.zoho.com/zeptomail/), Zoho's transactional relay, over SMTP. Only `info` keeps the shared mailbox, which is what keeps it a human mailbox: its unread count means somebody is waiting for an answer. A member replying to a receipt reaches the treasurer rather than the general inbox, a member answering the letter that appointed them reaches the office that keeps the appointments record, and a member who ignores an invitation cannot bury a pastoral letter under automation.
 
-**One thing to do in ZeptoMail itself:** the split is authorised in the *agent*, not in the code. Open the ZeptoMail agent and add `treasury@sdalomalinda.or.ke` and `verify@sdalomalinda.or.ke` as sender addresses alongside the one already sending the announcements. The domain is already verified, so this is adding two addresses — no new DNS records.
+**One thing to do in ZeptoMail itself:** the split is authorised in the *agent*, not in the code. Open the ZeptoMail agent and add `treasury@sdalomalinda.or.ke`, `verify@sdalomalinda.or.ke` and `appointments@sdalomalinda.or.ke` as sender addresses alongside the one already sending the announcements. The domain is already verified, so this is adding three addresses — no new DNS records.
 
 Then set one variable on the server:
 
@@ -76,7 +77,7 @@ Then set one variable on the server:
 ZEPTOMAIL_SEND_TOKEN=<the Send Mail Token from the ZeptoMail agent>
 ```
 
-With the token set, `treasury`, `verify` and `announcement` ride `smtp.zeptomail.com:587` (STARTTLS) as `emailapikey`, while `info` keeps the main mailbox. Any purpose can be re-pointed without touching code — the address, or the whole transport:
+With the token set, `treasury`, `verify`, `announcement` and `appointments` ride `smtp.zeptomail.com:587` (STARTTLS) as `emailapikey`, while `info` keeps the main mailbox. Any purpose can be re-pointed without touching code — the address, or the whole transport:
 
 ```text
 TREASURY_FROM_EMAIL=SDA Loma Linda Meru <treasurer@sdalomalinda.or.ke>
@@ -93,6 +94,7 @@ venv/bin/python manage.py send_test_email --to you@example.com                  
 venv/bin/python manage.py send_test_email --to you@example.com --purpose treasury    # receipts
 venv/bin/python manage.py send_test_email --to you@example.com --purpose verify      # join links
 venv/bin/python manage.py send_test_email --to you@example.com --purpose announcement
+venv/bin/python manage.py send_test_email --to you@example.com --purpose appointments  # leadership letters
 ```
 
 Each prints which host answered and which address it spoke as, so a mistyped token or a sender still missing from the ZeptoMail agent is found here rather than mid-broadcast. The broadcast also pauses between messages and aborts after repeated refusals (`ANNOUNCEMENT_SEND_DELAY`, `ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES`), and a failed recipient is logged with the server's own answer.
