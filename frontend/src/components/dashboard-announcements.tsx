@@ -229,28 +229,26 @@ export function DashboardAnnouncements() {
             {current?.detail || ""}
           </p>
 
-          {/* A notice that runs past the card's three lines, or one that
-              carries a flyer image, asks the reader to open the full feed.
-              The ask is a small button of its own, so pressing it reads as a
-              press and not as a label that merely looks pressable. */}
-          {current && isAwareness && (textLong || hasImage) && (
-            <div className="mt-2 flex items-center justify-end">
-              <Link
-                href="/announcements"
-                className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20"
-              >
-                See more
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
-              </Link>
-            </div>
-          )}
         </div>
 
         {/* The announcement's own actions. Clicking the card opens the full
             announcement in the feed; a giving call carries one Give Now button
             whose modal offers money or goods — the same two forms the old
-            three-wide combo opened — plus Pledge and Comment. */}
+            three-wide combo opened — plus Pledge and Comment.
+            A notice that runs past the card's three lines, or one that carries
+            a flyer image, asks the reader to open the full feed: that ask
+            shares this row with the Comment button, so the card's foot is one
+            line of controls rather than two. */}
         <div className="flex items-center justify-between gap-3">
+          {current && isAwareness && (textLong || hasImage) && (
+            <Link
+              href="/announcements"
+              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20"
+            >
+              See more
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
+            </Link>
+          )}
           {isGiving && (
             <div className="flex-1">
               <div className="grid grid-cols-3 gap-2">

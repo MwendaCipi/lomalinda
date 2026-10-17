@@ -2084,16 +2084,18 @@ class AnnouncementView(generics.ListCreateAPIView):
         return Response(self.get_serializer(dated + undated, many=True).data)
 
     def perform_create(self, serializer):
-        # A promotion is a fund drive: one post, one drive. The announcement's
-        # own words are the drive's description and its broadcast text — there
-        # is no second message to write — and its audience carries over, so
-        # the drive invites exactly the people the post addresses. The target
-        # came in with the post (the serializer requires it); the drive starts
-        # immediately and retires the day after the post's event ends.
+        # A promotion is a fund drive: one post, one drive — when the post
+        # carries a goal. The announcement's own words are the drive's
+        # description and its broadcast text — there is no second message to
+        # write — and its audience carries over, so the drive invites exactly
+        # the people the post addresses. The drive starts immediately and
+        # retires the day after the post's event ends.
         # The goal is composer input, not a stored announcement field — read
-        # and drop it before the row is built.
+        # and drop it before the row is built. It is optional: a support call
+        # posted without one still names its account (members give there) but
+        # mints no drive, since a drive with no goal has no progress to show.
         target = serializer.validated_data.pop('promotion_target', None)
-        if serializer.validated_data.get('announcement_type') == 'promotion':
+        if serializer.validated_data.get('announcement_type') == 'promotion' and target:
             account = (serializer.validated_data.get('support_account') or '').strip()
             end = serializer.validated_data.get('event_date_to') or serializer.validated_data.get('event_date_from')
             name_base = (serializer.validated_data.get('title') or serializer.validated_data.get('text') or 'Fund drive')[:110]

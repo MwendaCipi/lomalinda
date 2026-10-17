@@ -9690,8 +9690,8 @@ class AnnouncementTypeTests(APITestCase):
 
     Awareness is a plain notice: it carries no link and no account, and the
     API clears any it is handed. A web conference must carry its meeting
-    link; a promotion must name the treasury account it supports and open
-    its fund drive with a goal.
+    link; a promotion must name the treasury account it supports, and opens
+    its fund drive when it names a goal.
     """
 
     def setUp(self):
@@ -9733,20 +9733,22 @@ class AnnouncementTypeTests(APITestCase):
         # A promotion carries no meeting link, whatever the client sent.
         self.assertEqual(res.data['href'], '')
 
-    def test_a_new_promotion_needs_a_target_for_its_drive(self):
-        # A promotion is a drive, and a drive without a goal has no percentage
-        # to read: the API asks for the target when the post mints its drive.
-        # An edit of a post that already carries one asks for nothing — the
-        # drive's own numbers are managed on the drive.
+    def test_a_promotion_may_post_without_a_target(self):
+        # The goal is the officer's choice: a support call can go out with its
+        # account named and no drive behind it, so the feed never shows a
+        # percentage that can never move. The giving buttons read the account.
         res = self._post(announcement_type='promotion', support_account='Local Church Budget')
-        self.assertEqual(res.status_code, 400)
-        self.assertIn('target amount', str(res.data))
-        # A goal of zero is no goal at all, and neither is a stray word.
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertIsNone(res.data['fund_drive'])
+        self.assertEqual(res.data['support_account'], 'Local Church Budget')
+        # A goal of zero is no goal at all — writing one is refused rather
+        # than opening a drive that can never progress.
         res = self._post(announcement_type='promotion', support_account='Local Church Budget', promotion_target='0')
         self.assertEqual(res.status_code, 400)
 
         created = self._post(announcement_type='promotion', support_account='Local Church Budget', promotion_target='200000')
         self.assertEqual(created.status_code, 201, created.data)
+        self.assertEqual(float(created.data['fund_drive']['target_amount']), 200000.0)
         edit = self.client.patch(f"/api/members/announcements/{created.data['id']}/", {'text': 'Camp still needs tents.'}, format='json')
         self.assertEqual(edit.status_code, 200, edit.data)
 

@@ -565,14 +565,15 @@ export function AnnouncementManager({
       showAlert("Missing Announcement Type", err, "error");
       return;
     }
-    // A promotion mints its fund drive at once, so a new post needs the goal
-    // the drive opens with; an edit of a drive-carrying post does not.
-    if (form.announcement_type === "promotion" && !editingId) {
+    // The goal is optional: a support call may post with no drive behind it.
+    // A number that is written must still be a real goal, though — zero or a
+    // stray word would open a drive that can never show progress.
+    if (form.announcement_type === "promotion" && form.promotion_target.trim()) {
       const target = parseFloat(form.promotion_target);
       if (isNaN(target) || target <= 0) {
-        const err = "A promotion announcement needs a target amount for its fund drive.";
+        const err = "A target amount must be a number greater than zero — or leave it blank.";
         setMessage(err);
-        showAlert("Target Missing", err, "error");
+        showAlert("Target Invalid", err, "error");
         return;
       }
     }
@@ -600,8 +601,8 @@ export function AnnouncementManager({
         }
         // Optional fields are omitted when blank so the row keeps a real null
         // (an empty string would fail date parsing server-side). The drive
-        // goal rides along only when written — the API requires it of a new
-        // promotion and ignores it on edits.
+        // goal rides along only when written — the API mints a drive for a
+        // new promotion only when it carries one, and ignores it on edits.
         // The event's clock is never omitted, even when blank: leaving a field
         // out of a PATCH says "leave it as it was", and an officer who clears
         // the start time of an existing post means to clear it. A blank time
@@ -898,19 +899,19 @@ export function AnnouncementManager({
                     </select>
                   </label>
                   <label className="block text-xs font-semibold text-bark">
-                    Target amount (KES) *
+                    Target amount (KES)
                     <input
                       type="number"
                       min="1"
                       step="any"
-                      required
                       value={form.promotion_target}
                       onChange={(e) => setForm({ ...form, promotion_target: e.target.value })}
                       placeholder="e.g. 500000"
                       className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember"
                     />
                     <span className="mt-1 block text-[10px] font-normal text-moss">
-                      The goal of the fund drive this post opens.
+                      Optional — the goal of the fund drive this post opens. Leave it blank to post a
+                      support call with no drive goal; the giving buttons still name this account.
                     </span>
                   </label>
                 </>

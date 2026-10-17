@@ -650,13 +650,13 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             support_account = attrs.get('support_account') if 'support_account' in attrs else (instance.support_account if instance else '')
             if not (support_account or '').strip():
                 raise serializers.ValidationError('A promotion / contribution announcement needs a treasury account.')
-            # A promotion is a drive: on create it must open with a goal. An
-            # edit of a post that already carries its drive needs no target —
-            # the drive's numbers are managed on the drive itself.
-            if instance is None:
-                target = attrs.get('promotion_target')
-                if target is None or float(target) <= 0:
-                    raise serializers.ValidationError('A promotion announcement needs a target amount for its fund drive.')
+            # The goal is optional: a support call can post with its account
+            # named and no drive behind it, so nothing shows a percentage that
+            # can never move. A target that is written must still be a real
+            # goal, though — zero opens a drive that can never progress.
+            target = attrs.get('promotion_target')
+            if target is not None and float(target) <= 0:
+                raise serializers.ValidationError('A target amount must be greater than zero.')
             attrs['response_mode'] = ''
             attrs['response_options'] = ''
             attrs['action_type'] = 'none'
