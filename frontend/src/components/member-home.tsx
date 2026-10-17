@@ -3,16 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardList, UserRoundCheck, type LucideIcon } from "lucide-react";
+import { UserRoundCheck, type LucideIcon } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { REQUESTS_TILE, dashboardTiles, destinationOf } from "@/config/navigation";
+import { dashboardTiles, destinationOf } from "@/config/navigation";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { DashboardThoughtOfTheDay } from "@/components/dashboard-thought-of-the-day";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { DashboardChurchPulse } from "@/components/dashboard-church-pulse";
 import { useDepartments, useMyTies, type DepartmentRow } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
-import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { MemberWorkspace } from "@/components/member-workspace";
 import { seatTitle } from "@/components/roles-combobox";
 
@@ -31,12 +30,6 @@ type Tile = {
   label: string;
   desc: string;
   icon: LucideIcon;
-  /** How much is waiting behind it — only the Requests desk carries one. */
-  badge?: number;
-  /** The badge's own wording, when the default ("requests awaiting review") is not what it counts. */
-  badgeTitle?: string;
-  /** A card that fills its row rather than sharing one — the treasurer's tile reads both of its queues on one line. */
-  wide?: boolean;
 };
 
 /** One everyday place, as a card. */
@@ -45,21 +38,13 @@ function QuickTile({ tile }: { tile: Tile }) {
   return (
     <Link
       href={tile.href}
-      className={`group block rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md${tile.wide ? " col-span-2" : ""}`}
+      className="group block rounded-2xl border border-sand-line bg-white p-4 shadow-sm transition hover:border-ember hover:shadow-md"
     >
       <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-mist-select text-bark transition group-hover:bg-gold">
         <Icon className="h-4 w-4" />
       </div>
       <div className="mt-2.5 flex items-center gap-1.5">
         <h3 className="text-sm font-bold text-bark">{tile.label}</h3>
-        {tile.badge ? (
-          <span
-            title={tile.badgeTitle ?? `${tile.badge} request${tile.badge === 1 ? "" : "s"} awaiting review`}
-            className="rounded-full bg-ember px-1.5 py-0.5 text-[10px] font-bold text-white"
-          >
-            {tile.badge}
-          </span>
-        ) : null}
       </div>
       <p className="mt-0.5 text-[11px] leading-snug text-moss">{tile.desc}</p>
     </Link>
@@ -84,9 +69,10 @@ function QuickTile({ tile }: { tile: Tile }) {
  * The everyday destinations sit beside the week's announcements as four quick
  * tiles — announcements, giving, requests and the calendar — with no heading,
  * since four named cards do not need one to be read. On a phone they drop
- * beneath the announcement card. The treasurer's own tile joins them as a
- * fifth, full-row card saying what is still waiting on their decision — the
- * two queues nobody else is allowed to see counted. Everything else the page says is what only
+ * beneath the announcement card. Requests is the same Fellowship page for
+ * everybody, officers included: an elder asks for prayer the way a member
+ * does, and the desk that answers those asks keeps its own row on the rail.
+ * Everything else the page says is what only
  * this page can say: the week, what is waiting on you, and how the church you
  * serve is doing.
  *
@@ -146,36 +132,13 @@ export function MemberHome() {
   // itself if it ever gets a 403, so this gate is a courtesy, not the wall.
   const keepsTheBooks = hasAny(["treasurer", "admin"]);
 
-  // Leadership lands on the desks, not on the member-facing pages: a clerk or
-  // elder tapping Requests wants the desk that answers requests, and the desk
-  // carries the number still waiting so the tile says whether it needs them.
-  const isDesk = hasAny(REQUESTS_TILE.deskAudience);
-
-  // What leadership still owes an answer on, from the same hook the sidebar's
-  // badge and the Requests manager read — the three can never disagree.
-  const pendingRequests = usePendingRequestCounts(isDesk);
-
-  // ── The quick tiles ──────────────────────────────────────────────────────
-  // The four everyday actions, beside the week's announcements. Requests keeps
-  // its two faces — the desk for the offices that answer requests, the forms
-  // for everyone else — and only the desk's face carries a count.
+  // ── The quick tiles ─────────────────────────────────────────────────
+  // The four everyday actions, beside the week's announcements. Requests is
+  // the Fellowship page for everyone who taps it — an administrator asks
+  // for prayer the way a member does, from the same four forms. The desk
+  // that *answers* those asks keeps its own row on the rail, carrying the
+  // count of what is still waiting on it.
   const quickTiles: Tile[] = dashboardTiles.map((key) => {
-    if (key === "requests") {
-      return isDesk
-        ? {
-            href: REQUESTS_TILE.deskHref,
-            label: REQUESTS_TILE.label,
-            desc: REQUESTS_TILE.deskDescription,
-            icon: ClipboardList,
-            badge: pendingRequests.total,
-          }
-        : {
-            href: REQUESTS_TILE.memberHref,
-            label: REQUESTS_TILE.label,
-            desc: REQUESTS_TILE.memberDescription,
-            icon: ClipboardList,
-          };
-    }
     const dest = destinationOf(key);
     return {
       href: dest.href,

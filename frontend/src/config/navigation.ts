@@ -1375,16 +1375,16 @@ export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "administration", staffOnly: true },
 ];
 
-/** The Requests tile: the desk for leadership, the forms for everyone else. */
-export const REQUESTS_TILE = {
-  label: "Requests",
-  deskDescription: "Join, prayer, visitation, dedication",
-  memberDescription: "Prayer, visitation, dedication",
-  deskHref: "/administration?tab=requests",
-  memberHref: "/requests",
-  /** The desks that answer requests — same list the Requests managers gate by. */
-  deskAudience: ["elder", "admin", "clerk", "pastor", "chaplaincy", "welfare_leader", "children_ministry"],
-};
+/**
+ * The Requests desk's own address — the congregation panel's link into it.
+ *
+ * The dashboard's Requests *tile* is no longer two-faced: it is the plain
+ * `requests` destination for everyone, administrators and elders included, so
+ * a member asks the same way whoever they are. The desk is where the offices
+ * *answer*; it keeps its row on the rail and this link beside the counts,
+ * rather than becoming the tile a member lands on when they need prayer.
+ */
+export const REQUESTS_DESK_HREF = "/administration?tab=requests";
 
 /**
  * The dashboard's quick tiles: the four everyday actions, as cards beside the

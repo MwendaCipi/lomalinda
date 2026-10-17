@@ -88,6 +88,21 @@ export function scrollModeForPath(pathname: string): ScrollMode {
 
 const LOCKED_PREFIXES = ["/complete-profile"];
 
+/**
+ * The sections whose pages name themselves on a phone, the way Materials and
+ * the Ministry map always have: the heading rides *above* the strip, so a
+ * reader is told where they are before the views are offered.
+ *
+ * Fellowship and Stewardship are the two sections a member lives in all week,
+ * and on a narrow screen they used to give their reader only the strip — a row
+ * of chips whose meaning depends on already knowing which section you are in.
+ * A wide screen has always named the place above the strip, so this is the
+ * phone catching up to the same order rather than a second idea of it. The
+ * names come from the registry (`pageHeaderFor`) exactly as the wide screen's
+ * do, so a page is named the same way at every width.
+ */
+const HEADING_FIRST_SECTIONS = new Set(["Fellowship", "Stewardship"]);
+
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
   const { me, hasToken } = useHeaderData();
@@ -119,7 +134,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
   const [togglesRightAction, setTogglesRightAction] = useState<React.ReactNode>(null);
   const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
-  const [headingFirst, setHeadingFirst] = useState(false);
+  const [headingFirstAsked, setHeadingFirst] = useState(false);
   // Whether the strip is currently out of sight because the reader is moving
   // down the page (see the scroll effect below).
   const [togglesScrolledDown, setTogglesScrolledDown] = useState(false);
@@ -251,6 +266,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       : pageHeaderFor(pathname);
   // A page that names itself wins over the rail row that led here.
   const header: PageHeaderHeading | null = customHeader ?? pageHeader;
+  // Whether the heading leads the strip on *this* page: a page that asks for
+  // it, or a page of a section that always has (Materials and Ministry ask the
+  // same way, one page at a time).
+  const headingFirst =
+    headingFirstAsked ||
+    (section !== null && HEADING_FIRST_SECTIONS.has(section.label));
   const sectionPages = (section && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({

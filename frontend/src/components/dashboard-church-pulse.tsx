@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ClipboardList, UserRoundPlus, Users } from "lucide-react";
 import { HorizontalBars } from "@/components/mini-charts";
 import { dayFirst } from "@/lib/dates";
-import { REQUESTS_TILE } from "@/config/navigation";
+import { REQUESTS_DESK_HREF } from "@/config/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -114,7 +114,7 @@ export function DashboardChurchPulse() {
           </p>
         </div>
         <Link
-          href={REQUESTS_TILE.deskHref}
+          href={REQUESTS_DESK_HREF}
           className="rounded-full border border-sand-mute bg-white px-3.5 py-2 text-[11px] font-semibold text-bark hover:border-ember"
         >
           Open the requests desk
