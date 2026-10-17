@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { ChevronDown, Landmark, Search, UserRound, X } from "lucide-react";
-import { showAlert } from "@/lib/alerts";
+import { showAlert, showGivingThanks } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 import { useHeaderData, patchCachedMe } from "@/hooks/use-header-data";
 
@@ -420,8 +420,9 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
           showConfirmButton: false,
         });
       } else {
-        const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
-        showAlert("Contribution Received", successMsg, "success");
+        // A recorded gift earns the desk's thank-you, in the one voice every
+        // giving form uses.
+        showGivingThanks({ detail: data.message });
         setLoading(false);
       }
       onClose();

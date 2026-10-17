@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { showAlert } from "@/lib/alerts";
+import { showGivingThanks } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -165,7 +165,9 @@ export function InKindGiftModal({
         setNotes("");
         onRecorded?.();
         onClose();
-        showAlert("Gift recorded", "Thank you! Your in-kind giving has been recorded.", "success");
+        // Goods are handed over, not paid for, so the gift is already
+        // recorded by the time this answers — the giver is thanked here.
+        showGivingThanks({ kind: "in-kind", detail: data.message });
       } else {
         const detail = data.detail || Object.values(data).flat().join(" ") || "Failed to record in-kind giving.";
         setMessage(detail);

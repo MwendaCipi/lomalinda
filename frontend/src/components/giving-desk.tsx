@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronDown, Landmark, Search, Smartphone, UserRound, X } from "lucide-react";
 import { localDate } from "@/lib/dates";
 import { useRouter, useSearchParams } from "next/navigation";
-import { showAlert } from "@/lib/alerts";
+import { showAlert, showGivingThanks } from "@/lib/alerts";
 import { thankYouPath } from "@/lib/giving-thanks";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { stewardshipLinks } from "@/config/site-sections";
@@ -702,8 +702,9 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
         setShowGiveModal(false);
         setLoading(false);
         if (memberDesk) {
-          const successMsg = data.message ?? "Thank you! Your Bank Transfer contribution details have been recorded.";
-          showAlert("Contribution Received", successMsg, "success");
+          // The gift is on the book now, so the desk thanks the giver here
+          // rather than leaving the thanks to the record page.
+          showGivingThanks({ detail: data.message });
           localStorage.setItem(PENDING_GIVINGS_KEY, watchUntil);
         } else {
           router.push(thankYouPath({ kind: "money", method: "bank", title: allocations[0]?.purpose }));
@@ -728,21 +729,25 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
           button block and the bank band move as one, whatever the viewport.
           The visitor page keeps the marketing site's own scrolling. */}
       <div className={memberDesk ? "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-8 pt-4 sm:px-8 sm:pt-5 lg:px-10" : "mx-auto max-w-6xl px-6 py-10 lg:px-8 lg:py-12"}>
-          <div className="space-y-6">
+          {/* A hand reads the ways in order — the paybill, then the two
+              doors, then the bank — while a desk keeps the shape it has
+              always had: the two doors first, the paybill and the bank
+              beside each other underneath them. One set of children, ordered
+              per width rather than two copies of the page. */}
+          <div className="flex flex-col gap-6 sm:grid sm:grid-cols-2 sm:items-start">
             {/* The strip names the page on the desk; the public page keeps the title. */}
             <h1 className={memberDesk ? "sr-only" : "mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block"}>
               Giving
             </h1>
 
             {/* ── Paying the church directly: Safaricom's paybill ──
-                The paybill stands on its own band above the two giving
-                buttons — a giver pushing the money themselves reads where to
-                send it before the form's own doors — and the band it takes
-                above them is half of what sits the button block in the middle
-                of the page, the bank account holding the other half under it.
-                It disappears while the church has not set a paybill. */}
+                In a hand the paybill stands on its own band above the two
+                giving buttons — a giver pushing the money themselves reads
+                where to send it before the form's own doors — while a desk
+                sits it beside the bank card under the doors, half the row
+                each. It disappears while the church has not set a paybill. */}
             {churchBankDetails.mpesa_paybill_number && (
-              <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+              <article className="order-1 rounded-3xl border border-sand-line bg-white p-5 shadow-sm sm:order-2">
                 <p className="flex items-center gap-2 text-sm font-bold text-bark">
                   <Smartphone size={14} aria-hidden="true" /> Pay with Safaricom M-Pesa
                 </p>
@@ -767,7 +772,7 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
             {/* ── Give Now: the direct path, in the middle of the page ──
                 The line over the two doors names the ways to give and nothing
                 else — the form explains itself when it opens. */}
-            <div className="flex flex-col items-center justify-center gap-3 py-6 text-center sm:py-8">
+            <div className="order-2 flex flex-col items-center justify-center gap-3 py-6 text-center sm:order-1 sm:col-span-2 sm:py-8">
               <p className="max-w-md text-sm text-moss">
                 Give in Kind, Give by M-Pesa or record bank transfer.
               </p>
@@ -809,10 +814,10 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
             </div>
 
             {/* ── Paying the church directly: the bank ──
-                The bank account is the band under the buttons — the second of
-                the two that hold the button block between them — for a giver
-                who would rather push the money themselves. */}
-            <article className="rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+                The bank account is the band under the buttons in a hand and
+                the paybill's neighbour in a row on a desk — the second way to
+                push the money oneself. */}
+            <article className="order-3 rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
               <p className="flex items-center gap-2 text-sm font-bold text-bark">
                 <Landmark size={14} aria-hidden="true" /> Pay by bank transfer
               </p>

@@ -6,7 +6,7 @@ import { ArrowRight, Printer, Receipt } from "lucide-react";
 import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
-import { showAlert } from "@/lib/alerts";
+import { showAlert, showGivingThanks } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -186,12 +186,37 @@ export function MyGivings() {
   // The spinner is turned on by the initial load and off here:
   // nothing in this body runs synchronously, so calling it from an effect is
   // safe — a silent load (polling) never blanks the list on a hiccup either.
+  /**
+   * The gifts already on the record when the page opened are history. A gift
+   * that completes while the pending window runs is the one the member has
+   * just paid for, and it earns the thank-you the desks give — `null` means
+   * "nothing read yet", so the first load only marks history and never thanks
+   * a member for a gift given last month.
+   */
+  const thankedIds = useRef<Set<number> | null>(null);
   const loadMoney = (opts?: { silent?: boolean }) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     if (!token) return;
     fetch(`${API_URL}/api/members/contributions/?include_failed=1`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setMoney(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const rows: MyGiving[] = Array.isArray(data) ? data : [];
+        const known = thankedIds.current;
+        if (known === null) {
+          thankedIds.current = new Set(rows.map((row) => row.id));
+        } else {
+          const landed = rows.filter((row) => (row.status || "").toLowerCase() === "completed" && !known.has(row.id));
+          if (landed.length > 0) {
+            landed.forEach((row) => known.add(row.id));
+            const gift = landed[0];
+            const amount = `KES ${Number(gift.amount || 0).toLocaleString()}`;
+            showGivingThanks({
+              detail: `${gift.purpose ? `${gift.purpose} · ` : ""}${amount} has been recorded. The church is grateful for your generosity.`,
+            });
+          }
+        }
+        setMoney(rows);
+      })
       .catch(() => {
         if (!opts?.silent) setMoney([]);
       })
