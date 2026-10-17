@@ -119,12 +119,25 @@ export function DashboardAnnouncements() {
   const isOpinion = current?.announcement_type === "opinion";
   const isConference = current?.announcement_type === "web_conference" && Boolean(current.href);
 
-  /** Show "see more" on an awareness notice when the body is longer than the
-      card's three-line window or when the notice carries an image a visitor
-      can enlarge. Other slide types already carry their own action. */
   const isAwareness = current?.announcement_type === "awareness";
   const textLong = current && current.text.length > 220;
   const hasImage = current && isImageAttachment(current.attachment);
+
+  /** The ask to open the full feed. An awareness notice asks when the body is
+      longer than the card's three-line window or when it carries an image a
+      visitor can enlarge; a conference asks on the same terms, since above
+      the join row it has room for nothing but the hour and the link. The
+      giving and opinion slides already carry their own actions. */
+  const showSeeMore = Boolean(current && (isAwareness || isConference) && (textLong || hasImage));
+  const seeMore = (
+    <Link
+      href="/announcements"
+      className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20"
+    >
+      See more
+      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
+    </Link>
+  );
 
   /** The pledge modal's view of the slide the member is looking at. */
   const pledgeTargetFor = (announcement: Announcement): PledgeTarget => ({
@@ -236,19 +249,11 @@ export function DashboardAnnouncements() {
             whose modal offers money or goods — the same two forms the old
             three-wide combo opened — plus Pledge and Comment.
             A notice that runs past the card's three lines, or one that carries
-            a flyer image, asks the reader to open the full feed: that ask
-            shares this row with the Comment button, so the card's foot is one
-            line of controls rather than two. */}
+            a flyer image, asks the reader to open the full feed: on an
+            awareness notice that ask shares this row with the Comment button,
+            so the card's foot is one line of controls rather than two. */}
         <div className="flex items-center justify-between gap-3">
-          {current && isAwareness && (textLong || hasImage) && (
-            <Link
-              href="/announcements"
-              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20"
-            >
-              See more
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
-            </Link>
-          )}
+          {isAwareness && showSeeMore && seeMore}
           {isGiving && (
             <div className="flex-1">
               <div className="grid grid-cols-3 gap-2">
@@ -288,9 +293,10 @@ export function DashboardAnnouncements() {
           {/* A notice with no action of its own still takes a comment: the
               feed's rule — every card carries the Comment button — reaches
               the rail too, so a member reading a plain notice can answer it
-              without first opening the full feed. The giving, opinion and
-              conference slides already carry their own controls, so this sits
-              only on the slides that would otherwise go without. */}
+              without first opening the full feed. The giving and opinion
+              slides carry their own controls, and a conference carries its
+              own comment row under the join button, so this sits only on the
+              slides that would otherwise go without. */}
           {current && !isGiving && !isOpinion && !isConference && (
             <button
               type="button"
@@ -301,22 +307,36 @@ export function DashboardAnnouncements() {
             </button>
           )}
           {isConference && current?.href && (
-            <div className="ml-auto flex items-center gap-3">
-              {/* The countdown sits to the left of the join button, so the
-                  hour the meeting begins is read before the tap. */}
-              {countdown && (
-                <span className="text-xs font-semibold text-moss" aria-live="polite">
-                  {countdown}
-                </span>
-              )}
-              <a
-                href={current.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
-              >
-                {platformLabel(current.href)}
-              </a>
+            /* A conference reads top to bottom: the hour the meeting begins
+               and the way in share one row, read before the tap; the reply
+               and the ask to read on sit under them, so the rail's rule that
+               every card takes a comment holds here too. */
+            <div className="ml-auto flex w-full flex-col gap-2">
+              <div className="flex items-center justify-end gap-3">
+                {countdown && (
+                  <span className="text-xs font-semibold text-moss" aria-live="polite">
+                    {countdown}
+                  </span>
+                )}
+                <a
+                  href={current.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+                >
+                  {platformLabel(current.href)}
+                </a>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => { if (current) setCommentFor(current); }}
+                  className="pointer-events-auto rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  Comment
+                </button>
+                {showSeeMore && seeMore}
+              </div>
             </div>
           )}
           {/* The next gathering is online: the same way in the conference
