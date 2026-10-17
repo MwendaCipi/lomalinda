@@ -379,6 +379,25 @@ DEPARTMENT_ROLE_CATALOGUE = (
 #: What an area is seeded with: the base pair, then the catalogue.
 DEPARTMENT_ROLE_SEED = DEFAULT_DEPARTMENT_ROLES + DEPARTMENT_ROLE_CATALOGUE
 
+#: The seats church leadership fills in every area: the base pair and the
+#: offices the congregation elects. Every other office is the area's own —
+#: ``DepartmentRole.is_custom`` marks it, and the area's leader fills it.
+CHURCH_SEAT_ROLE_NAMES = (
+    'leader', 'assistant',
+    'first elder', 'second elder', 'third elder',
+    'head deacon', 'head deaconess',
+)
+
+
+def is_church_seat(role_name):
+    """Whether ``role_name`` is a seat church leadership appoints.
+
+    The base Leader/Assistant pair and the elected offices (the three elders
+    and the deaconate's two heads) belong to the church; everything else is
+    an office the area's own leader fills.
+    """
+    return (role_name or '').strip().lower() in CHURCH_SEAT_ROLE_NAMES
+
 
 class Department(models.Model):
     """A department of the church, as the elder's desk defines it.
@@ -459,6 +478,7 @@ class DepartmentRole(models.Model):
     has_assistant = models.BooleanField(default=False, help_text="The department may appoint assistants of this role beside its holder")
     sort_order = models.PositiveIntegerField(default=0)
     is_optional = models.BooleanField(default=False, help_text="One of the seeded catalogue offices, which an area may drop; the base Leader and Assistant stay")
+    is_custom = models.BooleanField(default=False, help_text="An office the area's own leader fills; church leadership sets only the base pair and the elected offices")
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

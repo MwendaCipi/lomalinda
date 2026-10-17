@@ -10020,6 +10020,10 @@ class DepartmentDirectoryView(APIView):
                 'units': department.unit_names,
                 'leader': leader,
                 'assistants': assistants,
+                # Whether this account leads the area — the one seat that
+                # fills its custom offices (Secretary, Treasurer, Choir
+                # Leader) rather than the church's fixed seats.
+                'can_manage_custom': is_department_leader(request.user, department.code),
                 # The roles the leadership modal edits, with who serves in
                 # each and whether the role takes an assistant.
                 'roles': [
@@ -10028,6 +10032,7 @@ class DepartmentDirectoryView(APIView):
                         'name': role.name,
                         'has_assistant': role.has_assistant,
                         'is_optional': role.is_optional,
+                        'is_custom': role.is_custom,
                         'holders': [
                             {
                                 'id': assignment.member.id,
@@ -10045,6 +10050,25 @@ class DepartmentDirectoryView(APIView):
                 'event_count': event_counts.get(department.code, 0),
             })
         return Response({'departments': departments})
+
+
+def is_department_leader(user, department, unit=None):
+    """Whether ``user`` leads this area — the one who fills its custom offices.
+
+    A leader-kind row on the area's board is the answer: the area's own leader
+    answers for every unit in it, and a unit's leader for that unit. An
+    assistant keeps the desk keys but not this one — the church asked that the
+    area's own offices be its leader's to fill, so the ministry staffs itself.
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    rows = DepartmentAssignment.objects.filter(
+        department__code=department, department__is_active=True,
+        member=user, kind='leader',
+    )
+    if unit:
+        rows = rows.filter(Q(unit=unit) | Q(unit=''))
+    return rows.exists()
 
 
 def can_manage_department(user, department):
@@ -10307,8 +10331,10 @@ class DepartmentCreateView(APIView):
                 department=department, name=role_name, has_assistant=assistant,
                 sort_order=index,
                 # The base pair stays with every area; the catalogue offices
-                # are the area's own to keep or drop.
+                # are the area's own to keep or drop, and its own leader's
+                # to fill.
                 is_optional=index >= len(DEFAULT_DEPARTMENT_ROLES),
+                is_custom=index >= len(DEFAULT_DEPARTMENT_ROLES),
             )
             for index, (role_name, assistant) in enumerate(DEPARTMENT_ROLE_SEED)
         ])
@@ -10413,6 +10439,7 @@ class DepartmentLeadershipView(APIView):
             'assistants': assistants,
             'unit': unit,
             'units': target.unit_names,
+            'can_manage_custom': is_department_leader(request.user, target.code, unit or None),
             'roles': [
                 {
                     'id': role.id,
@@ -10480,6 +10507,24 @@ class DepartmentLeadershipView(APIView):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
+        # The area's own offices are its leader's to fill. Church officers
+        # keep the fixed seats — the base Leader/Assistant pair and the
+        # elected offices — while a Secretary, Treasurer or Choir Leader is
+        # appointed by the leader whose area it is, so the ministry staffs
+        # itself. Checked over the whole batch, so one refused entry refuses
+        # the save rather than half-seating a board.
+        custom_roles = sorted(
+            {roles[e.get('role_id')] for e in submitted if roles[e.get('role_id')].is_custom},
+            key=lambda role: role.name,
+        )
+        if custom_roles and not is_department_leader(request.user, target.code, unit or None):
+            names = ', '.join(role.name for role in custom_roles)
+            verb = 'is' if len(custom_roles) == 1 else 'are'
+            return Response(
+                {'detail': f"{names} {verb} set by {target.name}'s leader, not from the church office."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         for entry in submitted:
             role = roles[entry.get('role_id')]
             kind = entry.get('kind') or 'leader'
@@ -10542,6 +10587,13 @@ class DepartmentLeadershipView(APIView):
             ).first()
             if role is None:
                 return Response({'detail': 'Office not found (the Leader and Assistant seats stay with every area).'}, status=status.HTTP_404_NOT_FOUND)
+            # A custom office is the area's own: its leader drops it, the way
+            # its leader fills it.
+            if role.is_custom and not is_department_leader(request.user, target.code):
+                return Response(
+                    {'detail': f"{role.name} is set by {target.name}'s leader, not from the church office."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             role.delete()
             sync_role_flags_from_assignments()
             return Response({'detail': 'Office removed.'})
@@ -10550,6 +10602,11 @@ class DepartmentLeadershipView(APIView):
         ).first()
         if assignment is None:
             return Response({'detail': 'Appointment not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if assignment.role.is_custom and not is_department_leader(request.user, target.code, assignment.unit or None):
+            return Response(
+                {'detail': f"{assignment.role.name} is set by {target.name}'s leader, not from the church office."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         assignment.delete()
         sync_role_flags_from_assignments()
         return Response({'detail': 'Appointment released.'})

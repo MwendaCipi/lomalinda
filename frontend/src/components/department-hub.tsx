@@ -188,6 +188,9 @@ type DepartmentRoleRow = {
   /** A seeded catalogue office the area may drop; the base Leader and
       Assistant pair stays with every area. */
   is_optional: boolean;
+  /** An office the area's own leader fills; church leadership sets only the
+      base pair and the elected offices. */
+  is_custom: boolean;
   /** Everyone serving this role, leaders first as the API orders them. */
   holders: { id: number; name: string; username: string; kind: "leader" | "assistant" }[];
   /** The appointments behind those holders — only the unit-scoped read
@@ -208,6 +211,9 @@ type DepartmentRow = {
   group?: "office" | "ministry" | "department";
   /** Sub-units, when the department runs as more than one (Children). */
   units?: string[];
+  /** Whether this account leads the area — the one who fills its custom
+      offices rather than the church's fixed seats. */
+  can_manage_custom?: boolean;
 };
 
 type RollMember = {
@@ -1775,6 +1781,7 @@ type RoleDraft = {
   name: string;
   has_assistant: boolean;
   is_optional: boolean;
+  is_custom: boolean;
   people: RolePerson[];
 };
 
@@ -1808,26 +1815,38 @@ function LeadershipEditModal({
       name: role.name,
       has_assistant: role.has_assistant,
       is_optional: role.is_optional,
+      is_custom: role.is_custom,
       people: role.holders.map((h) => ({ id: h.id, name: h.name, username: h.username, kind: h.kind })),
     }))
   );
+  // Whether this account leads the area — the one seat that fills its custom
+  // offices. The directory answers for the whole area; a unit's own read
+  // answers again when the modal switches unit.
+  const [canManageCustom, setCanManageCustom] = useState<boolean>(department.can_manage_custom ?? true);
 
   // In a department that runs as units, the board on screen is that unit's —
   // read from the API rather than taken from the directory, which carries the
   // department's board and not each unit's.
   useEffect(() => {
     if (!unit) return;
-    let cancelled = false;
-    fetch(`${API_URL}/api/members/departments/${department.code}/leadership/${unitQuery(unit)}`, { headers: authHeaders() })
+    // The read is abandoned when the modal switches unit again: the effect's
+    // own signal is what stops a slower answer seating the wrong board.
+    const controller = new AbortController();
+    fetch(`${API_URL}/api/members/departments/${department.code}/leadership/${unitQuery(unit)}`, {
+      headers: authHeaders(),
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (cancelled || !data?.roles) return;
+        if (!data?.roles) return;
+        setCanManageCustom(data.can_manage_custom ?? true);
         setDraft(
           data.roles.map((role: DepartmentRoleRow) => ({
             id: role.id,
             name: role.name,
             has_assistant: role.has_assistant,
             is_optional: role.is_optional,
+            is_custom: role.is_custom,
             people: (role.assignments ?? [])
               .map((assignment): RolePerson | null => {
                 const holder = role.holders.find((h) => h.id === assignment.member_id);
@@ -1840,9 +1859,7 @@ function LeadershipEditModal({
         );
       })
       .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [department.code, unit]);
   // The two base positions the desk appoints by: the Leader seat every area
   // keeps, and the "Assistant" seat beside it where the area carries one.
@@ -1856,6 +1873,12 @@ function LeadershipEditModal({
   // Their seats are set by name, and (on the deaconate) by the member's sex,
   // the way the church reads the office.
   const officeRoles = draft.filter((r) => r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
+  // Split the offices by who fills them. The church's elected seats — the
+  // three elders, the deaconate's two heads — are set from this desk wherever
+  // it can act; the area's own offices (Secretary, Treasurer, Choir Leader)
+  // are its leader's to fill, so a church officer sees them named but not
+  // pressable. The server refuses the seat all the same.
+  const customRoles = officeRoles.filter((r) => r.is_custom);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -2039,6 +2062,14 @@ function LeadershipEditModal({
               className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
             />
           </div>
+          {/* The area's own offices, named once: a church officer sees what
+              the area carries but not the buttons — its leader fills them. */}
+          {customRoles.length > 0 && !canManageCustom && (
+            <p className="mt-2 text-[11px] text-moss">
+              {customRoles.map((role) => role.name).join(", ")}{" "}
+              {customRoles.length === 1 ? "is" : "are"} set by {department.label}&apos;s leader.
+            </p>
+          )}
           <div className="mt-2 divide-y divide-sand-soft">
             {results.map((member) => (
               <div key={member.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -2058,7 +2089,9 @@ function LeadershipEditModal({
                       Set {seatTitle(department.code, leaderRole.name, "leader").toLowerCase()}
                     </button>
                   )}
-                  {officeRoles.map((role) => {
+                  {officeRoles
+                    .filter((role) => canManageCustom || !role.is_custom)
+                    .map((role) => {
                     // A seat the church fills by sex rests inert under a
                     // candidate the office is not for — the profile that
                     // says nothing leaves the button open for the desk to

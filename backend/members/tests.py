@@ -9193,9 +9193,17 @@ class DepartmentApiTests(APITestCase):
             'name': 'Music Leader',
         }, format='json')
         self.assertEqual(res.status_code, 405)
-        # A catalogue office the area does not use goes, with its seats.
+        # A catalogue office the area does not use goes, with its seats —
+        # and it is the area's own office, so its leader is who drops it.
+        choir = amm.roles.get(name='Choir Leader')
         res = self.client.delete('/api/members/departments/amm/leadership/', {
-            'role_id': amm.roles.get(name='Choir Leader').id,
+            'role_id': choir.id,
+        }, format='json')
+        self.assertEqual(res.status_code, 403, res.data)
+        self.assertTrue(amm.roles.filter(name='Choir Leader').exists())
+        self._auth(self.leader)
+        res = self.client.delete('/api/members/departments/amm/leadership/', {
+            'role_id': choir.id,
         }, format='json')
         self.assertEqual(res.status_code, 200)
         self.assertFalse(amm.roles.filter(name='Choir Leader').exists())
@@ -9295,6 +9303,117 @@ class AreaOfficeCatalogueSeedTests(TestCase):
         own.refresh_from_db()
         self.assertEqual((own.sort_order, own.has_assistant), (40, False))
         self.assertTrue(own.is_optional)
+
+
+class CustomOfficeAppointmentTests(APITestCase):
+    """Church leadership sets the fixed seats; an area's leader fills its own.
+
+    ``DepartmentRole.is_custom`` marks every office that is not the base
+    Leader/Assistant pair or an elected office (the three elders and the
+    deaconate's two heads). The elders' desk keeps the fixed seats everywhere,
+    while a Secretary, Treasurer or Choir Leader is appointed by the leader
+    whose area it is — and Sabbath School carries the Assistant seat its desk
+    was missing (0211).
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('custom.elder', 'custom.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.leader = User.objects.create_user('custom.leader', 'custom.leader@example.com', 'StrongPass#2026', first_name='Lenox', last_name='Leader')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        self.plain = User.objects.create_user('custom.plain', 'custom.plain@example.com', 'StrongPass#2026', first_name='Paula', last_name='Plain')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        self.amm = Department.objects.get(code='amm')
+        DepartmentAssignment.objects.create(
+            department=self.amm,
+            role=DepartmentRole.objects.get(department=self.amm, name='Leader'),
+            member=self.leader, kind='leader',
+        )
+
+    def _auth(self, user):
+        self.client.force_authenticate(user)
+
+    def test_sabbath_school_carries_the_assistant_seat(self):
+        """The area's desk reads Set assistant like every other area's."""
+        school = Department.objects.get(code='sabbath_school')
+        seat = DepartmentRole.objects.get(department=school, name='Assistant')
+        self.assertTrue(seat.has_assistant)
+        self.assertFalse(seat.is_optional)
+
+        self._auth(self.elder)
+        response = self.client.put('/api/members/departments/sabbath_school/leadership/', {
+            'assignments': [
+                {'role_id': seat.id, 'member_id': self.plain.id, 'kind': 'assistant'},
+            ],
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(
+            DepartmentAssignment.objects.filter(role=seat, member=self.plain, kind='assistant').exists()
+        )
+
+    def test_the_database_marks_each_area_own_offices_custom(self):
+        self.assertTrue(self.amm.roles.get(name='Secretary').is_custom)
+        self.assertTrue(self.amm.roles.get(name='Treasurer').is_custom)
+        self.assertTrue(self.amm.roles.get(name='Choir Leader').is_custom)
+        # The base pair is the church's, not the area's.
+        self.assertFalse(self.amm.roles.get(name='Leader').is_custom)
+        self.assertFalse(self.amm.roles.get(name='Assistant').is_custom)
+        # So are the elected offices — while Eldership's catalogue offices
+        # belong to the eldership's own leader.
+        eldership = Department.objects.get(code='eldership')
+        self.assertFalse(eldership.roles.get(name='First Elder').is_custom)
+        self.assertTrue(eldership.roles.get(name='Secretary').is_custom)
+
+    def test_only_the_area_leader_fills_its_custom_offices(self):
+        secretary = self.amm.roles.get(name='Secretary')
+        treasurer = self.amm.roles.get(name='Treasurer')
+        # Two offices in one save: the refusal names both, and a save that
+        # seats more than one custom office is not a special case.
+        payload = {
+            'assignments': [
+                {'role_id': secretary.id, 'member_id': self.plain.id, 'kind': 'leader'},
+                {'role_id': treasurer.id, 'member_id': self.leader.id, 'kind': 'leader'},
+            ],
+        }
+
+        # The elders' desk is refused, and nothing is seated.
+        self._auth(self.elder)
+        refused = self.client.put('/api/members/departments/amm/leadership/', payload, format='json')
+        self.assertEqual(refused.status_code, 403, refused.data)
+        self.assertIn("leader", str(refused.data))
+        self.assertFalse(DepartmentAssignment.objects.filter(role__in=[secretary, treasurer]).exists())
+
+        # The area's own leader fills them.
+        self._auth(self.leader)
+        accepted = self.client.put('/api/members/departments/amm/leadership/', payload, format='json')
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        self.assertTrue(DepartmentAssignment.objects.filter(role=secretary, member=self.plain).exists())
+        self.assertTrue(DepartmentAssignment.objects.filter(role=treasurer, member=self.leader).exists())
+
+    def test_the_desk_still_sets_the_fixed_seats(self):
+        self._auth(self.elder)
+        response = self.client.put('/api/members/departments/amm/leadership/', {
+            'assignments': [
+                {'role_id': self.amm.roles.get(name='Leader').id, 'member_id': self.plain.id, 'kind': 'leader'},
+            ],
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_the_payload_says_who_may_fill_the_custom_offices(self):
+        self._auth(self.elder)
+        directory = {
+            row['code']: row for row in self.client.get('/api/members/departments/?all=true').json()['departments']
+        }
+        self.assertFalse(directory['amm']['can_manage_custom'])
+        roles = {role['name']: role for role in directory['amm']['roles']}
+        self.assertTrue(roles['Secretary']['is_custom'])
+        self.assertFalse(roles['Leader']['is_custom'])
+
+        self._auth(self.leader)
+        directory = {
+            row['code']: row for row in self.client.get('/api/members/departments/?all=true').json()['departments']
+        }
+        self.assertTrue(directory['amm']['can_manage_custom'])
 
 
 class RequestBellNotificationTests(APITestCase):

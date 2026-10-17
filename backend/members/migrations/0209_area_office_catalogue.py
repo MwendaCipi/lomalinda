@@ -22,12 +22,13 @@ rollback deletes nothing.
 
 from django.db import migrations, models
 
-# members.models.DEPARTMENT_ROLE_CATALOGUE, in its order.
+# members.models.DEPARTMENT_ROLE_CATALOGUE, in its order. Pianist was in the
+# first cut of this list and 0210 dropped it; re-running this seed must not
+# bring the office back, so the list here follows the code.
 DEPARTMENT_ROLE_CATALOGUE = (
     ('Secretary', True),
     ('Treasurer', True),
     ('Choir Leader', True),
-    ('Pianist', False),
 )
 
 
