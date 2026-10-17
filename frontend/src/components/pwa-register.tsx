@@ -65,13 +65,28 @@ export function PwaRegister() {
 
   useEffect(() => {
     // Register Service Worker
+    //
+    // `.register` is called from here rather than only from a `load` listener:
+    // this component hydrates after the document has often already finished
+    // loading, and a listener added to an event that has fired never runs. The
+    // worker would then never be registered on that visit at all — which is
+    // invisible for the offline shell but fatal for push, because everything
+    // push needs (the bell's switch, the permission ask, the re-registration of
+    // a rotated subscription) starts from `getRegistration("/")`. Ask the
+    // document where it already is instead of assuming the event is still
+    // ahead of us.
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
+      const registerWorker = () => {
         navigator.serviceWorker
           .register("/sw.js")
           .then((reg) => console.log("PWA Service Worker registered:", reg.scope))
           .catch((err) => console.error("Service Worker registration failed:", err));
-      });
+      };
+      if (document.readyState === "complete") {
+        registerWorker();
+      } else {
+        window.addEventListener("load", registerWorker, { once: true });
+      }
     }
 
     // The installed app paints the build it loaded with until the document

@@ -86,6 +86,13 @@ export type NavDestination = {
    * the phone's bar without renaming it anywhere else.
    */
   tabLabel?: string;
+  /**
+   * What the shell prints *above* this page, when that differs from the name
+   * its row carries — the Giving desk is Stewardship in its heading, because
+   * "Giving" is the toggle a reader presses *inside* that section and a
+   * heading has to name the place it opens onto.
+   */
+  heading?: string;
   /** One-line description for surfaces that show one (tiles, hub cards). */
   description?: string;
   icon: LucideIcon;
@@ -259,6 +266,11 @@ export const destinations = {
     short: "Giving",
     // The bottom bar names the whole section, not just its front page.
     tabLabel: "Stewardship",
+    // And so does the heading, for the same reason: this is Stewardship's
+    // front door, and "Giving" is the toggle under it that says which view of
+    // the section is open. Naming the page Giving left the section's own name
+    // nowhere a reader could see it on a phone.
+    heading: "Stewardship",
     description: "Give tithes and offerings by M-Pesa or bank transfer.",
     icon: HandHeart,
     area: "stewardship",
@@ -490,6 +502,8 @@ export type RailItem = {
   href: string;
   label: string;
   short?: string;
+  /** What the shell prints above this page, where it differs from its row. */
+  heading?: string;
   /**
    * The name this page shows in a section's strip (`SectionNav`) when that
    * differs from its rail row and page heading.
@@ -526,6 +540,8 @@ export type RailRow = {
   icon: LucideIcon;
   href?: string;
   short?: string;
+  /** What the shell prints above this page, where it differs from its row. */
+  heading?: string;
   /** The name a section's strip shows for this page, when it differs. */
   stripLabel?: string;
   /** One-line description the shell shows under the page's name. */
@@ -583,6 +599,7 @@ function page(key: DestinationKey, extra: Partial<RailItem> = {}): RailItem {
     href: dest.href,
     label: dest.label,
     short: dest.short,
+    heading: dest.heading,
     icon: dest.icon,
     match: dest.match,
     ...extra,

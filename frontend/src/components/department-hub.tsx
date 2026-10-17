@@ -78,7 +78,7 @@ import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarViewToggle,
   MonthGrid,
@@ -3720,11 +3720,17 @@ function DepartmentDetail({
   // singing groups is a music-desk view, not a general department one.
   const isMusic = department.code === "music";
   const isSabbathSchool = department.code === "sabbath_school" || department.code === "sabbath-school";
-  // The Deaconate reads as one page: its Team view is the roll itself, and the
-  // desk's own strip above already names Team / Inventory / Duty Rota /
-  // Calendar. The hub's Members / Calendar / Accounts toggles would only repeat
-  // the page under them, so they are held back here.
+  // The Deaconate reads as one page *in the console*: its Team view is the
+  // roll itself, and the console's own Deaconate strip above already names
+  // Team / Inventory / Duty Rota / Calendar. The hub's Members / Calendar /
+  // Accounts toggles would only repeat the page under them there, so they are
+  // held back — but only while that strip is the one naming the desk (see the
+  // toggles effect). Opened from the Ministry map, where no console strip
+  // exists, the desk draws its own views as every other area's does: a phone
+  // has no rail to offer them, and the desk would otherwise arrive with no way
+  // to reach its calendar or its accounts at all.
   const isDeaconate = department.code === "deaconate";
+  const onConsole = usePathname().startsWith("/administration");
   // Which unit's desk is open; null is the whole department.
   const [unit, setUnit] = useState<string | null>(null);
   // The unit's own leadership, when one is selected: the directory's board is
@@ -4052,7 +4058,7 @@ function DepartmentDetail({
   }, [department.label, department.description, setCustomHeader, setHeadingFirst]);
 
   useEffect(() => {
-    if (isDeaconate) {
+    if (isDeaconate && onConsole) {
       setCustomToggles(null);
       return;
     }
@@ -4060,7 +4066,7 @@ function DepartmentDetail({
       <SubNav label="Department views" items={stripItems} value={activeStripKey} onChange={handleStripChange} />
     );
     return () => setCustomToggles(null);
-  }, [setCustomToggles, isDeaconate, stripItems, activeStripKey, handleStripChange]);
+  }, [setCustomToggles, isDeaconate, onConsole, stripItems, activeStripKey, handleStripChange]);
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);

@@ -54,7 +54,14 @@ export async function getPushState(): Promise<PushSupport> {
   // Push only exists in a secure context (https — or localhost during dev).
   if (!window.isSecureContext) return { supported: false, reason: "insecure" };
   try {
-    const registration = await navigator.serviceWorker.getRegistration("/");
+    // A browser that supports push is not "unsupported" just because this
+    // visit has not started the service worker yet — and on a fresh browser it
+    // usually has not, which left the bell with no switch and no permission ask
+    // at all. Registering here is the same call the enable flow makes, so the
+    // worker the subscription needs exists by the time the switch is pressed.
+    const registration =
+      (await navigator.serviceWorker.getRegistration("/")) ??
+      (await navigator.serviceWorker.register("/sw.js"));
     if (!registration) return { supported: false, reason: "unsupported" };
     const subscription = await registration.pushManager.getSubscription();
     return {

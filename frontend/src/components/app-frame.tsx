@@ -16,6 +16,11 @@ import { useRailHere } from "@/hooks/use-rail-location";
 
 type PageHeaderHeading = {
   label: string;
+  /**
+   * The name the heading prints in place of `label`, where the page's own
+   * label is only a toggle inside its section (Giving, inside Stewardship).
+   */
+  heading?: string;
   description?: string;
   /**
    * A node the heading band carries above the heading itself — the way back
@@ -262,10 +267,17 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // rather than falling back to the console's.
   const pageHeader =
     hereItem && (hereItem.description || hereItem.dept)
-      ? { label: hereItem.label, description: hereItem.description }
+      ? { label: hereItem.label, heading: hereItem.heading, description: hereItem.description }
       : pageHeaderFor(pathname);
   // A page that names itself wins over the rail row that led here.
-  const header: PageHeaderHeading | null = customHeader ?? pageHeader;
+  const named = customHeader ?? pageHeader;
+  // The heading prints the page's own name, or the section's where its row
+  // carries only a view of it: the Giving page sits under a Stewardship
+  // heading with Giving as the toggle beneath, so the two never disagree about
+  // which place the reader is in.
+  const header: PageHeaderHeading | null = named
+    ? { ...named, label: named.heading ?? named.label }
+    : null;
   // Whether the heading leads the strip on *this* page: a page that asks for
   // it, or a page of a section that always has (Materials and Ministry ask the
   // same way, one page at a time).
