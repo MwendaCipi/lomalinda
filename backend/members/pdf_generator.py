@@ -294,7 +294,10 @@ def generate_treasury_pdf(
 
     if is_individual:
         # Dedicated Individual Givings Report
-        subtitle_text = f"INDIVIDUAL CONTRIBUTIONS REPORT - {purpose_title.upper()}" if purpose_title else "INDIVIDUAL MEMBER & COLLECTION CONTRIBUTIONS REPORT"
+        if purpose_title:
+            subtitle_text = f"INDIVIDUAL CONTRIBUTIONS REPORT - {purpose_title.upper()}"
+        else:
+            subtitle_text = f"INDIVIDUAL MEMBER CONTRIBUTIONS REPORT FROM {start_date} TO {end_date}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
         if start_date == end_date:
             date_str = f"Date: {start_date}"
@@ -439,26 +442,32 @@ def generate_treasury_pdf(
         return buffer.getvalue()
 
     # --- NEKF Header (Summary Breakdown Mode) ---
-    story.append(Paragraph((field_name or 'NORTH EAST KENYA FIELD').upper(), st["title_big"]))
+    # The summary opens the way the individual givings report does: the
+    # report names itself with its own period in the headline (the same
+    # big, centred black title), one meta line underneath carrying church,
+    # field, district and period, then the same rule.
     from datetime import datetime as _dt
-    try:
-        dt_start = _dt.strptime(start_date, "%Y-%m-%d")
-        month_label = dt_start.strftime("%B %Y").upper()
-    except Exception:
-        month_label = start_date
     try:
         dt_end = _dt.strptime(end_date, "%Y-%m-%d")
         end_date_str = dt_end.strftime("%d.%m.%Y")
     except Exception:
         end_date_str = end_date
 
-    story.append(Paragraph(f"<b>CASH COUNT AND OFFERING REPORT SUMMARY ({month_label})</b>", st["subtitle"]))
+    story.append(Paragraph(
+        f"CASH COUNT AND OFFERING REPORT SUMMARY FROM {start_date} TO {end_date}",
+        st["title_big"],
+    ))
     meta_text = f"Name of Church: {church_name}"
+    meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Field: {field_name or 'North East Kenya Field'}"
     if district:
-        meta_text += f" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; District: {district}"
+        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; District: {district}"
+    if start_date == end_date:
+        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Date: {start_date}"
+    else:
+        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Period: {start_date} to {end_date}"
     story.append(Paragraph(meta_text, st["meta"]))
     story.append(Spacer(1, 10))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#26352f"), spaceAfter=10))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#26352f"), spaceAfter=12))
 
     # --- Weekly Cash Counts Summary ---
     story.append(Paragraph("<b>WEEKLY CASH COUNTS SUMMARY</b>", st["h2"]))

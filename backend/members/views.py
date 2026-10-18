@@ -9293,7 +9293,10 @@ class TreasurySpreadsheetView(APIView):
         # ── Header rows ───────────────────────────────────────────────────────────
         ws['A1'] = 'SEVENTH DAY ADVENTIST CHURCH'
         ws['A2'] = field_name                          # e.g. "North East Kenya Field"
-        ws['A3'] = f'CASH COUNT AND OFFERING REPORT SUMMARY ({start_date.strftime("%B %Y").upper()})'
+        ws['A3'] = (
+            f'CASH COUNT AND OFFERING REPORT SUMMARY '
+            f'FROM {start_date.strftime("%Y-%m-%d")} TO {end_date.strftime("%Y-%m-%d")}'
+        )
         ws['A5'] = f'Name of Church: {church_name}'
         if district:
             ws['E5'] = f'District: {district}'

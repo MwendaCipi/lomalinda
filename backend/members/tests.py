@@ -2137,6 +2137,37 @@ class MpesaRefundAPITests(APITestCase):
 
 from .models import BusinessMeeting, BusinessMeetingAgenda, CashContribution
 
+
+def _pdf_text(pdf_bytes):
+    """The words a ReportLab PDF actually prints, whitespace-collapsed.
+
+    Page content streams arrive deflated — ASCII85-wrapped or not — and the
+    streams ReportLab did not touch (font and image data) fail both decoders;
+    those are handed back as-is and contribute no text.
+    """
+    import base64
+    import re
+    import zlib
+
+    def decode(raw):
+        for attempt in (
+            lambda data: zlib.decompress(data),
+            lambda data: zlib.decompress(base64.a85decode(data, adobe=True)),
+            lambda data: data,
+        ):
+            try:
+                return attempt(raw)
+            except Exception:
+                pass
+        return raw
+
+    chunks = []
+    for stream in re.finditer(rb'stream\r?\n(.*?)endstream', pdf_bytes, re.S):
+        data = decode(stream.group(1).strip(b'\r\n'))
+        chunks.extend(m.group(0)[1:-1] for m in re.finditer(rb'\((?:\\.|[^\\()])*\)', data))
+    return re.sub(r'\s+', '', b''.join(chunks).decode('latin-1'))
+
+
 class PdfGenerationAPITests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -2182,6 +2213,52 @@ class PdfGenerationAPITests(APITestCase):
             }],
         )
         self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
+    def test_individual_report_headline_states_the_period(self):
+        """The individual report's own headline names its date range."""
+        from .pdf_generator import generate_treasury_pdf
+
+        text = _pdf_text(generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 1000},
+            is_individual=True,
+            individual_rows=[],
+        ))
+
+        heading = 'INDIVIDUAL MEMBER CONTRIBUTIONS REPORT FROM 2026-01-01 TO 2026-01-31'
+        self.assertIn(''.join(heading.split()), text)
+        self.assertNotIn(
+            ''.join('INDIVIDUAL MEMBER & COLLECTION CONTRIBUTIONS REPORT'.split()),
+            text,
+        )
+
+    def test_summary_report_headline_and_meta_match_the_individual_report(self):
+        """The cash-count summary opens the way the individual report does:
+        the report's own name carrying its period, then one meta line of
+        church, field, district and period."""
+        from .pdf_generator import generate_treasury_pdf
+
+        text = _pdf_text(generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 1500, "cash": 1500, "mpesa": 0, "bank_transfer": 0, "cheque": 0},
+            district="Meru",
+            field_name="North East Kenya Field",
+        ))
+
+        heading = 'CASH COUNT AND OFFERING REPORT SUMMARY FROM 2026-01-01 TO 2026-01-31'
+        self.assertIn(''.join(heading.split()), text)
+        # The month-only wording it replaces is gone.
+        self.assertNotIn(''.join('CASH COUNT AND OFFERING REPORT SUMMARY (JANUARY 2026)'.split()), text)
+        # Field moves out of the headline and into that meta line.
+        meta = 'Name of Church: SDA Church Test | Field: North East Kenya Field' \
+            ' | District: Meru | Period: 2026-01-01 to 2026-01-31'
+        self.assertIn(''.join(meta.split()), text)
 
     def test_member_giving_pdf_returns_valid_pdf_stream(self):
         Contribution.objects.create(
@@ -2319,6 +2396,23 @@ class TreasurySpreadsheetRangeTests(APITestCase):
 
     def test_the_whole_month_still_carries_both_gifts(self):
         self.assertEqual(self._tithe_for_week('start_date=2026-10-01&end_date=2026-10-31'), 3333.0)
+
+    def test_the_headline_states_the_selected_range(self):
+        """The workbook's title reads like the printed summary's: the report
+        name followed by the period the desk asked for."""
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = self.client.get(
+            '/api/members/reports/ledger/spreadsheet/?start_date=2026-10-08&end_date=2026-10-09'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        sheet = load_workbook(BytesIO(response.content)).active
+        self.assertEqual(
+            sheet['A3'].value,
+            'CASH COUNT AND OFFERING REPORT SUMMARY FROM 2026-10-08 TO 2026-10-09',
+        )
 
 
 class ProfileAreaPickerTests(APITestCase):
