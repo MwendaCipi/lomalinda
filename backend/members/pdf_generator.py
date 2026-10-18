@@ -16,7 +16,9 @@ from reportlab.platypus import (
     KeepTogether,
     HRFlowable,
     Flowable,
+    Image,
 )
+from reportlab.lib.utils import ImageReader
 from xml.sax.saxutils import escape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
@@ -107,6 +109,91 @@ class NumberedCanvas(canvas.Canvas):
         self.drawString(1.5 * cm, 1.2 * cm, footer_text)
         self.drawRightString(A4[0] - 1.5 * cm, 1.2 * cm, page_text)
         self.restoreState()
+
+
+def _signature_size(image):
+    """A saved signature's pixel size, or ``None`` when it cannot be read.
+
+    A signature the printer cannot open (a file gone missing under a profile,
+    a payload that is not an image after all) is treated exactly like no
+    signature at all: the paper keeps its ruled line instead of failing.
+    """
+    if not image:
+        return None
+    try:
+        return ImageReader(io.BytesIO(image)).getSize()
+    except Exception:
+        return None
+
+
+def _draw_signature(c, image, x, y, width, height):
+    """Draw a saved signature inside a box, resting on its floor.
+
+    The signature is scaled to fit rather than stretched to it, so a tall
+    photograph and a wide drawn scrawl both come out in proportion, and it is
+    anchored to the bottom so it appears to sit on the rule it signs.
+    """
+    size = _signature_size(image)
+    if not size or not size[0] or not size[1]:
+        return False
+    image_w, image_h = size
+    scale = min(width / image_w, height / image_h)
+    drawn_w, drawn_h = image_w * scale, image_h * scale
+    c.drawImage(
+        ImageReader(io.BytesIO(image)),
+        x + (width - drawn_w) / 2,
+        y,
+        width=drawn_w,
+        height=drawn_h,
+        mask='auto',
+    )
+    return True
+
+
+def _signature_flowable(image, max_width, max_height):
+    """A saved signature as a flowable for a table cell or story slot."""
+    size = _signature_size(image)
+    if not size or not size[0] or not size[1]:
+        return None
+    image_w, image_h = size
+    scale = min(max_width / image_w, max_height / image_h)
+    try:
+        return Image(io.BytesIO(image), width=image_w * scale, height=image_h * scale)
+    except Exception:
+        return None
+
+
+def _thermal_signatures(c, y, width, margin, signatures):
+    """The office signatures at the foot of a thermal receipt.
+
+    Two columns, each with the office above the line, the officer's saved
+    signature resting on it, and their name beneath — what a hand-signed slip
+    looks like. Drawn directly on the 80 mm canvas because the whole receipt
+    is drawn that way; an office with no signature keeps its blank line.
+    Returns the ``y`` the caller continues from.
+    """
+    entries = list(signatures or ())[:2]
+    if not entries:
+        return y
+    dark = colors.HexColor("#26352f")
+    muted = colors.HexColor("#617068")
+    gap = 5 * mm
+    slot_w = (width - 2 * margin - gap) / 2
+    image_h = 11 * mm
+    for index, entry in enumerate(entries):
+        x = margin + index * (slot_w + gap)
+        c.setFillColor(muted)
+        c.setFont("Helvetica", 6.5)
+        c.drawCentredString(x + slot_w / 2, y, (entry.get("office") or "").upper())
+        # The signature rests on the rule; the name prints under it.
+        _draw_signature(c, entry.get("image"), x + 1.5 * mm, y - image_h - 2, slot_w - 3 * mm, image_h)
+        c.setStrokeColor(dark)
+        c.setLineWidth(0.6)
+        c.line(x, y - image_h - 2, x + slot_w, y - image_h - 2)
+        c.setFillColor(dark)
+        c.setFont("Helvetica", 7)
+        c.drawCentredString(x + slot_w / 2, y - image_h - 12, (entry.get("name") or "")[:28])
+    return y - image_h - 22
 
 
 def get_pdf_styles():
@@ -267,6 +354,7 @@ def generate_treasury_pdf(
     district="",
     field_name="North East Kenya Field",
     purpose_title="",
+    signatures=None,
 ):
     """
     Generates NEKF-format Cash Count & Offering Report Summary PDF.
@@ -567,10 +655,27 @@ def generate_treasury_pdf(
     story.append(Spacer(1, 8))
 
     # --- Signatures: Treasurer, Deacon, Elder ---
+    def signature_cell(heading, entry, fallback):
+        """One signature cell: the named officer, their signature on the line,
+        or the blank rules the cell has always kept when nobody has signed."""
+        entry = entry or {}
+        cell = [Paragraph(heading, st["cell"])]
+        if entry.get("name"):
+            cell.append(Paragraph(f"Name: <b>{escape(entry['name'])}</b>", st["cell"]))
+        else:
+            cell.append(Paragraph(fallback, st["cell"]))
+        image = _signature_flowable(entry.get("image"), 4.6 * cm, 1.0 * cm)
+        if image:
+            cell.append(image)
+        else:
+            cell.append(Paragraph("Signature: _______________", st["cell"]))
+        return cell
+
+    offices = signatures or {}
     sig_data = [[
-        Paragraph("<b>Signed By:</b><br/><br/>Name: ______________________<br/>Treasurer Sign: _______________", st["cell"]),
-        Paragraph("Name: ______________________<br/>Deacon Sign: ________________", st["cell"]),
-        Paragraph("Name: ______________________<br/>Elder Sign: _________________", st["cell"]),
+        signature_cell("<b>Signed By:</b>", offices.get("treasurer"), "Name: ______________________"),
+        signature_cell("Deacon", None, "Name: ______________________"),
+        signature_cell("Elder", offices.get("first_elder"), "Name: ______________________"),
     ]]
     sig_table = Table(sig_data, colWidths=[6.0 * cm, 6.0 * cm, 6.0 * cm])
     sig_table.setStyle(TableStyle([
@@ -772,7 +877,7 @@ def generate_treasury_pdf(
     return buffer.getvalue()
 
 
-def generate_member_giving_statement_pdf(church_name, member_name, member_email, start_date, end_date, givings, purpose_totals, grand_total):
+def generate_member_giving_statement_pdf(church_name, member_name, member_email, start_date, end_date, givings, purpose_totals, grand_total, signatures=None):
     """
     Generates Member Official Contribution Statement PDF.
     """
@@ -895,9 +1000,23 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
     story.append(Paragraph(note_text, st["meta"]))
     story.append(Spacer(1, 15))
 
+    # The statement is the treasurer's word to the member, so the office
+    # signs it where it is printed: their saved signature on its line.
+    treasurer = (signatures or {}).get("treasurer") or {}
+    name_line = (
+        f"<b>Church Treasurer Name:</b> {escape(treasurer['name'])}"
+        if treasurer.get("name")
+        else "<b>Church Treasurer Name:</b> ___________________________"
+    )
+    treasurer_cell = [Paragraph(name_line, st["cell"])]
+    signature_image = _signature_flowable(treasurer.get("image"), 5.2 * cm, 1.0 * cm)
+    if signature_image:
+        treasurer_cell.extend([Paragraph("<b>Signature:</b>", st["cell"]), signature_image])
+    else:
+        treasurer_cell.append(Paragraph("<b>Signature:</b> ___________________________", st["cell"]))
     sign_data = [
         [
-            Paragraph("<b>Church Treasurer Name:</b> ___________________________<br/><b>Signature:</b> ___________________________", st["cell"]),
+            treasurer_cell,
             Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d')}", st["cell"]),
         ]
     ]
@@ -1132,6 +1251,7 @@ def generate_contribution_thermal_receipt_pdf(
     donor_name,
     contributions,
     issued_at=None,
+    signatures=None,
 ):
     """A thermal-style receipt for one giving (one payment, maybe several lines).
 
@@ -1144,6 +1264,10 @@ def generate_contribution_thermal_receipt_pdf(
     line, or several when a giver split one gift across accounts. Split
     lines print itemised with a total; a single line prints like the simple
     receipts a treasurer's book keeps.
+
+    `signatures` are the offices whose saved signatures sign the foot of the
+    slip (see ``members.signatures``); without them the slip keeps its two
+    blank rules, so a receipt never waits on a profile.
     """
     church_name = pdf_church_name(church_name)
     issued_at = issued_at or timezone.now()
@@ -1241,7 +1365,10 @@ def generate_contribution_thermal_receipt_pdf(
     # ── Footer ──
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
-    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=0)
+    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    # The officers behind the slip sign its foot: the treasurer who issued it
+    # and the first elder who authorises it.
+    y = _thermal_signatures(c, y - 4, WIDTH, margin, signatures)
 
     c.showPage()
     c.save()
@@ -1258,12 +1385,14 @@ def generate_in_kind_thermal_receipt_pdf(
     received_on,
     items,
     issued_at=None,
+    signatures=None,
 ):
     """A thermal-style receipt for one in-kind gift — goods, not money.
 
     Same 80 mm layout as the money receipt, but the lines are the donated
     items rather than account amounts: there is no currency to total, so
     each item simply lists, and the purpose names what the gift was for.
+    The signatures at the foot are the same two offices as the money slip.
     """
     church_name = pdf_church_name(church_name)
     issued_at = issued_at or timezone.now()
@@ -1338,7 +1467,8 @@ def generate_in_kind_thermal_receipt_pdf(
     # ── Footer ──
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
-    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=0)
+    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    y = _thermal_signatures(c, y - 4, WIDTH, margin, signatures)
 
     c.showPage()
     c.save()
@@ -1346,7 +1476,7 @@ def generate_in_kind_thermal_receipt_pdf(
     return buffer.getvalue()
 
 
-def generate_financial_report_pdf(church_name, report) -> bytes:
+def generate_financial_report_pdf(church_name, report, signatures=None) -> bytes:
     """The printed twin of the reports screen: one A4 sheet a treasurer can
     pin to the noticeboard or hand out.
 
@@ -1354,6 +1484,9 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     offerings in, expenditure out, and the total in hand they leave — and
     the sentence under the table says how the total is read, so the paper
     teaches the same arithmetic the app does.
+
+    The statement is signed at its foot: the treasurer who prepared it and
+    the first elder who authorises it, their saved signatures on the line.
     """
     church_name = pdf_church_name(church_name)
 
@@ -1465,30 +1598,53 @@ def generate_financial_report_pdf(church_name, report) -> bytes:
     else:
         story.append(Paragraph("<i>No notes accompany this statement.</i>", st["cell"]))
 
+    # The statement is only the church's record once its officers have signed
+    # it: the treasurer who prepared it and the elder who authorises it.
+    story.append(Spacer(1, 18))
+    story.append(Paragraph("Signatures", st["h2"]))
+    story.append(SignatureSlotsFlowable(
+        signatures=signatures, slots=SignatureSlotsFlowable.STATEMENT_SLOTS,
+    ))
+
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer.getvalue()
 
 
 class SignatureSlotsFlowable(Flowable):
-    """Three ruled slots at the foot of a report: where the people who touch
-    it put their pens.
+    """Ruled slots at the foot of a report: where the people who touch it put
+    their pens.
+
+    Each slot names an office and, where that office has a saved signature
+    (see ``members.signatures``), prints it on the line with the officer's
+    name beneath — so a report comes off the printer already signed. A slot
+    with no signature keeps the ruled line it has always drawn.
 
     Drawn straight onto the canvas — one ``drawString`` per slot title, rather
     than as paragraphs — so each title lands in the PDF as a single text
     object and can be found there.
     """
 
-    LABELS = (
-        ("Authorizing Officer", "Elder / Church Office"),
-        ("Issued By", "Treasury Office"),
-        ("Received By", "Department Representative"),
+    #: (office code or None, slot title, hint under it) — the withdrawal
+    #: paper's three: authorised, issued, received.
+    SLOTS = (
+        ('first_elder', "Authorizing Officer", "Elder / Church Office"),
+        ('treasurer', "Issued By", "Treasury Office"),
+        (None, "Received By", "Department Representative"),
     )
 
-    def __init__(self, height=3.4 * cm):
+    #: A financial statement answers to two offices: prepared, authorised.
+    STATEMENT_SLOTS = (
+        ('treasurer', "Prepared By", "Treasury Office"),
+        ('first_elder', "Authorizing Officer", "Church Office"),
+    )
+
+    def __init__(self, height=3.9 * cm, signatures=None, slots=None):
         super().__init__()
         self.height = height
         self.width = 0
+        self.signatures = signatures or {}
+        self.slots = tuple(slots or self.SLOTS)
 
     def wrap(self, availWidth, availHeight):
         self.width = availWidth
@@ -1497,7 +1653,7 @@ class SignatureSlotsFlowable(Flowable):
     def draw(self):
         c = self.canv
         gap = 0.4 * cm
-        count = len(self.LABELS)
+        count = len(self.slots)
         box_w = (self.width - gap * (count - 1)) / count
         h = self.height
         primary = colors.HexColor("#26352f")
@@ -1506,7 +1662,7 @@ class SignatureSlotsFlowable(Flowable):
         border = colors.HexColor("#dfdbd1")
 
         c.saveState()
-        for i, (label, hint) in enumerate(self.LABELS):
+        for i, (code, label, hint) in enumerate(self.slots):
             x = i * (box_w + gap)
             # The slot: a white box with a header band across its top.
             c.setFillColor(colors.white)
@@ -1523,19 +1679,36 @@ class SignatureSlotsFlowable(Flowable):
             c.drawString(x + (box_w - c.stringWidth(hint, "Helvetica", 6.5)) / 2, h - 1.18 * cm, hint)
 
             inner_l, inner_r = x + 0.3 * cm, x + box_w - 0.3 * cm
-            # The signature rule, with its caption beneath.
+            signed = self.signatures.get(code) if code else None
+            # The signature rule, with the saved signature resting on it and
+            # its caption beneath.
             c.setStrokeColor(accent)
             c.setLineWidth(0.75)
             c.line(inner_l, 1.15 * cm, inner_r, 1.15 * cm)
+            if signed:
+                _draw_signature(
+                    c, signed.get("image"),
+                    inner_l + 0.15 * cm, 1.22 * cm,
+                    inner_r - inner_l - 0.3 * cm, max(h - 2.52 * cm, 0.6 * cm),
+                )
             c.setFillColor(muted)
             c.setFont("Helvetica", 6)
             c.drawString(inner_l, 0.8 * cm, "Signature")
-            # Name and date, each on its own short rule.
+            # Name and date, each on its own short rule — the officer's name
+            # printed where a pen would have written it.
             c.setStrokeColor(border)
             c.setLineWidth(0.5)
             c.setFont("Helvetica", 6)
-            c.drawString(inner_l, 0.32 * cm, "Name")
-            c.line(inner_l + 0.7 * cm, 0.3 * cm, x + box_w * 0.6, 0.3 * cm)
+            name = (signed or {}).get("name") or ""
+            if name:
+                c.setFillColor(primary)
+                c.setFont("Helvetica-Bold", 6)
+                c.drawString(inner_l, 0.32 * cm, name[:30])
+                c.setFillColor(muted)
+                c.setFont("Helvetica", 6)
+            else:
+                c.drawString(inner_l, 0.32 * cm, "Name")
+                c.line(inner_l + 0.7 * cm, 0.3 * cm, x + box_w * 0.6, 0.3 * cm)
             date_l = x + box_w * 0.66
             c.drawString(date_l, 0.32 * cm, "Date")
             c.line(date_l + 0.62 * cm, 0.3 * cm, inner_r, 0.3 * cm)
@@ -1728,7 +1901,7 @@ def amount_in_words(amount) -> str:
     return words
 
 
-def generate_withdrawal_request_pdf(church_name, row) -> bytes:
+def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     """One department withdrawal request as a sheet that can be signed.
 
     The treasury desk's per-request Print: the same request the queue shows,
@@ -1834,7 +2007,7 @@ def generate_withdrawal_request_pdf(church_name, row) -> bytes:
 
     story.append(Spacer(1, 16))
     story.append(Paragraph("Signatures", st["h2"]))
-    story.append(SignatureSlotsFlowable())
+    story.append(SignatureSlotsFlowable(signatures=signatures))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)

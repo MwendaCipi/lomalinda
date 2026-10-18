@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import tempfile
 from pathlib import Path
 
 import dj_database_url
@@ -117,6 +118,11 @@ if 'test' in sys.argv:
     INSTALLED_APPS = [app for app in INSTALLED_APPS if app != 'django_tenants']
     MIDDLEWARE = [m for m in MIDDLEWARE if m != 'django_tenants.middleware.main.TenantMainMiddleware']
     DATABASE_ROUTERS = ()
+    # What a test uploads is a twelve-byte fake; it belongs somewhere thrown
+    # away, not beside the pictures the church's albums really hold — every
+    # run used to leave "baptism.jpg" (and its renamed twins) in the media
+    # root, and the next run's file then saved under a stranger's name.
+    MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'loma-test-media')
 elif DATABASE_URL:
     DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', 'true' if not DEBUG else 'false').lower() == 'true'
     db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)
@@ -222,6 +228,24 @@ ANNOUNCEMENT_SEND_DELAY = float(os.getenv('ANNOUNCEMENT_SEND_DELAY', '2'))
 # what it could not reach instead of walking the whole list against a closed
 # door.
 ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES = int(os.getenv('ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES', '3'))
+
+# Text messages go through Ping Africa's Bulk gateway (members/sms.py). Only
+# the token has to be set; the endpoint has the documented default, and the
+# sender is omitted unless SMS_SENDER_ID names a sender the account was
+# granted — the church's name is not one, and the gateway refuses it.
+SMS_API_URL = os.getenv('SMS_API_URL', '')
+# A test run must never spend real SMS credits or ring a real phone. The token
+# sits in the developer's own .env for trying the gateway by hand, so it is
+# blanked while testing; a test that exercises SMS overrides it with a fake
+# and patches the HTTP call.
+SMS_API_KEY = '' if 'test' in sys.argv else os.getenv('SMS_API_KEY', '')
+SMS_SENDER_ID = os.getenv('SMS_SENDER_ID', '')
+SMS_TIMEOUT = int(os.getenv('SMS_TIMEOUT', '10'))
+# The gateway documents 60 requests a minute; a whole-congregation broadcast
+# walks the roll one message per request, so a pause keeps it under that
+# ceiling instead of collecting 429s halfway down the list. It runs in a
+# background thread, so the pace costs no officer's request any time.
+SMS_SEND_DELAY = float(os.getenv('SMS_SEND_DELAY', '1.5'))
 
 # The Emails desk *reads* info@ over IMAP. Sending was never the hard half:
 # the domain's MX records stay with Zoho, so no inbound provider can receive

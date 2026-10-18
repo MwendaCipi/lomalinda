@@ -11,6 +11,7 @@ import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { patchCachedMe, useHeaderData } from "@/hooks/use-header-data";
 import { useAllDepartments } from "@/hooks/use-departments";
 import { AreaJoinModal } from "@/components/area-modals";
+import { SignatureCard } from "@/components/signature-card";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 type Details = { date_of_birth: string; county_of_birth: string; education_level: string; profession: string; residence: string; current_church: string };
@@ -75,6 +76,12 @@ export default function MemberPage() {
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
 
+  // The signature an officer signs the church's paper with. Only the offices
+  // that sign — the treasurer and the first elder — are offered the card; the
+  // office label arrives with it, so the page never repeats the rule.
+  const [signatureUrl, setSignatureUrl] = useState("");
+  const [signatureOffice, setSignatureOffice] = useState("");
+
   // The church's own record of this member's service: the gifts and talents
   // they serve with, and the department and ministries they belong to. Read
   // with identity below, shown on the card under the header.
@@ -113,6 +120,8 @@ export default function MemberPage() {
           setPendingEmail(data.pending_email_change || "");
           setGender(data.gender || "");
           setPhotoUrl(data.photo_url || "");
+          setSignatureUrl(data.signature_url || "");
+          setSignatureOffice(data.signature_office || "");
           setChurchLife({
             gifts: typeof data.gifts === "string" ? data.gifts : "",
             departmentRef: typeof data.department_ref === "string" ? data.department_ref : "",
@@ -572,6 +581,12 @@ export default function MemberPage() {
             </div>
             {photoMessage && <p className="mt-3 text-sm text-moss">{photoMessage}</p>}
           </section>
+
+          {/* The officers who sign the church's paper keep their signature
+              here: uploaded from a signed slip, or drawn on the pad. */}
+          {signatureOffice && (
+            <SignatureCard token={token} office={signatureOffice} signatureUrl={signatureUrl} />
+          )}
 
           {/* The church's record of this member's service — gifts, the
               department they are filed under, and the ministries they serve

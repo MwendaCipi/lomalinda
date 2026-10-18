@@ -2999,6 +2999,9 @@ export function DepartmentAccountsPanel({
   const [movements, setMovements] = useState<FundMovement[]>([]);
   const [withdrawals, setWithdrawals] = useState<FundWithdrawal[]>([]);
   const [canRequest, setCanRequest] = useState(false);
+  // A fund drive is the desk's own campaign to raise money — the leadership's
+  // to start, unlike the request line, which follows the fund itself.
+  const [canStartDrive, setCanStartDrive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showDriveForm, setShowDriveForm] = useState(false);
@@ -3028,6 +3031,7 @@ export function DepartmentAccountsPanel({
         setMovements(Array.isArray(data?.movements) ? data.movements : []);
         setWithdrawals(Array.isArray(data?.withdrawals) ? data.withdrawals : []);
         setCanRequest(Boolean(data?.can_request_withdrawal));
+        setCanStartDrive(Boolean(data?.can_start_fund_drive));
 
         // Initial default account filter:
         // The desks that read more than their own fund — AWM and Development,
@@ -3050,6 +3054,7 @@ export function DepartmentAccountsPanel({
         setMovements([]);
         setWithdrawals([]);
         setCanRequest(false);
+        setCanStartDrive(false);
       })
       .finally(() => setLoading(false));
   }, [department.code]);
@@ -3528,7 +3533,7 @@ export function DepartmentAccountsPanel({
 
               {/* Right — request button */}
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {canRequest && startableDriveAccount && (
+                {canStartDrive && startableDriveAccount && (
                   <button
                     type="button"
                     onClick={openDriveForm}
@@ -3550,7 +3555,9 @@ export function DepartmentAccountsPanel({
                     <span className="hidden sm:inline">{isDeaconate ? "Request funding" : "Request withdrawal"}</span>
                   </button>
                 ) : (
-                  <span className="text-[11px] italic text-moss-faint">Leaders only</span>
+                  // Reachable only if a fund ever arrives without a door to
+                  // it: the button follows the account, not the office.
+                  <span className="text-[11px] italic text-moss-faint">No fund to request from</span>
                 )}
               </div>
             </div>

@@ -1,0 +1,6 @@
+# The daily sweep of failed and cancelled giving attempts once they are
+# thirty days old — the Failed tab's backlog, kept useful.
+# Installed by deploy.sh on the VPS; kept here for a box set up by hand.
+# Adjust the project and virtualenv paths to match the deployment.
+CRON_TZ=Africa/Nairobi
+15 2 * * * cd /var/www/loma_linda/backend && /var/www/loma_linda/backend/venv/bin/python manage.py cleanup_failed_contributions >> /var/log/loma_linda_failed_givings.log 2>&1

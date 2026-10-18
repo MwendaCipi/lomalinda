@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Images, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -88,6 +88,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   refunds: "M-Pesa refunds",
   inventory: "the inventory register",
   "deaconate-rota": "the duty rota",
+  "deaconate-moments": "the deaconate's moments",
   "deaconate-members": "the deaconate team",
   "deaconate-calendar": "the deaconate calendar",
   "deaconate-funding": "deaconate funding and accounts",
@@ -112,7 +113,7 @@ function AdministrationContent() {
   const searchDept = searchParams.get("dept");
 
   const [status, setStatus] = useState<"loading" | "authorized" | "denied" | "offline">("loading");
-  const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean } | null>(null);
+  const [profile, setProfile] = useState<{ username: string; role: string; roles?: string[]; email?: string; is_staff?: boolean; is_superuser?: boolean; my_ties?: string[] } | null>(null);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   // The desk the URL falls back to when it names no tab: the phone's overview,
   // or the desk the role keeps on a desktop. The URL itself is the tab.
@@ -263,8 +264,15 @@ function AdministrationContent() {
   const isChoirDirector = hasAnyRole("choir_director", "admin");
   const isFinance = hasAnyRole("treasurer", "elder", "admin");
   // The deaconate desk belongs to the deacons and the admin; elders and
-  // clerks reach their work from the Elders' Desk.
-  const isDeaconate = hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin");
+  // clerks reach their work from the Elders' Desk. The roll counts too: a
+  // deacon or deaconess seated on the deaconate keeps its rota and register
+  // (the API's own rule, ``can_manage_deaconate``), so the duty reminder that
+  // lands them here must find the page open.
+  const onDeaconateRoll =
+    Array.isArray(profile?.my_ties) && profile.my_ties.includes("deaconate");
+  const isDeaconate =
+    onDeaconateRoll ||
+    hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin");
   const isElderOnly = isElder && !isAdmin;
   // The phone overview is one page of desks, each with its own heading and a
   // card per page it holds — the same sections for every officer, so an admin
@@ -296,7 +304,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -481,6 +489,7 @@ function AdministrationContent() {
             { icon: <UserCheck size={20} aria-hidden="true" />, label: "Deaconate Team", description: "The deacons and deaconesses who serve the church's property, duty and ordinances.", href: "/administration?tab=deaconate-members" },
             { icon: <Package size={20} aria-hidden="true" />, label: "Church Property", description: "The church's property register, and the movements of each item.", href: "/administration?tab=inventory" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Duty Rota", description: "The deacons' and deaconesses' duty rosters for the church's services.", href: "/administration?tab=deaconate-rota" },
+            { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=deaconate-moments" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Deaconate Calendar", description: "Communion services, foot washing and the ordinances the desk keeps.", href: "/administration?tab=deaconate-calendar" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The funds the deaconate's work is answered for.", href: "/administration?tab=deaconate-funding" },
           ],
@@ -663,7 +672,7 @@ function AdministrationContent() {
             )}
 
             {/* Deaconate Ministry Manager */}
-            {["inventory", "deaconate-rota", "deaconate-members", "deaconate-calendar", "deaconate-funding"].includes(activeTab) && (
+            {["inventory", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding"].includes(activeTab) && (
               // The deaconate panels own their own scrolling (fixed filters, scrolling
               // rows, fixed actions), so the page itself must not scroll.
               <div className="h-full min-h-0">
@@ -671,6 +680,8 @@ function AdministrationContent() {
                   initialTab={
                     activeTab === "deaconate-rota"
                       ? "rota"
+                      : activeTab === "deaconate-moments"
+                      ? "moments"
                       : activeTab === "deaconate-members"
                       ? "members"
                       : activeTab === "deaconate-calendar"

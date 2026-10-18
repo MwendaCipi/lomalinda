@@ -95,12 +95,6 @@ type IndividualGiving = {
 };
 
 /** Money that actually arrived — completed digital gifts and recorded cash. */
-/** The whole failed backlog, whenever it was recorded: the Failed tab is a
-    queue of noise to clear, not a report over a period — so it reads every
-    failed attempt the badge counts, however old, and the two agree. */
-const FAILED_ALL_TIME = { from: "2000-01-01", to: "2099-12-31" };
-
-/** Money that actually arrived — completed digital gifts and recorded cash. */
 const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.status === "Recorded";
 
 /**
@@ -173,9 +167,9 @@ export default function TreasuryPage() {
   // held row until the treasurer files it.
   const [heldGivings, setHeldGivings] = useState<IndividualGiving[]>([]);
   const [loadingHeld, setLoadingHeld] = useState(false);
-  // The Failed tab's own rows: read all-time and written only by
-  // loadFailedGivings, apart from the date-window list the Individual tab
-  // uses — so a window refresh can never shrink the queue the badge counts.
+  // The Failed tab's own rows: written only by loadFailedGivings, apart
+  // from the date-window list the Individual tab uses — the two loads share
+  // the desk's dates but never overwrite each other's rows.
   const [failedGivingsList, setFailedGivingsList] = useState<IndividualGiving[]>([]);
   const [loadingFailedGivings, setLoadingFailedGivings] = useState(false);
   const [purposeGivings, setPurposeGivings] = useState<Record<string, IndividualGiving[]>>({});
@@ -188,16 +182,19 @@ export default function TreasuryPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
-  // The Failed badge on the treasury strip: counted from the same backlog
-  // the tab lists, so the two never disagree — and recounted the moment an
-  // attempt is taken off, so the deduction shows at once.
+  // The Failed badge on the treasury strip: counted from the window the
+  // Failed tab lists, so the two never disagree — and recounted the moment
+  // an attempt is taken off, so the deduction shows at once.
   const [failedCount, setFailedCount] = useState<number | null>(null);
 
   const headers = useCallback(() => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` }), []);
 
-  const refreshFailedCount = useCallback(async () => {
+  // The badge takes the desk's window — the same dates the Failed tab lists
+  // beneath it. The defaults carry the current window, and the callback's
+  // identity carries it too, so a date change recounts the badge on its own.
+  const refreshFailedCount = useCallback(async (fDate = fromDate, tDate = toDate) => {
     try {
-      const res = await fetch(`${API_URL}/api/members/treasury/failed/`, { headers: headers() });
+      const res = await fetch(`${API_URL}/api/members/treasury/failed/?from_date=${fDate}&to_date=${tDate}`, { headers: headers() });
       if (res.ok) {
         const data = await res.json();
         if (typeof data?.count === "number") setFailedCount(data.count);
@@ -205,7 +202,7 @@ export default function TreasuryPage() {
     } catch {
       // The badge keeps its last count rather than lying about the queue.
     }
-  }, [headers]);
+  }, [headers, fromDate, toDate]);
 
   useEffect(() => {
     // The count rides a microtask — the same shape the desks use — so the
@@ -214,19 +211,20 @@ export default function TreasuryPage() {
   }, [refreshFailedCount]);
 
   // `givings` writes the date-window list the Individual tab shows;
-  // `failed` writes the Failed tab's own all-time list. The two targets stay
-  // apart, so no window refresh can overwrite the queue the badge counts.
+  // `failed` writes the Failed tab's own windowed list. The two targets stay
+  // apart, so one tab's load can never overwrite the rows the other shows.
   const fetchLedgerList = useCallback(async (fDate: string, tDate: string, which: "givings" | "failed" = "givings") => {
     const setLoading = which === "failed" ? setLoadingFailedGivings : setLoadingAllGivings;
     const setList = which === "failed" ? setFailedGivingsList : setAllGivingsList;
     setLoading(true);
     try {
-      // Both lists are the ledger's own read of the window — completed gifts
-      // beside the attempts that never arrived (`include_failed=1`) — and the
-      // Failed tab merely widens the window to the whole backlog. The strip's
-      // badge is the counter at `/treasury/failed/`, which answers with a
-      // number and no rows; reading that answer as a list is what took this
-      // page down, so the rows are asked for here and nowhere else.
+      // Both lists are the ledger's own read of the desk's window — completed
+      // gifts beside the attempts that never arrived (`include_failed=1`) — so
+      // the Failed tab shows the selected window and never another month's
+      // attempts. The strip's badge is the counter at `/treasury/failed/`,
+      // which answers with a number and no rows; reading that answer as a
+      // list is what took this page down, so the rows are asked for here and
+      // nowhere else.
       const res = await fetch(
         `${API_URL}/api/members/treasury/purpose-contributions/?from_date=${fDate}&to_date=${tDate}&include_failed=1`,
         { headers: headers() }
@@ -249,18 +247,18 @@ export default function TreasuryPage() {
     [fromDate, toDate, fetchLedgerList],
   );
 
-  // The Failed tab reads the whole backlog, however old: it is a queue of
-  // noise to clear, not a report over the desk's date window — and reading
-  // the same set the badge counts keeps the two from disagreeing.
+  // The Failed tab reads the desk's own date window — the same window the
+  // Individual tab and the badge read — so filtering to September lists
+  // September's attempts and never October's. The callback's identity
+  // carries the dates, so a moved window re-reads the tab on its own.
   const loadFailedGivings = useCallback(
-    () => fetchLedgerList(FAILED_ALL_TIME.from, FAILED_ALL_TIME.to, "failed"),
-    [fetchLedgerList],
+    (fDate = fromDate, tDate = toDate) => fetchLedgerList(fDate, tDate, "failed"),
+    [fromDate, toDate, fetchLedgerList],
   );
 
   useEffect(() => {
-    // The Failed tab reads the whole backlog, however old: it is a queue of
-    // noise to clear, not a report over the desk's date window — and reading
-    // the same set the badge counts keeps the two from disagreeing.
+    // The windowed read rides the microtask — the shape every desk's loads
+    // use — so the effect's own synchronous body sets nothing.
     void Promise.resolve().then(() => loadFailedGivings());
   }, [loadFailedGivings]);
 
@@ -304,8 +302,8 @@ export default function TreasuryPage() {
         timer: 4000,
         showConfirmButton: false,
       });
-      // The queue that vote keeps the full backlog; close it so the fresh
-      // all-time list the endpoint returns is what the Failed tab shows next.
+      // The desk's view stays where the removal happened; close the window
+      // list so the fresh read the endpoint returns is what shows next.
       setAllGivingsList([]);
       setLoadingAllGivings(false);
       void Promise.resolve().then(() => {
@@ -459,8 +457,8 @@ export default function TreasuryPage() {
           } else if (view === "failed") {
             setExpandedPurpose(null);
             setViewMode("failed_givings");
-            // The Failed tab reads the whole backlog, however old — the same
-            // set the badge counts — rather than the desk's date window.
+            // The Failed tab reads the desk's window — the same set the
+            // badge beside it counts.
             loadFailedGivings();
           } else if (view === "summary") {
             // The summary chip is the way back out of a purpose's own view:
@@ -588,10 +586,10 @@ export default function TreasuryPage() {
   async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
 
   // Opening the Failed tab, or switching the page open there, swaps the
-  // window's own date-window list out for the full backlog the badge counts:
-  // nothing else on the page may overwrite that queue. The resets ride the
-  // same microtask as the read — the shape every desk's loads use — so the
-  // effect's own synchronous body sets nothing.
+  // Individual tab's rows out for the Failed tab's own read of the desk's
+  // window: nothing else on the page may overwrite what the tab shows. The
+  // resets ride the same microtask as the read — the shape every desk's
+  // loads use — so the effect's own synchronous body sets nothing.
   useEffect(() => {
     if (viewMode !== "failed_givings") return;
     void Promise.resolve().then(() => {
@@ -1469,7 +1467,7 @@ export default function TreasuryPage() {
                     const searchQueryLower = searchQuery.trim().toLowerCase();
                     // The strip above picks the view: individual givings, or
                     // the attempts that never arrived — the latter from its
-                    // own all-time list, never the window's.
+                    // own read of the desk's window.
                     const showFailed = viewMode === "failed_givings";
                     const listToDisplay = (showFailed ? failedGivingsList : allGivingsList).filter((g) => {
                       if (showFailed ? isReceivedGiving(g) : !isReceivedGiving(g)) return false;

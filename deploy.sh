@@ -90,6 +90,16 @@ CRON_LINE="0 3 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send
 crontab -l 2>/dev/null | grep -F 'send_pledge_reminders' > /dev/null \
   || fail "the pledge-reminder cron entry could not be installed."
 
+echo "⏰ Ensuring the deaconate's duty-reminder cron is installed..."
+# The rota's officers are reminded the evening before the duty they serve; the
+# command stamps each line as it rings it, so a re-run a minute later sends
+# nothing. Idempotent in the same shape as the pledge line: rewritten, never
+# duplicated.
+DUTY_CRON="30 18 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send_duty_reminders >> /var/log/loma_linda_duty_reminders.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'send_duty_reminders' || true; echo "$DUTY_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'send_duty_reminders' > /dev/null \
+  || fail "the duty-reminder cron entry could not be installed."
+
 echo "⏰ Ensuring the Emails-desk mailbox poller is installed..."
 # info@ is read by polling IMAP (Zoho keeps the domain's MX, so no inbound
 # provider can receive for this address) — without this entry the desk deploys
@@ -100,6 +110,16 @@ MAILBOX_CRON="*/5 * * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py
 ( crontab -l 2>/dev/null | grep -vF 'manage.py sync_mailbox' || true; echo "$MAILBOX_CRON" ) | crontab -
 crontab -l 2>/dev/null | grep -F 'manage.py sync_mailbox' > /dev/null \
   || fail "the mailbox-poller cron entry could not be installed."
+
+echo "⏰ Ensuring the failed-givings purge cron is installed..."
+# A failed attempt never became money, but a backlog of months-old noise
+# hides the month the desk is reviewing; the sweep takes each one off once it
+# is thirty days old. Same idempotent shape as the lines above: rewritten,
+# never duplicated.
+FAILED_CRON="15 2 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py cleanup_failed_contributions >> /var/log/loma_linda_failed_givings.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'cleanup_failed_contributions' || true; echo "$FAILED_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'cleanup_failed_contributions' > /dev/null \
+  || fail "the failed-givings purge cron entry could not be installed."
 
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"

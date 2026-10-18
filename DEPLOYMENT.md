@@ -99,6 +99,40 @@ venv/bin/python manage.py send_test_email --to you@example.com --purpose appoint
 
 Each prints which host answered and which address it spoke as, so a mistyped token or a sender still missing from the ZeptoMail agent is found here rather than mid-broadcast. The broadcast also pauses between messages and aborts after repeated refusals (`ANNOUNCEMENT_SEND_DELAY`, `ANNOUNCEMENT_MAX_CONSECUTIVE_FAILURES`), and a failed recipient is logged with the server's own answer.
 
+## SMS: receipts and announcements by text
+
+Text messages go through [Ping Africa's Bulk gateway](https://bulk.ping.africa/docs/api). One variable is enough:
+
+```text
+SMS_API_KEY=<the token from the Bulk dashboard: Account Settings → API Tokens>
+```
+
+With only that set, the endpoint is the documented `https://bulk.ping.africa/api/sms/send` and the sender is the account's own default (`PING-AFRICA` on a new account). Three optional variables:
+
+```text
+SMS_SENDER_ID=LOMALINDA   # only a sender the account was granted — an unapproved name is refused
+SMS_API_URL=...           # to point at a test double; normally leave unset
+SMS_SEND_DELAY=1.5        # seconds between messages in a broadcast (the gateway allows 60 requests/minute)
+```
+
+The church's name is **not** a valid sender ID: sending it in place of an approved sender comes back `400 — No sender ID available`. Leave `SMS_SENDER_ID` empty and the account's default speaks, which is the one sender every Bulk account is guaranteed to have.
+
+Verify the token with one real message before trusting it anywhere else:
+
+```bash
+cd backend
+venv/bin/python manage.py send_test_sms --to 0712345678
+venv/bin/python manage.py send_test_sms --to +254712345678 --message "Hello"
+```
+
+The command takes the same path the app does — number normalised to `+254…`, `Authorization: Bearer <token>`, the documented `recipient`/`message` body — and prints the provider's answer. The reasons a send is refused are logged with the status: `401` bad token, `402` no credits, `429` throttled, `422` validation (check `messages`).
+
+**What sends a text today:** giving receipts (to the phone on the contribution, when one is reachable — email still carries the PDF), and announcements posted with **Through SMS**, which reach every phone in the announcement's audience, once per number. A member's number is stored as typed (`0712 345 678`) and normalised at the gateway boundary; a number the gateway cannot use (masked, foreign) is skipped rather than spending a credit on a failure.
+
+A long receipt or announcement is sent whole and is billed per part, so keep `default_receipt_message` and announcement text short if cost matters — Ping Africa reports the part count (and the remaining balance) in its answer for each message. An announcement broadcast runs in a background thread at `SMS_SEND_DELAY` pace, exactly like the email broadcast.
+
+**Not by text yet:** board and business meeting invitations. Their "SMS Notification" switch writes the in-app notice only.
+
 ## The Emails desk: receiving at info@
 
 **Sending** at `info@` already works — that is the main mailbox above. **Receiving** is the half that needs one decision in Zoho, because the domain's MX records stay with Zoho and no inbound provider can take an address Zoho already answers (a subdomain would give a *different* address, not this one). So the desk reads the mailbox over **IMAP**: a poller pulls new letters into a shared inbox that elders, clerks and the administrator open from the Eldership strip → **Emails**.

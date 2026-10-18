@@ -95,6 +95,13 @@ class MemberProfile(models.Model):
     # lands on disk at phone-photo weight. Blank is the normal state: the
     # identity bar draws the member's initial until one is chosen.
     photo = models.ImageField(upload_to='profile_photos/', blank=True)
+    # The signature the member signs the church's papers with, kept here once
+    # rather than drawn again on every receipt: an officer photographs the
+    # signed slip and uploads it, or draws it on the profile page with a
+    # finger, and the receipts and reports the church prints carry it under
+    # their office (see members/signatures.py). Blank is the normal state —
+    # the paper then keeps the ruled line it has always drawn.
+    signature = models.ImageField(upload_to='member_signatures/', blank=True)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='member')
     role = models.CharField(max_length=30, default='member', choices=ROLE_CHOICES, help_text="Primary/legacy role kept in sync with 'roles'")
     roles = models.CharField(max_length=250, blank=True, default='member', help_text="Comma-separated role codes; a member can hold several roles")
@@ -209,6 +216,15 @@ class MemberProfile(models.Model):
     terms_of_use_version = models.CharField(max_length=20, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def signature_url(self):
+        """The signature's URL, or '' when none is on file.
+
+        Read the way ``photo_url`` is: a reader asks by name and a profile
+        without one answers with an empty line rather than an error.
+        """
+        return self.signature.url if self.signature else ''
 
     @property
     def photo_url(self):
@@ -1135,6 +1151,11 @@ class ChurchEvent(models.Model):
     happened_on = models.DateField(null=True, blank=True, help_text="The day the event happened; orders the albums, newest first")
     posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='church_events')
     published = models.BooleanField(default=True, help_text="Unpublished albums stay behind the desk until the office lets them out")
+    #: Links to videos the day's footage lives on elsewhere — a YouTube or
+    #: Vimeo page. An album takes links rather than uploaded video for now
+    #: (video is the one thing the church's storage will not carry), so they
+    #: ride beside the pictures as plain URLs.
+    video_links = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -2482,17 +2503,30 @@ class DutyRota(models.Model):
     for next Sabbath was gone with the next reload: these rows are the
     church's record of who serves when.
 
-    The officers on a line are names rather than accounts: the desk rosters
-    the team it actually has, and a deacon serving a shift need not hold an
-    account in the app at all.
+    The officers on a line are names first rather than accounts: the desk
+    rosters the team it actually has, and a deacon serving a shift need not
+    hold an account in the app at all. Where the desk picked the officer from
+    the church's roll, the entry also carries that member's ``member_id`` — the
+    line still prints their name, and the daily cron can now remind the person
+    behind it (see ``members/duty.py``).
     """
 
     title = models.CharField(max_length=200)
     duty_date = models.DateField()
     shift = models.CharField(max_length=80, blank=True, default='')
     duty_type = models.CharField(max_length=80, blank=True, default='')
-    #: The officers named on the line, in the order the desk listed them.
+    #: The officers named on the line, in the order the desk listed them. An
+    #: entry is a bare name, or ``{name, phone, email, role, member_id}`` where
+    #: the desk took the officer's contacts down — ``member_id`` only when the
+    #: officer was picked from the roll and holds an account.
     assigned_team = models.JSONField(default=list, blank=True)
+    #: When the reminder for this line last went out. Stamped by the daily
+    #: ``send_duty_reminders`` cron so a second run — the next day's, or one
+    #: run by hand — never rings the same Sabbath twice. Null means never.
+    reminder_sent_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text='When the officers on this line were last reminded of it',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='duty_rota_entries',

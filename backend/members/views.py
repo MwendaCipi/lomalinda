@@ -1,3 +1,4 @@
+import base64
 import csv
 from io import StringIO
 
@@ -25,6 +26,7 @@ from functools import wraps
 import os
 import io
 import secrets
+import sys
 import threading
 import time
 from decimal import Decimal, InvalidOperation
@@ -67,7 +69,13 @@ from .pledges import (
     REDEEMED_BY_OFFICE,
 )
 from .paystack import PaystackConfigurationError, initialize_checkout, parse_webhook, verify_webhook_signature
+# The text-message gateway. It owns number formatting and the provider's
+# payload, so no call site has to know what Ping Africa expects.
+from . import sms
 from .requests import notify_request_safely, send_membership_approval_email
+# Who signs the church's paper: the two office holders whose saved signatures
+# the receipts and reports print (see members/signatures.py).
+from .signatures import office_for, receipt_signatures, report_signatures
 from .treasury import account_for_purpose, apply_credit, credit_account, credit_contribution_lines, enrich_transaction_descriptions
 from .throttling import PublicTokenThrottle
 from .roles import (
@@ -193,6 +201,9 @@ def contribution_receipt_attachment(contribution):
             church_name=church_name_short(),
             donor_name=donor_name,
             contributions=lines,
+            # The office's signature travels with the letter: the same slip
+            # the member downloads is the one that arrives already signed.
+            signatures=receipt_signatures(),
         )
         reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
         return (f'Receipt-{reference}.pdf', pdf_bytes, 'application/pdf')
@@ -403,7 +414,7 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
     """
     email_sent = False
     sms_sent = False
-    sms_configured = bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))
+    sms_configured = sms.configured()
     if email:
         try:
             if attachments:
@@ -426,21 +437,12 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
             # than from a silent “Pending” badge.
             logger.exception('Receipt email to %s failed to send.', email)
 
-    if phone:
-        sms_api_url = getattr(settings, 'SMS_API_URL', '')
-        sms_api_key = getattr(settings, 'SMS_API_KEY', '')
-        if sms_api_url and sms_api_key:
-            try:
-                response = requests.post(
-                    sms_api_url,
-                    json={'to': phone, 'message': body, 'from': getattr(settings, 'SMS_SENDER_ID', current_church_name())},
-                    headers={'Authorization': f'Bearer {sms_api_key}'},
-                    timeout=10,
-                )
-                response.raise_for_status()
-                sms_sent = True
-            except Exception:
-                logger.exception('Receipt SMS to %s failed to send.', phone)
+    if phone and sms_configured:
+        # The gateway normalises the number (+254…) and logs the provider's own
+        # reason for a refusal; nothing here may raise into the giving flow.
+        sms_sent = sms.send(phone, body)
+        if not sms_sent:
+            logger.warning('Receipt SMS to %s was not delivered.', phone)
 
     sent = email_sent or sms_sent
     if sent:
@@ -625,7 +627,7 @@ def send_honoree_receipt(contribution):
 def send_cash_receipt(cash, *, send_sms=True, send_email=True):
     """Send a manually recorded receipt through both selected channels."""
     if cash.receipt_sent_at or cash.entry_type != 'individual':
-        return {'email_sent': False, 'sms_sent': False, 'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', ''))}
+        return {'email_sent': False, 'sms_sent': False, 'sms_configured': sms.configured()}
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
     donor_name = giver_display_name(
         cash.donor_name, email=cash.giver_email, phone=cash.giver_phone,
@@ -668,7 +670,7 @@ def send_grouped_cash_receipt(rows, *, send_sms=True, send_email=True):
     if not rows or any(row.receipt_sent_at for row in rows):
         return {
             'email_sent': False, 'sms_sent': False,
-            'sms_configured': bool(getattr(settings, 'SMS_API_URL', '') and getattr(settings, 'SMS_API_KEY', '')),
+            'sms_configured': sms.configured(),
         }
     first = rows[0]
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
@@ -1609,16 +1611,28 @@ class PasswordResetConfirmView(APIView):
         return Response({'message': 'Your password has been reset. You can now sign in.'})
 
 
-def announcement_emails_run_inline():
-    """True while mail never really leaves the box: tests and development.
+def announcement_broadcasts_run_inline():
+    """True while a broadcast is instant enough to run inside the request.
 
     Django's test runner swaps SMTP for the in-memory backend (tests read their
-    assertions out of that outbox, which a background thread cannot reach in
-    time), and development prints mail to the console. Both are instant, so the
-    broadcast simply runs in the request there. Only a real SMTP send — the
-    throttled, minutes-long one — is pushed to a background thread.
+    assertions out of that outbox, and patched SMS calls out of their mock,
+    neither of which a background thread reaches in time), and development
+    prints mail to the console. Both are instant, so a broadcast simply runs in
+    the request there. Only the real, paced sends — the minutes-long ones — are
+    pushed to a background thread.
     """
     return not settings.EMAIL_BACKEND.endswith('smtp.EmailBackend')
+
+
+def sms_broadcasts_run_inline():
+    """True only under the test runner.
+
+    A text really leaves the building, so unlike the email path there is no
+    reason for development to run the broadcast inside the request: even a
+    local database holds real numbers. Tests are the one exception — their
+    gateway is mocked, and the assertions read the mock right after the POST.
+    """
+    return 'test' in sys.argv
 
 
 def dispatch_announcement_emails_safely(announcement_id, schema_name=None):
@@ -1677,6 +1691,36 @@ def _push_announcement_impl(announcement_id):
         push_announcement(announcement)
     except Exception:
         logger.exception('Announcement push broadcast for #%s failed', announcement_id)
+
+
+def dispatch_announcement_sms_safely(announcement_id, schema_name=None):
+    """Text an announcement off the request cycle, failures logged.
+
+    The pace that keeps a whole congregation under the gateway's rate limit
+    makes the broadcast a minutes-long job, so it never holds an officer's
+    request open — same reason the email broadcast is threaded.
+    """
+    if schema_name:
+        try:
+            from django_tenants.utils import schema_context
+            with schema_context(schema_name):
+                _dispatch_announcement_sms_impl(announcement_id)
+            return
+        except ImportError:
+            pass
+    _dispatch_announcement_sms_impl(announcement_id)
+
+
+def _dispatch_announcement_sms_impl(announcement_id):
+    try:
+        announcement = Announcement.objects.get(id=announcement_id)
+    except Announcement.DoesNotExist:
+        # Deleted between the post and the thread's start — nothing to send.
+        return
+    try:
+        send_announcement_sms(announcement)
+    except Exception:
+        logger.exception('Announcement SMS broadcast for #%s failed', announcement_id)
 
 
 def can_manage_announcements(user):
@@ -1921,6 +1965,53 @@ def announcement_recipient_count(announcement, church_name):
     return sum(1 for _ in announcement_email_recipients(announcement, church_name))
 
 
+def announcement_sms_recipients(announcement):
+    """Yield each phone an announcement's audience reaches, once.
+
+    Same audience rule as the email (``announcement_recipients``); this is
+    only the phone half of it. Numbers are normalised before they are deduped,
+    so a household that shares one phone receives one text, and a number the
+    gateway cannot use is dropped here rather than costing a failed request.
+    """
+    seen = set()
+    rows = announcement_recipients(announcement).values_list('member_profile__phone_number', flat=True)
+    for phone in rows:
+        to = sms.recipient(phone)
+        if not to or to in seen:
+            continue
+        seen.add(to)
+        yield to
+
+
+def send_announcement_sms(announcement):
+    """Text the post to every phone its audience reaches.
+
+    The post itself is the message — an SMS has no subject line, so the title
+    leads, the body follows and the church signs it, exactly as the email is
+    built. A message the gateway refuses is counted and logged; the walk down
+    the roll continues, because one bad number must not silence the rest.
+    """
+    church_name = current_church_name()
+    body = f"{announcement.title}\n\n{announcement.text or ''}".strip()
+    if announcement.detail:
+        body += f"\n\n{announcement.detail}"
+    body += f"\n\n{church_name}"
+
+    sent = failed = 0
+    for phone in announcement_sms_recipients(announcement):
+        if sms.send(phone, body):
+            sent += 1
+        else:
+            failed += 1
+        # The gateway allows 60 requests a minute; the pause keeps a full
+        # congregation under that rather than collecting 429s midway.
+        if settings.SMS_SEND_DELAY > 0:
+            time.sleep(settings.SMS_SEND_DELAY)
+    if failed:
+        logger.warning('Announcement SMS finished: %d sent, %d refused.', sent, failed)
+    return sent
+
+
 class CanManageAnnouncements(permissions.BasePermission):
     """Posting is a leadership right, decided before the body is validated.
 
@@ -1934,22 +2025,41 @@ class CanManageAnnouncements(permissions.BasePermission):
 
 
 class CanManageMoments(permissions.BasePermission):
-    """Moments is the administrators' gallery: only the admin role posts,
-    adds media, unpublishes or deletes — normal members and the other
-    offices read the wall."""
+    """Moments opens at the top to the administrators and to the deaconate;
+    everyone else reads the wall."""
 
     def has_permission(self, request, view):
         return can_manage_moments(request.user)
 
 
 def can_manage_moments(user):
-    """The Moments gate: administrators only (staff and superusers count)."""
+    """The Moments gate: who may document into the wall, who only reads it.
+
+    Moments is the church's record of its own life, and it has two doors.
+    The administrators keep the first — staff, superusers and the admin
+    role: they open albums, add to them, take them down. The deaconate has
+    the second: the desk standing in the middle of the church's days (the
+    Sabbaths, the communions, the baptisms) is the desk with the pictures of
+    them, and it documents its own moments without needing the office. A
+    plain member — and an elder without the admin role, as ever — reads the
+    published albums only.
+    """
     if not user or not user.is_authenticated:
         return False
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('admin'))
+    if profile and profile.has_role('admin'):
+        return True
+    # The deaconate's own desk: its roll, and whoever leads it. Deliberately
+    # not ``can_manage_department`` — that opens every department's door to
+    # every church office, and Moments opens to the desk that holds the
+    # pictures, not to the whole office row.
+    if DepartmentMembership.objects.filter(member=user, department='deaconate').exists():
+        return True
+    return DepartmentAssignment.objects.filter(
+        department__code='deaconate', member=user, department__is_active=True,
+    ).exists()
 
 
 class ChurchEventView(generics.ListCreateAPIView):
@@ -2150,7 +2260,7 @@ class AnnouncementView(generics.ListCreateAPIView):
             # timeout when the congregation is large. In development and the
             # test suite the send runs inline: tests assert on mail.outbox,
             # which a thread cannot reach before the assertion runs.
-            if announcement_emails_run_inline():
+            if announcement_broadcasts_run_inline():
                 try:
                     send_announcement_emails(announcement)
                 except Exception:
@@ -2196,6 +2306,23 @@ class AnnouncementView(generics.ListCreateAPIView):
                     )
             except Exception:
                 pass
+            # That in-app bell is not a text message. Until now this branch
+            # wrote notices and stopped, so an officer choosing "Through SMS"
+            # reached nobody's phone; the real send is here, paced and off the
+            # request cycle exactly like the email broadcast.
+            if sms.configured():
+                if sms_broadcasts_run_inline():
+                    try:
+                        send_announcement_sms(announcement)
+                    except Exception:
+                        logger.exception('Announcement SMS broadcast failed')
+                else:
+                    threading.Thread(
+                        target=dispatch_announcement_sms_safely,
+                        args=(announcement.id, schema_name),
+                        name=f'announcement-sms-{announcement.id}',
+                        daemon=True,
+                    ).start()
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -2791,6 +2918,10 @@ class MeView(APIView):
             # The member's picture, so the profile page and the identity bar
             # draw the same face. '' when none is on file.
             'photo_url': profile.photo_url if profile else '',
+            # The signature an officer signs the church's paper with, and the
+            # office it stands for — '' when this member signs nothing.
+            'signature_url': profile.signature_url if profile else '',
+            'signature_office': office_for(profile),
             'gifts': profile.gifts if profile else '',
             'ministry': profile.ministry if profile else '',
             'department': profile.department if profile else '',
@@ -3014,6 +3145,112 @@ class MePhotoView(APIView):
             profile.photo = ''
             profile.save(update_fields=['photo'])
         return Response({'photo_url': ''})
+
+
+class MeSignatureView(APIView):
+    """The officer's own signature: posted as a file or a drawn picture.
+
+    Only the offices whose signature the church's paper carries may keep one
+    (see ``members/signatures.py``): the treasurer and the first elder. The
+    signature arrives two ways — a photograph of the slip the officer signs
+    cheques with, sent as multipart the way a photo is, or the picture their
+    finger drew on the profile page, sent as a PNG data URL in JSON. Both are
+    stored as one small PNG: transparency is kept, so a drawn signature
+    prints as ink on the paper rather than as a white box over it.
+
+    Replacing a signature removes the old file; DELETE takes it down, and the
+    receipts go back to their blank ruled line — never to a broken image.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    #: A signature printed at ~45 mm wide is sharp at this size already.
+    MAX_EDGE = 900
+    #: Beyond this a file was never a scan of a signature.
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+    #: A drawn pad posts its picture as a data URL, not as a file.
+    DATA_URL_PATTERN = re.compile(r'^data:image/(png|jpeg|jpg|webp);base64,(?P<data>[A-Za-z0-9+/=\s]+)$', re.IGNORECASE)
+
+    @staticmethod
+    def _refusal(message):
+        return Response({'signature': message}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _picture(self, request):
+        """The submitted picture bytes, or a refusal response."""
+        upload = request.FILES.get('signature')
+        if upload is not None:
+            if upload.size > self.MAX_UPLOAD_BYTES:
+                return None, self._refusal('That picture is too large — 5 MB at most.')
+            if not IMAGE_SUFFIX_PATTERN.search(upload.name or ''):
+                return None, self._refusal('That file is not an image.')
+            return upload.read(), None
+
+        drawn = (request.data.get('signature_data') or '') if isinstance(request.data, dict) else ''
+        if not drawn:
+            return None, self._refusal('Choose a picture to upload, or draw your signature first.')
+        match = self.DATA_URL_PATTERN.match(str(drawn).strip())
+        if not match:
+            return None, self._refusal('That drawing is not a picture.')
+        try:
+            payload = base64.b64decode(match.group('data'), validate=False)
+        except (ValueError, TypeError):
+            return None, self._refusal('That drawing is not a picture.')
+        if len(payload) > self.MAX_UPLOAD_BYTES:
+            return None, self._refusal('That picture is too large — 5 MB at most.')
+        return payload, None
+
+    def post(self, request):
+        profile = MemberProfile.objects.filter(user=request.user).first()
+        office = office_for(profile)
+        if not office:
+            return Response(
+                {'signature': 'Only the treasurer and the first elder sign the church\'s receipt book.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        payload, refusal = self._picture(request)
+        if refusal is not None:
+            return refusal
+
+        try:
+            with Image.open(io.BytesIO(payload)) as opened:
+                image = ImageOps.exif_transpose(opened)
+                # A drawn signature arrives with a transparent page and ink
+                # on it; a photographed slip arrives as paper. Both are kept
+                # as PNG — the alpha where there is one, greyscale ink where
+                # there is not — so the printer can lay the scrawl straight
+                # on the line.
+                if image.mode in ('RGBA', 'LA', 'P'):
+                    image = image.convert('RGBA')
+                else:
+                    image = image.convert('L')
+                image.thumbnail((self.MAX_EDGE, self.MAX_EDGE))
+                buffer = io.BytesIO()
+                image.save(buffer, format='PNG', optimize=True)
+        except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError):
+            return self._refusal('That file is not an image.')
+
+        if profile.signature:
+            # Stored names carry a random suffix per upload, so the old file
+            # must go first or every replace leaves the last one on disk.
+            profile.signature.delete(save=False)
+        profile.signature = ''
+        # A fresh token per upload keeps every signature on its own URL: a
+        # replaced scrawl must never come back from a cached one.
+        profile.signature.save(
+            f'signature-{request.user.pk}-{secrets.token_hex(4)}.png',
+            ContentFile(buffer.getvalue()),
+            save=True,
+        )
+        return Response({'signature_url': profile.signature_url, 'office': office})
+
+    def delete(self, request):
+        profile = MemberProfile.objects.filter(user=request.user).first()
+        if profile and profile.signature:
+            profile.signature.delete(save=False)
+            profile.signature = ''
+            profile.save(update_fields=['signature'])
+        return Response({'signature_url': '', 'office': office_for(profile)})
 
 
 def send_email_change_verification(user, change_request):
@@ -3350,6 +3587,7 @@ class MemberThermalReceiptView(APIView):
             church_name=church_name,
             donor_name=donor_name,
             contributions=lines,
+            signatures=receipt_signatures(),
         )
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         stamp = (row.paid_at or row.created_at).strftime('%Y%m%d')
@@ -3747,6 +3985,56 @@ def _get_purpose_q(purpose_param):
         return Q(purpose__iexact=purpose_param) | Q(purpose__icontains=purpose_param)
 
 
+def giving_window(params):
+    """The date window a givings query means, as (start, end) dates.
+
+    Read the same way by every caller — the ledger's own list, the summary
+    drill-down, and the Failed tab's badge — so a filter cannot mean one
+    thing on the list and another on the counter beside it. Defaults mirror
+    the ledger's: no start date reads the last thirty days ending at `to`,
+    a single `date` is that day alone, and a reversed pair is the same span.
+    """
+    from_val = params.get('from_date') or params.get('from')
+    to_val = params.get('to_date') or params.get('to')
+    date_val = params.get('date')
+
+    today = timezone.localdate()
+    today_str = today.isoformat()
+    from_str = (from_val or date_val or '').strip()
+    to_str = (to_val or date_val or '').strip() or today_str
+
+    if not from_str:
+        try:
+            end_date = datetime.strptime(to_str, '%Y-%m-%d').date()
+        except ValueError:
+            end_date = today
+        start_date = end_date - timedelta(days=30)
+    else:
+        try:
+            start_date = datetime.strptime(from_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(to_str, '%Y-%m-%d').date()
+        except ValueError:
+            raise ValidationError({'date': 'Use YYYY-MM-DD.'})
+
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    return start_date, end_date
+
+
+def digital_window_q(start_date, end_date):
+    """Digital rows a window holds, by the day that day actually is.
+
+    Money is counted by the day it arrived; an attempt that never arrived
+    carries no `paid_at`, so it is counted by the day it was made. September's
+    window therefore holds September's attempts and cannot borrow October's —
+    the one rule every windowed givings read goes through.
+    """
+    return (
+        Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date)
+        | Q(paid_at__isnull=True, created_at__date__gte=start_date, created_at__date__lte=end_date)
+    )
+
+
 class PurposeContributionsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -3762,35 +4050,9 @@ class PurposeContributionsView(APIView):
         digital_statuses = ('completed', 'failed', 'cancelled') if include_failed else ('completed',)
 
         purpose = request.query_params.get('purpose', '').strip()
-        from_val = request.query_params.get('from_date') or request.query_params.get('from')
-        to_val = request.query_params.get('to_date') or request.query_params.get('to')
-        date_val = request.query_params.get('date')
+        start_date, end_date = giving_window(request.query_params)
 
-        today = timezone.localdate()
-        today_str = today.isoformat()
-        from_str = (from_val or date_val or '').strip()
-        to_str = (to_val or date_val or '').strip() or today_str
-
-        if not from_str:
-            try:
-                end_date = datetime.strptime(to_str, '%Y-%m-%d').date()
-            except ValueError:
-                end_date = today
-            start_date = end_date - timedelta(days=30)
-        else:
-            try:
-                start_date = datetime.strptime(from_str, '%Y-%m-%d').date()
-                end_date = datetime.strptime(to_str, '%Y-%m-%d').date()
-            except ValueError:
-                raise ValidationError({'date': 'Use YYYY-MM-DD.'})
-
-        if start_date > end_date:
-            start_date, end_date = end_date, start_date
-
-        digital_filter = Q(status__in=digital_statuses, giving_type='financial') & (
-            Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
-            Q(paid_at__isnull=True, created_at__date__gte=start_date, created_at__date__lte=end_date)
-        )
+        digital_filter = Q(status__in=digital_statuses, giving_type='financial') & digital_window_q(start_date, end_date)
         digital_qs = Contribution.objects.filter(digital_filter)
         cash_qs = CashContribution.objects.filter(received_on__range=(start_date, end_date))
 
@@ -5657,9 +5919,16 @@ class TreasuryFailedView(APIView):
     def get(self, request):
         if not is_treasurer_or_admin(request.user):
             raise PermissionDenied('Only church treasurers or administrators can review failed givings.')
+        # The badge answers with the window the Failed tab lists underneath
+        # it — the same parse, the same rule — so the number on the strip and
+        # the rows in the tab can never disagree: filter the tab to September
+        # and the badge counts September, never October. Without a window it
+        # reads the last thirty days, which the daily purge is what keeps
+        # clear anyway.
+        start_date, end_date = giving_window(request.query_params)
         count = Contribution.objects.filter(
-            status__in=('failed', 'cancelled'), giving_type='financial'
-        ).count()
+            status__in=('failed', 'cancelled'), giving_type='financial',
+        ).filter(digital_window_q(start_date, end_date)).count()
         return Response({'count': count})
 
     def delete(self, request, pk):
@@ -6324,7 +6593,9 @@ class ChurchFinancialReportPdfView(APIView):
         church_setting = ChurchSettings.objects.first()
         church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
 
-        pdf_bytes = generate_financial_report_pdf(church_name=church_name, report=report)
+        pdf_bytes = generate_financial_report_pdf(
+            church_name=church_name, report=report, signatures=report_signatures(),
+        )
 
         safe_title = ''.join(ch if ch.isalnum() else '_' for ch in report.title).strip('_')[:60] or 'Report'
         filename = f"Financial_Report_{safe_title}.pdf"
@@ -6522,6 +6793,7 @@ class InKindThermalReceiptView(APIView):
             notes=gift.notes,
             received_on=gift.received_on,
             items=items,
+            signatures=receipt_signatures(),
         )
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         stamp = gift.received_on.strftime('%Y%m%d')
@@ -9011,6 +9283,7 @@ class TreasuryPdfView(APIView):
             district=district,
             field_name=field_name,
             purpose_title=purpose_param,
+            signatures=report_signatures(),
         )
 
         filename = f"Individual_Givings_{purpose_param}_{start_date.strftime('%Y%m%d')}.pdf" if purpose_param else f"Financial_Treasury_{start_date.strftime('%Y%m%d')}.pdf"
@@ -9095,6 +9368,7 @@ class MemberGivingStatementPdfView(APIView):
             givings=givings,
             purpose_totals=purpose_totals,
             grand_total=grand_total,
+            signatures=report_signatures(),
         )
 
         filename = f"Member_Giving_Statement_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.pdf"
@@ -9864,8 +10138,10 @@ class DutyRotaView(APIView):
 
     ``GET`` hands the rota over in date order, the earliest duty first, and
     accepts ``from``/``to`` (YYYY-MM-DD) so a desk can read one month of it.
-    ``POST`` schedules a line, and ``DELETE`` — on the detail path — takes one
-    off, for the Sabbath whose rota was cancelled or written twice.
+    ``POST`` schedules a line, ``PUT`` — on the detail path — rewrites one the
+    desk has already scheduled (the duty itself, or the officers rostered on
+    it), and ``DELETE`` takes one off, for the Sabbath whose rota was cancelled
+    or written twice.
     """
 
     permission_classes = [IsAuthenticated]
@@ -9907,6 +10183,82 @@ class DutyRotaView(APIView):
         title = entry.title
         entry.delete()
         return Response({'detail': f'"{title}" is off the duty rota.'})
+
+    def put(self, request, pk=None):
+        """Rewrite a line already on the rota — duty, or its officers.
+
+        The schedule form is also the edit form: the desk opens a line,
+        changes who is rostered or when the shift runs, and saves it back.
+        The same validation runs as on scheduling, so an edited line is
+        exactly as strict as a new one.
+        """
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers and the deaconate can edit a duty rota.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        entry = generics.get_object_or_404(DutyRota, pk=pk)
+        serializer = DutyRotaSerializer(entry, data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        entry = serializer.save()
+        return Response(DutyRotaSerializer(entry).data, status=status.HTTP_200_OK)
+
+
+class DutyRotaPeopleView(APIView):
+    """Who the rota's Add Officer modal suggests as the desk types: the roll.
+
+    The gift form's name search (``lookup/names/``) hands back id-and-name
+    only — a search result is a pick, not a contact card to harvest. The
+    rota's modal is the opposite case: the desk rostering a duty fills a name,
+    phone, email and role field from the one member behind the name, and the
+    line has to carry the number its officers will be called on. So this
+    answers with those four fields — and only for people who may write the
+    rota in the first place, the same door the rota itself has.
+
+    Two characters is the least that is worth searching for (a first name, a
+    surname, the start of a phone number). Typing without picking stays
+    allowed everywhere this list is offered: a deacon who holds no account in
+    the church's app is still a deacon the rota must name.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers and the deaconate can look up officers.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        query = (request.query_params.get('q') or request.query_params.get('query') or '').strip()
+        if len(query) < 2:
+            return Response({'matches': []})
+        matches = (
+            User.objects.filter(is_active=True)
+            .filter(
+                Q(first_name__icontains=query)
+                | Q(last_name__icontains=query)
+                | Q(username__icontains=query)
+                | Q(email__icontains=query)
+                | Q(member_profile__phone_number__icontains=query)
+            )
+            .select_related('member_profile')
+            .order_by('first_name', 'last_name', 'username')[:8]
+        )
+        results = []
+        for user in matches:
+            profile = getattr(user, 'member_profile', None)
+            # The plain "Member" role is what everyone holds; it says nothing
+            # about the duty they are being rostered for, so it is left off.
+            roles = [code for code in profile.get_roles() if code != DEFAULT_ROLE] if profile else []
+            results.append({
+                'id': user.id,
+                'name': (user.get_full_name() or user.username).strip(),
+                'phone': (profile.phone_number if profile else '') or '',
+                'email': user.email or '',
+                'role': role_labels(roles),
+            })
+        return Response({'matches': results})
 
 
 # ── Departments ──────────────────────────────────────────────────────────────
@@ -11863,8 +12215,9 @@ class DepartmentAccountView(APIView):
 
     GET answers the balance, the movements on the fund (the ledger lines the
     treasury already writes — contributions credited, withdrawals debited)
-    and the withdrawal asks the desk has raised. The leader raises a
-    withdrawal with POST; the treasurer answers at
+    and the withdrawal asks the desk has raised. The desk raises a withdrawal
+    with POST — anyone the fund is open to, its leadership and the roll that
+    reads it alike — and the treasurer answers at
     DepartmentWithdrawalReviewView.
     """
 
@@ -11880,6 +12233,7 @@ class DepartmentAccountView(APIView):
                 'account': None,
                 'accounts': [],
                 'can_request_withdrawal': False,
+                'can_start_fund_drive': False,
                 'movements': [],
                 'withdrawals': [],
             })
@@ -11948,21 +12302,40 @@ class DepartmentAccountView(APIView):
                 }
                 for acc in accounts
             ],
-            'can_request_withdrawal': can_manage_department(request.user, department) or is_treasurer_or_admin(request.user),
+            # The button follows the fund, not the office: a desk that can read
+            # an account can ask for money out of it (see
+            # ``department_accounts``). The treasurer still answers every ask,
+            # so nothing moves on the asker's word.
+            'can_request_withdrawal': bool(accounts),
+            # A fund drive is the desk's own campaign to raise money, not an
+            # ask of the fund: that one stays with the desk's leadership.
+            'can_start_fund_drive': (
+                can_manage_department(request.user, department)
+                or is_treasurer_or_admin(request.user)
+            ),
             'is_deaconate': is_deaconate,
             'movements': movements,
             'withdrawals': withdrawals,
         })
 
     def post(self, request, department):
-        """The leader asks the treasurer to pay something out of the fund."""
+        """The desk asks the treasurer to pay something out of the fund.
+
+        The ask runs on the same door as the read: whoever the fund is open to
+        — its leadership, and the roll the desk reads for — may ask from it, so
+        the button and the ask it opens never disagree. The treasurer still
+        answers every request, and only their word debits the fund.
+        """
         target = Department.objects.filter(code=department, is_active=True).first()
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department) and not is_treasurer_or_admin(request.user):
-            return Response({'detail': "Only this department's leadership can request a withdrawal or funding."}, status=status.HTTP_403_FORBIDDEN)
         accounts = department_accounts(request.user, department)
         if not accounts:
+            if not can_manage_department(request.user, department) and not is_treasurer_or_admin(request.user):
+                return Response(
+                    {'detail': "Only this department's desk can request a withdrawal or funding."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             return Response({'detail': 'This department has no account to withdraw from yet.'}, status=status.HTTP_400_BAD_REQUEST)
 
         account_id = request.data.get('account_id')
@@ -12361,7 +12734,9 @@ class WithdrawalRequestPdfView(APIView):
         church_name = current_church_name()
 
         from .pdf_generator import generate_withdrawal_request_pdf
-        pdf_bytes = generate_withdrawal_request_pdf(church_name, _withdrawal_review_row(row))
+        pdf_bytes = generate_withdrawal_request_pdf(
+            church_name, _withdrawal_review_row(row), signatures=report_signatures(),
+        )
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f'Withdrawal_Request_{row.id}.pdf'

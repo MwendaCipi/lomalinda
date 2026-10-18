@@ -15,6 +15,7 @@ import {
   Gift,
   GraduationCap,
   HandHeart,
+  Images,
   Heart,
   HeartPulse,
   HeartHandshake,
@@ -730,7 +731,7 @@ export const eldershipItems: RailRow[] = [
  * disagree about the desk's shape or what a page is called.
  */
 export const deaconateViews: {
-  view: "members" | "inventory" | "rota" | "calendar" | "funding";
+  view: "members" | "inventory" | "rota" | "moments" | "calendar" | "funding";
   tab: string;
   label: string;
   short?: string;
@@ -759,6 +760,13 @@ export const deaconateViews: {
     label: "Duty Rota",
     icon: ClipboardList,
     description: "The deacons' and deaconesses' duty rosters for the church's services.",
+  },
+  {
+    view: "moments",
+    tab: "deaconate-moments",
+    label: "Moments",
+    icon: Images,
+    description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
   },
   {
     view: "calendar",

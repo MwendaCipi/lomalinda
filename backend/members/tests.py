@@ -1254,6 +1254,175 @@ class TreasuryFailedViewTests(APITestCase):
             status.HTTP_403_FORBIDDEN,
         )
 
+    @staticmethod
+    def _aged(row, when):
+        """A row backdated past its own creation stamp: created_at is what a
+        windowed attempt is counted by."""
+        Contribution.objects.filter(pk=row.pk).update(created_at=when)
+        return row
+
+    def test_a_september_window_counts_september_and_never_october(self):
+        """The strip's badge answers the desk's date filter: September's
+        window holds September's attempts — the queue that used to show
+        October beside them is why this rule is pinned here."""
+        # setUp's attempt is stamped "now"; park it well outside both windows
+        # so only this test's own rows are on show.
+        self._aged(self.failed, timezone.make_aware(datetime(2026, 8, 15, 9, 0)))
+        early = self._aged(
+            Contribution.objects.create(
+                payment_method='mpesa', giving_type='financial', status='failed',
+                amount=Decimal('40.00'), purpose='Tithe',
+                checkout_request_id='ws_CO_sep05',
+            ),
+            timezone.make_aware(datetime(2026, 9, 5, 9, 30)),
+        )
+        late = self._aged(
+            Contribution.objects.create(
+                payment_method='mpesa', giving_type='financial', status='cancelled',
+                amount=Decimal('60.00'), purpose='Tithe',
+                checkout_request_id='ws_CO_sep20',
+            ),
+            timezone.make_aware(datetime(2026, 9, 20, 17, 0)),
+        )
+        october = self._aged(
+            Contribution.objects.create(
+                payment_method='mpesa', giving_type='financial', status='failed',
+                amount=Decimal('80.00'), purpose='Tithe',
+                checkout_request_id='ws_CO_oct05',
+            ),
+            timezone.make_aware(datetime(2026, 10, 5, 8, 0)),
+        )
+        # Money that arrived inside September is the list's, never the badge's.
+        self._aged(
+            Contribution.objects.create(
+                payment_method='mpesa', giving_type='financial', status='completed',
+                mpesa_receipt_number='OKK9SEPT1', amount=Decimal('700.00'),
+                purpose='Tithe', paid_at=timezone.make_aware(datetime(2026, 9, 28, 10, 0)),
+            ),
+            timezone.make_aware(datetime(2026, 9, 28, 10, 0)),
+        )
+
+        self.client.force_authenticate(user=self.treasurer)
+        september = self.client.get(
+            '/api/members/treasury/failed/?from_date=2026-09-01&to_date=2026-09-30'
+        )
+        self.assertEqual(september.status_code, status.HTTP_200_OK)
+        self.assertEqual(september.data['count'], 2)
+
+        # And the badge agrees with the row list the Failed tab reads from:
+        # same window, same rows — never one number over a different answer.
+        listing = self.client.get(
+            '/api/members/treasury/purpose-contributions/'
+            '?from_date=2026-09-01&to_date=2026-09-30&include_failed=1'
+        )
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        never_arrived = [
+            row for row in listing.data
+            if row['status'] in ('Failed', 'Cancelled', 'Pending')
+        ]
+        self.assertEqual(len(never_arrived), september.data['count'])
+
+        october_window = self.client.get(
+            '/api/members/treasury/failed/?from_date=2026-10-01&to_date=2026-10-31'
+        )
+        self.assertEqual(october_window.data['count'], 1)
+        self.assertTrue(Contribution.objects.filter(pk__in=[early.pk, late.pk, october.pk]).exists())
+        # The list itself obeys the window as well: September's rows are only
+        # September's, so October's attempt can never leak through.
+        listed_ids = {row['raw_id'] for row in listing.data if row['source'] == 'digital'}
+        self.assertNotIn(october.pk, listed_ids)
+
+    def test_a_malformed_window_is_refused_rather_than_guessed(self):
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.get(
+            '/api/members/treasury/failed/?from_date=soon&to_date=2026-09-30'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class CleanupFailedContributionsTests(TestCase):
+    """The daily sweep: an attempt that never became money is noise, and
+    noise ages out at thirty days — whole payment or nothing, and never a
+    gift that arrived."""
+
+    def _attempt(self, status='failed', age_days=0, **fields):
+        row = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status=status,
+            amount=Decimal('100.00'), purpose='Tithe', **fields,
+        )
+        if age_days:
+            Contribution.objects.filter(pk=row.pk).update(
+                created_at=timezone.now() - timedelta(days=age_days)
+            )
+        return row
+
+    def _run(self, *args):
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('cleanup_failed_contributions', *args, stdout=out, stderr=StringIO())
+        return out.getvalue()
+
+    def test_attempts_past_the_window_are_purged_and_younger_ones_kept(self):
+        old = self._attempt(age_days=45, checkout_request_id='ws_CO_old45')
+        edge = self._attempt(status='cancelled', age_days=31, checkout_request_id='ws_CO_old31')
+        recent = self._attempt(age_days=12, checkout_request_id='ws_CO_new12')
+
+        self._run()
+
+        self.assertFalse(Contribution.objects.filter(pk=old.pk).exists())
+        self.assertFalse(Contribution.objects.filter(pk=edge.pk).exists())
+        self.assertTrue(Contribution.objects.filter(pk=recent.pk).exists())
+
+    def test_a_completed_gift_is_never_touched_however_old(self):
+        done = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='OKK9AGES1', amount=Decimal('999.00'), purpose='Tithe',
+            paid_at=timezone.now(),
+        )
+        Contribution.objects.filter(pk=done.pk).update(
+            created_at=timezone.now() - timedelta(days=400)
+        )
+
+        self._run()
+
+        self.assertTrue(Contribution.objects.filter(pk=done.pk).exists())
+
+    def test_a_split_payment_goes_whole_or_stays_whole(self):
+        together = uuid.uuid4()
+        left = self._attempt(age_days=45, checkout_request_id='ws_CO_split1', payment_group=together)
+        right = self._attempt(age_days=45, checkout_request_id='ws_CO_split1', payment_group=together)
+
+        # A payment one line of which holds a real gift keeps every line: the
+        # ledger may never lose half a payment.
+        mixed = uuid.uuid4()
+        held = self._attempt(age_days=45, checkout_request_id='ws_CO_mixed', payment_group=mixed)
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='OKKMIXED1', amount=Decimal('50.00'), purpose='Tithe',
+            payment_group=mixed, paid_at=timezone.now(),
+        )
+
+        self._run()
+
+        self.assertFalse(Contribution.objects.filter(pk__in=[left.pk, right.pk]).exists())
+        self.assertTrue(Contribution.objects.filter(pk=held.pk).exists())
+
+    def test_dry_run_removes_nothing(self):
+        old = self._attempt(age_days=45, checkout_request_id='ws_CO_dryrun')
+
+        output = self._run('--dry-run')
+
+        self.assertIn('Would remove 1 failed givings', output)
+        self.assertTrue(Contribution.objects.filter(pk=old.pk).exists())
+
+    def test_the_window_can_be_narrowed(self):
+        old = self._attempt(age_days=20, checkout_request_id='ws_CO_days10')
+
+        self._run('--days', '10')
+
+        self.assertFalse(Contribution.objects.filter(pk=old.pk).exists())
+
 
 class DedupeMpesaReceiptsCommandTests(TestCase):
     """One payment, one receipt: the pull and the callback each recorded
@@ -4244,6 +4413,66 @@ class AnnouncementBroadcastTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 
+class AnnouncementSmsBroadcastTests(APITestCase):
+    """"Through SMS" must ring phones, not only write the in-app notice.
+
+    Who is texted follows the email audience exactly; a phone shared by two
+    accounts gets one text, an account with no usable phone gets none, and a
+    post that did not choose SMS texts nobody.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('ann.sms.elder', 'ann.sms.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder', phone_number='0700000001')
+        self.client.force_authenticate(self.elder)
+
+    def _add_member(self, username, phone=''):
+        user = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=user, role='member', roles='member', phone_number=phone)
+        return user
+
+    @override_settings(SMS_API_KEY='test-token', SMS_SEND_DELAY=0)
+    @patch('members.sms.requests.post')
+    def test_an_sms_announcement_texts_each_reachable_phone_once(self, sms_post):
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True}
+        # The same phone written two ways, a second phone, and a member with none.
+        self._add_member('ann.sms.same', '+254700000001')
+        self._add_member('ann.sms.other', '0712 000 002')
+        self._add_member('ann.sms.nophone')
+
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Choir practice',
+            'text': 'Tonight at six in the sanctuary.',
+            'visibility': 'members_only',
+            'sharing_option': 'sms',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        sent = sorted(call.kwargs['json']['recipient'] for call in sms_post.call_args_list)
+        self.assertEqual(sent, ['+254700000001', '+254712000002'])
+        body = sms_post.call_args_list[0].kwargs['json']['message']
+        self.assertIn('Choir practice', body)
+        self.assertIn('Tonight at six in the sanctuary.', body)
+
+    @override_settings(SMS_API_KEY='test-token', SMS_SEND_DELAY=0)
+    @patch('members.sms.requests.post')
+    def test_a_post_that_did_not_choose_sms_texts_nobody(self, sms_post):
+        self._add_member('ann.sms.site.only', '0712000003')
+
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Site notice',
+            'text': 'Read it on the site.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        sms_post.assert_not_called()
+
+
 class AnnouncementManagementPermissionTests(APITestCase):
     """Writes need leadership (staff/superusers count); drafts stay private."""
 
@@ -5408,15 +5637,21 @@ class DutyRotaAPITests(APITestCase):
         self.assertEqual(unstaffed.status_code, status.HTTP_201_CREATED)
         self.assertEqual(unstaffed.data['assigned_team'], [])
 
-    def test_a_duty_needs_a_name_and_a_date(self):
+    def test_a_duty_needs_a_date_but_not_a_title(self):
+        """The schedule form asks for the day, the time and the officers; the
+        title it used to invent is optional, and the line reads by its date.
+        An undated duty is no duty at all, so that is still refused."""
         self.client.force_authenticate(self.head_deaconess)
 
-        self.assertEqual(self._schedule(title='  ').status_code, status.HTTP_400_BAD_REQUEST)
+        untitled = self._schedule(title='  ')
+        self.assertEqual(untitled.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(untitled.data['title'], '')
+        self.assertEqual(untitled.data['date'], '2026-11-07')
 
         undated = self.client.post('/api/members/duty-rota/', {'title': 'Ushering'}, format='json')
         self.assertEqual(undated.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('date', undated.data)
-        self.assertEqual(DutyRota.objects.count(), 0)
+        self.assertEqual(DutyRota.objects.count(), 1)
 
     def test_a_duty_can_be_taken_off_the_rota(self):
         self.client.force_authenticate(self.head_deaconess)
@@ -5438,7 +5673,355 @@ class DutyRotaAPITests(APITestCase):
             self.client.delete('/api/members/duty-rota/1/').status_code,
             status.HTTP_403_FORBIDDEN,
         )
+        self.assertEqual(
+            self.client.put('/api/members/duty-rota/1/', {'title': 'Ushering', 'date': '2026-11-07'}).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
         self.assertEqual(DutyRota.objects.count(), 0)
+
+    def test_officers_carry_who_they_are_and_how_to_reach_them(self):
+        """The Add Officer modal writes an officer, not just a name: the line
+        rosters the person with the number the Sabbath will call. A bare name
+        — every line written before the modal, and a deacon with no account —
+        still rides alongside them."""
+        self.client.force_authenticate(self.head_deaconess)
+
+        david = {
+            'name': 'Deacon David',
+            'phone': '0712 345 678',
+            'email': 'david@example.com',
+            'role': 'Head Deacon',
+            'duty': 'Counting the offering',
+        }
+        created = self._schedule(assigned_team=[
+            david,
+            {'name': 'Deaconess Sarah', 'phone': '0722 000 111', 'email': '', 'role': 'Communion care', 'duty': ''},
+            {'name': '  ', 'phone': '0700 000 000'},            # no name: not an officer
+            dict(david),                                         # the same officer, once
+            {'name': 'Deacon David', 'phone': '0799 999 999', 'email': '', 'role': '', 'duty': 'Holding the door'},
+            'Deacon Linus',                                      # typed, not from the roll
+        ])
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['assigned_team'], [
+            david,
+            {'name': 'Deaconess Sarah', 'phone': '0722 000 111', 'email': '', 'role': 'Communion care', 'duty': ''},
+            {'name': 'Deacon David', 'phone': '0799 999 999', 'email': '', 'role': '', 'duty': 'Holding the door'},
+            'Deacon Linus',
+        ])
+        stored = DutyRota.objects.get(pk=created.data['id'])
+        self.assertEqual(stored.assigned_team[0]['phone'], '0712 345 678')
+        self.assertEqual(stored.assigned_team[1]['email'], '')
+
+    def test_a_line_can_be_edited_after_it_was_scheduled(self):
+        """The schedule form is also the edit form: a shift moved, officers
+        changed — the line the church reads is the line the desk saved."""
+        self.client.force_authenticate(self.head_deaconess)
+        entry_id = self._schedule().data['id']
+
+        edited = self.client.put(f'/api/members/duty-rota/{entry_id}/', {
+            'title': 'Communion preparation team',
+            'date': '2026-11-14',
+            'shift': '02:00 PM - 05:00 PM',
+            'duty_type': 'Communion Setup',
+            'assigned_team': [{
+                'name': 'Deaconess Sarah',
+                'phone': '0722 000 111',
+                'email': 'sarah@example.com',
+                'role': 'Head Deaconess',
+            }],
+        }, format='json')
+
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(edited.data['title'], 'Communion preparation team')
+        self.assertEqual(edited.data['assigned_team'][0]['phone'], '0722 000 111')
+        self.assertEqual(DutyRota.objects.count(), 1)
+        listed = self.client.get('/api/members/duty-rota/')
+        self.assertEqual(listed.data[0]['shift'], '02:00 PM - 05:00 PM')
+        self.assertEqual(listed.data[0]['duty_type'], 'Communion Setup')
+
+        # An edit is held to everything a new line is: no date, no save, and
+        # the line on the server is the one it was before the request.
+        rejected = self.client.put(
+            f'/api/members/duty-rota/{entry_id}/', {'title': 'Ushering'}, format='json'
+        )
+        self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('date', rejected.data)
+        self.assertEqual(
+            DutyRota.objects.get(pk=entry_id).title, 'Communion preparation team'
+        )
+
+    def _rostered_officer(self, **extra):
+        """A deacon on the roll, for the modal's suggestions to find."""
+        officer = User.objects.create_user(
+            'deacon.david', 'david@example.com', 'DeaconPass#2026',
+            first_name='David', last_name='Kariuki',
+        )
+        MemberProfile.objects.create(
+            user=officer, role='head_deacon', roles='head_deacon',
+            phone_number='0712345678', **extra,
+        )
+        return officer
+
+    def test_the_officer_lookup_answers_the_desk_with_contacts(self):
+        """Suggestions fill the modal's four fields from the one member
+        behind the name — and only for a desk that may roster them."""
+        self._rostered_officer()
+
+        self.client.force_authenticate(self.head_deaconess)
+        found = self.client.get('/api/members/duty-rota/people/?q=Kariuki')
+
+        self.assertEqual(found.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(found.data['matches']), 1)
+        self.assertEqual(found.data['matches'][0]['name'], 'David Kariuki')
+        self.assertEqual(found.data['matches'][0]['phone'], '0712345678')
+        self.assertEqual(found.data['matches'][0]['email'], 'david@example.com')
+        self.assertEqual(found.data['matches'][0]['role'], 'Head Deacon')
+
+        # The plain "Member" role says nothing about a duty and is left off
+        # the suggestion; so is a search too short to be one.
+        self.client.force_authenticate(self.member)
+        MemberProfile.objects.filter(user=self.member).update(
+            roles='member', phone_number='0700111222'
+        )
+        self.client.force_authenticate(self.head_deaconess)
+        named = self.client.get('/api/members/duty-rota/people/?q=plain.rota')
+        self.assertEqual(named.data['matches'][0]['role'], '')
+        self.assertEqual(
+            self.client.get('/api/members/duty-rota/people/?q=D').data, {'matches': []}
+        )
+
+        # The congregation rosters nobody, so it looks up nobody either.
+        self.client.force_authenticate(self.member)
+        refused = self.client.get('/api/members/duty-rota/people/?q=Kariuki')
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_an_officer_picked_from_the_roll_keeps_their_account(self):
+        """The desk picks the person, not just the name: the line carries the
+        account behind it, which is what the daily reminder rings. A name
+        typed by hand stays a name and nothing more."""
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+
+        created = self._schedule(assigned_team=[
+            {
+                'name': 'David Kariuki', 'phone': '0712345678',
+                'email': 'david@example.com', 'role': 'Ushering',
+                'member_id': officer.pk,
+            },
+            'Deacon Linus',
+        ])
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['assigned_team'][0]['member_id'], officer.pk)
+        self.assertEqual(created.data['assigned_team'][0]['role'], 'Ushering')
+        self.assertEqual(created.data['assigned_team'][1], 'Deacon Linus')
+        self.assertEqual(
+            DutyRota.objects.get(pk=created.data['id']).assigned_team[0]['member_id'],
+            officer.pk,
+        )
+
+        # And an edit keeps it: the officer is still the same person on the line.
+        edited = self.client.put(f"/api/members/duty-rota/{created.data['id']}/", {
+            'date': '2026-11-14',
+            'assigned_team': created.data['assigned_team'],
+        }, format='json')
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(edited.data['assigned_team'][0]['member_id'], officer.pk)
+
+    def test_an_account_no_longer_on_the_roll_is_left_off_the_officer(self):
+        """A line outlives the account: an id the roll no longer answers to is
+        dropped from the officer, never used to refuse the rota."""
+        self.client.force_authenticate(self.head_deaconess)
+
+        created = self._schedule(assigned_team=[{
+            'name': 'Deacon Gone', 'phone': '', 'email': '', 'role': '',
+            'member_id': 999999,
+        }])
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        officer = created.data['assigned_team'][0]
+        self.assertEqual(officer['name'], 'Deacon Gone')
+        self.assertNotIn('member_id', officer)
+
+    def test_a_rostered_member_is_rung_by_the_daily_reminder(self):
+        """The chain the desk asked for: the officer is picked as the real
+        person on the line, and the cron rings them the day before the duty."""
+        from django.core.management import call_command
+
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+        letters_before = len(mail.outbox)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        created = self._schedule(date=str(tomorrow), assigned_team=[{
+            'name': 'David Kariuki', 'phone': '0712345678',
+            'email': 'david@example.com', 'role': 'Ushering',
+            'member_id': officer.pk,
+        }])
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        call_command('send_duty_reminders', stdout=StringIO())
+
+        notice = ChurchNotification.objects.get(user=officer)
+        self.assertIn('Main Sanctuary Ushering Team A', notice.title)
+        self.assertEqual(notice.link, '/administration?tab=deaconate-rota')
+        self.assertEqual(len(mail.outbox), letters_before + 1)
+        self.assertEqual(mail.outbox[-1].to, ['david@example.com'])
+        self.assertIn('Ushering', mail.outbox[-1].body)
+
+    def test_a_member_id_that_is_not_an_id_is_refused(self):
+        self.client.force_authenticate(self.head_deaconess)
+
+        refused = self._schedule(assigned_team=[{
+            'name': 'Deacon David', 'member_id': 'david',
+        }])
+
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('assigned_team', refused.data)
+        self.assertEqual(DutyRota.objects.count(), 0)
+
+
+class DutyReminderCronTests(TestCase):
+    """The daily reminder for the deaconate's rota.
+
+    The cron rings the officer behind the name — the bell, a letter and a push
+    — the day before the duty. A hand-typed name is on the rota and reminded
+    by nobody, and a line is stamped as it is reminded, so a second run of the
+    command is silent.
+    """
+
+    def setUp(self):
+        self.desk = User.objects.create_user(
+            'cron.head.deaconess', 'cron.desk@example.com', 'DeaconPass#2026',
+            first_name='Dora', last_name='Desk',
+        )
+        MemberProfile.objects.create(user=self.desk, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=self.desk)
+        self.officer = User.objects.create_user(
+            'cron.deacon', 'cron.deacon@example.com', 'DeaconPass#2026',
+            first_name='David', last_name='Kariuki',
+        )
+        MemberProfile.objects.create(
+            user=self.officer, role='head_deacon', roles='head_deacon',
+            phone_number='0712345678',
+        )
+        mail.outbox.clear()
+
+    def tearDown(self):
+        mail.outbox.clear()
+
+    def _line(self, day=None, team=None, title='Sanctuary care'):
+        return DutyRota.objects.create(
+            title=title,
+            duty_date=day or timezone.localdate() + timedelta(days=1),
+            shift='08:30 AM - 01:00 PM',
+            assigned_team=team if team is not None else [
+                {
+                    'name': 'David Kariuki', 'phone': '0712345678',
+                    'email': 'cron.deacon@example.com', 'role': 'Ushering',
+                    'member_id': self.officer.pk,
+                },
+                'Deacon Linus',
+            ],
+        )
+
+    def _run(self, *args):
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('send_duty_reminders', *args, stdout=out)
+        return out.getvalue()
+
+    def test_the_officer_behind_the_name_is_reminded_before_the_duty(self):
+        line = self._line()
+
+        self._run()
+
+        notice = ChurchNotification.objects.get(user=self.officer)
+        self.assertIn('Duty reminder', notice.title)
+        self.assertIn('Sanctuary care', notice.message)
+        self.assertIn('Ushering', notice.message)
+        self.assertEqual(notice.link, '/administration?tab=deaconate-rota')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['cron.deacon@example.com'])
+        self.assertIn('Sanctuary care', mail.outbox[0].body)
+
+        line.refresh_from_db()
+        self.assertIsNotNone(line.reminder_sent_at)
+        # The typed name has nobody behind it; only the officer was rung.
+        self.assertEqual(ChurchNotification.objects.count(), 1)
+        self.assertEqual(ChurchNotification.objects.filter(user=self.desk).count(), 0)
+
+    def test_a_second_run_rings_nobody_twice(self):
+        self._line()
+        self._run()
+        letters = len(mail.outbox)
+
+        self._run()
+
+        self.assertEqual(ChurchNotification.objects.count(), 1)
+        self.assertEqual(len(mail.outbox), letters)
+
+    def test_force_rings_a_line_again(self):
+        """The desk's own re-send: a deliberate second run, never the cron's."""
+        self._line()
+        self._run()
+
+        self._run('--force')
+
+        self.assertEqual(ChurchNotification.objects.count(), 2)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_a_line_of_typed_names_is_stamped_and_reported(self):
+        """A deaconate that keeps its officers by name alone is not an error:
+        there is nobody to ring, and the run says so once."""
+        line = self._line(team=['Deacon Linus'], title='Audio/PA')
+
+        output = self._run()
+
+        self.assertEqual(ChurchNotification.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertIn('no account to remind', output)
+        line.refresh_from_db()
+        self.assertIsNotNone(line.reminder_sent_at)
+
+    def test_the_window_follows_the_days_asked_for(self):
+        far = self._line(
+            day=timezone.localdate() + timedelta(days=3), title='Camporee setup',
+        )
+
+        self._run()
+        far.refresh_from_db()
+        self.assertIsNone(far.reminder_sent_at)
+
+        self._run('--days', '3')
+        far.refresh_from_db()
+        self.assertIsNotNone(far.reminder_sent_at)
+        self.assertEqual(ChurchNotification.objects.filter(user=self.officer).count(), 1)
+
+    def test_a_dry_run_lists_but_sends_nothing(self):
+        line = self._line()
+
+        output = self._run('--dry-run')
+
+        self.assertIn('would remind', output)
+        self.assertEqual(ChurchNotification.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 0)
+        line.refresh_from_db()
+        self.assertIsNone(line.reminder_sent_at)
+
+    def test_a_closed_account_is_left_off(self):
+        line = self._line(team=[
+            {'name': 'David Kariuki', 'member_id': self.officer.pk},
+        ])
+        self.officer.is_active = False
+        self.officer.save(update_fields=['is_active'])
+
+        self._run()
+
+        self.assertEqual(ChurchNotification.objects.count(), 0)
+        line.refresh_from_db()
+        self.assertIsNotNone(line.reminder_sent_at)
 
 
 class MemberRosterSystemAccountTests(APITestCase):
@@ -8756,12 +9339,13 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         self.assertIsNone(contribution.receipt_sent_at)
 
     @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
-    @patch('members.views.requests.post')
+    @patch('members.sms.requests.post')
     def test_the_phone_can_be_supplied_or_corrected_on_resend(self, sms_post):
         """The SMS number is editable exactly like the email: entered when
         the row has none, corrected when the one on file is stale — and the
         corrected number goes on the row and out the gateway."""
-        sms_post.return_value.raise_for_status.return_value = None
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True, 'message': {'parts': 1}, 'new_balance': 100}
         contribution = Contribution.objects.create(
             amount=Decimal('5.00'), giving_type='financial', purpose='lcb',
             status='completed', payment_method='mpesa',
@@ -8776,7 +9360,9 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-        self.assertEqual(sms_post.call_args.kwargs['json']['to'], '0712345678')
+        # The ledger keeps the number as it was typed; the gateway is handed
+        # the international form Ping Africa documents.
+        self.assertEqual(sms_post.call_args.kwargs['json']['recipient'], '+254712345678')
         contribution.refresh_from_db()
         self.assertEqual(contribution.phone_number, '0712345678')
         self.assertIsNotNone(contribution.receipt_sent_at)
@@ -8805,11 +9391,12 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         self.assertIsNone(contribution.receipt_sent_at)
 
     @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
-    @patch('members.views.requests.post')
+    @patch('members.sms.requests.post')
     def test_a_cash_receipts_contacts_can_be_corrected_too(self, sms_post):
         from django.core import mail
 
-        sms_post.return_value.raise_for_status.return_value = None
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True, 'message': {'parts': 1}, 'new_balance': 100}
         cash = self._cash(giver_phone='0791000746', giver_email='old@example.com')
 
         response = self.client.post(
@@ -8820,20 +9407,21 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(mail.outbox[0].to, ['new@example.com'])
-        self.assertEqual(sms_post.call_args.kwargs['json']['to'], '0722000111')
+        self.assertEqual(sms_post.call_args.kwargs['json']['recipient'], '+254722000111')
         cash.refresh_from_db()
         self.assertEqual(cash.giver_email, 'new@example.com')
         self.assertEqual(cash.giver_phone, '0722000111')
         self.assertIsNotNone(cash.receipt_sent_at)
 
     @override_settings(SMS_API_URL='https://sms.example/send', SMS_API_KEY='key')
-    @patch('members.views.requests.post')
+    @patch('members.sms.requests.post')
     def test_sms_only_needs_no_email_and_actually_goes_out(self, sms_post):
         """The channel picker's SMS-only choice must not be blocked by a
         missing address: a phone-only giver can still get the receipt."""
         from django.core import mail
 
-        sms_post.return_value.raise_for_status.return_value = None
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True, 'message': {'parts': 1}, 'new_balance': 100}
         cash = self._cash()
 
         response = self.client.post(
@@ -8847,7 +9435,7 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         cash.refresh_from_db()
         self.assertIsNotNone(cash.receipt_sent_at)
         self.assertEqual(mail.outbox, [])
-        self.assertEqual(sms_post.call_args.kwargs['json']['to'], '0791000746')
+        self.assertEqual(sms_post.call_args.kwargs['json']['recipient'], '+254791000746')
 
     @override_settings(SMS_API_URL='', SMS_API_KEY='')
     def test_sms_only_reports_honestly_when_sms_is_not_configured(self):
@@ -8875,6 +9463,81 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class SmsGatewayTests(APITestCase):
+    """Ping Africa's gateway, at the three points a guess would break it.
+
+    The number must leave as ``+254…``, the body is ``recipient``/``message``
+    (not the ``to``/``from`` a generic gateway would take), and ``sender_id``
+    is only ever a sender the account was granted — a refusal is reported as
+    a failure, never mistaken for a send.
+    """
+
+    def test_numbers_from_every_screen_leave_in_international_form(self):
+        from .sms import recipient
+
+        for written in ('0712345678', '0712 345 678', '+254712345678',
+                        '254712345678', '00254712345678', '712345678'):
+            self.assertEqual(recipient(written), '+254712345678', written)
+
+    def test_a_masked_or_foreign_number_is_refused_before_a_credit_is_spent(self):
+        from .sms import recipient
+
+        for written in ('', 'call-me-maybe', '0722000', '25471234567', '+255712345678', '2547****678'):
+            self.assertEqual(recipient(written), '', written)
+
+    @override_settings(SMS_API_URL='', SMS_API_KEY='test-token', SMS_SENDER_ID='')
+    @patch('members.sms.requests.post')
+    def test_the_documented_endpoint_and_body_are_used(self, sms_post):
+        from .sms import send
+
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {
+            'success': True, 'message': {'status': 'sent', 'parts': 1}, 'new_balance': 99,
+        }
+
+        self.assertTrue(send('0712 345 678', 'Hello from the church'))
+
+        self.assertEqual(sms_post.call_args.args[0], 'https://bulk.ping.africa/api/sms/send')
+        self.assertEqual(sms_post.call_args.kwargs['json'], {
+            'recipient': '+254712345678',
+            'message': 'Hello from the church',
+        })
+        self.assertEqual(
+            sms_post.call_args.kwargs['headers']['Authorization'], 'Bearer test-token'
+        )
+
+    @override_settings(SMS_API_KEY='test-token', SMS_SENDER_ID='LOMALINDA')
+    @patch('members.sms.requests.post')
+    def test_an_approved_sender_names_the_sender(self, sms_post):
+        from .sms import send
+
+        sms_post.return_value.status_code = 201
+        sms_post.return_value.json.return_value = {'success': True}
+
+        self.assertTrue(send('0712345678', 'Hello'))
+        self.assertEqual(sms_post.call_args.kwargs['json']['sender_id'], 'LOMALINDA')
+
+    @override_settings(SMS_API_KEY='test-token')
+    @patch('members.sms.requests.post')
+    def test_a_gateway_refusal_is_never_counted_as_sent(self, sms_post):
+        from .sms import send
+
+        sms_post.return_value.status_code = 402
+        sms_post.return_value.json.return_value = {'error': 'Insufficient credits'}
+
+        self.assertFalse(send('0712345678', 'Hello'))
+
+    @override_settings(SMS_API_KEY='test-token')
+    @patch('members.sms.requests.post')
+    def test_a_message_the_gateway_marks_failed_is_not_sent(self, sms_post):
+        from .sms import send
+
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': False, 'error': 'Sender ID is not authorised'}
+
+        self.assertFalse(send('0712345678', 'Hello'))
 
 
 class SexIsSetOnceTests(APITestCase):
@@ -11244,9 +11907,11 @@ class DepartmentGroupAndUnitTests(APITestCase):
 class ChurchEventMomentsTests(APITestCase):
     """Moments stores church events: an album with a title and its media.
 
-    Anyone may read the published albums; only administrators open albums,
-    add files or take one down — Moments is the administrators' gallery,
-    and even an elder or clerk with the announcements right is refused.
+    Anyone may read the published albums. Posting has two doors: the
+    administrators', and the deaconate's — the desk in the middle of the
+    church's days holds the pictures of them and documents its own moments.
+    Everyone else is refused, an elder or clerk with the announcements
+    right included.
     """
 
     def setUp(self):
@@ -11266,6 +11931,13 @@ class ChurchEventMomentsTests(APITestCase):
             title='Baptism 3rd October 2026',
             description='A Sabbath of new members.',
         )
+
+    def _deacon(self, username='deacon.on.wall'):
+        """A deacon on the deaconate's roll — the desk that documents."""
+        deacon = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=deacon, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=deacon)
+        return deacon
 
     def _jpg(self, name='pool.jpg'):
         return self.SimpleUploadedFile(name, b'\xff\xd8\xff\xe0fakejpeg', content_type='image/jpeg')
@@ -11291,8 +11963,8 @@ class ChurchEventMomentsTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_an_elder_without_the_admin_role_may_not_post_an_album(self):
-        """Moments is the administrators' gallery: the announcements right
-        posts notices, not albums, so an elder is refused where an admin
+        """Moments is not the announcements right's gallery: the office that
+        posts notices posts no albums, so an elder is refused where an admin
         role or Django staff is waved through."""
         elder = User.objects.create_user(
             'moments.elder', 'moments.elder@example.com', 'ChurchPass#2026',
@@ -11301,6 +11973,52 @@ class ChurchEventMomentsTests(APITestCase):
         self.client.force_authenticate(elder)
         response = self.client.post('/api/members/church-events/', {'title': 'Choir Sunday'}, format='json')
         self.assertEqual(response.status_code, 403)
+
+    def test_the_deaconate_documents_a_moment_with_pictures_and_a_video_link(self):
+        """The deaconate stands in the middle of the church's days and holds
+        their pictures, so it documents its own moments: pictures as files,
+        video as the address of where the footage already lives."""
+        self.client.force_authenticate(self._deacon())
+
+        response = self.client.post('/api/members/church-events/', {
+            'title': 'Communion 14th December 2026',
+            'description': 'Foot washing before the service.',
+            'happened_on': '2026-12-14',
+            'media_files': [self._jpg('communion.jpg')],
+            'video_links': [' https://youtu.be/abc123 ', 'https://youtu.be/abc123', ''],
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['media_count'], 1)
+        # Trimmed, once each, blanks dropped: the wall carries one address.
+        self.assertEqual(response.data['video_links'], ['https://youtu.be/abc123'])
+        # And it goes straight out — the desk documents, the wall shows.
+        self.assertTrue(ChurchEvent.objects.get(pk=response.data['id']).published)
+
+    def test_a_video_link_must_be_a_web_address(self):
+        self.client.force_authenticate(self._deacon('deacon.bad.link'))
+
+        response = self.client.post('/api/members/church-events/', {
+            'title': 'Pathfinders march',
+            'video_links': ['youtu.be/abc123'],
+        }, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('video_links', response.data)
+
+    def test_the_deaconate_reads_the_wall_but_not_the_desk(self):
+        """Documenting is the deaconate's; what has not been let out yet is
+        still the office's to see."""
+        self.event.published = False
+        self.event.save()
+        self.client.force_authenticate(self._deacon('deacon.reads.wall'))
+
+        listed = self.client.get('/api/members/church-events/')
+        self.assertEqual(listed.data, [])
+        self.assertEqual(
+            self.client.get('/api/members/church-events/?include_unpublished=true').data,
+            [],
+        )
 
     def test_the_office_posts_an_album_with_pictures_and_a_video(self):
         self.client.force_authenticate(self.admin)
@@ -11887,10 +12605,11 @@ class DepartmentFundTests(APITestCase):
     """A department reads its own fund; only the treasurer moves its money.
 
     The desk's Accounts view answers the balance and the ledger lines the
-    treasury already writes. The leader asks for money with a POST; the
-    treasurer approves — the fund is debited and the ledger gains the line —
-    or declines with a word back. Nobody else may ask, and nobody but the
-    treasurer may answer.
+    treasury already writes. Whoever the fund is open to asks for money with
+    a POST — the desk's leadership, and the roll the desk reads for — so the
+    request button follows account access rather than office. The treasurer
+    approves (the fund is debited and the ledger gains the line) or declines
+    with a word back, and nobody but the treasurer may answer.
     """
 
     def setUp(self):
@@ -12211,6 +12930,61 @@ class DepartmentFundTests(APITestCase):
         response = self.client.get('/api/members/departments/music/account/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNone(response.data['account'])
+        # And with no door to the fund there is no request line either.
+        self.assertFalse(response.data['can_request_withdrawal'])
+
+    def test_every_desk_that_reads_a_fund_can_request_from_it(self):
+        """The button follows the account, not the office: a ministry's own
+        roll reads its fund, so it may ask the treasurer from it too."""
+        from .models import DepartmentMembership
+
+        account = self._fund()
+        DepartmentMembership.objects.create(member=self.member, department='music')
+
+        self.client.force_authenticate(self.member)
+        response = self.client.get('/api/members/departments/music/account/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['account']['id'], account.id)
+        self.assertTrue(response.data['can_request_withdrawal'])
+
+        sent = self.client.post('/api/members/departments/music/account/', {
+            'amount': '75', 'reason': 'A new hymn book',
+        }, format='json')
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED)
+        row = self._pending()
+        self.assertEqual(row.requested_by, self.member)
+        self.assertEqual(row.amount, Decimal('75.00'))
+        # The treasurer still holds the money: the ask moved nothing.
+        account.refresh_from_db()
+        self.assertEqual(account.balance, Decimal('500.00'))
+
+    def test_the_request_line_does_not_hand_out_the_fund_drive(self):
+        """The withdrawal button follows account access; starting a fund drive
+        stays the desk's leadership, whichever fund the reader can see."""
+        from .models import DepartmentMembership
+
+        self._fund()
+        DepartmentMembership.objects.create(member=self.member, department='music')
+
+        self.client.force_authenticate(self.member)
+        roll_read = self.client.get('/api/members/departments/music/account/')
+        self.assertTrue(roll_read.data['can_request_withdrawal'])
+        self.assertFalse(roll_read.data['can_start_fund_drive'])
+
+        self.client.force_authenticate(self.leader)
+        leader_read = self.client.get('/api/members/departments/music/account/')
+        self.assertTrue(leader_read.data['can_request_withdrawal'])
+        self.assertTrue(leader_read.data['can_start_fund_drive'])
+
+    def test_a_member_with_no_door_to_the_fund_cannot_ask(self):
+        self._fund()
+        self.client.force_authenticate(self.member)
+        response = self.client.post('/api/members/departments/music/account/', {
+            'amount': '75', 'reason': 'A new hymn book',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        from .models import DepartmentWithdrawalRequest
+        self.assertFalse(DepartmentWithdrawalRequest.objects.exists())
 
     def test_a_department_without_a_fund_shows_none(self):
         self.client.force_authenticate(self.leader)
@@ -13487,6 +14261,284 @@ class ProfilePhotoAndSexTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.gender, '')
+
+
+class SignatureOnTheChurchsPaperTests(APITestCase):
+    """The signature an officer saves once, printed on the paper their office
+    signs.
+
+    Only the treasurer and the first elder keep one. It arrives either as a
+    photograph of the signed slip or as the picture a finger drew, is stored
+    as one small PNG, can be replaced and taken down again, and every receipt
+    and report the church prints carries it under the office. Nobody signed
+    yet is never a failure: the paper keeps its ruled line.
+    """
+
+    ME_URL = '/api/members/me/'
+    SIGNATURE_URL = '/api/members/me/signature/'
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import tempfile
+        cls._media_root = tempfile.mkdtemp(prefix='signature-tests-')
+        cls._media_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_override.disable()
+        import shutil
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        # Count only the files this test made: the directory is shared for
+        # the whole class, so earlier tests' signatures go first.
+        import os
+        import shutil
+        directory = os.path.join(self._media_root, 'member_signatures')
+        if os.path.isdir(directory):
+            shutil.rmtree(directory)
+
+        self.treasurer = User.objects.create_user(
+            'sig.treasurer', 'sig.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tessa', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.elder = User.objects.create_user(
+            'sig.elder', 'sig.elder@example.com', 'StrongPass#2026',
+            first_name='Fred', last_name='Elder',
+        )
+        MemberProfile.objects.create(user=self.elder, role='first_elder', roles='first_elder,member')
+        self.member = User.objects.create_user(
+            'sig.member', 'sig.member@example.com', 'StrongPass#2026',
+            first_name='Ruth', last_name='Member',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+    # -- helpers -------------------------------------------------------
+
+    def _drawn(self, name='signature.png', size=(900, 300)):
+        """A drawn signature: a transparent page with ink on it."""
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import ImageDraw, Image
+        image = Image.new('RGBA', size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.line((20, size[1] - 40, size[0] - 20, 40), fill=(24, 32, 28, 255), width=6)
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')
+
+    def _data_url(self):
+        import base64
+        return 'data:image/png;base64,' + base64.b64encode(self._drawn().read()).decode('ascii')
+
+    def _stored_names(self):
+        import os
+        directory = os.path.join(self._media_root, 'member_signatures')
+        return sorted(os.listdir(directory)) if os.path.isdir(directory) else []
+
+    @staticmethod
+    def _printed(text, phrase):
+        """Whether ``phrase`` is on the paper.
+
+        Each drawn string is its own text object, so the extracted text has
+        nothing between them — ``Tessa Treasurer`` reads ``TessaTreasurer``.
+        """
+        return phrase.replace(' ', '') in text
+
+    def _upload(self, user):
+        self.client.force_authenticate(user)
+        return self.client.post(self.SIGNATURE_URL, {'signature': self._drawn()}, format='multipart')
+
+    # -- who may sign --------------------------------------------------
+
+    def test_a_plain_member_may_not_keep_a_signature(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(self.SIGNATURE_URL, {'signature': self._drawn()}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._stored_names(), [])
+
+    def test_the_treasurer_uploads_a_signature_and_the_profile_reads_it(self):
+        response = self._upload(self.treasurer)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['signature_url'].startswith('/media/member_signatures/'))
+        me = self.client.get(self.ME_URL)
+        self.assertEqual(me.data['signature_url'], response.data['signature_url'])
+        self.assertEqual(me.data['signature_office'], 'Treasurer')
+
+    def test_the_first_elder_signs_as_the_first_elder(self):
+        response = self._upload(self.elder)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(self.ME_URL).data['signature_office'], 'First Elder')
+
+    def test_one_person_holding_both_offices_signs_as_the_senior_office(self):
+        both = User.objects.create_user(
+            'sig.both', 'sig.both@example.com', 'StrongPass#2026',
+            first_name='Botha', last_name='Officer',
+        )
+        MemberProfile.objects.create(user=both, role='treasurer', roles='treasurer,first_elder,member')
+        response = self._upload(both)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['office'], 'First Elder')
+
+    # -- how it arrives -------------------------------------------------
+
+    def test_a_drawn_signature_uploads_as_a_picture(self):
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(
+            self.SIGNATURE_URL, {'signature_data': self._data_url()}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['signature_url'].endswith('.png'))
+        from PIL import Image
+        profile = MemberProfile.objects.get(user=self.treasurer)
+        with Image.open(profile.signature.path) as stored:
+            # The transparency survives, so the ink prints on the line.
+            self.assertIn('A', stored.mode)
+            self.assertLessEqual(max(stored.size), 900)
+
+    def test_a_picture_with_no_picture_in_it_is_refused(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.post(
+            self.SIGNATURE_URL,
+            {'signature': SimpleUploadedFile('notes.txt', b'just words', content_type='text/plain')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('signature', response.data)
+        self.assertEqual(self._stored_names(), [])
+
+    def test_a_new_signature_replaces_the_old_file(self):
+        first = self._upload(self.treasurer)
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        second = self._upload(self.treasurer)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(first.data['signature_url'], second.data['signature_url'])
+        self.assertEqual(len(self._stored_names()), 1)
+
+    def test_an_officer_may_take_their_signature_down(self):
+        self._upload(self.treasurer)
+        response = self.client.delete(self.SIGNATURE_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['signature_url'], '')
+        self.assertEqual(self.client.get(self.ME_URL).data['signature_url'], '')
+        self.assertEqual(self._stored_names(), [])
+
+    # -- what the paper prints ------------------------------------------
+
+    def test_the_receipt_carries_both_offices_and_their_names(self):
+        self._upload(self.treasurer)
+        self._upload(self.elder)
+        self.client.force_authenticate(self.member)
+        row = Contribution.objects.create(
+            member=self.member, amount=Decimal('500'), purpose='Tithe',
+            payment_method='mpesa', status='completed', mpesa_receipt_number='SIGNED01',
+        )
+        response = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        self.assertTrue(self._printed(text, 'TREASURER'))
+        self.assertTrue(self._printed(text, 'FIRST ELDER'))
+        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
+        self.assertTrue(self._printed(text, 'Fred Elder'))
+
+    def test_the_in_kind_receipt_is_signed_too(self):
+        from .models import InKindContribution
+        self._upload(self.treasurer)
+        self._upload(self.elder)
+        gift = InKindContribution.objects.create(
+            member=self.member, donor_name='Ruth Member', items='2 bags of maize',
+            purpose='Welfare & Charity',
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        self.assertTrue(self._printed(text, 'FIRST ELDER'))
+        self.assertTrue(self._printed(text, 'Fred Elder'))
+
+    def test_a_receipt_with_nobody_in_the_offices_keeps_its_blank_lines(self):
+        """An empty office signs nothing: the slip keeps the two rules it has
+        always drawn, rather than naming someone who is not there."""
+        User.objects.filter(pk__in=[self.treasurer.pk, self.elder.pk]).update(is_active=False)
+        self.client.force_authenticate(self.member)
+        row = Contribution.objects.create(
+            member=self.member, amount=Decimal('250'), purpose='Tithe',
+            payment_method='cash', status='completed',
+        )
+        response = self.client.get(f'/api/members/contributions/{row.pk}/receipt/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        for name in ('Tessa Treasurer', 'Fred Elder', 'TREASURER', 'FIRST ELDER'):
+            self.assertFalse(self._printed(text, name), text)
+
+    def test_the_financial_statement_is_signed_by_both_offices(self):
+        self._upload(self.treasurer)
+        self._upload(self.elder)
+        report = ChurchFinancialReport.objects.create(
+            title='October Statement', period_start=date(2026, 10, 1),
+            period_end=date(2026, 10, 31), total_tithes=Decimal('40000'),
+            total_offerings=Decimal('12000'), total_expenses=Decimal('6000'),
+        )
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get(f'/api/members/reports/{report.pk}/pdf/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        self.assertTrue(self._printed(text, 'Prepared By'))
+        self.assertTrue(self._printed(text, 'Authorizing Officer'))
+        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
+        self.assertTrue(self._printed(text, 'Fred Elder'))
+
+    def test_an_office_without_a_saved_signature_still_names_its_officer(self):
+        """The name prints and the line stays blank: a statement is not held
+        back because one office has not drawn their signature yet."""
+        self._upload(self.treasurer)
+        report = ChurchFinancialReport.objects.create(
+            title='September Statement', period_start=date(2026, 9, 1),
+            period_end=date(2026, 9, 30),
+        )
+        self.client.force_authenticate(self.treasurer)
+        text = _pdf_text(self.client.get(f'/api/members/reports/{report.pk}/pdf/').content)
+        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
+        self.assertTrue(self._printed(text, 'Fred Elder'))
+
+    def test_the_office_holder_who_has_signed_answers_for_the_office(self):
+        """Roles are shared: a second treasurer who has not drawn theirs must
+        never hide the signature the church actually has."""
+        second = User.objects.create_user(
+            'sig.treasurer2', 'sig.treasurer2@example.com', 'StrongPass#2026',
+            first_name='Later', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=second, role='treasurer', roles='treasurer,member')
+        self._upload(self.treasurer)
+        self.client.force_authenticate(self.member)
+        row = Contribution.objects.create(
+            member=self.member, amount=Decimal('120'), purpose='Tithe',
+            payment_method='cash', status='completed',
+        )
+        text = _pdf_text(self.client.get(f'/api/members/contributions/{row.pk}/receipt/').content)
+        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
+        self.assertFalse(self._printed(text, 'Later Treasurer'))
+
+    def test_a_member_holding_both_offices_prints_once_on_the_receipt(self):
+        both = User.objects.create_user(
+            'sig.both2', 'sig.both2@example.com', 'StrongPass#2026',
+            first_name='Botha', last_name='Officer',
+        )
+        MemberProfile.objects.create(user=both, role='treasurer', roles='treasurer,first_elder,member')
+        self._upload(both)
+        self.client.force_authenticate(self.member)
+        row = Contribution.objects.create(
+            member=self.member, amount=Decimal('90'), purpose='Tithe',
+            payment_method='cash', status='completed',
+        )
+        text = _pdf_text(self.client.get(f'/api/members/contributions/{row.pk}/receipt/').content)
+        self.assertEqual(text.count('BothaOfficer'), 1, text)
+        self.assertTrue(self._printed(text, 'FIRST ELDER'))
 
 
 class UserDetailUpdateViewTests(APITestCase):

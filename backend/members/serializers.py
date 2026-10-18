@@ -392,7 +392,13 @@ class ChurchEventMediaSerializer(serializers.ModelSerializer):
     The reader gets the file's URL, its original name (so a tile can label a
     download) and whether it plays as video — every moment the tiles need,
     and nothing that would leak the server's file layout.
+
+    The URL is the file's own, not a link to a detail route: an album's
+    media has no page of its own, so naming one here asked the router for a
+    ``churcheventmedia-detail`` that has never existed — and every album
+    holding a picture failed to serialize.
     """
+    url = serializers.FileField(source='file', read_only=True)
     file_name = serializers.SerializerMethodField()
     is_video = serializers.SerializerMethodField()
 
@@ -416,6 +422,10 @@ class ChurchEventSerializer(serializers.ModelSerializer):
     adds more files the same way, or takes one down with ``remove_media_ids``
     (which also deletes the file from storage). ``posted_by_name`` credits
     whoever posted it, the way a receipt greets its giver.
+
+    ``video_links`` is the album's other door: the footage lives on a video
+    site, and the album carries the address instead of the file — an album's
+    pictures are all the video the church's storage will hold for now.
     """
     media = ChurchEventMediaSerializer(many=True, read_only=True)
     media_files = serializers.ListField(
@@ -424,11 +434,26 @@ class ChurchEventSerializer(serializers.ModelSerializer):
         required=False,
         help_text="New pictures or videos to add to the album",
     )
+    # A blank line is a stray return rather than a link, so the child
+    # accepts one and ``validate_video_links`` drops it.
+    video_links = serializers.ListField(
+        child=serializers.CharField(max_length=400, allow_blank=True),
+        required=False,
+        help_text="Web addresses of videos of the event (YouTube, Vimeo, …)",
+    )
     remove_media_ids = serializers.ListField(
         child=serializers.IntegerField(),
         write_only=True,
         required=False,
         help_text="Ids of media to remove from the album (files are deleted)",
+    )
+    # A picture album arrives as multipart, and DRF reads a missing
+    # ``published`` in a form as "not checked" — an empty string, i.e. False.
+    # The default is the model's own: an album goes out unless the desk
+    # says otherwise, however it was sent.
+    published = serializers.BooleanField(
+        required=False, default=True,
+        help_text="Unpublished albums stay behind the desk until the office lets them out",
     )
     posted_by_name = serializers.SerializerMethodField()
     media_count = serializers.IntegerField(source='media.count', read_only=True)
@@ -438,7 +463,7 @@ class ChurchEventSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'title', 'description', 'happened_on', 'published',
             'posted_by_name', 'media_count', 'media',
-            'media_files', 'remove_media_ids', 'created_at',
+            'media_files', 'remove_media_ids', 'video_links', 'created_at',
         )
         read_only_fields = ('created_at',)
 
@@ -461,6 +486,28 @@ class ChurchEventSerializer(serializers.ModelSerializer):
             if not (IMAGE_SUFFIX_PATTERN.search(name) or VIDEO_SUFFIX_PATTERN.search(name)):
                 raise serializers.ValidationError(f'"{name}" is neither a picture nor a video an album can hold.')
         return files
+
+    def validate_video_links(self, raw_links):
+        """The album's videos-by-reference: trimmed, once each, web addresses.
+
+        A blank line is a stray return rather than a link, so it is dropped;
+        the same address twice is the paste twice, so it is kept once; and a
+        link that is not a web address is refused here rather than printed
+        on the wall as dead text.
+        """
+        links = []
+        for raw in raw_links or []:
+            link = str(raw).strip()
+            if not link or link in links:
+                continue
+            if not link.lower().startswith(('http://', 'https://')):
+                raise serializers.ValidationError(
+                    f'"{link}" is not a web address — a video link starts with https://'
+                )
+            links.append(link)
+        if len(links) > 8:
+            raise serializers.ValidationError('An album takes at most 8 video links.')
+        return links
 
     def _save_uploaded_files(self, event, files, user):
         ChurchEventMedia.objects.bulk_create([
@@ -2144,20 +2191,39 @@ class InventoryItemSerializer(serializers.ModelSerializer):
 #: week by week, so the limit is a sanity check on a paste, not a roster rule.
 DUTY_TEAM_LIMIT = 20
 
+#: One officer as the Add Officer modal writes it: the name the rota has
+#: always carried, with who to call beside it and the part they are playing
+#: on the day. The deaconate rosters people and needs their number on the
+#: line itself, so the contact travels with the name rather than being
+#: looked up again when the Sabbath comes; the duty is the desk's own note
+#: of what this officer is doing ("counting the offering"), which no church
+#: office knows.
+DUTY_OFFICER_FIELDS = ('name', 'phone', 'email', 'role', 'duty')
+#: The longest each of those may be — a limit on what the rota will print.
+DUTY_OFFICER_LIMITS = {'name': 120, 'phone': 40, 'email': 200, 'role': 80, 'duty': 160}
+
 
 class DutyRotaSerializer(serializers.ModelSerializer):
     """One line of the deaconate's duty rota, as the desk reads and writes it.
 
     ``date`` is the API's word for the model's ``duty_date`` (a field named
     ``date`` would read as "a date" everywhere it is used), and the officers
-    are handed over as the list the desk typed, trimmed and de-duplicated.
+    are handed over as the list the desk built, trimmed and de-duplicated:
+    an object where its contacts came along, a bare name where they did not,
+    so every line written before either still reads back as it was written.
     """
 
     date = serializers.DateField(source='duty_date')
-    # A blank entry is a stray comma rather than an officer, so the child
-    # accepts one and ``validate_assigned_team`` drops it.
+    # The desk's form captures the day, the time and the officers rostered
+    # on it; the title was the schedule's own invention, so it is optional
+    # now (a line reads back by its date) while every line that was given
+    # one keeps it.
+    title = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    # An entry is an officer object or a plain name; whichever it is,
+    # ``validate_assigned_team`` trims it, drops the blank ones and
+    # de-duplicates what is left.
     assigned_team = serializers.ListField(
-        child=serializers.CharField(max_length=120, allow_blank=True),
+        child=serializers.JSONField(),
         required=False,
     )
 
@@ -2167,27 +2233,85 @@ class DutyRotaSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
 
     def validate_title(self, value):
-        title = (value or '').strip()
-        if not title:
-            raise serializers.ValidationError('Name the duty being rotaed.')
-        return title
+        """The title is a courtesy line, not the duty itself: the desk rosters
+        a day, a time and its officers, and the line reads by its date."""
+        return (value or '').strip()
 
     def validate_assigned_team(self, value):
         """The officers named on the line: trimmed, de-duplicated, in order.
 
-        An empty entry is a stray comma rather than an officer, so it is
-        dropped; two spellings of the same name are the desk's own business
-        and are kept as written. Wholly blank — the desk rostered nobody —
-        leaves the line unstaffed rather than refusing it, since a rota is
-        often written before the team is settled.
+        An entry with no name is a stray row rather than an officer, so it
+        is dropped; the same officer twice is rostered once — same name, and
+        (when it came along) the same phone, email and role. Two spellings
+        of the same name are the desk's own business and are kept as
+        written. Wholly blank — the desk rostered nobody — leaves the line
+        unstaffed rather than refusing it, since a rota is often written
+        before the team is settled.
         """
         team = []
-        for name in value or []:
-            cleaned = str(name).strip()
-            if cleaned and cleaned not in team:
-                team.append(cleaned)
+        seen = set()
+        for item in value or []:
+            if isinstance(item, dict):
+                officer = {}
+                for field, limit in DUTY_OFFICER_LIMITS.items():
+                    raw = item.get(field)
+                    text = str(raw).strip() if raw is not None else ''
+                    if len(text) > limit:
+                        raise serializers.ValidationError(
+                            f"An officer's {field} may be {limit} characters."
+                        )
+                    officer[field] = text
+                if not officer['name']:
+                    continue
+                # The officer's account, when the desk picked them off the
+                # roll: the line still prints the name, and the daily reminder
+                # cron can reach the person behind it. Only a real, active
+                # account is kept, so a line survives the officer's account
+                # being closed — it goes back to naming them alone.
+                member_id = item.get('member_id')
+                if member_id not in (None, '', 0, '0'):
+                    try:
+                        officer['member_id'] = int(member_id)
+                    except (TypeError, ValueError):
+                        raise serializers.ValidationError(
+                            "An officer's member_id must be the id of the member they are."
+                        )
+                key = tuple(officer[field] for field in DUTY_OFFICER_FIELDS)
+            else:
+                if not isinstance(item, str):
+                    raise serializers.ValidationError(
+                        'Each officer is a name, or a name with its contacts.'
+                    )
+                name = item.strip()
+                if not name:
+                    continue
+                officer = name
+                # The same shape as the officers above, all blank but the
+                # name — so "Deacon David" typed and "Deacon David" picked
+                # from the roll are one officer, not two.
+                key = (name, '', '', '', '')
+            if key in seen:
+                continue
+            seen.add(key)
+            team.append(officer)
         if len(team) > DUTY_TEAM_LIMIT:
             raise serializers.ValidationError(
                 f'A duty line names at most {DUTY_TEAM_LIMIT} officers.'
             )
+
+        # Ids the roll no longer answers to are dropped rather than refused:
+        # the rota is a record of who served, and a closed account must not
+        # make an old line unsaveable.
+        named = {
+            officer['member_id'] for officer in team
+            if isinstance(officer, dict) and officer.get('member_id')
+        }
+        if named:
+            accounts = set(
+                User.objects.filter(pk__in=named, is_active=True)
+                .values_list('pk', flat=True)
+            )
+            for officer in team:
+                if isinstance(officer, dict) and officer.get('member_id') not in accounts:
+                    officer.pop('member_id', None)
         return team

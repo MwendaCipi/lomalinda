@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePageHeader } from "@/components/app-frame";
 import {
   AlertTriangle,
   ArrowRightLeft,
+  Bell,
   Boxes,
   CheckCircle2,
   Clock,
+  ExternalLink,
+  Images,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -67,6 +71,28 @@ interface InventoryItem {
   created_at: string;
 }
 
+/**
+ * One officer on a duty line: the name the rota has always carried, with who
+ * to call beside it. The Add Officer modal takes all four; a name typed by
+ * hand (a deacon who keeps no account in the church's app) fills only the
+ * first, and the empty fields are simply left off the line.
+ */
+interface RotaOfficer {
+  name: string;
+  phone: string;
+  email: string;
+  /** The part they play on the day: ushering, food service, … */
+  role: string;
+  /** What this officer is doing on this duty, in the desk's own words. */
+  duty: string;
+  /**
+   * The church account behind the name, when the desk picked the officer off
+   * the roll. The rota prints the name either way; the daily cron reminds the
+   * account, so a name typed by hand carries none and is reminded by nobody.
+   */
+  member_id?: number | null;
+}
+
 /** One line of the duty rota, as the API keeps it. */
 interface RotaEntry {
   id: number;
@@ -74,8 +100,56 @@ interface RotaEntry {
   date: string;
   shift: string;
   duty_type: string;
-  assigned_team: string[];
+  /**
+   * Officers as they come back: an object where their contacts were taken
+   * down, a bare name where they weren't — every line scheduled before the
+   * modal still reads back exactly as it was written.
+   */
+  assigned_team: Array<string | RotaOfficer>;
 }
+
+/** A suggestion from the rota's own roll search, carrying all four fields. */
+interface OfficerMatch extends RotaOfficer {
+  id: number;
+}
+
+/** One picture inside a moment's album, as the wall serves it. */
+interface MomentMedia {
+  id: number;
+  url: string;
+  file_name: string | null;
+  is_video: boolean;
+}
+
+/** One documented moment on the Moments wall: the day, its words, its album. */
+interface MomentAlbum {
+  id: number;
+  title: string;
+  description: string;
+  happened_on: string | null;
+  posted_by_name: string | null;
+  media_count: number;
+  media: MomentMedia[];
+  video_links: string[];
+}
+
+/** Either shape of a saved officer, as the modal and the card read it. */
+const normalizeOfficer = (entry: string | RotaOfficer): RotaOfficer =>
+  typeof entry === "string"
+    ? { name: entry, phone: "", email: "", role: "", duty: "", member_id: null }
+    : {
+        // Whatever else the line carries rides along: the API's officer may
+        // grow a field, and an edit must not be the thing that drops it.
+        ...entry,
+        name: String(entry?.name ?? ""),
+        phone: String(entry?.phone ?? ""),
+        email: String(entry?.email ?? ""),
+        role: String(entry?.role ?? ""),
+        duty: String(entry?.duty ?? ""),
+        member_id: typeof entry?.member_id === "number" ? entry.member_id : null,
+      };
+
+
 
 const emptyItemForm = {
   name: "",
@@ -95,21 +169,27 @@ const emptyMovementForm = {
   notes: "",
 };
 
+const emptyOfficerForm: RotaOfficer = { name: "", phone: "", email: "", role: "", duty: "", member_id: null };
+
 const emptyRotaForm = {
-  title: "",
+  // What almost every line the desk writes is called; the field is editable
+  // so a communion or a special Sabbath can be named as itself.
+  title: "Sabbath Duty Rota",
   date: "",
   shift: "08:30 AM - 01:00 PM",
-  dutyType: "Ushering",
-  assignedTeam: "",
+  officers: [] as RotaOfficer[],
 };
 
 /** Authenticated JSON call against the members API. */
 async function apiFetch(path: string, init?: RequestInit) {
   const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
+  // A FormData body brings its own boundary; a content type laid over it
+  // would misdescribe the encoding and the upload would arrive unreadable.
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   return fetch(`${API_URL}/api/members${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
@@ -171,7 +251,7 @@ function custodyCell(item: InventoryItem) {
 }
 
 interface DeaconateManagerProps {
-  initialTab?: "inventory" | "rota" | "members" | "calendar" | "funding" | "accounts";
+  initialTab?: "inventory" | "rota" | "moments" | "members" | "calendar" | "funding" | "accounts";
   /**
    * The desk is read under a strip someone else draws — the area desk on the
    * Ministry map, whose toggles name these same five pages. Its panels then
@@ -224,6 +304,31 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
   const [newRota, setNewRota] = useState(emptyRotaForm);
   const [savingRota, setSavingRota] = useState(false);
   const [removingRotaId, setRemovingRotaId] = useState<number | null>(null);
+  // Non-null while the schedule modal is rewriting a line that already exists.
+  const [editingRotaId, setEditingRotaId] = useState<number | null>(null);
+  // The Add Officer modal, stacked over the schedule modal: one officer at a
+  // time, as many as the duty needs, all folded into the line when it is saved.
+  const [showOfficerModal, setShowOfficerModal] = useState(false);
+  const [officerForm, setOfficerForm] = useState<RotaOfficer>(emptyOfficerForm);
+  const [officerMatches, setOfficerMatches] = useState<OfficerMatch[]>([]);
+  const [showOfficerMatches, setShowOfficerMatches] = useState(false);
+  // The name last picked from the roll: it is already answered, so the
+  // search neither asks again nor reports that nobody matched.
+  const [pickedOfficerName, setPickedOfficerName] = useState<string | null>(null);
+
+  // Moments: the desk documents a day, and it goes out on the wall the
+  // Fellowship strip opens. Pictures are files; video is a link to where the
+  // footage already lives, because the church's storage holds stills.
+  const [moments, setMoments] = useState<MomentAlbum[]>([]);
+  const [loadingMoments, setLoadingMoments] = useState(true);
+  const [showMomentModal, setShowMomentModal] = useState(false);
+  const [momentTitle, setMomentTitle] = useState("");
+  const [momentDay, setMomentDay] = useState("");
+  const [momentNote, setMomentNote] = useState("");
+  const [momentFiles, setMomentFiles] = useState<File[]>([]);
+  const [momentLinks, setMomentLinks] = useState("");
+  const [postingMoment, setPostingMoment] = useState(false);
+  const momentFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadInventory = async () => {
     setLoadingInventory(true);
@@ -290,6 +395,63 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
         showAlert("Could not load the duty rota", "Check your connection and try again.", "error");
       }
     });
+    return () => {
+      alive = false;
+    };
+  }, [activeTab]);
+
+  // The Add Officer modal's name field searches the roll as the desk types,
+  // debounced, and asks for nothing until there are two characters to ask
+  // with. The answer belongs to a modal that is still open: when it closes,
+  // the callback that would have written the suggestions finds the request
+  // cancelled instead. Every state write below sits inside a timer or a
+  // promise callback, never in the body of the effect itself.
+  useEffect(() => {
+    if (!showOfficerModal) return;
+    const query = officerForm.name.trim();
+    let alive = true;
+    const timer = setTimeout(() => {
+      if (query.length < 2 || query === pickedOfficerName) {
+        setOfficerMatches([]);
+        return;
+      }
+      apiFetch(`/duty-rota/people/?q=${encodeURIComponent(query)}`)
+        .then((res) => (res.ok ? res.json() : { matches: [] }))
+        .then((data) => {
+          if (alive) setOfficerMatches(Array.isArray(data.matches) ? data.matches : []);
+        })
+        .catch(() => {
+          if (alive) setOfficerMatches([]);
+        });
+    }, 200);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [officerForm.name, showOfficerModal, pickedOfficerName]);
+
+  // The wall is read when its tab is opened, the same way the rota is: this
+  // page is the desk's own album shelf, so the list is what most visits are
+  // here for. State is settled inside the promise's callbacks.
+  useEffect(() => {
+    if (activeTab !== "moments") return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await apiFetch("/church-events/");
+        const data = res.ok ? await res.json() : null;
+        if (!alive) return;
+        setMoments(Array.isArray(data) ? (data as MomentAlbum[]) : []);
+        if (!res.ok) {
+          showAlert("Could not load Moments", "Check your connection and try again.", "error");
+        }
+      } catch {
+        if (alive) showAlert("Could not load Moments", "Check your connection and try again.", "error");
+      } finally {
+        if (alive) setLoadingMoments(false);
+      }
+    };
+    void load();
     return () => {
       alive = false;
     };
@@ -504,41 +666,193 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
 
   const scheduleRota = async (e: React.FormEvent) => {
     e.preventDefault();
-    const title = newRota.title.trim();
-    if (!title || !newRota.date || savingRota) return;
+    // The form asks for the day, the time and the officers on it — the title
+    // and the duty kind it used to invent are gone, so a line reads by its
+    // date and the part each officer is playing.
+    if (!newRota.date || savingRota) return;
 
-    const teamList = newRota.assignedTeam
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
+    const editing = editingRotaId !== null;
     setSavingRota(true);
     try {
-      const res = await apiFetch("/duty-rota/", {
-        method: "POST",
+      const res = await apiFetch(editing ? `/duty-rota/${editingRotaId}/` : "/duty-rota/", {
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify({
-          title,
+          title: newRota.title.trim(),
           date: newRota.date,
           shift: newRota.shift.trim(),
-          duty_type: newRota.dutyType,
           // An unstaffed line stays unstaffed: the desk often writes the rota
           // before the team is settled, and "Deacon Board" invented here
-          // would be the app rostering people the church never named.
-          assigned_team: teamList,
+          // would be the app rostering people the church never named. The
+          // officers ride up whole — name, phone, email, role — so the line
+          // reads who to call, and on what part, when the Sabbath comes.
+          assigned_team: newRota.officers,
         }),
       });
       if (!res.ok) {
-        showAlert("Duty rota not saved", firstErrorMessage(await res.json().catch(() => null)) || "The duty could not be scheduled.", "error");
+        showAlert(
+          "Duty rota not saved",
+          firstErrorMessage(await res.json().catch(() => null)) || (editing ? "The duty could not be saved." : "The duty could not be scheduled."),
+          "error",
+        );
         return;
       }
       setShowAddRotaModal(false);
       setNewRota(emptyRotaForm);
+      setEditingRotaId(null);
+      setShowOfficerModal(false);
+      setOfficerMatches([]);
       await loadRota();
-      showAlert("Duty Rota Added", `"${title}" scheduled for ${dayFirst(newRota.date)}.`, "success");
+      showAlert(
+        editing ? "Duty Rota Updated" : "Duty Rota Added",
+        editing
+          ? `The rota for ${dayFirst(newRota.date)} is saved.`
+          : `The rota for ${dayFirst(newRota.date)} is on the board.`,
+        "success",
+      );
     } catch {
       showAlert("Duty rota not saved", "Check your connection and try again.", "error");
     } finally {
       setSavingRota(false);
+    }
+  };
+
+  /** A line already on the rota opens back up in the same save form. */
+  const openRota = (entry: RotaEntry) => {
+    setNewRota({
+      // A line saved before the title came back reads as itself, but the
+      // field is required on the way out — so it opens with the default
+      // rather than with an empty box the desk must notice.
+      title: entry.title || "Sabbath Duty Rota",
+      date: entry.date,
+      shift: entry.shift,
+      officers: entry.assigned_team.map(normalizeOfficer),
+    });
+    setEditingRotaId(entry.id);
+    setShowAddRotaModal(true);
+  };
+
+  /** Leaving the save form forgets the line being written and anyone staged. */
+  const closeRotaModal = () => {
+    setShowAddRotaModal(false);
+    setNewRota(emptyRotaForm);
+    setEditingRotaId(null);
+    setShowOfficerModal(false);
+    setOfficerMatches([]);
+  };
+
+  const openOfficerModal = () => {
+    setOfficerForm(emptyOfficerForm);
+    setOfficerMatches([]);
+    setPickedOfficerName(null);
+    setShowOfficerMatches(true);
+    setShowOfficerModal(true);
+  };
+
+  const closeOfficerModal = () => {
+    setShowOfficerModal(false);
+    setOfficerMatches([]);
+  };
+
+  /**
+   * A suggestion fills in who the person is — name, phone, email — from the
+   * member behind it. What they do on the day stays the desk's choice: the
+   * office a member holds is not the part they are rostered for this Sabbath,
+   * so the duty role is left to be picked below.
+   */
+  const pickOfficer = (match: OfficerMatch) => {
+    // The account rides with the officer from here on: the line keeps their
+    // name and contacts, and the daily reminder keeps a way to reach them.
+    // The duty stays the desk's — it belongs to the person being rostered,
+    // so a new name starts the field empty rather than carrying the last
+    // one's over.
+    setOfficerForm({ name: match.name, phone: match.phone, email: match.email, role: "", duty: "", member_id: match.id });
+    setOfficerMatches([]);
+    setPickedOfficerName(match.name);
+    setShowOfficerMatches(false);
+  };
+
+  /** One officer onto the line — and the modal stays open for the next. */
+  const addOfficer = (e: React.FormEvent) => {
+    e.preventDefault();
+    // A name typed over the pick is somebody else: the account goes with the
+    // person who was picked, never with whatever is typed next, or the desk
+    // would remind the wrong officer.
+    const name = officerForm.name.trim();
+    const officer = {
+      ...officerForm,
+      name,
+      member_id: pickedOfficerName === name ? officerForm.member_id ?? null : null,
+    };
+    if (!officer.name) {
+      showAlert("Name the officer", "Type a name, or pick one from the roll.", "error");
+      return;
+    }
+    const alreadyOn = newRota.officers.some(
+      (row) => row.name === officer.name && (row.phone || "") === (officer.phone || ""),
+    );
+    if (alreadyOn) {
+      showAlert("Already on this line", `${officer.name} is already rostered here.`, "info");
+      return;
+    }
+    setNewRota((prev) => ({ ...prev, officers: [...prev.officers, officer] }));
+    setOfficerForm(emptyOfficerForm);
+    setOfficerMatches([]);
+    setPickedOfficerName(null);
+  };
+
+  const removeOfficer = (index: number) =>
+    setNewRota((prev) => ({ ...prev, officers: prev.officers.filter((_, i) => i !== index) }));
+
+  /** Leave the moment form with nothing staged. */
+  const closeMomentModal = () => {
+    setShowMomentModal(false);
+    setMomentTitle("");
+    setMomentDay("");
+    setMomentNote("");
+    setMomentFiles([]);
+    setMomentLinks("");
+  };
+
+  /**
+   * Document a moment: the day, a few words, the pictures, and the address
+   * of any video of it. It goes straight out — the desk documents, the
+   * Fellowship wall shows — because a moment is the church's own news.
+   */
+  const documentMoment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = momentTitle.trim();
+    const links = momentLinks
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!title || postingMoment) return;
+
+    setPostingMoment(true);
+    try {
+      const body = new FormData();
+      body.append("title", title);
+      if (momentNote.trim()) body.append("description", momentNote.trim());
+      if (momentDay) body.append("happened_on", momentDay);
+      momentFiles.forEach((file) => body.append("media_files", file));
+      links.forEach((link) => body.append("video_links", link));
+
+      const res = await apiFetch("/church-events/", { method: "POST", body });
+      if (!res.ok) {
+        showAlert(
+          "The moment was not documented",
+          firstErrorMessage(await res.json().catch(() => null)) || "Nothing was posted. Try again.",
+          "error",
+        );
+        return;
+      }
+      const album = (await res.json()) as MomentAlbum;
+      setMoments((prev) => [album, ...prev]);
+      closeMomentModal();
+      showAlert("Moment documented", `"${title}" is on the Moments wall.`, "success");
+    } catch {
+      showAlert("The moment was not documented", "Check your connection and try again.", "error");
+    } finally {
+      setPostingMoment(false);
     }
   };
 
@@ -594,6 +908,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
   const inventoryEmpty = inventory.length === 0
     ? "No property items registered yet. Use Add Church Property to record the first one."
     : "No property items match these filters.";
+
+  // Same for a duty role already on an edited officer — a part the desk
+  // rostered once and the four below have since replaced.
+
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -732,7 +1050,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
         </>
       )}
 
-      {/* ── TAB: DUTY ROTA (session-only until the rota has a backend) ── */}
+      {/* ── TAB: DUTY ROTA — scheduled, edited and rostered here ── */}
       {activeTab === "rota" && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -742,7 +1060,14 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
               <p className="text-xs text-moss">Sabbath &amp; midweek service duty rosters, communion preparation team assignments.</p>
             </div>
             <button
-              onClick={() => setShowAddRotaModal(true)}
+              onClick={() => {
+                // A brand-new line starts blank: a line opened for editing
+                // earlier must never turn "schedule a duty" into an edit of
+                // the last one the desk looked at.
+                setEditingRotaId(null);
+                setNewRota(emptyRotaForm);
+                setShowAddRotaModal(true);
+              }}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-bark-950"
             >
               <Plus className="h-4 w-4" />
@@ -772,7 +1097,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                     )}
                     <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
                   </div>
-                  <h3 className="font-bold text-sm text-bark">{item.title}</h3>
+                  <h3 className="font-bold text-sm text-bark">{item.title || "Duty"}</h3>
                   <p className="text-xs text-moss flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-ember" />
                     {item.shift || "Time not set"}
@@ -782,18 +1107,49 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                     <p className="text-[11px] font-bold text-bark mb-1">Assigned Officers:</p>
                     {item.assigned_team.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {item.assigned_team.map((member, idx) => (
-                          <span key={idx} className="rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark">
-                            {member}
-                          </span>
-                        ))}
+                        {item.assigned_team.map((entry, idx) => {
+                          const officer = normalizeOfficer(entry);
+                          const details = [officer.duty, officer.role, officer.phone].filter(Boolean).join(" · ");
+                          return (
+                            <span
+                              key={`${officer.name}-${idx}`}
+                              title={
+                                officer.member_id
+                                  ? `${details || officer.name} · reminded on their account`
+                                  : details || officer.name
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark"
+                            >
+                              {officer.member_id && (
+                                <Bell
+                                  className="h-3 w-3 shrink-0 text-ember"
+                                  aria-label="Reminders go to this officer's account"
+                                />
+                              )}
+                              {officer.name}
+                              {officer.phone && (
+                                <span className="ml-1 font-normal text-moss">{officer.phone}</span>
+                              )}
+                            </span>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-[11px] text-moss">Nobody rostered yet.</p>
                     )}
                   </div>
 
-                  <div className="flex justify-end border-t border-sand-line/60 pt-2">
+                  <div className="flex justify-end gap-2 border-t border-sand-line/60 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => openRota(item)}
+                      aria-label={`Edit the duty \"${item.title}\"`}
+                      title="Edit this duty and its officers"
+                      className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      Edit
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeRota(item)}
@@ -808,6 +1164,96 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: MOMENTS — the day, its pictures, and the way to add one ── */}
+      {activeTab === "moments" && (
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Named by the strip above on a wide screen. */}
+            <div className="md:hidden">
+              <h2 className="text-base font-bold text-bark">Moments</h2>
+              <p className="text-xs text-moss">
+                Document a day of the church: its pictures, and a link to any video of it.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowMomentModal(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-bark-950"
+            >
+              <Plus className="h-4 w-4" />
+              Document a moment
+            </button>
+          </div>
+
+          {loadingMoments ? (
+            <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
+              Loading moments…
+            </div>
+          ) : moments.length === 0 ? (
+            <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
+              No moment has been documented yet. The Sabbath that just was — its pictures belong on the wall.
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {moments.map((album) => {
+                const cover = album.media.find((picture) => !picture.is_video);
+                const links = album.video_links ?? [];
+                return (
+                  <article
+                    key={album.id}
+                    className="overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm"
+                  >
+                    {cover ? (
+                      // The wall's own tiles are plain images: the pictures are
+                      // the point, and a next/image proxy adds nothing here.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cover.url} alt={album.title} className="h-40 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-40 w-full items-center justify-center bg-sand-card text-moss">
+                        <Images className="h-6 w-6" aria-hidden="true" />
+                      </div>
+                    )}
+                    <div className="space-y-2 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-bold text-bark">{album.title}</h3>
+                        {album.happened_on && (
+                          <span className="shrink-0 text-[11px] font-bold text-bark">
+                            {dayFirst(album.happened_on)}
+                          </span>
+                        )}
+                      </div>
+                      {album.description && <p className="text-xs text-moss">{album.description}</p>}
+                      <p className="text-[11px] text-moss">
+                        {album.media_count} {album.media_count === 1 ? "picture" : "pictures"}
+                        {links.length > 0 &&
+                          ` · ${links.length} ${links.length === 1 ? "video" : "videos"}`}
+                        {album.posted_by_name && ` · by ${album.posted_by_name}`}
+                      </p>
+                      {links.length > 0 && (
+                        <ul className="space-y-1">
+                          {links.map((link, idx) => (
+                            <li key={`${album.id}-link-${idx}`}>
+                              <a
+                                href={link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-ember hover:underline"
+                              >
+                                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                                {link.replace(/^https?:\/\//, "").slice(0, 42)}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1167,18 +1613,20 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
-              <h3 className="font-bold text-base text-bark">Schedule Duty Rota</h3>
-              <button onClick={() => setShowAddRotaModal(false)} className="text-moss hover:text-bark">
+              <h3 className="font-bold text-base text-bark">
+                {editingRotaId !== null ? "Edit Duty Rota" : "Schedule Duty Rota"}
+              </h3>
+              <button onClick={closeRotaModal} aria-label="Close" className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <form onSubmit={scheduleRota} className="mt-4 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-bark">Duty Title *</label>
+                <label className="font-bold text-bark">Title *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Main Sanctuary Ushering Team A"
+                  placeholder="Sabbath Duty Rota"
                   value={newRota.title}
                   onChange={(e) => setNewRota({ ...newRota, title: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
@@ -1197,47 +1645,68 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-bark">Duty Type</label>
-                  <select
-                    value={newRota.dutyType}
-                    onChange={(e) => setNewRota({ ...newRota, dutyType: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-semibold text-bark"
-                  >
-                    <option value="Ushering">Ushering</option>
-                    <option value="Communion Setup">Communion Setup</option>
-                    <option value="Audio/PA">Audio/PA</option>
-                    <option value="Security & Parking">Security &amp; Parking</option>
-                    <option value="Sanctuary Care">Sanctuary Care</option>
-                  </select>
+                  <label className="font-bold text-bark">Shift / Time</label>
+                  <input
+                    type="text"
+                    placeholder="08:30 AM - 01:00 PM"
+                    value={newRota.shift}
+                    onChange={(e) => setNewRota({ ...newRota, shift: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-bark">Shift / Time</label>
-                <input
-                  type="text"
-                  placeholder="08:30 AM - 01:00 PM"
-                  value={newRota.shift}
-                  onChange={(e) => setNewRota({ ...newRota, shift: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-bark">Assigned Officers (Comma-separated)</label>
-                <input
-                  type="text"
-                  placeholder="Deacon David, Deaconess Sarah"
-                  value={newRota.assignedTeam}
-                  onChange={(e) => setNewRota({ ...newRota, assignedTeam: e.target.value })}
-                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <label className="font-bold text-bark">Assigned Officers</label>
+                  <button
+                    type="button"
+                    onClick={openOfficerModal}
+                    className="inline-flex items-center gap-1 rounded-lg border border-ember bg-white px-2.5 py-1 text-[11px] font-bold text-ember transition hover:bg-sand"
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    Add Officer
+                  </button>
+                </div>
+                {newRota.officers.length === 0 ? (
+                  <p className="mt-2 rounded-xl border border-dashed border-sand-line bg-sand-card px-3 py-2.5 text-[11px] text-moss">
+                    Nobody rostered yet. Add an officer — search the roll or type the name — and
+                    keep adding until the team is down.
+                  </p>
+                ) : (
+                  <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto">
+                    {newRota.officers.map((officer, idx) => (
+                      <li
+                        key={`${officer.name}-${idx}`}
+                        className="flex items-start justify-between gap-2 rounded-xl border border-sand-line bg-sand-card px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-bark">{officer.name}</p>
+                          <p className="truncate text-[10px] text-moss">
+                            {[officer.duty, officer.role, officer.phone, officer.email].filter(Boolean).join(" · ") ||
+                              "No contact taken down"}
+                            {officer.member_id ? " · Reminders on" : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeOfficer(idx)}
+                          aria-label={`Remove ${officer.name} from this line`}
+                          title="Take this officer off the line"
+                          className="shrink-0 text-moss transition hover:text-red-600"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddRotaModal(false)}
+                  onClick={closeRotaModal}
                   className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
                 >
                   Cancel
@@ -1247,7 +1716,257 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                   disabled={savingRota}
                   className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
                 >
-                  {savingRota ? "Saving…" : "Save Duty Rota"}
+                  {savingRota ? "Saving…" : editingRotaId !== null ? "Save Changes" : "Save Duty Rota"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD OFFICER — stacked over the save form so the desk can roster
+          a whole team in one sitting: every Add Officer folds these four fields
+          into the line being written and clears them for the next, and the save
+          form behind keeps whatever has been added so far. The name searches the
+          roll as it is typed; any of the four can also be typed by hand. */}
+      {showOfficerModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
+              <div>
+                <h3 className="font-bold text-base text-bark">Add Officer</h3>
+                <p className="mt-0.5 text-[11px] text-moss">
+                  {newRota.officers.length === 0
+                    ? "The first officer on this line."
+                    : `${newRota.officers.length} rostered so far — keep adding, then save the rota.`}
+                </p>
+              </div>
+              <button onClick={closeOfficerModal} aria-label="Close" className="text-moss hover:text-bark">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={addOfficer} className="mt-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="relative">
+                  <label className="font-bold text-bark">Name *</label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Deacon David"
+                    value={officerForm.name}
+                    onChange={(e) => {
+                      setOfficerForm({ ...officerForm, name: e.target.value });
+                      setShowOfficerMatches(true);
+                    }}
+                    onFocus={() => setShowOfficerMatches(true)}
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                  />
+                  {showOfficerMatches && officerForm.name.trim().length >= 2 && (
+                    officerMatches.length > 0 ? (
+                      <ul className="absolute z-10 mt-1 max-h-44 w-full overflow-y-auto rounded-xl border border-sand-line bg-white shadow-lg">
+                        {officerMatches.map((match) => (
+                          <li key={match.id}>
+                            <button
+                              type="button"
+                              onClick={() => pickOfficer(match)}
+                              className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition hover:bg-sand"
+                            >
+                              <span className="font-semibold text-bark">{match.name}</span>
+                              <span className="text-[10px] text-moss">
+                                {[match.phone, match.email].filter(Boolean).join(" · ")}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="absolute z-10 mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-[10px] text-moss shadow-lg">
+                        No member matched. The name can still be typed as it should print.
+                      </p>
+                    )
+                  )}
+                </div>
+
+                <div>
+                  <label className="font-bold text-bark">Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="0712 345 678"
+                    value={officerForm.phone}
+                    onChange={(e) => setOfficerForm({ ...officerForm, phone: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-bark">Email</label>
+                  <input
+                    type="email"
+                    placeholder="david@example.com"
+                    value={officerForm.email}
+                    onChange={(e) => setOfficerForm({ ...officerForm, email: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="font-bold text-bark">Duty</label>
+                  <input
+                    type="text"
+                    placeholder="Counting the offering, holding the door…"
+                    value={officerForm.duty}
+                    onChange={(e) => setOfficerForm({ ...officerForm, duty: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                  />
+                  <p className="mt-1 text-[10px] text-moss">
+                    What this officer is doing on the day, in your own words.
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-3 text-[11px] text-moss">
+                Pick a name to fill in who the person is — the roll answers with their number and
+                address — then write what they are doing this Sabbath. A deacon who keeps no
+                account in the app is still rostered by typing their name.
+              </p>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeOfficerModal}
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
+                >
+                  Done
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-xl bg-bark px-4 py-2 xs font-bold text-white shadow"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add Officer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DOCUMENT A MOMENT — the day, its words, its pictures, and the
+          address of any video of it. Pictures go up as files; video rides as
+          a link, because an album's pictures are all the video the church's
+          storage will hold for now. */}
+      {showMomentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="font-bold text-base text-bark">Document a moment</h3>
+              <button onClick={closeMomentModal} aria-label="Close" className="text-moss hover:text-bark">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={documentMoment} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-bark">What it was *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Communion Service"
+                  value={momentTitle}
+                  onChange={(e) => setMomentTitle(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-bark">The day it happened</label>
+                <input
+                  type="date"
+                  value={momentDay}
+                  onChange={(e) => setMomentDay(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-bark">A few words</label>
+                <textarea
+                  rows={3}
+                  placeholder="What the day was, for whoever opens it…"
+                  value={momentNote}
+                  onChange={(e) => setMomentNote(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                />
+              </div>
+
+              <div>
+                <p className="font-bold text-bark">Pictures</p>
+                <button
+                  type="button"
+                  onClick={() => momentFileInputRef.current?.click()}
+                  className="mt-1 w-full rounded-xl border border-dashed border-sand-line bg-sand-card px-4 py-4 text-center text-[11px] font-semibold text-moss transition hover:border-ember hover:text-bark"
+                >
+                  Choose from this device
+                </button>
+                <input
+                  ref={momentFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => setMomentFiles(Array.from(e.target.files ?? []))}
+                />
+                {momentFiles.length > 0 && (
+                  <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                    {momentFiles.map((file, index) => (
+                      <li
+                        key={`${file.name}-${index}`}
+                        className="flex items-center justify-between rounded-xl bg-sand px-3 py-2 text-[11px]"
+                      >
+                        <span className="min-w-0 truncate font-semibold text-bark">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setMomentFiles((current) => current.filter((_, i) => i !== index))}
+                          aria-label={`Remove ${file.name}`}
+                          className="shrink-0 text-moss transition hover:text-red-600"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <label className="font-bold text-bark">Video link</label>
+                <textarea
+                  rows={2}
+                  placeholder={"https://youtube.com/…\nOne link per line"}
+                  value={momentLinks}
+                  onChange={(e) => setMomentLinks(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                />
+                <p className="mt-1 text-[10px] text-moss">
+                  A link to where the video lives — it is shown on the wall beside the pictures.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeMomentModal}
+                  className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={postingMoment}
+                  className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
+                >
+                  {postingMoment ? "Posting…" : "Post the moment"}
                 </button>
               </div>
             </form>
