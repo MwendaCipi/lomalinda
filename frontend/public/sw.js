@@ -423,8 +423,16 @@
    offers a test notice, and a rotated subscription re-registers itself. This
    worker also renews the subscription the browser retires, instead of leaving
    the server holding a dead endpoint. Chrome changed, so installed apps must
-   take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v81";
+   take the new shell.
+
+   v82 — the deaconate's duty rota and property register are the church's rows
+   now rather than the browser's, the desk's pages are a card each on the
+   console's phone overview so the rota has a door on a hand, Education stands
+   on the rail as a ministry and reads the church budget, a held paybill
+   payment can be taken off the treasury's unassigned desk, and the day's
+   thought is signed with the writer's picture where they have one. Chrome
+   changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v82";
 const STATIC_ASSETS = [
   "/",
   "/about/",
