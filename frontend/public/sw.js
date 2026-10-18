@@ -438,8 +438,17 @@
    Rota, Deaconate Calendar, Funding), the property register is called Church
    Property everywhere the desk names it, and one of the desk's rows is the
    whole screen there — the roll scrolls, the count and Add Member stay at the
-   foot. Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v83";
+   foot. Chrome changed, so installed apps must take the new shell.
+
+   v84 — the officers' paper and the desk's own dates: a signature is saved
+   once on the profile page and every receipt and report the church prints
+   carries it under the office it belongs to, the deaconate's rota keeps the
+   account behind a name taken from the roll so the evening reminder can reach
+   that officer, an album carries links to the day's footage where video cannot
+   be stored, and the treasury's Failed tab reads the desk's own date window
+   rather than every attempt ever recorded. Chrome changed, so installed apps
+   must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v84";
 const STATIC_ASSETS = [
   "/",
   "/about/",
