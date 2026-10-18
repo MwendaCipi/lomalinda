@@ -57,7 +57,7 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { DEPARTMENT_BLURBS, departmentDeskCode } from "@/config/navigation";
+import { DEPARTMENT_BLURBS, deaconateViews, departmentDeskCode } from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 
@@ -68,7 +68,7 @@ import { usePageHeader } from "@/components/app-frame";
 import { densityCellPad } from "@/lib/table-density";
 import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
-import { SubNav } from "./sub-nav";
+import { SectionNav, SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
 import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles-combobox";
 import { ComboboxPopover } from "./combobox-popover";
@@ -78,7 +78,7 @@ import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarViewToggle,
   MonthGrid,
@@ -3701,6 +3701,7 @@ function DepartmentDetail({
   onChanged,
   initialTab = "members",
   onBack,
+  embedded = false,
 }: {
   department: DepartmentRow;
   onChanged: () => void;
@@ -3711,6 +3712,13 @@ function DepartmentDetail({
    * desk falls back to the hub's own directory.
    */
   onBack?: (() => void) | null;
+  /**
+   * The desk is one view of a larger one — the deaconate's Team page, which
+   * the deaconate desk draws under its own strip. It then keeps its views to
+   * itself: the strip above names them, so a second one here would trade the
+   * desk's pages for the hub's few under the name of the page it opened.
+   */
+  embedded?: boolean;
 }) {
   const units = department.units ?? [];
   // Personal Ministries runs the church's weekly rhythm, so the church's own
@@ -3731,6 +3739,11 @@ function DepartmentDetail({
   // to reach its calendar or its accounts at all.
   const isDeaconate = department.code === "deaconate";
   const onConsole = usePathname().startsWith("/administration");
+  // Whether the console's own strip already names the deaconate's pages: it
+  // does on every one of them (`?tab=deaconate-*`), and not on the desk opened
+  // by department.
+  const consoleTab = useSearchParams()?.get("tab") ?? null;
+  const onADeaconatePage = deaconateViews.some((page) => page.tab === consoleTab);
   // Which unit's desk is open; null is the whole department.
   const [unit, setUnit] = useState<string | null>(null);
   // The unit's own leadership, when one is selected: the directory's board is
@@ -4058,15 +4071,53 @@ function DepartmentDetail({
   }, [department.label, department.description, setCustomHeader, setHeadingFirst]);
 
   useEffect(() => {
+    // A desk that is one view of a larger one leaves the strip to it entirely
+    // — it neither draws one nor clears one, because the desk around it owns
+    // that state and a writing here would wipe the strip it just drew
+    // (a child's effect runs first, and one that runs again on its own data
+    // would take the desk's pages down with it).
+    if (embedded) return;
+    // The deaconate's pages are five console pages, and the console's own strip
+    // names them wherever the address bar lands on one of them. A link that
+    // opens the desk by department (`?tab=leaders&dept=deaconate`) resolves to
+    // no section, so the desk would arrive with a roll and no door to its
+    // register, its rota or its funding: there it names the same five itself,
+    // in the same order, each opening the page the rail opens.
     if (isDeaconate && onConsole) {
-      setCustomToggles(null);
-      return;
+      if (onADeaconatePage) {
+        setCustomToggles(null);
+        return;
+      }
+      setCustomToggles(
+        <SectionNav
+          label="Deaconate pages"
+          activeHref={null}
+          items={deaconateViews.map((page) => ({
+            key: page.tab,
+            href: `/administration?tab=${page.tab}`,
+            label: page.label,
+            short: page.short,
+            icon: page.icon,
+            help: page.label,
+          }))}
+        />
+      );
+      return () => setCustomToggles(null);
     }
     setCustomToggles(
       <SubNav label="Department views" items={stripItems} value={activeStripKey} onChange={handleStripChange} />
     );
     return () => setCustomToggles(null);
-  }, [setCustomToggles, isDeaconate, onConsole, stripItems, activeStripKey, handleStripChange]);
+  }, [
+    setCustomToggles,
+    embedded,
+    isDeaconate,
+    onConsole,
+    onADeaconatePage,
+    stripItems,
+    activeStripKey,
+    handleStripChange,
+  ]);
 
   const loadRoll = useCallback(() => {
     setLoadingRoll(true);
@@ -4479,14 +4530,27 @@ function DepartmentDetail({
       )
     : memberFiltered;
 
+  // The roll is the desk's table, so on a phone it is the whole screen: the
+  // card gives up the page's padding and its own frame and fills what is left
+  // under the strip, the rows scroll inside it, and the count and Add Member
+  // sit pinned at its foot — the way the roster and the treasury read on the
+  // same screen. Every other view keeps the page's padding and scrolls it.
+  const deskFillsPhone = subTab === "members";
+
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
+    <div
+      className={`mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col custom-hover-scrollbar ${
+        deskFillsPhone
+          ? "md:gap-4 md:overflow-hidden md:px-4 lg:px-6"
+          : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
+      }`}
+    >
 
       {/* Members tab — a contained table: the page holds still, the rows
           scroll, the way the roster and treasury read. The department's board
           leads the table, so opening a department shows who leads it first. */}
       {subTab === "members" && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white md:rounded-2xl md:border md:border-sand-line md:shadow-sm">
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
@@ -5027,22 +5091,29 @@ function DepartmentDetail({
 
 export function DepartmentHub({
   initialDept = null,
+  initialTab = "members",
   onBack,
+  embedded = false,
 }: {
   initialDept?: string | null;
+  /** Which of the opened area's views to land on. */
+  initialTab?: "members" | "calendar";
   /**
    * Where the way out of an opened area leads — the ministry map, or the
    * desk the hub sits inside. Left unset it is the hub's own directory: the
    * list the detail was opened from.
    */
   onBack?: (() => void) | null;
+  /** One view of a larger desk, which names the views itself (see
+      `DepartmentDetail`). */
+  embedded?: boolean;
 } = {}) {
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   // Which department detail (and which of its tabs) is open; the row's
   // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
-  const [detailTab, setDetailTab] = useState<"members" | "calendar">("members");
+  const [detailTab, setDetailTab] = useState<"members" | "calendar">(initialTab);
   // Which department's budget modal is open.
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
   // Which department's leadership modal is open.
@@ -5108,6 +5179,7 @@ export function DepartmentHub({
         onChanged={loadDirectory}
         initialTab={detailTab}
         onBack={onBack ?? (() => setSelected(null))}
+        embedded={embedded}
       />
     );
   }

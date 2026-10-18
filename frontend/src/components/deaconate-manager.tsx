@@ -172,9 +172,19 @@ function custodyCell(item: InventoryItem) {
 
 interface DeaconateManagerProps {
   initialTab?: "inventory" | "rota" | "members" | "calendar" | "funding" | "accounts";
+  /**
+   * The desk is read under a strip someone else draws — the area desk on the
+   * Ministry map, whose toggles name these same five pages. Its panels then
+   * carry no way back of their own (the shell's heading already has one) and
+   * the Team view hands the roll the caller's own back handler, so "Back"
+   * leads where the reader came from rather than to the console's overview.
+   */
+  embedded?: boolean;
+  /** Where the Team view's way out leads; the console's overview by default. */
+  onBack?: () => void;
 }
 
-export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerProps) {
+export function DeaconateManager({ initialTab = "inventory", embedded = false, onBack }: DeaconateManagerProps) {
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const activeTab = initialTab;
@@ -571,6 +581,16 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
     }
   };
 
+  // The way out of a panel, on a phone: the console's own arrow where these
+  // are pages of the console, and the caller's destination where the desk was
+  // opened somewhere else — the Ministry map, whose own heading carries no way
+  // out once a panel sits under it.
+  const backArrow = embedded ? (
+    onBack ? <BackToOverviewArrow onClick={onBack} label="Back to the ministry map" /> : null
+  ) : (
+    <BackToOverviewArrow />
+  );
+
   const inventoryEmpty = inventory.length === 0
     ? "No property items registered yet. Use Add Church Property to record the first one."
     : "No property items match these filters.";
@@ -582,7 +602,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
         <>
           <div className="shrink-0 border-b border-sand-line bg-white px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <BackToOverviewArrow />
+              {backArrow}
               <Boxes className="h-4 w-4 shrink-0 text-ember" />
               {/* Named by the strip above on a wide screen. */}
               <h2 className="text-sm font-bold text-bark md:hidden">Property Inventory</h2>
@@ -804,7 +824,10 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {activeTab === "members" && (
         <DepartmentHub
           initialDept="deaconate"
-          onBack={() => router.replace("/administration?tab=overview", { scroll: false })}
+          embedded={embedded}
+          onBack={
+            onBack ?? (() => router.replace("/administration?tab=overview", { scroll: false }))
+          }
         />
       )}
 
@@ -812,7 +835,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {activeTab === "calendar" && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
           <div className="flex items-center gap-1">
-            <BackToOverviewArrow />
+            {backArrow}
             {/* Named by the strip above on a wide screen. */}
             <div className="md:hidden">
               <h2 className="text-base font-bold text-bark">Deaconate Ordinances &amp; Event Schedule</h2>
@@ -829,7 +852,7 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
       {(activeTab === "funding" || activeTab === "accounts") && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6 custom-hover-scrollbar">
           <div className="flex items-center gap-1">
-            <BackToOverviewArrow />
+            {backArrow}
             <div className="md:hidden">
               <h2 className="text-base font-bold text-bark">Deaconate Funding &amp; Accounts</h2>
               <p className="text-xs text-moss">Local Church Budget allocations, transactions ledger, and funding requests.</p>

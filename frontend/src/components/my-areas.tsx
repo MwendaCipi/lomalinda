@@ -6,7 +6,8 @@ import { ArrowLeft, LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
-import { isStaffRole } from "@/config/navigation";
+import { DEACONATE_ROLES, deaconateViews, isStaffRole } from "@/config/navigation";
+import { DeaconateManager } from "@/components/deaconate-manager";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { invalidateDepartments, useAllDepartments, useMyTies } from "@/hooks/use-departments";
@@ -75,6 +76,8 @@ export function MyAreas() {
   // what used to render the old page under the same strip.
   const searchParams = useSearchParams();
   const openCode = searchParams.get("area");
+  // Which of an opened area's views is being read (`?view=`).
+  const openView = searchParams.get("view") ?? "members";
   const [joining, setJoining] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
   /** Which card's actions popover is open — one at a time, the way the desks
@@ -200,7 +203,27 @@ export function MyAreas() {
   // effect below walks it to the desk instead.
   const openArea = openCode && openCode !== "treasury" ? rows.find((row) => row.code === openCode) ?? null : null;
 
-  const { setCustomToggles, setCustomHeader, setHeadingFirst, setHeaderRightAction } = usePageHeader();
+  /**
+   * The deaconate reads as five pages: its team, the church's property
+   * register, the duty rota, the ordinances calendar and the desk's funding.
+   * The console's own strip names them on a wide screen, and the rail names
+   * them on a desk — but neither is there in a hand, so the area desk draws
+   * the same five toggles over itself. An officer of the desk reads that desk
+   * here; a member who is not of it keeps the read-mostly view every area
+   * gets, roll and ask-to-join included.
+   */
+  const holdsDeaconate = DEACONATE_ROLES.some((role) => roles.includes(role));
+  const opensDeaconateDesk = openArea?.code === "deaconate" && holdsDeaconate;
+  const deaconateView = (deaconateViews.find((page) => page.view === openView)?.view ?? "members") as
+    (typeof deaconateViews)[number]["view"];
+  // The register, the rota and the funding are the console desk's own panels,
+  // so they are read from it; the roll and the calendar are the ones this desk
+  // already draws — the hub implements them, and the calendar is the real one
+  // (the console's ordinances page is still a stub).
+  const deaconateUsesHub = deaconateView === "members" || deaconateView === "calendar";
+
+  const { setCustomToggles, setCustomHeader, setHeadingFirst, setHeaderRightAction, setPinnedDesk } =
+    usePageHeader();
   const router = useRouter();
 
   // Reading the address bar: an area opens as a real step in the phone's
@@ -255,6 +278,25 @@ export function MyAreas() {
     return () => setCustomToggles(null);
   }, [openArea, tab, setCustomToggles, showMap]);
 
+  // The deaconate's desk draws the desk's own five pages, the same ones the
+  // console's strip names. Moving between them replaces the entry, so a
+  // session of toggling leaves one step and the address bar names the view on
+  // screen — the way the map's own toggles behave.
+  useEffect(() => {
+    if (!opensDeaconateDesk) return;
+    setCustomToggles(
+      <SubNav
+        label="Deaconate pages"
+        value={deaconateView}
+        onChange={(next) =>
+          router.replace(`/my-areas?area=deaconate&view=${next}`, { scroll: false })
+        }
+        items={deaconateViews.map((page) => ({ key: page.view, label: page.label, short: page.short }))}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [opensDeaconateDesk, deaconateView, setCustomToggles, router]);
+
   // One card's actions popover at a time: a press anywhere outside the menu
   // closes it, the same way the desks' row menus behave.
   useEffect(() => {
@@ -276,6 +318,15 @@ export function MyAreas() {
     setHeadingFirst(true);
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
+
+  // An open area is a desk of rows: the roll scrolls and the count and the
+  // actions beside it stay at its foot, so on a phone the desk takes the whole
+  // screen — the same screen the console's desks have by route. The map itself
+  // keeps the page's own scroll, where its cards stack and the document moves.
+  useEffect(() => {
+    setPinnedDesk(Boolean(openArea));
+    return () => setPinnedDesk(false);
+  }, [openArea, setPinnedDesk]);
 
   // The map's search, on the heading's own row: it takes the space beside the
   // name rather than a row of its own beneath the strip, so the map on a phone
@@ -394,8 +445,11 @@ export function MyAreas() {
   // page to the same desk those doors open instead of keeping a second,
   // thinner view of it here.
   if (openArea) {
+    // No padding on a phone: the desk's own card is the screen there. It
+    // carries its own inset on the wider widths, where this wrapper's padding
+    // is what frames it.
     return (
-      <div className="flex h-full min-w-0 w-full flex-col px-4 py-6 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+      <div className="flex h-full min-w-0 w-full flex-col sm:px-8 sm:py-8 lg:px-10 lg:py-10">
         <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
           {/* The way back out of the area, on a wide screen; on a phone it
               rides above the name in the shell's heading band. */}
@@ -408,7 +462,21 @@ export function MyAreas() {
             Ministry
           </button>
           <div className="min-h-0 w-full flex-1">
-            <DepartmentHub key={openArea.code} initialDept={openArea.code} onBack={showMap} />
+            {opensDeaconateDesk ? (
+              deaconateUsesHub ? (
+                <DepartmentHub
+                  key={`deaconate-${deaconateView}`}
+                  initialDept="deaconate"
+                  initialTab={deaconateView}
+                  embedded
+                  onBack={showMap}
+                />
+              ) : (
+                <DeaconateManager initialTab={deaconateView} embedded onBack={showMap} />
+              )
+            ) : (
+              <DepartmentHub key={openArea.code} initialDept={openArea.code} onBack={showMap} />
+            )}
           </div>
         </div>
       </div>

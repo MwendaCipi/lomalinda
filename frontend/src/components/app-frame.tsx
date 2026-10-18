@@ -57,6 +57,15 @@ type PageHeaderContextType = {
    * page — so this is asked for a page at a time, never imposed on all of them.
    */
   setHeadingFirst: (on: boolean) => void;
+  /**
+   * A page that is a desk of rows on a phone — the rows scroll, and the count
+   * and the actions beside it stay at the foot — asks for the whole screen,
+   * the way the pages that are pinned by route have it. It is asked for by a
+   * page whose *state* is the desk (the ministry map's opened area, say),
+   * where no route of its own exists to pin; the map itself keeps the page's
+   * own scroll.
+   */
+  setPinnedDesk: (on: boolean) => void;
 };
 
 const PageHeaderContext = createContext<PageHeaderContextType>({
@@ -65,6 +74,7 @@ const PageHeaderContext = createContext<PageHeaderContextType>({
   setTogglesRightAction: () => {},
   setCustomHeader: () => {},
   setHeadingFirst: () => {},
+  setPinnedDesk: () => {},
 });
 
 export function usePageHeader() {
@@ -111,7 +121,6 @@ const HEADING_FIRST_SECTIONS = new Set(["Fellowship", "Stewardship"]);
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
   const { me, hasToken } = useHeaderData();
-  const mode = scrollModeForPath(pathname);
 
   /**
    * The places whose strip steps aside while the page is read by scrolling.
@@ -140,6 +149,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const [togglesRightAction, setTogglesRightAction] = useState<React.ReactNode>(null);
   const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
   const [headingFirstAsked, setHeadingFirst] = useState(false);
+  // A page whose own state is a desk asks for the screen the pinned routes
+  // have (see `setPinnedDesk`); it is cleared with the rest of the chrome the
+  // moment the route changes.
+  const [pinnedDesk, setPinnedDesk] = useState(false);
+  // The screen the shell lays out: the route's own mode, or the one a page
+  // asks for while it is the desk on screen (see `setPinnedDesk`).
+  const mode: ScrollMode = pinnedDesk ? "pinned" : scrollModeForPath(pathname);
   // Whether the strip is currently out of sight because the reader is moving
   // down the page (see the scroll effect below).
   const [togglesScrolledDown, setTogglesScrolledDown] = useState(false);
@@ -159,7 +175,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // `setHeaderRightAction` → shell re-render → new context → page re-render →
   // effect. One stable value breaks the loop for every desk at once.
   const pageHeaderSlots = useMemo(
-    () => ({ setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst }),
+    () => ({
+      setHeaderRightAction,
+      setCustomToggles,
+      setTogglesRightAction,
+      setCustomHeader,
+      setHeadingFirst,
+      setPinnedDesk,
+    }),
     [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst]
   );
 
@@ -178,6 +201,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     setTogglesRightAction(null);
     setCustomHeader(null);
     setHeadingFirst(false);
+    setPinnedDesk(false);
     setTogglesScrolledDown(false);
   }
 

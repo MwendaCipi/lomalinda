@@ -612,7 +612,14 @@ function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<
   return { href: `/administration?tab=${tab}`, tab, label, icon, ...extra };
 }
 
-const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
+/**
+ * Who the deaconate's desk answers to: the deacons and deaconesses, their two
+ * heads, and the admin. Exported because the desk is drawn in two places — the
+ * console's own strip names its pages, and the area desk on the Ministry map
+ * draws the same views as toggles of one page — and both ask the same question
+ * of the viewer.
+ */
+export const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
 /** Elders and clerks share the church's programmes; the register is the clerk's. */
 const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];
@@ -711,33 +718,75 @@ export const eldershipItems: RailRow[] = [
   }),
 ];
 
+/**
+ * The deaconate's own pages, written once: the desk is read in two places, and
+ * each one names the same five.
+ *
+ * `tab` is the console page the rail opens (the URL names which page is on
+ * screen there), `view` is that same page as a view of the desk's one page on
+ * the Ministry map, where there is no rail to offer them — a phone has none at
+ * all. The labels, the short forms and the blurbs live here so the console's
+ * strip, the phone overview's cards and the area desk's toggles can never
+ * disagree about the desk's shape or what a page is called.
+ */
+export const deaconateViews: {
+  view: "members" | "inventory" | "rota" | "calendar" | "funding";
+  tab: string;
+  label: string;
+  short?: string;
+  icon: LucideIcon;
+  description: string;
+}[] = [
+  {
+    view: "members",
+    tab: "deaconate-members",
+    label: "Deaconate Team",
+    short: "Team",
+    icon: UserCheck,
+    description: "The deacons and deaconesses who serve the church's property, duty and ordinances.",
+  },
+  {
+    view: "inventory",
+    tab: "inventory",
+    label: "Church Property",
+    short: "Property",
+    icon: Boxes,
+    description: "The church's property register and the movements of each item.",
+  },
+  {
+    view: "rota",
+    tab: "deaconate-rota",
+    label: "Duty Rota",
+    icon: ClipboardList,
+    description: "The deacons' and deaconesses' duty rosters for the church's services.",
+  },
+  {
+    view: "calendar",
+    tab: "deaconate-calendar",
+    label: "Deaconate Calendar",
+    short: "Calendar",
+    icon: Calendar,
+    description: "Communion services, foot washing and the ordinances the desk keeps.",
+  },
+  {
+    view: "funding",
+    tab: "deaconate-funding",
+    label: "Funding & Accounts",
+    short: "Funding",
+    icon: Wallet,
+    description: "Local Church Budget allocations, transactions ledger, and funding requests.",
+  },
+];
+
 /** The deaconate: the church's property, its duty and its ordinances. The
  *  team leads the strip — a desk is its people before its things. */
-export const deaconateItems: RailRow[] = [
-  officeTab("deaconate-members", "Deaconate Team", UserCheck, {
+export const deaconateItems: RailRow[] = deaconateViews.map((page) =>
+  officeTab(page.tab, page.label, page.icon, {
     roles: DEACONATE_ROLES,
-    short: "Team",
-    description: "The deacons and deaconesses who serve the church's property, duty and ordinances.",
-  }),
-  officeTab("inventory", "Inventory", Boxes, {
-    roles: DEACONATE_ROLES,
-    description: "The church's property register and the movements of each item.",
-  }),
-  officeTab("deaconate-rota", "Duty Rota", ClipboardList, {
-    roles: DEACONATE_ROLES,
-    description: "The deacons' and deaconesses' duty rosters for the church's services.",
-  }),
-  officeTab("deaconate-calendar", "Deaconate Calendar", Calendar, {
-    roles: DEACONATE_ROLES,
-    short: "Calendar",
-    description: "Communion services, foot washing and the ordinances the desk keeps.",
-  }),
-  officeTab("deaconate-funding", "Funding & Accounts", Wallet, {
-    roles: DEACONATE_ROLES,
-    short: "Funding",
-    description: "Local Church Budget allocations, transactions ledger, and funding requests.",
-  }),
-];
+    short: page.short,
+    description: page.description,
+  })
+);
 
 /** Which heading a department is filed under. */
 export type DepartmentGroup = "office" | "ministry" | "department";

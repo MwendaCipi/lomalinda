@@ -431,8 +431,15 @@
    on the rail as a ministry and reads the church budget, a held paybill
    payment can be taken off the treasury's unassigned desk, and the day's
    thought is signed with the writer's picture where they have one. Chrome
-   changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v82";
+   changed, so installed apps must take the new shell.
+
+   v83 — the deaconate's desk names its own pages on a phone: the ministry map
+   opens it with the desk's five toggles over it (Team, Church Property, Duty
+   Rota, Deaconate Calendar, Funding), the property register is called Church
+   Property everywhere the desk names it, and one of the desk's rows is the
+   whole screen there — the roll scrolls, the count and Add Member stay at the
+   foot. Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v83";
 const STATIC_ASSETS = [
   "/",
   "/about/",
