@@ -11,6 +11,11 @@ export type DailyWord = {
   date: string;
   text: string;
   author_name: string;
+  /**
+   * The writer's picture, or '' where they have none on file — the readers
+   * show the face beside the name only when there is one to show.
+   */
+  author_photo_url?: string;
 };
 
 /** How long an answer is trusted — the same minute the announcement feed gets. */

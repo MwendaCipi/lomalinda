@@ -70,7 +70,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -972,6 +972,63 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(rows[0]['mpesa_receipt_number'], 'HELD99PAY1')
         self.assertEqual(rows[0]['typed_reference'], 'youth trip')
         self.assertEqual(rows[0]['amount'], '350.00')
+
+    def test_a_held_payment_can_be_taken_off_the_desk(self):
+        """The office's own test row, a doubled Safaricom message, money
+        already returned by hand: the treasurer removes it, and it leaves the
+        ledger — it was credited to no account, so no fund is short."""
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.delete(f'/api/members/treasury/unassigned/{self.held.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('1 unassigned payment removed', response.data['detail'])
+        self.assertFalse(Contribution.objects.filter(pk=self.held.pk).exists())
+
+        # And the desk is empty of it.
+        response = self.client.get('/api/members/treasury/unassigned/')
+        self.assertEqual(response.data, [])
+
+    def test_a_split_payment_is_removed_whole(self):
+        """A payment split across accounts leaves one line per account: taking
+        it off the desk takes every line of it, never half a payment."""
+        group = uuid.uuid4()
+        self.held.payment_group = group
+        self.held.save(update_fields=['payment_group'])
+        others = [
+            Contribution.objects.create(
+                payment_method='mpesa', giving_type='financial', status='completed',
+                mpesa_receipt_number='HELD99PAY1', amount=Decimal('50.00'),
+                purpose=name, needs_review=True,
+                payment_group=group, paid_at=timezone.now(),
+            )
+            for name in ('Welfare', 'AYM')
+        ]
+
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.delete(f'/api/members/treasury/unassigned/{others[0].id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Contribution.objects.filter(payment_group=group).exists())
+
+    def test_an_assigned_gift_is_not_the_desks_to_remove(self):
+        """Once a payment has been assigned it is a real credit on a fund: the
+        unassigned desk no longer owns it, so a late press cannot delete it."""
+        account = TreasuryAccount.objects.create(name='AYM', description='Adventist Youth Ministry')
+        self.client.force_authenticate(user=self.treasurer)
+        self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {'account_id': account.id}, format='json',
+        )
+
+        response = self.client.delete(f'/api/members/treasury/unassigned/{self.held.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Contribution.objects.filter(pk=self.held.pk).exists())
+
+    def test_only_the_treasury_office_may_remove_a_held_payment(self):
+        self.client.force_authenticate(user=self.member)
+        response = self.client.delete(f'/api/members/treasury/unassigned/{self.held.id}/')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Contribution.objects.filter(pk=self.held.pk).exists())
 
     def test_assign_credits_account_once_and_clears_flag(self):
         account = TreasuryAccount.objects.create(name='AYM', description='Adventist Youth Ministry', account_type='mobile_money')
@@ -5166,6 +5223,129 @@ class DeaconateInventoryAPITests(APITestCase):
         self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(self._register().status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_the_deaconate_itself_keeps_the_register(self):
+        """The desk that carries the church's furniture records where it went.
+
+        A deacon holds no church-wide role code (``deacon`` is not one), so
+        their seat on the deaconate — the roll, and the board's Leader and
+        Assistant rows — is what opens the register: without it the rail row
+        led to a 403 and the desk looked unwired.
+        """
+        deacon = User.objects.create_user('deacon.john', 'deacon.john@example.com', 'DeaconPass#2026')
+        MemberProfile.objects.create(user=deacon, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=deacon)
+        self.client.force_authenticate(deacon)
+
+        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_200_OK)
+        self.assertEqual(self._register(name='Communion trays', tag_number='SAC-01').status_code, status.HTTP_201_CREATED)
+
+        # A member of the congregation still reaches nothing of it.
+        self.client.force_authenticate(self.member)
+        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_403_FORBIDDEN)
+
+
+class DutyRotaAPITests(APITestCase):
+    """The deaconate's duty rota lives on the server, not in the browser."""
+
+    def setUp(self):
+        self.head_deaconess = User.objects.create_user('head.deaconess', 'head.deaconess@example.com', 'DeaconPass#2026')
+        MemberProfile.objects.create(user=self.head_deaconess, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=self.head_deaconess)
+        self.member = User.objects.create_user('plain.rota.member', 'plain.rota.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+    def _schedule(self, **overrides):
+        payload = {
+            'title': 'Main Sanctuary Ushering Team A',
+            'date': '2026-11-07',
+            'shift': '08:30 AM - 01:00 PM',
+            'duty_type': 'Ushering',
+            'assigned_team': ['Deacon David', 'Deaconess Sarah'],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/duty-rota/', payload, format='json')
+
+    def test_a_scheduled_duty_is_read_back_after_a_reload(self):
+        """The rota used to be a browser array: a duty scheduled this morning
+        was gone with the next reload. It is the church's row now."""
+        self.client.force_authenticate(self.head_deaconess)
+
+        created = self._schedule()
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['date'], '2026-11-07')
+        self.assertEqual(created.data['assigned_team'], ['Deacon David', 'Deaconess Sarah'])
+
+        listed = self.client.get('/api/members/duty-rota/')
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(listed.data), 1)
+        self.assertEqual(listed.data[0]['title'], 'Main Sanctuary Ushering Team A')
+        self.assertEqual(DutyRota.objects.count(), 1)
+
+    def test_the_rota_reads_earliest_duty_first(self):
+        self.client.force_authenticate(self.head_deaconess)
+
+        self._schedule(title='Communion setup', date='2026-12-05', duty_type='Communion Setup')
+        self._schedule(title='Sanctuary care', date='2026-11-14', duty_type='Sanctuary Care')
+
+        listed = self.client.get('/api/members/duty-rota/')
+
+        self.assertEqual([row['title'] for row in listed.data], ['Sanctuary care', 'Communion setup'])
+
+    def test_the_rota_serves_one_stretch_of_weeks(self):
+        self.client.force_authenticate(self.head_deaconess)
+        self._schedule(title='Sanctuary care', date='2026-11-14')
+        self._schedule(title='Communion setup', date='2026-12-05')
+
+        listed = self.client.get('/api/members/duty-rota/?from=2026-11-01&to=2026-11-30')
+
+        self.assertEqual([row['title'] for row in listed.data], ['Sanctuary care'])
+
+    def test_an_unstaffed_line_is_kept_and_stray_commas_are_not_officers(self):
+        """The desk writes the rota before the team is settled: a line with
+        nobody on it is a real line, and "A, , A" is one officer, once."""
+        self.client.force_authenticate(self.head_deaconess)
+
+        created = self._schedule(assigned_team=['Deacon David', ' ', 'Deacon David'])
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['assigned_team'], ['Deacon David'])
+
+        unstaffed = self._schedule(title='Audio/PA', date='2026-11-21', assigned_team=[])
+        self.assertEqual(unstaffed.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(unstaffed.data['assigned_team'], [])
+
+    def test_a_duty_needs_a_name_and_a_date(self):
+        self.client.force_authenticate(self.head_deaconess)
+
+        self.assertEqual(self._schedule(title='  ').status_code, status.HTTP_400_BAD_REQUEST)
+
+        undated = self.client.post('/api/members/duty-rota/', {'title': 'Ushering'}, format='json')
+        self.assertEqual(undated.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('date', undated.data)
+        self.assertEqual(DutyRota.objects.count(), 0)
+
+    def test_a_duty_can_be_taken_off_the_rota(self):
+        self.client.force_authenticate(self.head_deaconess)
+        entry_id = self._schedule().data['id']
+
+        removed = self.client.delete(f'/api/members/duty-rota/{entry_id}/')
+
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertIn('off the duty rota', removed.data['detail'])
+        self.assertEqual(DutyRota.objects.count(), 0)
+        self.assertEqual(self.client.get('/api/members/duty-rota/').data, [])
+
+    def test_the_congregation_neither_reads_nor_writes_the_rota(self):
+        self.client.force_authenticate(self.member)
+
+        self.assertEqual(self.client.get('/api/members/duty-rota/').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._schedule().status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            self.client.delete('/api/members/duty-rota/1/').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(DutyRota.objects.count(), 0)
+
 
 class MemberRosterSystemAccountTests(APITestCase):
     """The member roster lists the congregation, not the deployment's owner."""
@@ -9275,6 +9455,54 @@ class WelfareMinistrySeedTests(TestCase):
         self.assertIn('Assistant', set(welfare.roles.values_list('name', flat=True)))
 
 
+class EducationMinistrySeedTests(TestCase):
+    """Education exists as a ministry of the record.
+
+    The rail's Ministries heading expands the church's own Department rows, so
+    asking for Education on the rail is answered only when the row exists,
+    filed under Ministries, with the offices its desk renders. 0212 settles
+    that.
+    """
+
+    def test_education_is_a_ministry_with_the_offices_its_desk_renders(self):
+        education = Department.objects.get(code='education')
+        self.assertEqual(education.group, 'ministry')
+        self.assertTrue(education.is_active)
+        self.assertEqual(
+            list(education.roles.values_list('name', flat=True)),
+            [role_name for role_name, _assistant in DEPARTMENT_ROLE_SEED],
+        )
+        # The base pair is the area's; the catalogue rides beside it.
+        self.assertEqual(
+            list(education.roles.filter(is_optional=False).values_list('name', flat=True)),
+            ['Leader', 'Assistant'],
+        )
+
+    def test_rerunning_the_seed_never_mints_a_second_education(self):
+        from importlib import import_module
+        seed = import_module('members.migrations.0212_seed_education_ministry').seed_education
+
+        seed(django_apps, None)
+        seed(django_apps, None)
+        self.assertEqual(Department.objects.filter(code='education').count(), 1)
+        self.assertEqual(Department.objects.get(code='education').group, 'ministry')
+        self.assertEqual(
+            Department.objects.get(code='education').roles.count(),
+            len(DEPARTMENT_ROLE_SEED),
+        )
+
+    def test_a_row_an_office_created_by_hand_keeps_its_name_and_seats(self):
+        from importlib import import_module
+        seed = import_module('members.migrations.0212_seed_education_ministry').seed_education
+
+        Department.objects.filter(code='education').update(group='department', name='Education Team')
+        seed(django_apps, None)
+        education = Department.objects.get(code='education')
+        self.assertEqual(education.group, 'ministry')
+        self.assertEqual(education.name, 'Education Team')
+        self.assertIn('Leader', set(education.roles.values_list('name', flat=True)))
+
+
 class AreaOfficeCatalogueSeedTests(TestCase):
     """Every area carries the church's office list; the desk does not write it.
 
@@ -11644,6 +11872,45 @@ class DepartmentFundTests(APITestCase):
         response = self.client.get('/api/members/departments/awm/account/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('LCB', [row['name'] for row in response.data['accounts']])
+
+    def test_education_ministry_desk_reads_lcb(self):
+        """Education asks the church budget for what it spends: its desk reads
+        the Local Church Budget and raises its funding requests against it,
+        and reads no other ministry's fund."""
+        education = Department.objects.get(code='education')
+        role = DepartmentRole.objects.get(department=education, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=education, role=role, member=self.leader, kind='leader',
+        )
+        from django.db.models import Q
+
+        # The church budget account, as the desk reads it — the one account the
+        # church holds for it, whatever else the treasury has opened.
+        lcb = TreasuryAccount.objects.filter(
+            Q(name__iexact='LCB') | Q(description__icontains='Local Church Budget')
+        ).order_by('id').first()
+        self.assertIsNotNone(lcb, 'the church budget account is seeded')
+        TreasuryAccount.objects.filter(pk=lcb.pk).update(balance=Decimal('1000.00'))
+        lcb.refresh_from_db()
+        TreasuryAccount.objects.create(
+            name='MusicFund', description='Music Ministry', balance=Decimal('500.00'),
+        )
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.get('/api/members/departments/education/account/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row['name'] for row in response.data['accounts']]
+        self.assertEqual(names, ['LCB'])
+        self.assertTrue(response.data['accounts'][0]['is_lcb'])
+        self.assertTrue(response.data['can_request_withdrawal'])
+
+        # The ask lands against the church budget itself.
+        posted = self.client.post('/api/members/departments/education/account/', {
+            'amount': '100', 'reason': 'Sabbath School lesson helps', 'account_id': lcb.id,
+        }, format='json')
+        self.assertEqual(posted.status_code, status.HTTP_201_CREATED, posted.data)
+        self.assertEqual(self._pending().account_id, lcb.id)
 
     def _seat_leader_of(self, code, account_name, description):
         """A department with its own fund and the leader seated at its desk."""

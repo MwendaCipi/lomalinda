@@ -10,7 +10,7 @@ from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification,
     CashContribution, ChurchSettings, Contribution, ContributionTreasury, Department, EnrollmentRequest, FundraisingCampaign, GivingRequest, GIFT_RELATIONSHIP_CHOICES, Invitation,
-    InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
+    DutyRota, InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
     SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, Expenditure, VisitationRequest,
@@ -2138,3 +2138,56 @@ class InventoryItemSerializer(serializers.ModelSerializer):
         if existing.exists():
             raise serializers.ValidationError(f'Tag "{tag}" is already used by another item.')
         return tag
+
+
+#: How many officers one duty line may name. The desk writes the rota by hand,
+#: week by week, so the limit is a sanity check on a paste, not a roster rule.
+DUTY_TEAM_LIMIT = 20
+
+
+class DutyRotaSerializer(serializers.ModelSerializer):
+    """One line of the deaconate's duty rota, as the desk reads and writes it.
+
+    ``date`` is the API's word for the model's ``duty_date`` (a field named
+    ``date`` would read as "a date" everywhere it is used), and the officers
+    are handed over as the list the desk typed, trimmed and de-duplicated.
+    """
+
+    date = serializers.DateField(source='duty_date')
+    # A blank entry is a stray comma rather than an officer, so the child
+    # accepts one and ``validate_assigned_team`` drops it.
+    assigned_team = serializers.ListField(
+        child=serializers.CharField(max_length=120, allow_blank=True),
+        required=False,
+    )
+
+    class Meta:
+        model = DutyRota
+        fields = ('id', 'title', 'date', 'shift', 'duty_type', 'assigned_team', 'created_at')
+        read_only_fields = ('id', 'created_at')
+
+    def validate_title(self, value):
+        title = (value or '').strip()
+        if not title:
+            raise serializers.ValidationError('Name the duty being rotaed.')
+        return title
+
+    def validate_assigned_team(self, value):
+        """The officers named on the line: trimmed, de-duplicated, in order.
+
+        An empty entry is a stray comma rather than an officer, so it is
+        dropped; two spellings of the same name are the desk's own business
+        and are kept as written. Wholly blank — the desk rostered nobody —
+        leaves the line unstaffed rather than refusing it, since a rota is
+        often written before the team is settled.
+        """
+        team = []
+        for name in value or []:
+            cleaned = str(name).strip()
+            if cleaned and cleaned not in team:
+                team.append(cleaned)
+        if len(team) > DUTY_TEAM_LIMIT:
+            raise serializers.ValidationError(
+                f'A duty line names at most {DUTY_TEAM_LIMIT} officers.'
+            )
+        return team

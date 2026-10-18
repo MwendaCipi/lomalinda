@@ -20,6 +20,13 @@ const fundAuthHeaders = (): Record<string, string> => {
  * (`usePageHeader().setCustomToggles`), which is what keeps it a single line:
  * the band shows either this strip or the section's own pages, never both.
  */
+/**
+ * Announced by the unassigned desk whenever its queue changes — a payment
+ * assigned or removed — so the strip's badge answers on the spot rather than
+ * counting a row the desk has already dealt with.
+ */
+export const UNASSIGNED_CHANGED_EVENT = "treasury-unassigned-changed";
+
 export type TreasuryView = "givings" | "summary" | "unassigned" | "accounts" | "drives" | "expenses" | "requests" | "failed";
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
@@ -95,18 +102,24 @@ export function TreasuryNav({
 
   // The unassigned badge: paybill payments waiting for an account. The strip
   // is drawn on every treasury page, so this is what keeps the count honest
-  // wherever the treasurer stands.
+  // wherever the treasurer stands — and the desk above it says when a payment
+  // has been assigned or removed, because the strip is not on the page that
+  // changed and would otherwise keep counting a row that is no longer there.
   useEffect(() => {
     if (typeof unassignedCount === "number") return;
     let alive = true;
-    fetch(`${API_URL}/api/members/treasury/unassigned/`, { headers: fundAuthHeaders() })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (alive && Array.isArray(data)) setFetchedUnassigned(data.length);
-      })
-      .catch(() => {});
+    const readCount = () =>
+      fetch(`${API_URL}/api/members/treasury/unassigned/`, { headers: fundAuthHeaders() })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (alive && Array.isArray(data)) setFetchedUnassigned(data.length);
+        })
+        .catch(() => {});
+    void readCount();
+    window.addEventListener(UNASSIGNED_CHANGED_EVENT, readCount);
     return () => {
       alive = false;
+      window.removeEventListener(UNASSIGNED_CHANGED_EVENT, readCount);
     };
   }, [unassignedCount]);
 

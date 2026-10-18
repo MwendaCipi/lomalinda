@@ -13,6 +13,7 @@ import {
   Briefcase,
   FileText,
   Gift,
+  GraduationCap,
   HandHeart,
   Heart,
   HeartPulse,
@@ -763,6 +764,7 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   health: HeartPulse,
   sabbath_school: BookOpen,
   welfare: HandHeart,
+  education: GraduationCap,
   dorcas: Sparkles,
   development: Landmark,
 };
@@ -787,6 +789,7 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   sabbath_school: "The church's Sabbath School.",
   personal_ministries: "Equipping every member for witnessing, Bible study and outreach.",
   welfare: "Practical support and compassion for church members and neighbours in need.",
+  education: "Christian education in the church and its schools: the study of God's word, our schools, and the students they serve.",
   dorcas: "Providing food, clothing, and compassionate service in the spirit of Dorcas.",
   development: "Planning, infrastructure, sanctuary building, and church plot development.",
   music: "The church's music.",
@@ -1115,6 +1118,7 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   personal_ministries: "PM",
   health: "Health",
   welfare: "Welfare",
+  education: "Education",
   dorcas: "Dorcas",
   development: "Development",
 };

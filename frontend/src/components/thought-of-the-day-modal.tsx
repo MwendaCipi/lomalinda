@@ -3,6 +3,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 
+import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useDailyWord } from "@/hooks/use-daily-word";
 
 /** The day a member has already closed, so one word pops once, not once a page. */
@@ -110,9 +111,21 @@ export function ThoughtOfTheDayModal() {
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
     >
       <div className="relative w-full max-w-lg rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8">
-        <h2 id="thought-of-the-day-title" className="text-xl font-bold text-bark sm:text-2xl">
-          Thought of the Day
-        </h2>
+        {/* The writer's own picture at the modal's top right, where the church
+            has one: the word arrives signed, and the face is who signed it. */}
+        <div className="flex items-start justify-between gap-4">
+          <h2 id="thought-of-the-day-title" className="text-xl font-bold text-bark sm:text-2xl">
+            Thought of the Day
+          </h2>
+          {word.author_photo_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolveAttachmentUrl(word.author_photo_url)}
+              alt={word.author_name ? `${word.author_name}'s profile picture` : ""}
+              className="h-12 w-12 shrink-0 rounded-full border border-sand-line object-cover shadow-sm"
+            />
+          )}
+        </div>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-moss-mid">{word.text}</p>
         {word.author_name && (
           <p className="mt-3 text-xs font-semibold text-ember">— {word.author_name}</p>

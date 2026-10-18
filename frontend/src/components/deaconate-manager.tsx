@@ -11,6 +11,7 @@ import {
   Clock,
   Plus,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { RecordList } from "./record-list";
@@ -19,6 +20,7 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { FilterPopover, FilterSet } from "@/components/filter-popover";
 import { DepartmentAccountsPanel, DepartmentHub } from "./department-hub";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -65,14 +67,14 @@ interface InventoryItem {
   created_at: string;
 }
 
-/** Duty rota entries are session-only for now; the rota has no backend yet. */
+/** One line of the duty rota, as the API keeps it. */
 interface RotaEntry {
-  id: string;
+  id: number;
   title: string;
   date: string;
   shift: string;
-  dutyType: string;
-  assignedTeam: string[];
+  duty_type: string;
+  assigned_team: string[];
 }
 
 const emptyItemForm = {
@@ -146,17 +148,25 @@ function inventoryStateBadge(item: InventoryItem) {
   );
 }
 
+/**
+ * Who holds an item, and since when.
+ *
+ * The custody reading is spans rather than paragraphs because the phone card
+ * shows it inside a grid cell beside its label, and a paragraph inside a
+ * paragraph is not markup the browser will keep — it split the card and
+ * forfeited the island on the way in (the register's own hydration error).
+ */
 function custodyCell(item: InventoryItem) {
   if (!item.assigned_to) {
     return <span className="text-graydim">In Store</span>;
   }
   return (
-    <div>
-      <p className="font-semibold text-bark">{item.assigned_to}</p>
+    <span className="block">
+      <span className="block font-semibold text-bark">{item.assigned_to}</span>
       {item.checked_out_at && (
-        <p className="text-[10px]">Since {dayFirst(item.checked_out_at)}</p>
+        <span className="block text-[10px]">Since {dayFirst(item.checked_out_at)}</span>
       )}
-    </div>
+    </span>
   );
 }
 
@@ -197,10 +207,13 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   const [openActionMenuId, setOpenActionMenuId] = useState<number | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
 
-  // Duty rota (session-only until the rota gets a backend)
+  // Duty rota (server-backed: this is the church's record of who serves when)
   const [rota, setRota] = useState<RotaEntry[]>([]);
+  const [loadingRota, setLoadingRota] = useState(true);
   const [showAddRotaModal, setShowAddRotaModal] = useState(false);
   const [newRota, setNewRota] = useState(emptyRotaForm);
+  const [savingRota, setSavingRota] = useState(false);
+  const [removingRotaId, setRemovingRotaId] = useState<number | null>(null);
 
   const loadInventory = async () => {
     setLoadingInventory(true);
@@ -223,6 +236,54 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
   useEffect(() => {
     loadInventory();
   }, []);
+
+  /**
+   * The rota the church keeps, earliest duty first — or null when the desk
+   * could not be read (offline, a refused session).
+   *
+   * Reading and writing the desk's state are kept apart on purpose: the effect
+   * below settles what it fetched from the promise's own callback, the way the
+   * shell reads the day's word, rather than writing state while the effect runs.
+   */
+  const fetchRota = async (): Promise<RotaEntry[] | null> => {
+    try {
+      const res = await apiFetch("/duty-rota/");
+      if (!res.ok) return null;
+      return (await res.json()) as RotaEntry[];
+    } catch {
+      return null;
+    }
+  };
+
+  /** A read the desk asked for — after scheduling a duty, or removing one. */
+  const loadRota = async () => {
+    setLoadingRota(true);
+    const rows = await fetchRota();
+    setRota(rows ?? []);
+    setLoadingRota(false);
+    if (rows === null) {
+      showAlert("Could not load the duty rota", "Check your connection and try again.", "error");
+    }
+  };
+
+  // The rota is read when its tab is opened, not with the whole desk: the
+  // deaconate console mounts on every one of its pages, and the register is
+  // what most visits are here for.
+  useEffect(() => {
+    if (activeTab !== "rota") return;
+    let alive = true;
+    void fetchRota().then((rows) => {
+      if (!alive) return;
+      setRota(rows ?? []);
+      setLoadingRota(false);
+      if (rows === null) {
+        showAlert("Could not load the duty rota", "Check your connection and try again.", "error");
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activeTab]);
 
   const { setHeaderRightAction } = usePageHeader();
   const router = useRouter();
@@ -431,28 +492,83 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
     }
   };
 
-  const scheduleRota = (e: React.FormEvent) => {
+  const scheduleRota = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRota.title.trim() || !newRota.date) return;
+    const title = newRota.title.trim();
+    if (!title || !newRota.date || savingRota) return;
 
     const teamList = newRota.assignedTeam
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const entry: RotaEntry = {
-      id: `ROT-${Date.now()}`,
-      title: newRota.title.trim(),
-      date: newRota.date,
-      shift: newRota.shift,
-      dutyType: newRota.dutyType,
-      assignedTeam: teamList.length > 0 ? teamList : ["Deacon Board"],
-    };
+    setSavingRota(true);
+    try {
+      const res = await apiFetch("/duty-rota/", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          date: newRota.date,
+          shift: newRota.shift.trim(),
+          duty_type: newRota.dutyType,
+          // An unstaffed line stays unstaffed: the desk often writes the rota
+          // before the team is settled, and "Deacon Board" invented here
+          // would be the app rostering people the church never named.
+          assigned_team: teamList,
+        }),
+      });
+      if (!res.ok) {
+        showAlert("Duty rota not saved", firstErrorMessage(await res.json().catch(() => null)) || "The duty could not be scheduled.", "error");
+        return;
+      }
+      setShowAddRotaModal(false);
+      setNewRota(emptyRotaForm);
+      await loadRota();
+      showAlert("Duty Rota Added", `"${title}" scheduled for ${dayFirst(newRota.date)}.`, "success");
+    } catch {
+      showAlert("Duty rota not saved", "Check your connection and try again.", "error");
+    } finally {
+      setSavingRota(false);
+    }
+  };
 
-    setRota((prev) => [entry, ...prev]);
-    setShowAddRotaModal(false);
-    setNewRota(emptyRotaForm);
-    showAlert("Duty Rota Added", `"${entry.title}" scheduled for ${dayFirst(entry.date)}.`, "success");
+  /**
+   * Take a duty off the rota: the Sabbath whose service was called off, or a
+   * line the desk wrote twice. Only the rota line goes — the property register
+   * and the ordinances are other records entirely.
+   */
+  const removeRota = async (entry: RotaEntry) => {
+    const result = await showAlert(
+      "Remove this duty?",
+      `"${entry.title}" on ${dayFirst(entry.date)} leaves the rota for good.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Remove",
+        cancelButtonText: "Keep",
+        confirmButtonColor: brand.ember,
+      },
+    );
+    if (!result.isConfirmed) return;
+    setRemovingRotaId(entry.id);
+    try {
+      const res = await apiFetch(`/duty-rota/${entry.id}/`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not remove it", data.detail || "Try again.", "error");
+        return;
+      }
+      setRota((prev) => prev.filter((row) => row.id !== entry.id));
+      showAlert("Duty removed", data.detail || "It is off the rota.", "success", {
+        toast: true,
+        timer: 3500,
+        showConfirmButton: false,
+      });
+    } catch {
+      showAlert("Network error", "Could not reach the server.", "error");
+    } finally {
+      setRemovingRotaId(null);
+    }
   };
 
   const inventoryEmpty = inventory.length === 0
@@ -614,7 +730,11 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
             </button>
           </div>
 
-          {rota.length === 0 ? (
+          {loadingRota ? (
+            <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
+              Loading the duty rota…
+            </div>
+          ) : rota.length === 0 ? (
             <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
               No duty rota has been scheduled yet.
             </div>
@@ -623,26 +743,48 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
               {rota.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between border-b border-sand-line pb-3">
-                    <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
-                      {item.dutyType}
-                    </span>
+                    {item.duty_type ? (
+                      <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
+                        {item.duty_type}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
                     <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
                   </div>
                   <h3 className="font-bold text-sm text-bark">{item.title}</h3>
                   <p className="text-xs text-moss flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-ember" />
-                    {item.shift}
+                    {item.shift || "Time not set"}
                   </p>
 
                   <div>
                     <p className="text-[11px] font-bold text-bark mb-1">Assigned Officers:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {item.assignedTeam.map((member, idx) => (
-                        <span key={idx} className="rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark">
-                          {member}
-                        </span>
-                      ))}
-                    </div>
+                    {item.assigned_team.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {item.assigned_team.map((member, idx) => (
+                          <span key={idx} className="rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark">
+                            {member}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-moss">Nobody rostered yet.</p>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end border-t border-sand-line/60 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => removeRota(item)}
+                      disabled={removingRotaId === item.id}
+                      aria-label={`Remove the duty "${item.title}"`}
+                      title="Remove this duty from the rota"
+                      className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      {removingRotaId === item.id ? "Removing…" : "Remove"}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1077,8 +1219,12 @@ export function DeaconateManager({ initialTab = "inventory" }: DeaconateManagerP
                 >
                   Cancel
                 </button>
-                <button type="submit" className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow">
-                  Save Duty Rota
+                <button
+                  type="submit"
+                  disabled={savingRota}
+                  className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
+                >
+                  {savingRota ? "Saving…" : "Save Duty Rota"}
                 </button>
               </div>
             </form>

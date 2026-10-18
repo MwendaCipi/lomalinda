@@ -44,7 +44,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -98,7 +98,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for, IMAGE_SUFFIX_PATTERN
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, DutyRotaSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for, IMAGE_SUFFIX_PATTERN
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -5599,6 +5599,49 @@ class TreasuryUnassignedView(APIView):
         ])
 
 
+class UnassignedPaymentView(APIView):
+    """One held paybill payment, taken off the desk.
+
+    DELETE removes a payment a treasurer decides is not the church's to keep
+    waiting on the ledger: the office's own test payment, a Safaricom message
+    delivered twice, money already returned to the sender by hand. No account
+    ever saw this money — the row is credited to nothing and receipted never —
+    so taking it off the ledger leaves no fund short, exactly as the Failed
+    tab's own removal does.
+
+    A row that has been assigned is not this desk's to remove: the review flag
+    is cleared, the gift is a real credit on a fund, and the ledger answers for
+    it (a treasurer reverses it there instead).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can remove unassigned payments.')
+        contribution = generics.get_object_or_404(Contribution, pk=pk)
+        if not contribution.needs_review or contribution.status != 'completed':
+            return Response(
+                {
+                    'detail': (
+                        'Only a payment still waiting for an account can be removed — '
+                        'an assigned gift stands on its fund.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # A split payment leaves one line per account, all sharing the
+        # payment's group; removing a single line would leave half the payment
+        # on the desk, so the whole payment goes at once.
+        from .treasury import ContributionSiblings
+
+        doomed = ContributionSiblings(contribution).rows()
+        removed = len(doomed)
+        Contribution.objects.filter(pk__in=[row.pk for row in doomed]).delete()
+        noun = 'payment' if removed == 1 else 'payments'
+        return Response({'detail': f'{removed} unassigned {noun} removed.'})
+
+
 class TreasuryFailedView(APIView):
     """Giving attempts that never arrived — counted, and removable.
 
@@ -8774,6 +8817,11 @@ class DailyWordView(APIView):
 
     @staticmethod
     def _row(row):
+        # The writer's own picture, where they have one: the thought is read as
+        # written by a person, and the church knows that person's face. An
+        # account without a picture answers with an empty line, which the
+        # readers draw nothing beside (a broken image is never the fallback).
+        profile = getattr(row.author, 'member_profile', None) if row.author_id else None
         return {
             'id': row.id,
             'date': row.date,
@@ -8781,13 +8829,14 @@ class DailyWordView(APIView):
             'author_name': (
                 row.author.get_full_name() or row.author.username
             ) if row.author_id else '',
+            'author_photo_url': getattr(profile, 'photo_url', '') or '',
             'updated_at': row.updated_at,
         }
 
     def get(self, request):
         today = timezone.localdate()
-        row = DailyWord.objects.filter(date=today).first()
-        recent = list(DailyWord.objects.select_related('author').order_by('-date')[:14])
+        row = DailyWord.objects.filter(date=today).select_related('author', 'author__member_profile').first()
+        recent = list(DailyWord.objects.select_related('author', 'author__member_profile').order_by('-date')[:14])
         return Response({
             'today': self._row(row) if row else None,
             'recent': [self._row(item) for item in recent],
@@ -9715,18 +9764,32 @@ class ExpenditureDetailView(APIView):
 
 
 def can_manage_deaconate(user):
-    """Who keeps the deaconate property register: admin, clerks and elders.
+    """Who keeps the deaconate's desks: the deacons themselves, and the office.
 
     The deaconate desk has no role code of its own (``deacon`` is not in
-    ``roles.ROLE_DEFINITIONS``), so its register is kept by the same officers
-    who run the rest of the church office, plus staff accounts.
+    ``roles.ROLE_DEFINITIONS``), so its membership and its leadership are read
+    from the department itself: the roll is the deacons and deaconesses the
+    church has seated (``DepartmentMembership``), and the board is its
+    Leader/Assistant rows (``can_manage_department``). Both keep the property
+    register and the duty rota — the desk that carries the church's furniture
+    is the desk that records where it went — and the officers who run the rest
+    of the church office, plus staff accounts, keep them as well.
+
+    A plain member reaches neither: the register is the church's property, not
+    the congregation's to edit.
     """
     if not user or not user.is_authenticated:
         return False
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('admin', 'clerk', 'elder'))
+    if profile and profile.has_role('admin', 'clerk', 'elder', 'pastor'):
+        return True
+    if can_manage_department(user, 'deaconate'):
+        return True
+    return DepartmentMembership.objects.filter(
+        member=user, department='deaconate',
+    ).exists()
 
 
 class InventoryItemListCreateView(APIView):
@@ -9786,6 +9849,61 @@ class InventoryMovementCreateView(APIView):
         payload = InventoryItemSerializer(item).data
         payload['movement'] = InventoryMovementSerializer(movement).data
         return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class DutyRotaView(APIView):
+    """The deaconate's duty rota: read it, schedule a line, take one off.
+
+    The rota was the one desk page still living in the browser: the deaconate
+    kept its duties in an array, so a shift scheduled for next Sabbath was
+    gone on the next reload. These are the church's rows instead, read by the
+    same people who keep the property register (`can_manage_deaconate`).
+
+    ``GET`` hands the rota over in date order, the earliest duty first, and
+    accepts ``from``/``to`` (YYYY-MM-DD) so a desk can read one month of it.
+    ``POST`` schedules a line, and ``DELETE`` — on the detail path — takes one
+    off, for the Sabbath whose rota was cancelled or written twice.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers and the deaconate can read the duty rota.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        rota = DutyRota.objects.select_related('created_by').all()
+        start = str(request.query_params.get('from') or '').strip()
+        end = str(request.query_params.get('to') or '').strip()
+        if start:
+            rota = rota.filter(duty_date__gte=start)
+        if end:
+            rota = rota.filter(duty_date__lte=end)
+        return Response(DutyRotaSerializer(rota, many=True).data)
+
+    def post(self, request):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers and the deaconate can schedule a duty rota.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        serializer = DutyRotaSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        entry = serializer.save(created_by=request.user)
+        return Response(DutyRotaSerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    def delete(self, request, pk=None):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers and the deaconate can remove a duty rota.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        entry = generics.get_object_or_404(DutyRota, pk=pk)
+        title = entry.title
+        entry.delete()
+        return Response({'detail': f'"{title}" is off the duty rota.'})
 
 
 # ── Departments ──────────────────────────────────────────────────────────────
@@ -9923,6 +10041,7 @@ DEPARTMENT_LEAD_ROLE = {
     'chaplaincy': 'chaplaincy',
     'health': 'health_leader',
     'welfare': 'welfare_leader',
+    'education': 'education_leader',
     'development': 'development',
     'dorcas': 'dorcas_leader',
 }
@@ -11593,7 +11712,7 @@ def department_account(user, code):
     return accounts[0] if accounts else None
 
 
-LCB_DEPARTMENT_ACCESS_CODES = {'awm', 'eldership', 'clerkship', 'deaconate'}
+LCB_DEPARTMENT_ACCESS_CODES = {'awm', 'eldership', 'clerkship', 'deaconate', 'education'}
 #: The desks that read the Msamaria Mwema fund beside their own: the
 #: deaconate serves its welfare work, and the elders answer for the fund.
 MSAMARIA_DEPARTMENT_ACCESS_CODES = {'eldership', 'deaconate'}
@@ -11623,12 +11742,16 @@ def department_accounts(user, code):
         - development: Church Plot and Church Development accounts
         - clerkship: LCB (Local Church Budget), Msamaria Mwema and Evangelism
         - dorcas: Nyakundis / Dorcas account
+        - education: LCB (Local Church Budget) — the ministry's work is the
+          church's own budget line, not an offering of its own
         - personal_ministries: Evangelism
         - children, youth, pathfinders: Department fund + Camporee / Campout accounts
         - Other departments: Their linked treasury account
     - The camp funds are kept off the Ambassadors and AYM desks: neither
       ministry raises a camp offering, so each reads its own fund alone.
-    - LCB is included only for AWM, Eldership, Clerkship and Deaconate.
+    - LCB is included only for AWM, Eldership, Clerkship, Deaconate and
+      Education, so an Education desk reads the church budget, raises its
+      funding asks against it and can never reach another ministry's fund.
     - Msamaria Mwema is included only for Eldership and Deaconate.
     - The clerk keeps the church's own books, so the Clerkship desk reads the
       church budget with the welfare and outreach funds beside it — LCB,

@@ -2474,6 +2474,38 @@ class InventoryMovement(models.Model):
     def __str__(self):
         return f"{self.get_action_display()}: {self.item.name} from/for {self.moved_by}"
 
+
+class DutyRota(models.Model):
+    """One line of the deacons' and deaconesses' duty rota.
+
+    The deaconate desk held its rota in a browser array, so a duty scheduled
+    for next Sabbath was gone with the next reload: these rows are the
+    church's record of who serves when.
+
+    The officers on a line are names rather than accounts: the desk rosters
+    the team it actually has, and a deacon serving a shift need not hold an
+    account in the app at all.
+    """
+
+    title = models.CharField(max_length=200)
+    duty_date = models.DateField()
+    shift = models.CharField(max_length=80, blank=True, default='')
+    duty_type = models.CharField(max_length=80, blank=True, default='')
+    #: The officers named on the line, in the order the desk listed them.
+    assigned_team = models.JSONField(default=list, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='duty_rota_entries',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['duty_date', 'id']
+
+    def __str__(self):
+        return f"{self.title} — {self.duty_date:%d/%m/%Y}"
+
+
 class ProfileChangeRequest(models.Model):
     """A proposed profile edit awaiting the member's own approval.
 

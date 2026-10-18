@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserPlus, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -472,8 +472,17 @@ function AdministrationContent() {
           label: "Deaconate Ministry",
           icon: <Package size={16} aria-hidden="true" />,
           description: "Church property, the duty rota, the team and the ordinances calendar.",
+          // One card per page the desk holds, the same shape every other desk
+          // reads on a phone: the team, the property register, the rota, the
+          // ordinances and the desk's accounts. A single card for the whole
+          // ministry left the rota and the register with no door of their own
+          // — the rail names them on a wide screen, and a phone has no rail.
           cards: [
-            { icon: <Package size={20} aria-hidden="true" />, label: "Deaconate Ministry", description: "Church property inventory, duty rota, deaconate roster and ordinances calendar.", href: "/administration?tab=inventory" },
+            { icon: <UserCheck size={20} aria-hidden="true" />, label: "Deaconate Team", description: "The deacons and deaconesses who serve the church's property, duty and ordinances.", href: "/administration?tab=deaconate-members" },
+            { icon: <Package size={20} aria-hidden="true" />, label: "Church Property", description: "The church's property register, and the movements of each item.", href: "/administration?tab=inventory" },
+            { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Duty Rota", description: "The deacons' and deaconesses' duty rosters for the church's services.", href: "/administration?tab=deaconate-rota" },
+            { icon: <Calendar size={20} aria-hidden="true" />, label: "Deaconate Calendar", description: "Communion services, foot washing and the ordinances the desk keeps.", href: "/administration?tab=deaconate-calendar" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The funds the deaconate's work is answered for.", href: "/administration?tab=deaconate-funding" },
           ],
         }
       : null,

@@ -3031,12 +3031,12 @@ export function DepartmentAccountsPanel({
 
         // Initial default account filter:
         // The desks that read more than their own fund — AWM and Development,
-        // the Eldership, Deaconate and Clerkship desks, whose strips carry LCB
-        // and the welfare and outreach funds beside their own, and the
-        // Treasury desk, which keeps every account — are selected by default
-        // ("all").
+        // the Eldership, Deaconate, Clerkship and Education desks, whose strips
+        // carry LCB and the welfare and outreach funds beside their own, and
+        // the Treasury desk, which keeps every account — are selected by
+        // default ("all").
         // For other departments, their primary account is selected by default, or "all".
-        if (["awm", "development", "eldership", "deaconate", "clerkship", "treasury"].includes(department.code)) {
+        if (["awm", "development", "eldership", "deaconate", "clerkship", "education", "treasury"].includes(department.code)) {
           setAccountFilter("all");
         } else if (accList.length > 0) {
           const primary = accList.find((a) => a.is_primary) ?? accList[0];

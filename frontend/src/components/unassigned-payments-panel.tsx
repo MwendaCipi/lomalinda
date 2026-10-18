@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, Mail, MessageSquare, Phone, X } from "lucide-react";
+import { AlertTriangle, Check, Mail, MessageSquare, Phone, Trash2, X } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "@/components/combobox-popover";
 import { ContactModal, waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
+import { UNASSIGNED_CHANGED_EVENT } from "@/components/treasury-nav";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -39,6 +41,11 @@ type AccountOption = {
   label: string;
   department_id: number | null;
 };
+
+/** A held payment's amount as the desk reads it — the row's own words. */
+function amountOf(row: HeldPayment): string {
+  return `KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
+}
 
 /** dd/mm/yyyy from an ISO timestamp — the desk's own date reading. */
 function dmy(iso: string): string {
@@ -78,7 +85,8 @@ function renderReceiptTemplate(
  * row no longer carries the assignment itself: **Assign** opens a modal with
  * the account combo, the giver's contact slots and the receipt message, so one
  * press both files the gift and thanks the giver; **Contact** opens the
- * church's standard contact sheet for the payer.
+ * church's standard contact sheet for the payer; **Delete** takes a payment
+ * the church is not going to keep off the desk altogether — see `removeRow`.
  */
 export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => void }) {
   const [rows, setRows] = useState<HeldPayment[]>([]);
@@ -120,6 +128,52 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
   const dropRow = (row: HeldPayment) => {
     setRows((prev) => prev.filter((r) => r.id !== row.id));
     onAssigned?.();
+    // The strip that leads here is drawn above this desk and counts its rows
+    // from its own read: tell it the queue moved, or its badge keeps counting
+    // a payment the desk has already filed or removed.
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(UNASSIGNED_CHANGED_EVENT));
+  };
+
+  /**
+   * Take a payment off the desk for good: the office's own test row, a
+   * Safaricom message delivered twice, money already returned to the sender by
+   * hand. The row is credited to no account and receipted never, so no fund is
+   * short by removing it — but it does leave the church's ledger, so the press
+   * is confirmed first and says so.
+   */
+  const removeRow = async (row: HeldPayment) => {
+    const amount = `KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
+    const result = await showAlert(
+      "Remove this payment?",
+      `${amount} · ${row.mpesa_receipt_number || "no receipt number"}. It is credited to no account and removes the row from the church's ledger for good.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Remove",
+        cancelButtonText: "Keep",
+        confirmButtonColor: brand.ember,
+      },
+    );
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/unassigned/${row.id}/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not remove", data.detail || "Try again.", "error");
+        return;
+      }
+      dropRow(row);
+      showAlert("Payment removed", data.detail || "It is off the unassigned desk.", "success", {
+        toast: true,
+        timer: 3500,
+        showConfirmButton: false,
+      });
+    } catch {
+      showAlert("Network error", "Could not reach the server.", "error");
+    }
   };
 
   if (!loading && rows.length === 0) {
@@ -146,9 +200,7 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
             <div key={row.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-bark">
-                    KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                  </p>
+                  <p className="text-sm font-bold text-bark">{amountOf(row)}</p>
                   <p className="mt-0.5 text-xs text-moss">
                     Typed: <span className="font-semibold text-bark">{row.typed_reference || "(blank)"}</span>
                   </p>
@@ -178,6 +230,15 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
                 >
                   Contact
                 </button>
+                <button
+                  type="button"
+                  onClick={() => removeRow(row)}
+                  aria-label={`Remove the payment of ${amountOf(row)}`}
+                  title="Remove this payment"
+                  className="rounded-xl border border-sand-line bg-white px-3 py-2 text-moss transition hover:border-red-300 hover:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
             </div>
           ))}
@@ -199,9 +260,7 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-sand-line/60 align-middle hover:bg-sand">
-                  <td className="py-2.5 pr-3 text-xs font-semibold text-bark">
-                    KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
-                  </td>
+                  <td className="py-2.5 pr-3 text-xs font-semibold text-bark">{amountOf(row)}</td>
                   <td className="py-2.5 pr-3 text-xs text-bark">
                     <span className="inline-flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
@@ -228,6 +287,15 @@ export function UnassignedPaymentsPanel({ onAssigned }: { onAssigned?: () => voi
                         className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
                       >
                         Contact
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeRow(row)}
+                        aria-label={`Remove the payment of ${amountOf(row)}`}
+                        title="Remove this payment"
+                        className="rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </div>
                   </td>
