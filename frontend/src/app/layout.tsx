@@ -14,8 +14,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Pinch-zoom stays available (WCAG 1.4.4) — never lock maximumScale on an
   // accessibility-forward app.
-  // Let the tab bar extend into the gesture bar and pad with env(safe-area-inset-bottom)
-  viewportFit: "cover",
+  // Keep Android's Back/Home/Recents area outside the web viewport. With
+  // `viewport-fit=cover`, the system controls are composited over the page,
+  // which makes their background appear transparent in the installed app.
 };
 
 export const metadata: Metadata = {

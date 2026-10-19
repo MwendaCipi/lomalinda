@@ -1394,8 +1394,9 @@ def generate_contribution_thermal_receipt_pdf(
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
     issued_eat = _to_eat(issued_at)
     line_out(f"Issued {issued_eat.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
-    # The treasurer who issued the slip signs its foot, centered.
-    y = _thermal_signatures(c, y - 8, WIDTH, margin, signatures)
+    # Leave a distinct visual break after the verse and issue details before
+    # the treasurer's signature block begins.
+    y = _thermal_signatures(c, y - 6 * mm, WIDTH, margin, signatures)
 
     c.showPage()
     c.save()
@@ -1496,7 +1497,8 @@ def generate_in_kind_thermal_receipt_pdf(
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
     issued_eat = _to_eat(issued_at)
     line_out(f"Issued {issued_eat.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
-    y = _thermal_signatures(c, y - 8, WIDTH, margin, signatures)
+    # Match the cash receipt's breathing room before the signature block.
+    y = _thermal_signatures(c, y - 6 * mm, WIDTH, margin, signatures)
 
     c.showPage()
     c.save()
