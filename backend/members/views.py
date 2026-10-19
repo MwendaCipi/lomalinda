@@ -8567,9 +8567,15 @@ class MemberNameSearchView(APIView):
             Q(first_name__icontains=query)
             | Q(last_name__icontains=query)
             | Q(username__icontains=query)
-        ).order_by('first_name', 'last_name', 'username')[:8]
+            | Q(member_profile__phone_number__icontains=query)
+        ).select_related('member_profile').order_by('first_name', 'last_name', 'username')[:8]
         return Response({'matches': [
-            {'id': user.id, 'name': (user.get_full_name() or user.username).strip()}
+            {
+                'id': user.id,
+                'name': (user.get_full_name() or user.username).strip(),
+                'phone': getattr(getattr(user, 'member_profile', None), 'phone_number', '') or '',
+                'gender': getattr(getattr(user, 'member_profile', None), 'gender', '') or '',
+            }
             for user in matches
         ]})
 
@@ -10152,10 +10158,18 @@ class DutyRotaView(APIView):
         rota = DutyRota.objects.select_related('created_by').all()
         start = str(request.query_params.get('from') or '').strip()
         end = str(request.query_params.get('to') or '').strip()
+        q = str(request.query_params.get('q') or request.query_params.get('query') or '').strip()
         if start:
             rota = rota.filter(duty_date__gte=start)
         if end:
             rota = rota.filter(duty_date__lte=end)
+        if q:
+            rota = rota.filter(
+                Q(title__icontains=q)
+                | Q(duty_type__icontains=q)
+                | Q(shift__icontains=q)
+                | Q(notes__icontains=q)
+            )
         return Response(DutyRotaSerializer(rota, many=True).data)
 
     def post(self, request):
@@ -10200,6 +10214,58 @@ class DutyRotaView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         entry = serializer.save()
         return Response(DutyRotaSerializer(entry).data, status=status.HTTP_200_OK)
+
+
+class DutyRotaPdfView(APIView):
+    """Generate and return an official aggregated PDF of the duty rota for a period."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers and the deaconate can export the duty rota.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            settings_obj = ChurchSettings.objects.first()
+            church_name = settings_obj.church_name if settings_obj else "SDA Church"
+        except Exception:
+            church_name = "SDA Church"
+
+        rota = DutyRota.objects.select_related('created_by').all()
+        start = str(request.query_params.get('from') or '').strip()
+        end = str(request.query_params.get('to') or '').strip()
+        q = str(request.query_params.get('q') or request.query_params.get('query') or '').strip()
+
+        if start:
+            rota = rota.filter(duty_date__gte=start)
+        if end:
+            rota = rota.filter(duty_date__lte=end)
+        if q:
+            rota = rota.filter(
+                Q(title__icontains=q)
+                | Q(duty_type__icontains=q)
+                | Q(shift__icontains=q)
+                | Q(notes__icontains=q)
+                | Q(assigned_team__icontains=q)
+            )
+
+        entries = DutyRotaSerializer(rota, many=True).data
+
+        from .pdf_generator import generate_duty_rota_pdf
+        pdf_bytes = generate_duty_rota_pdf(
+            church_name=church_name,
+            rota_entries=entries,
+            start_date=start or None,
+            end_date=end or None,
+            search=q or None,
+        )
+        tag = f"_{start}_to_{end}" if start and end else f"_{start or end}" if start or end else ""
+        filename = f"Duty_Rota{tag}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
 
 
 class DutyRotaPeopleView(APIView):

@@ -3,9 +3,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { kenyaCounties } from "@/config/kenya-counties";
-import { getPushState, PushSupport } from "@/lib/push";
-import { useAccessibility } from "@/context/accessibility-context";
-import type { ThemeChoice } from "@/lib/theme";
 import { offlineFetch } from "@/lib/offline-fetch";
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { patchCachedMe, useHeaderData } from "@/hooks/use-header-data";
@@ -31,7 +28,6 @@ const RELATIONSHIP_CHOICES = [
 ];
 
 export default function MemberPage() {
-  const { theme, setTheme } = useAccessibility();
   // The header's identity read, reused rather than fetched twice: the join
   // picker needs the roles to know whether Treasury is theirs to knock on.
   const { me: headerMe } = useHeaderData();
@@ -42,9 +38,6 @@ export default function MemberPage() {
   const [token] = useState(() => typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
   const [detailsMessage, setDetailsMessage] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
-  const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
-  const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
-  const [prefMessage, setPrefMessage] = useState("");
 
   // The contact line: the member's own to change, same validation the
   // office edit gets — no appointment needed to say the number moved. The
@@ -111,7 +104,6 @@ export default function MemberPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) {
-          setAnnouncePrefs({ email: !!data.announce_email, push: !!data.announce_push });
           setPhone(data.phone_number || "");
           setRelationships(Array.isArray(data.declared_relationships) ? data.declared_relationships : []);
           setDisplayName([data.first_name, data.last_name].filter(Boolean).join(" ") || data.username || "");
@@ -132,7 +124,6 @@ export default function MemberPage() {
         }
       })
       .catch(() => {});
-    getPushState().then(setPushSupport).catch(() => setPushSupport(null));
   }, [token]);
 
   useEffect(() => {
@@ -412,24 +403,6 @@ export default function MemberPage() {
     }
   }
 
-  async function saveAnnouncePref(field: "email" | "push", value: boolean) {
-    if (!announcePrefs) return;
-    const previous = announcePrefs;
-    setAnnouncePrefs({ ...announcePrefs, [field]: value });
-    setPrefMessage("");
-    try {
-      const response = await fetch(`${API_URL}/api/members/me/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(field === "email" ? { announce_email: value } : { announce_push: value }),
-      });
-      if (!response.ok) throw new Error();
-      setPrefMessage("Preference saved.");
-    } catch {
-      setAnnouncePrefs(previous);
-      showAlert("Not saved", "Your preference could not be saved. Try again.", "error");
-    }
-  }
 
   useEffect(() => {
     if (!token) return;
@@ -899,81 +872,6 @@ export default function MemberPage() {
             </form>
           )}
 
-          <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
-            <h2 className="text-xl font-semibold">Appearance</h2>
-            <p className="mt-2 text-sm leading-6 text-moss">
-              How the app is lit. <strong>System</strong> follows your device and keeps following it
-              as the device switches between light and dark; Light and Dark hold the app still
-              whatever the device does. Resetting the display defaults returns you to System.
-            </p>
-            <div className="mt-5 grid grid-cols-3 gap-2 sm:max-w-md">
-              {(["system", "light", "dark"] as ThemeChoice[]).map((choice) => (
-                <button
-                  key={choice}
-                  type="button"
-                  onClick={() => setTheme(choice)}
-                  aria-pressed={theme === choice}
-                  className={`rounded-xl py-2 text-sm font-semibold capitalize transition ${
-                    theme === choice
-                      ? "bg-bark text-white shadow-sm"
-                      : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
-                  }`}
-                >
-                  {choice}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {announcePrefs && (
-            <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-line">
-              <h2 className="text-xl font-semibold">Notification preferences</h2>
-              <p className="mt-2 text-sm leading-6 text-moss">
-                Choose how announcements reach you. Requests waiting for the office always notify, whatever you switch off here.
-              </p>
-              <div className="mt-5 space-y-3">
-                <label className="flex items-center justify-between gap-4 rounded-2xl bg-sand px-4 py-3 text-sm font-medium cursor-pointer">
-                  <span>
-                    Announcements by email
-                    <span className="block text-xs font-normal text-moss">The broadcast letters, not receipts. Those always come.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={announcePrefs.email}
-                    onChange={(e) => saveAnnouncePref("email", e.target.checked)}
-                    className="h-4 w-4 shrink-0 accent-sage"
-                  />
-                </label>
-                {pushSupport?.supported ? (
-                  <label className="flex items-center justify-between gap-4 rounded-2xl bg-sand px-4 py-3 text-sm font-medium cursor-pointer">
-                    <span>
-                      Announcements as notifications
-                      <span className="block text-xs font-normal text-moss">A notification on this device when an announcement is posted.</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={announcePrefs.push}
-                      onChange={(e) => saveAnnouncePref("push", e.target.checked)}
-                      className="h-4 w-4 shrink-0 accent-sage"
-                    />
-                  </label>
-                ) : (
-                  <div className="rounded-2xl bg-sand px-4 py-3 text-sm font-medium">
-                    Announcements as notifications
-                    <span className="mt-0.5 block text-xs font-normal text-moss">
-                      Not available in this browser. On iPhone, add the app to your Home Screen first.
-                    </span>
-                  </div>
-                )}
-              </div>
-              {pushSupport?.supported && !pushSupport.enabled && announcePrefs.push && (
-                <p className="mt-3 text-xs text-moss">
-                  To receive them on <em>this</em> device, also tap <strong>Turn on notifications</strong> in the bell at the top of the page. That grants the browser permission.
-                </p>
-              )}
-              {prefMessage && <p className="mt-3 text-sm text-moss">{prefMessage}</p>}
-            </section>
-          )}
         </div>
       </div>
 

@@ -11,10 +11,13 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
+  FileDown,
   Images,
   Pencil,
   Plus,
+  Printer,
   Search,
+  Share2,
   Trash2,
   X,
 } from "lucide-react";
@@ -316,6 +319,15 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
   // search neither asks again nor reports that nobody matched.
   const [pickedOfficerName, setPickedOfficerName] = useState<string | null>(null);
 
+  // Rota filtering, PDF download and sharing
+  const [rotaFromDate, setRotaFromDate] = useState("");
+  const [rotaToDate, setRotaToDate] = useState("");
+  const [rotaSearchQuery, setRotaSearchQuery] = useState("");
+  const [downloadingRotaPdf, setDownloadingRotaPdf] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareTarget, setShareTarget] = useState<RotaEntry | null>(null);
+  const [shareChannels, setShareChannels] = useState({ whatsapp: true, sms: true, email: true });
+
   // Moments: the desk documents a day, and it goes out on the wall the
   // Fellowship strip opens. Pictures are files; video is a link to where the
   // footage already lives, because the church's storage holds stills.
@@ -360,9 +372,14 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
    * below settles what it fetched from the promise's own callback, the way the
    * shell reads the day's word, rather than writing state while the effect runs.
    */
-  const fetchRota = async (): Promise<RotaEntry[] | null> => {
+  const fetchRota = async (from = rotaFromDate, to = rotaToDate, q = rotaSearchQuery): Promise<RotaEntry[] | null> => {
     try {
-      const res = await apiFetch("/duty-rota/");
+      const params = new URLSearchParams();
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      if (q.trim()) params.set("q", q.trim());
+      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const res = await apiFetch(`/duty-rota/${queryStr}`);
       if (!res.ok) return null;
       return (await res.json()) as RotaEntry[];
     } catch {
@@ -381,24 +398,165 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
     }
   };
 
-  // The rota is read when its tab is opened, not with the whole desk: the
-  // deaconate console mounts on every one of its pages, and the register is
-  // what most visits are here for.
+  // The rota is read when its tab is opened or when date range/search filters change.
   useEffect(() => {
     if (activeTab !== "rota") return;
     let alive = true;
-    void fetchRota().then((rows) => {
-      if (!alive) return;
-      setRota(rows ?? []);
-      setLoadingRota(false);
-      if (rows === null) {
-        showAlert("Could not load the duty rota", "Check your connection and try again.", "error");
-      }
-    });
+    const timer = setTimeout(() => {
+      fetchRota(rotaFromDate, rotaToDate, rotaSearchQuery).then((rows) => {
+        if (!alive) return;
+        setRota(rows ?? []);
+        setLoadingRota(false);
+        if (rows === null) {
+          showAlert("Could not load the duty rota", "Check your connection and try again.", "error");
+        }
+      });
+    }, 200);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [activeTab]);
+  }, [activeTab, rotaFromDate, rotaToDate, rotaSearchQuery]);
+
+  const filteredRota = useMemo(() => {
+    if (!rotaSearchQuery.trim()) return rota;
+    const q = rotaSearchQuery.toLowerCase().trim();
+    return rota.filter((item) => {
+      const matchTitle = (item.title || "").toLowerCase().includes(q);
+      const matchType = (item.duty_type || "").toLowerCase().includes(q);
+      const matchShift = (item.shift || "").toLowerCase().includes(q);
+      const matchTeam = item.assigned_team.some((entry) => {
+        const officer = normalizeOfficer(entry);
+        return (
+          officer.name.toLowerCase().includes(q) ||
+          officer.duty.toLowerCase().includes(q) ||
+          officer.role.toLowerCase().includes(q) ||
+          officer.phone.toLowerCase().includes(q)
+        );
+      });
+      return matchTitle || matchType || matchShift || matchTeam;
+    });
+  }, [rota, rotaSearchQuery]);
+
+  const downloadRotaPdf = async () => {
+    setDownloadingRotaPdf(true);
+    try {
+      const params = new URLSearchParams();
+      if (rotaFromDate) params.set("from", rotaFromDate);
+      if (rotaToDate) params.set("to", rotaToDate);
+      if (rotaSearchQuery.trim()) params.set("q", rotaSearchQuery.trim());
+      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const res = await apiFetch(`/duty-rota/pdf/${queryStr}`);
+      if (!res.ok) {
+        throw new Error("Failed to download PDF");
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      const tag = rotaFromDate && rotaToDate ? `_${rotaFromDate}_to_${rotaToDate}` : rotaFromDate ? `_from_${rotaFromDate}` : "";
+      a.download = `Duty_Rota${tag}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+      showAlert("Rota PDF Downloaded", "The duty rota document has been saved to your downloads.", "success");
+    } catch {
+      showAlert("Download Failed", "Could not generate or download the rota PDF.", "error");
+    } finally {
+      setDownloadingRotaPdf(false);
+    }
+  };
+
+  const printRotaPdf = async (item?: RotaEntry) => {
+    try {
+      const params = new URLSearchParams();
+      if (item) {
+        params.set("from", item.date);
+        params.set("to", item.date);
+        params.set("q", item.title || "");
+      } else {
+        if (rotaFromDate) params.set("from", rotaFromDate);
+        if (rotaToDate) params.set("to", rotaToDate);
+        if (rotaSearchQuery.trim()) params.set("q", rotaSearchQuery.trim());
+      }
+      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const res = await apiFetch(`/duty-rota/pdf/${queryStr}`);
+      if (!res.ok) throw new Error("Could not fetch PDF for printing");
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const win = window.open(blobUrl, "_blank");
+      if (win) {
+        win.focus();
+      } else {
+        window.location.href = blobUrl;
+      }
+    } catch {
+      showAlert("Print Failed", "Could not prepare the duty rota for printing.", "error");
+    }
+  };
+
+  const openShareModal = (target: RotaEntry | null) => {
+    setShareTarget(target);
+    setShowShareModal(true);
+  };
+
+  const shareContent = useMemo(() => {
+    if (shareTarget) {
+      const lines = [
+        `📋 *SDA Church - Duty Rota*`,
+        `*Duty:* ${shareTarget.title || "Duty"}`,
+        `*Date:* ${dayFirst(shareTarget.date)}`,
+        shareTarget.shift ? `*Shift/Time:* ${shareTarget.shift}` : "",
+        shareTarget.duty_type ? `*Type:* ${shareTarget.duty_type}` : "",
+        "",
+        `*Assigned Team:*`,
+        ...shareTarget.assigned_team.map((entry) => {
+          const off = normalizeOfficer(entry);
+          const details = [off.duty, off.role, off.phone].filter(Boolean).join(" · ");
+          return `• ${off.name}${details ? ` (${details})` : ""}`;
+        }),
+      ].filter(Boolean);
+      return {
+        subject: `Duty Rota: ${shareTarget.title || "Duty"} (${dayFirst(shareTarget.date)})`,
+        text: lines.join("\n"),
+      };
+    } else {
+      const periodLabel = rotaFromDate && rotaToDate ? ` (${dayFirst(rotaFromDate)} to ${dayFirst(rotaToDate)})` : "";
+      const lines = [
+        `📋 *SDA Church - Duty Rota Schedule${periodLabel}*`,
+        `Total Duties: ${filteredRota.length}`,
+        "",
+        ...filteredRota.slice(0, 15).map((item) => {
+          const teamNames = item.assigned_team.map((e) => normalizeOfficer(e).name).join(", ");
+          return `• ${dayFirst(item.date)} - ${item.title}${item.shift ? ` (${item.shift})` : ""}: ${teamNames || "Unassigned"}`;
+        }),
+        filteredRota.length > 15 ? `...and ${filteredRota.length - 15} more duties.` : "",
+      ].filter(Boolean);
+      return {
+        subject: `Duty Rota Schedule${periodLabel}`,
+        text: lines.join("\n"),
+      };
+    }
+  }, [shareTarget, filteredRota, rotaFromDate, rotaToDate]);
+
+  const executeShare = () => {
+    const { subject, text } = shareContent;
+    if (shareChannels.whatsapp) {
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank");
+    }
+    if (shareChannels.sms) {
+      window.open(`sms:?body=${encodeURIComponent(text)}`);
+    }
+    if (shareChannels.email) {
+      window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`);
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      void navigator.clipboard.writeText(text);
+    }
+    setShowShareModal(false);
+    showAlert("Duty Rota Shared", "The message has been copied to your clipboard and your chosen channels opened.", "success");
+  };
 
   // The Add Officer modal's name field searches the roll as the desk types,
   // debounced, and asks for nothing until there are two characters to ask
@@ -457,8 +615,56 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
     };
   }, [activeTab]);
 
-  const { setHeaderRightAction } = usePageHeader();
+  const { setHeaderRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
   const router = useRouter();
+
+  useEffect(() => {
+    if (activeTab !== "rota") return;
+    setHeadingFirst(true);
+    setCustomHeader({
+      label: "Duty Rota",
+      description: "Sabbath & midweek service duty rosters, communion preparation team assignments.",
+    });
+    setHeaderRightAction(
+      <div className="flex w-full flex-wrap sm:flex-nowrap items-center gap-2 sm:w-auto">
+        <div className="relative min-w-0 flex-1 sm:w-52">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
+          <input
+            type="text"
+            placeholder="Search rota..."
+            value={rotaSearchQuery}
+            onChange={(e) => setRotaSearchQuery(e.target.value)}
+            className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
+          />
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input
+            type="date"
+            value={rotaFromDate}
+            onChange={(e) => setRotaFromDate(e.target.value)}
+            aria-label="From date"
+            title="From date"
+            className="h-8 rounded-full border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+          />
+          <span className="text-xs text-moss">to</span>
+          <input
+            type="date"
+            value={rotaToDate}
+            onChange={(e) => setRotaToDate(e.target.value)}
+            aria-label="To date"
+            title="To date"
+            className="h-8 rounded-full border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+          />
+        </div>
+      </div>
+    );
+    return () => {
+      setCustomHeader(null);
+      setHeadingFirst(false);
+      setHeaderRightAction(null);
+    };
+  }, [activeTab, rotaFromDate, rotaToDate, rotaSearchQuery, setHeaderRightAction, setCustomHeader, setHeadingFirst]);
+
   useEffect(() => {
     if (activeTab !== "inventory") return;
     // The two filters, written once and shown twice: inside the phone's
@@ -1052,121 +1258,167 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
 
       {/* ── TAB: DUTY ROTA — scheduled, edited and rostered here ── */}
       {activeTab === "rota" && (
-        <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {/* Named by the strip above on a wide screen. */}
-            <div className="md:hidden">
-              <h2 className="text-base font-bold text-bark">Deacon &amp; Deaconess Duty Rota</h2>
-              <p className="text-xs text-moss">Sabbath &amp; midweek service duty rosters, communion preparation team assignments.</p>
-            </div>
-            <button
-              onClick={() => {
-                // A brand-new line starts blank: a line opened for editing
-                // earlier must never turn "schedule a duty" into an edit of
-                // the last one the desk looked at.
-                setEditingRotaId(null);
-                setNewRota(emptyRotaForm);
-                setShowAddRotaModal(true);
-              }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow transition hover:bg-bark-950"
-            >
-              <Plus className="h-4 w-4" />
-              Schedule Duty Rota
-            </button>
+        <>
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4">
+            {loadingRota ? (
+              <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
+                Loading the duty rota…
+              </div>
+            ) : filteredRota.length === 0 ? (
+              <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
+                {rota.length === 0 ? "No duty rota has been scheduled yet." : "No duty rota entries match your filters."}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredRota.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between border-b border-sand-line pb-3">
+                      {item.duty_type ? (
+                        <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
+                          {item.duty_type}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
+                    </div>
+                    <h3 className="font-bold text-sm text-bark">{item.title || "Duty"}</h3>
+                    <p className="text-xs text-moss flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-ember" />
+                      {item.shift || "Time not set"}
+                    </p>
+
+                    <div>
+                      <p className="text-[11px] font-bold text-bark mb-1">Assigned Officers:</p>
+                      {item.assigned_team.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {item.assigned_team.map((entry, idx) => {
+                            const officer = normalizeOfficer(entry);
+                            const details = [officer.duty, officer.role, officer.phone].filter(Boolean).join(" · ");
+                            return (
+                              <span
+                                key={`${officer.name}-${idx}`}
+                                title={
+                                  officer.member_id
+                                    ? `${details || officer.name} · reminded on their account`
+                                    : details || officer.name
+                                }
+                                className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark"
+                              >
+                                {officer.member_id && (
+                                  <Bell
+                                    className="h-3 w-3 shrink-0 text-ember"
+                                    aria-label="Reminders go to this officer's account"
+                                  />
+                                )}
+                                {officer.name}
+                                {officer.phone && (
+                                  <span className="ml-1 font-normal text-moss">{officer.phone}</span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-moss">Nobody rostered yet.</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-sand-line/60 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => openShareModal(item)}
+                        aria-label={`Share ${item.title}`}
+                        title="Share this duty via WhatsApp, SMS, or Email"
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                      >
+                        <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void printRotaPdf(item)}
+                        aria-label={`Print ${item.title}`}
+                        title="Print this duty entry"
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                      >
+                        <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+                        Print
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openRota(item)}
+                        aria-label={`Edit the duty \"${item.title}\"`}
+                        title="Edit this duty and its officers"
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeRota(item)}
+                        disabled={removingRotaId === item.id}
+                        aria-label={`Remove the duty "${item.title}"`}
+                        title="Remove this duty from the rota"
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        {removingRotaId === item.id ? "Removing…" : "Remove"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {loadingRota ? (
-            <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
-              Loading the duty rota…
+          {/* ── Fixed Bottom Bar for Duty Rota ── */}
+          <div className="shrink-0 border-t border-sand-line bg-white p-3 sm:px-6 sm:py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-20">
+            <p className="hidden text-[11px] text-moss sm:block">
+              {filteredRota.length} of {rota.length} {rota.length === 1 ? "duty" : "duties"} scheduled
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => openShareModal(null)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+              >
+                <Share2 className="h-3.5 w-3.5 text-ember" />
+                Share
+              </button>
+              <button
+                type="button"
+                onClick={() => void printRotaPdf()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+              >
+                <Printer className="h-3.5 w-3.5 text-ember" />
+                Print
+              </button>
+              <button
+                type="button"
+                disabled={downloadingRotaPdf}
+                onClick={() => void downloadRotaPdf()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand disabled:opacity-50"
+              >
+                <FileDown className="h-3.5 w-3.5 text-ember" />
+                {downloadingRotaPdf ? "Downloading..." : "Download Rota"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingRotaId(null);
+                  setNewRota(emptyRotaForm);
+                  setShowAddRotaModal(true);
+                }}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
+              >
+                <Plus className="h-4 w-4" />
+                Add Schedule
+              </button>
             </div>
-          ) : rota.length === 0 ? (
-            <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
-              No duty rota has been scheduled yet.
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {rota.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between border-b border-sand-line pb-3">
-                    {item.duty_type ? (
-                      <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
-                        {item.duty_type}
-                      </span>
-                    ) : (
-                      <span />
-                    )}
-                    <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
-                  </div>
-                  <h3 className="font-bold text-sm text-bark">{item.title || "Duty"}</h3>
-                  <p className="text-xs text-moss flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5 text-ember" />
-                    {item.shift || "Time not set"}
-                  </p>
-
-                  <div>
-                    <p className="text-[11px] font-bold text-bark mb-1">Assigned Officers:</p>
-                    {item.assigned_team.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {item.assigned_team.map((entry, idx) => {
-                          const officer = normalizeOfficer(entry);
-                          const details = [officer.duty, officer.role, officer.phone].filter(Boolean).join(" · ");
-                          return (
-                            <span
-                              key={`${officer.name}-${idx}`}
-                              title={
-                                officer.member_id
-                                  ? `${details || officer.name} · reminded on their account`
-                                  : details || officer.name
-                              }
-                              className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark"
-                            >
-                              {officer.member_id && (
-                                <Bell
-                                  className="h-3 w-3 shrink-0 text-ember"
-                                  aria-label="Reminders go to this officer's account"
-                                />
-                              )}
-                              {officer.name}
-                              {officer.phone && (
-                                <span className="ml-1 font-normal text-moss">{officer.phone}</span>
-                              )}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-moss">Nobody rostered yet.</p>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end gap-2 border-t border-sand-line/60 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => openRota(item)}
-                      aria-label={`Edit the duty \"${item.title}\"`}
-                      title="Edit this duty and its officers"
-                      className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                    >
-                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeRota(item)}
-                      disabled={removingRotaId === item.id}
-                      aria-label={`Remove the duty "${item.title}"`}
-                      title="Remove this duty from the rota"
-                      className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      {removingRotaId === item.id ? "Removing…" : "Remove"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        </>
       )}
 
       {/* ── TAB: MOMENTS — the day, its pictures, and the way to add one ── */}
@@ -1720,6 +1972,107 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SHARE DUTY ROTA */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+              <h3 className="font-bold text-base text-bark">
+                {shareTarget ? "Share Duty Details" : "Share Duty Rota"}
+              </h3>
+              <button
+                onClick={() => setShowShareModal(false)}
+                aria-label="Close"
+                className="text-moss hover:text-bark"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-moss">
+              Select the channels you wish to share to. You can choose any combination or select all.
+            </p>
+
+            {/* Checkboxes */}
+            <div className="space-y-2.5 rounded-xl border border-sand-line bg-sand-card p-3.5 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-sand-line">
+                <span className="font-bold text-bark">Channels</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allSelected = shareChannels.whatsapp && shareChannels.sms && shareChannels.email;
+                    setShareChannels({
+                      whatsapp: !allSelected,
+                      sms: !allSelected,
+                      email: !allSelected,
+                    });
+                  }}
+                  className="text-xs font-semibold text-ember hover:underline"
+                >
+                  {shareChannels.whatsapp && shareChannels.sms && shareChannels.email ? "Deselect All" : "Select All"}
+                </button>
+              </div>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shareChannels.whatsapp}
+                  onChange={(e) => setShareChannels((prev) => ({ ...prev, whatsapp: e.target.checked }))}
+                  className="h-4 w-4 rounded accent-bark"
+                />
+                <span className="font-medium text-bark">WhatsApp</span>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shareChannels.sms}
+                  onChange={(e) => setShareChannels((prev) => ({ ...prev, sms: e.target.checked }))}
+                  className="h-4 w-4 rounded accent-bark"
+                />
+                <span className="font-medium text-bark">SMS</span>
+              </label>
+
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shareChannels.email}
+                  onChange={(e) => setShareChannels((prev) => ({ ...prev, email: e.target.checked }))}
+                  className="h-4 w-4 rounded accent-bark"
+                />
+                <span className="font-medium text-bark">Email</span>
+              </label>
+            </div>
+
+            {/* Preview */}
+            <div>
+              <p className="font-bold text-[11px] text-bark mb-1">Message Preview:</p>
+              <div className="max-h-36 overflow-y-auto rounded-xl border border-sand-line bg-sand p-3 font-mono text-[11px] text-bark whitespace-pre-wrap">
+                {shareContent.text}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-sand-line">
+              <button
+                type="button"
+                onClick={() => setShowShareModal(false)}
+                className="rounded-xl border border-sand-line px-4 py-2 text-xs font-semibold text-bark hover:bg-sand"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeShare}
+                disabled={!shareChannels.whatsapp && !shareChannels.sms && !shareChannels.email}
+                className="rounded-xl bg-bark px-5 py-2 text-xs font-bold text-white transition hover:bg-bark-950 disabled:opacity-50"
+              >
+                Share Rota
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -100,6 +100,94 @@ export function RequestsModal({
     phone_number: "",
   });
 
+  type MemberMatch = { id: number; name: string; phone: string; gender: string };
+  const [fatherMatches, setFatherMatches] = useState<MemberMatch[]>([]);
+  const [motherMatches, setMotherMatches] = useState<MemberMatch[]>([]);
+  const [showFatherMatches, setShowFatherMatches] = useState(false);
+  const [showMotherMatches, setShowMotherMatches] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(async () => {
+      const q = dedication.father_name.trim();
+      if (q.length < 2) {
+        if (alive) {
+          setFatherMatches([]);
+          setShowFatherMatches(false);
+        }
+        return;
+      }
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      try {
+        const res = await fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(q)}`, { headers });
+        if (res.ok && alive) {
+          const data = await res.json();
+          const list = Array.isArray(data.matches) ? data.matches : [];
+          setFatherMatches(list);
+          setShowFatherMatches(list.length > 0);
+        }
+      } catch {
+        if (alive) setFatherMatches([]);
+      }
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [dedication.father_name]);
+
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(async () => {
+      const q = dedication.mother_name.trim();
+      if (q.length < 2) {
+        if (alive) {
+          setMotherMatches([]);
+          setShowMotherMatches(false);
+        }
+        return;
+      }
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      try {
+        const res = await fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(q)}`, { headers });
+        if (res.ok && alive) {
+          const data = await res.json();
+          const list = Array.isArray(data.matches) ? data.matches : [];
+          setMotherMatches(list);
+          setShowMotherMatches(list.length > 0);
+        }
+      } catch {
+        if (alive) setMotherMatches([]);
+      }
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [dedication.mother_name]);
+
+  const selectFather = (m: MemberMatch) => {
+    setDedication((prev) => ({
+      ...prev,
+      father_name: m.name,
+      phone_number: prev.phone_number || m.phone || "",
+    }));
+    setShowFatherMatches(false);
+  };
+
+  const selectMother = (m: MemberMatch) => {
+    setDedication((prev) => ({
+      ...prev,
+      mother_name: m.name,
+      phone_number: prev.phone_number || m.phone || "",
+    }));
+    setShowMotherMatches(false);
+  };
+
   // Every open starts from an empty form on the desk that was clicked, with a
   // signed-in member's own details in the contact fields — the way both desk
   // forms do it. The resets and the read live inside a deferred microtask, so
@@ -542,7 +630,7 @@ export function RequestsModal({
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
+                <div className="relative">
                   <label className={labelCls} htmlFor="dedication-father">
                     Father&apos;s name <span className="text-moss">(optional)</span>
                   </label>
@@ -552,11 +640,27 @@ export function RequestsModal({
                     maxLength={160}
                     value={dedication.father_name}
                     onChange={(e) => setDedication({ ...dedication, father_name: e.target.value })}
+                    onFocus={() => { if (fatherMatches.length > 0) setShowFatherMatches(true); }}
                     placeholder="e.g. Joseph Mwangi"
                     className={fieldCls}
                   />
+                  {showFatherMatches && fatherMatches.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-sand-line bg-white py-1 shadow-lg">
+                      {fatherMatches.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => selectFather(m)}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-bark hover:bg-sand"
+                        >
+                          <span className="font-semibold">{m.name}</span>
+                          {m.phone && <span className="text-[11px] text-moss">{m.phone}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div>
+                <div className="relative">
                   <label className={labelCls} htmlFor="dedication-mother">
                     Mother&apos;s name <span className="text-moss">(optional)</span>
                   </label>
@@ -566,9 +670,25 @@ export function RequestsModal({
                     maxLength={160}
                     value={dedication.mother_name}
                     onChange={(e) => setDedication({ ...dedication, mother_name: e.target.value })}
+                    onFocus={() => { if (motherMatches.length > 0) setShowMotherMatches(true); }}
                     placeholder="e.g. Grace Mwangi"
                     className={fieldCls}
                   />
+                  {showMotherMatches && motherMatches.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-sand-line bg-white py-1 shadow-lg">
+                      {motherMatches.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => selectMother(m)}
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-bark hover:bg-sand"
+                        >
+                          <span className="font-semibold">{m.name}</span>
+                          {m.phone && <span className="text-[11px] text-moss">{m.phone}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div>

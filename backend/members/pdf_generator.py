@@ -2040,3 +2040,123 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=None, search=None) -> bytes:
+    """Generate a clean, printable duty rota schedule PDF aggregated for a period."""
+    church_name = pdf_church_name(church_name)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2.2 * cm,
+    )
+
+    st = get_pdf_styles()
+    story = []
+
+    story.append(Paragraph("DUTY ROTA SCHEDULE", st["title_big"]))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}", st["meta"]))
+
+    filter_parts = []
+    if start_date and end_date:
+        filter_parts.append(f"Period: {start_date} to {end_date}")
+    elif start_date:
+        filter_parts.append(f"From: {start_date}")
+    elif end_date:
+        filter_parts.append(f"Up to: {end_date}")
+    else:
+        filter_parts.append("Period: Full Schedule")
+
+    if search:
+        filter_parts.append(f"Filter: “{escape(search)}”")
+
+    filter_parts.append(f"Total duties: {len(rota_entries)}")
+    story.append(Paragraph(" · ".join(filter_parts), st["meta"]))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
+    story.append(Spacer(1, 10))
+
+    if not rota_entries:
+        story.append(Paragraph("No duty rota entries match this period.", st["cell"]))
+    else:
+        def fmt_d(val):
+            text = str(val or "")
+            if len(text) >= 10:
+                try:
+                    dt = datetime.strptime(text[:10], "%Y-%m-%d")
+                    return dt.strftime("%d/%m/%Y")
+                except Exception:
+                    return text[:10]
+            return text
+
+        header = [
+            Paragraph("#", st["header"]),
+            Paragraph("Date &amp; Shift", st["header"]),
+            Paragraph("Duty / Service", st["header"]),
+            Paragraph("Assigned Officers &amp; Roles", st["header"]),
+        ]
+        table_data = [header]
+
+        for idx, item in enumerate(rota_entries, 1):
+            date_str = fmt_d(item.get("date") or item.get("duty_date"))
+            shift_str = escape(str(item.get("shift") or "Time not set"))
+            date_col = f"<b>{date_str}</b><br/><font color='#617068' size='8'>{shift_str}</font>"
+
+            duty_type = escape(str(item.get("duty_type") or ""))
+            title = escape(str(item.get("title") or "Duty"))
+            duty_col = f"<b>{title}</b>"
+            if duty_type:
+                duty_col += f"<br/><font color='#b36b3c' size='8'><b>{duty_type}</b></font>"
+            notes = str(item.get("notes") or "").strip()
+            if notes:
+                duty_col += f"<br/><font color='#617068' size='7.5'><i>{escape(notes)}</i></font>"
+
+            team = item.get("assigned_team") or []
+            officers_lines = []
+            for member in team:
+                if isinstance(member, dict):
+                    m_name = escape(str(member.get("name") or member.get("officer_name") or "Officer"))
+                    m_role = escape(str(member.get("duty") or member.get("role") or ""))
+                    m_phone = escape(str(member.get("phone") or ""))
+                    line = f"• <b>{m_name}</b>"
+                    sub = [s for s in (m_role, m_phone) if s]
+                    if sub:
+                        line += f" <font color='#617068'>({', '.join(sub)})</font>"
+                    officers_lines.append(line)
+                elif isinstance(member, str):
+                    officers_lines.append(f"• {escape(member)}")
+
+            team_col = "<br/>".join(officers_lines) if officers_lines else "<font color='#617068'><i>Nobody rostered yet</i></font>"
+
+            table_data.append([
+                Paragraph(str(idx), st["cell"]),
+                Paragraph(date_col, st["cell"]),
+                Paragraph(duty_col, st["cell"]),
+                Paragraph(team_col, st["cell"]),
+            ])
+
+        table = Table(
+            table_data,
+            colWidths=[0.8 * cm, 3.2 * cm, 5.0 * cm, 9.0 * cm],
+            repeatRows=1,
+        )
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fbf9f5")]),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.HexColor("#dfdbd1")),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
+        ]))
+        story.append(table)
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()

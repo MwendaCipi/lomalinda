@@ -28,6 +28,7 @@ import {
   Receipt,
   Scale,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Sun,
   Target,
@@ -348,6 +349,18 @@ export const destinations = {
     area: "account",
     // `/member/reports` is its own destination below, so it is excluded here.
     match: ["/member"],
+  },
+  /**
+   * The member's display, theme, accessibility and notification settings.
+   */
+  preferences: {
+    href: "/member/preferences",
+    label: "Preferences",
+    short: "Preferences",
+    description: "App appearance, theme, and notification settings.",
+    icon: SlidersHorizontal,
+    area: "account",
+    match: ["/member/preferences"],
   },
   /**
    * The member's own giving record — the table of what they gave, with its
@@ -1515,6 +1528,7 @@ export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
  */
 export const accountMenuKeys: { key: DestinationKey; staffOnly?: boolean }[] = [
   { key: "myAccount" },
+  { key: "preferences" },
   { key: "myGivings" },
   { key: "administration", staffOnly: true },
 ];

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
@@ -37,7 +36,95 @@ export default function ChildDedicationPage() {
   });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [token] = useState<string | null>(() => (typeof window !== "undefined" ? localStorage.getItem("access_token") : null));
+
+  type MemberMatch = { id: number; name: string; phone: string; gender: string };
+  const [fatherMatches, setFatherMatches] = useState<MemberMatch[]>([]);
+  const [motherMatches, setMotherMatches] = useState<MemberMatch[]>([]);
+  const [showFatherMatches, setShowFatherMatches] = useState(false);
+  const [showMotherMatches, setShowMotherMatches] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(async () => {
+      const q = form.father_name.trim();
+      if (q.length < 2) {
+        if (alive) {
+          setFatherMatches([]);
+          setShowFatherMatches(false);
+        }
+        return;
+      }
+      const storedToken = localStorage.getItem("access_token") || token;
+      const headers: Record<string, string> = {};
+      if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
+      try {
+        const res = await fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(q)}`, { headers });
+        if (res.ok && alive) {
+          const data = await res.json();
+          const list = Array.isArray(data.matches) ? data.matches : [];
+          setFatherMatches(list);
+          setShowFatherMatches(list.length > 0);
+        }
+      } catch {
+        if (alive) setFatherMatches([]);
+      }
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [form.father_name, token]);
+
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(async () => {
+      const q = form.mother_name.trim();
+      if (q.length < 2) {
+        if (alive) {
+          setMotherMatches([]);
+          setShowMotherMatches(false);
+        }
+        return;
+      }
+      const storedToken = localStorage.getItem("access_token") || token;
+      const headers: Record<string, string> = {};
+      if (storedToken) headers.Authorization = `Bearer ${storedToken}`;
+      try {
+        const res = await fetch(`${API_URL}/api/members/lookup/names/?q=${encodeURIComponent(q)}`, { headers });
+        if (res.ok && alive) {
+          const data = await res.json();
+          const list = Array.isArray(data.matches) ? data.matches : [];
+          setMotherMatches(list);
+          setShowMotherMatches(list.length > 0);
+        }
+      } catch {
+        if (alive) setMotherMatches([]);
+      }
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [form.mother_name, token]);
+
+  const selectFather = (member: MemberMatch) => {
+    setForm((prev) => ({
+      ...prev,
+      father_name: member.name,
+      phone_number: prev.phone_number || member.phone || "",
+    }));
+    setShowFatherMatches(false);
+  };
+
+  const selectMother = (member: MemberMatch) => {
+    setForm((prev) => ({
+      ...prev,
+      mother_name: member.name,
+      phone_number: prev.phone_number || member.phone || "",
+    }));
+    setShowMotherMatches(false);
+  };
 
   const fetchDedications = async () => {
     setFetchingList(true);
@@ -108,7 +195,6 @@ export default function ChildDedicationPage() {
 
   useEffect(() => {
     const storedToken = localStorage.getItem("access_token");
-    setToken(storedToken);
     fetchDedications();
     if (storedToken) {
       handleLookup();
@@ -264,26 +350,62 @@ export default function ChildDedicationPage() {
                         className={inputClass}
                       />
                     </label>
-                    <label className="block text-sm font-medium">
-                      Father&apos;s Full Name
-                      <input
-                        required
-                        placeholder="Father's name"
-                        value={form.father_name}
-                        onChange={(e) => setForm({ ...form, father_name: e.target.value })}
-                        className={inputClass}
-                      />
-                    </label>
-                    <label className="block text-sm font-medium">
-                      Mother&apos;s Full Name
-                      <input
-                        required
-                        placeholder="Mother's name"
-                        value={form.mother_name}
-                        onChange={(e) => setForm({ ...form, mother_name: e.target.value })}
-                        className={inputClass}
-                      />
-                    </label>
+                    <div className="relative">
+                      <label className="block text-sm font-medium">
+                        Father&apos;s Full Name
+                        <input
+                          required
+                          placeholder="Father's name"
+                          value={form.father_name}
+                          onChange={(e) => setForm({ ...form, father_name: e.target.value })}
+                          onFocus={() => { if (fatherMatches.length > 0) setShowFatherMatches(true); }}
+                          className={inputClass}
+                        />
+                      </label>
+                      {showFatherMatches && fatherMatches.length > 0 && (
+                        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-sand-line bg-white py-1 shadow-lg">
+                          {fatherMatches.map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => selectFather(m)}
+                              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-bark hover:bg-sand"
+                            >
+                              <span className="font-semibold">{m.name}</span>
+                              {m.phone && <span className="text-[11px] text-moss">{m.phone}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <label className="block text-sm font-medium">
+                        Mother&apos;s Full Name
+                        <input
+                          required
+                          placeholder="Mother's name"
+                          value={form.mother_name}
+                          onChange={(e) => setForm({ ...form, mother_name: e.target.value })}
+                          onFocus={() => { if (motherMatches.length > 0) setShowMotherMatches(true); }}
+                          className={inputClass}
+                        />
+                      </label>
+                      {showMotherMatches && motherMatches.length > 0 && (
+                        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-48 overflow-y-auto rounded-xl border border-sand-line bg-white py-1 shadow-lg">
+                          {motherMatches.map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => selectMother(m)}
+                              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-bark hover:bg-sand"
+                            >
+                              <span className="font-semibold">{m.name}</span>
+                              {m.phone && <span className="text-[11px] text-moss">{m.phone}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <label className="block text-sm font-medium sm:col-span-2">
                       Additional Notes or Preferred Date (Optional)
                       <textarea

@@ -1216,7 +1216,7 @@ export default function TreasuryPage() {
                           </div>
 
                           {/* Sticky Footer for Dedicated Purpose View */}
-                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand font-bold text-bark shadow-lg md:shadow-none">
+                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t border-sand-line bg-white font-bold text-bark shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2">
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 px-3 py-2 sm:px-4 sm:py-2.5">
                               <div className="flex items-center gap-3 text-xs sm:text-sm">
                                 <span className="text-[11px] sm:text-xs text-moss font-semibold">
@@ -1440,7 +1440,7 @@ export default function TreasuryPage() {
                     </div>
 
                     {/* Breakdown View Sticky Footer */}
-                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-lg md:shadow-none">
+                    <div className="shrink-0 sticky bottom-0 md:static z-30 border-t border-sand-line bg-white px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2.5">
                       {/* A row count is the table's own vocabulary: with cards
                           on a phone it says nothing the list does not already
                           say, and it costs a line of the ledger's height. */}
@@ -1808,7 +1808,7 @@ export default function TreasuryPage() {
                         </div>
 
                         {/* Fixed Child Table Footer — sits flush on the tab bar. */}
-                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t-2 border-sand-mute bg-sand px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-lg md:shadow-none">
+                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t border-sand-line bg-white px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2.5">
                           <span className="text-moss text-[11px] sm:text-xs">
                             {showFailed ? (
                               <>
