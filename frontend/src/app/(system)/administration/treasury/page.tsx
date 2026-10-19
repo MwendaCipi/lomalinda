@@ -178,6 +178,9 @@ export default function TreasuryPage() {
   // the desk's dates but never overwrite each other's rows.
   const [failedGivingsList, setFailedGivingsList] = useState<IndividualGiving[]>([]);
   const [loadingFailedGivings, setLoadingFailedGivings] = useState(false);
+  // A response for an older date window must never replace the rows — or the
+  // badge derived from them — after the treasurer has chosen a newer one.
+  const failedGivingsRequest = useRef(0);
   const [purposeGivings, setPurposeGivings] = useState<Record<string, IndividualGiving[]>>({});
   const [loadingPurpose, setLoadingPurpose] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -188,33 +191,11 @@ export default function TreasuryPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
-  // The Failed badge on the treasury strip: counted from the window the
-  // Failed tab lists, so the two never disagree — and recounted the moment
-  // an attempt is taken off, so the deduction shows at once.
-  const [failedCount, setFailedCount] = useState<number | null>(null);
+  // The Failed badge is counted from the exact rows rendered by the Failed
+  // tab, rather than by a second request that can finish for an older window.
+  const [failedCount, setFailedCount] = useState(0);
 
   const headers = useCallback(() => ({ "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` }), []);
-
-  // The badge takes the desk's window — the same dates the Failed tab lists
-  // beneath it. The defaults carry the current window, and the callback's
-  // identity carries it too, so a date change recounts the badge on its own.
-  const refreshFailedCount = useCallback(async (fDate = fromDate, tDate = toDate) => {
-    try {
-      const res = await fetch(`${API_URL}/api/members/treasury/failed/?from_date=${fDate}&to_date=${tDate}`, { headers: headers() });
-      if (res.ok) {
-        const data = await res.json();
-        if (typeof data?.count === "number") setFailedCount(data.count);
-      }
-    } catch {
-      // The badge keeps its last count rather than lying about the queue.
-    }
-  }, [headers, fromDate, toDate]);
-
-  useEffect(() => {
-    // The count rides a microtask — the same shape the desks use — so the
-    // effect's own body never writes state synchronously.
-    void Promise.resolve().then(() => refreshFailedCount());
-  }, [refreshFailedCount]);
 
   // `givings` writes the date-window list the Individual tab shows;
   // `failed` writes the Failed tab's own windowed list. The two targets stay
@@ -222,6 +203,8 @@ export default function TreasuryPage() {
   const fetchLedgerList = useCallback(async (fDate: string, tDate: string, which: "givings" | "failed" = "givings") => {
     const setLoading = which === "failed" ? setLoadingFailedGivings : setLoadingAllGivings;
     const setList = which === "failed" ? setFailedGivingsList : setAllGivingsList;
+    const request = which === "failed" ? ++failedGivingsRequest.current : 0;
+    if (which === "failed") setFailedCount(0);
     setLoading(true);
     try {
       // Both lists are the ledger's own read of the desk's window — completed
@@ -239,7 +222,10 @@ export default function TreasuryPage() {
         const data = await res.json();
         // A payload that is not the array this endpoint promises leaves the
         // list as it was rather than taking the desk down at .filter.
-        if (Array.isArray(data)) setList(data);
+        if (Array.isArray(data) && (which !== "failed" || request === failedGivingsRequest.current)) {
+          setList(data);
+          if (which === "failed") setFailedCount(data.filter((giving: IndividualGiving) => !isReceivedGiving(giving)).length);
+        }
       }
     } catch {
       // Ignore fetch errors
@@ -314,7 +300,6 @@ export default function TreasuryPage() {
       setLoadingAllGivings(false);
       void Promise.resolve().then(() => {
         loadFailedGivings();
-        refreshFailedCount();
       });
     } catch (error) {
       showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
