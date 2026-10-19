@@ -10075,11 +10075,8 @@ class InventoryItemListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can_manage_deaconate(request.user):
-            return Response(
-                {'detail': 'Only church officers can view the property inventory.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # All authenticated members may read the inventory register; write
+        # operations (POST, PATCH, DELETE) remain restricted to officers.
         items = InventoryItem.objects.annotate(movement_count=Count('movements'))
         return Response(InventoryItemSerializer(items, many=True).data)
 

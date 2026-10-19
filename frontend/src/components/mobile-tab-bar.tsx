@@ -39,27 +39,19 @@ export function MobileTabBar() {
   // button: one poller feeds both badges.
   const chatUnread = useChatUnread();
 
-  // On the surfaces that are read by scrolling — the dashboard, announcements,
-  // ministries, materials, chat and stewardship cards — the bar steps out of
-  // the way on the way down and comes straight back on any upward movement,
-  // so a long read gets the whole screen without stranding anyone.
-  const navHidesOnScroll =
-    pathname === "/dashboard" ||
-    pathname.startsWith("/announcements") ||
-    pathname.startsWith("/my-areas") ||
-    pathname.startsWith("/ministries") ||
-    pathname.startsWith("/materials") ||
-    pathname.startsWith("/chat") ||
-    pathname.startsWith("/member/giving") ||
-    pathname.startsWith("/member/givings") ||
-    pathname.startsWith("/support") ||
-    pathname === "/financial" ||
-    pathname === "/give";
+  // The bottom tab bar belongs only to the dashboard. Every other surface has
+  // its own section strip (AppFrame) for in-section navigation, and the top-bar
+  // back arrow returns from any section to the dashboard. Hiding the bar on any
+  // non-dashboard route keeps the full screen available for content and avoids
+  // the visual clutter of a bar that can never change what section is active
+  // once you have left the home screen.
+  const isOnDashboard = pathname === "/dashboard";
+
+  // On the dashboard the bar can still step aside while the member scrolls
+  // through their announcements — same behaviour as before.
+  const navHidesOnScroll = isOnDashboard;
   const [scrolledDown, setScrolledDown] = useState(false);
-  // The route decides whether hiding is in play at all; the scroll only ever
-  // says which way the reader is going. Deriving the bar's state keeps a route
-  // change from needing to reset anything.
-  const navHidden = navHidesOnScroll && scrolledDown;
+  const navHidden = !isOnDashboard || (navHidesOnScroll && scrolledDown);
 
   useEffect(() => {
     if (!navHidesOnScroll) {

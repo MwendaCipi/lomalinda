@@ -363,6 +363,21 @@ export const destinations = {
     area: "account",
     match: ["/member/givings"],
   },
+  /**
+   * The church's property register — furniture, equipment and other assets
+   * tracked by the deaconate. Members may browse it; only officers may add or
+   * move items. The register lives at /support/property so it stays in the
+   * Stewardship section rather than the deaconate admin console.
+   */
+  churchProperty: {
+    href: "/support/property",
+    label: "Church Property",
+    short: "Property",
+    description: "Furniture, equipment and assets the deaconate department maintains for the church.",
+    icon: Boxes,
+    area: "stewardship",
+    match: ["/support/property"],
+  },
   memberReports: {
     href: "/member/reports",
     label: "Giving Statements",
@@ -989,7 +1004,7 @@ export const railEntries: RailEntry[] = [
     // account menu.
     items: [
       page("give"),
-      page("myGivings"),
+      page("churchProperty"),
       page("fundDrives"),
       page("budget"),
       page("financial"),

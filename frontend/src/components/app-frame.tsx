@@ -152,6 +152,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     pathname === "/support/budget" ||
     pathname === "/support/financial" ||
     pathname === "/support/reports" ||
+    pathname === "/support/property" ||
     pathname === "/administration/treasury" ||
     pathname === "/administration/fund-drives";
 
