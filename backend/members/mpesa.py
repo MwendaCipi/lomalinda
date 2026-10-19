@@ -34,10 +34,10 @@ def safe_mpesa_phone(value, max_length=20):
     """Coerce a Safaricom-supplied phone into the 2547… form, never raising.
 
     The C2B confirmation's MSISDN is untrusted text: it may carry a leading
-    plus or zero, stray separators, or junk. The stored column is bounded, so
-    a value longer than the column would crash the whole save and drop the
-    payment — this normalises to digits and truncates rather than losing the
-    gift. Returns '' when nothing phone-shaped remains.
+    plus or zero, stray separators, or junk. If the number was masked by Safaricom
+    (e.g., contains 'X' or missing digits), non-digit stripping leaves an invalid
+    length; discard it rather than storing a mangled or double-prefixed number.
+    Returns '' when nothing phone-shaped remains.
     """
     digits = re.sub(r'\D', '', str(value or ''))
     if digits.startswith('254'):
@@ -46,8 +46,11 @@ def safe_mpesa_phone(value, max_length=20):
         digits = f'254{digits[1:]}'
     elif len(digits) == 9:
         digits = f'254{digits}'
-    # A phone is 12 digits; keep at most that many, then clamp to the column.
-    return digits[:12][:max_length] if digits else ''
+
+    # A valid Kenyan phone must be exactly 12 digits starting with 254
+    if len(digits) != 12 or not digits.startswith('254'):
+        return ''
+    return digits[:max_length]
 
 
 def account_reference_for_purpose(purpose):

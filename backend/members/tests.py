@@ -784,10 +784,9 @@ class MpesaC2BAPITests(APITestCase):
         self.assertTrue(any(member.email in message.to for message in mail.outbox))
 
     def test_an_obfuscated_msisdn_falls_back_to_a_sender_name_that_names_one_member(self):
-        # Safaricom obfuscates the payer's number in some payloads — the
-        # phone thread is cut — but the registered sender name still
-        # arrives, and when it names exactly one member of the roll the
-        # gift is tied to that account and the receipt has an address.
+        # Matching transactions by sender name is intentionally disabled because
+        # many individuals share identical names, causing false-positive matches
+        # and misdirected receipts. Only phone and email matches are accepted.
         from django.core import mail
 
         member = User.objects.create_user('onjwayow', 'onjwayowilliam@example.com', 'StrongPass#2026')
@@ -807,10 +806,8 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         contribution = Contribution.objects.get(mpesa_receipt_number='OBF45NAME')
-        self.assertEqual(contribution.member, member)
-        self.assertEqual(contribution.donor_email, 'onjwayowilliam@example.com')
-        self.assertTrue(any(member.email in message.to for message in mail.outbox))
-        self.assertIsNotNone(contribution.receipt_sent_at)
+        self.assertIsNone(contribution.member)
+        self.assertEqual(contribution.donor_email, '')
 
     def test_a_sender_name_two_members_share_links_nobody(self):
         # Two members answer to the same name: the name alone does not
@@ -837,6 +834,7 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.donor_email, '')
 
     def test_a_bare_first_name_counts_only_when_it_fits_exactly_one_member(self):
+        # Matching by name (even bare first name) is intentionally disabled.
         from django.core import mail
 
         sole = User.objects.create_user('shadrack.m', 'shadrack@example.com', 'StrongPass#2026')
@@ -855,10 +853,10 @@ class MpesaC2BAPITests(APITestCase):
         response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         contribution = Contribution.objects.get(mpesa_receipt_number='BARE45ONE')
-        self.assertEqual(contribution.member, sole)
-        self.assertEqual(contribution.donor_email, 'shadrack@example.com')
+        self.assertIsNone(contribution.member)
+        self.assertEqual(contribution.donor_email, '')
 
-        # A second member answering to the same first name makes it    # ambiguous — nobody is named.
+        # A second member answering to the same first name also stays unattributed.
         twin = User.objects.create_user('shadrack.b', 'shadrack.b@example.com', 'StrongPass#2026')
         twin.first_name = 'Shadrack'
         twin.last_name = 'Abednego'

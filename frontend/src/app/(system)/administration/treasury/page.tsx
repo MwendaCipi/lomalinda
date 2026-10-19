@@ -156,16 +156,8 @@ export default function TreasuryPage() {
   const [showDates, setShowDates] = useState(false);
   const datesRef = useRef<HTMLDivElement>(null);
   const datesPanelRef = useRef<HTMLDivElement>(null);
-  // Scanning a window other than this month so far. The phone folds the dates
-  // away, so the button itself has to say that a narrower window is standing —
-  // otherwise the only way to know is to open the popover and look.
   const customWindow = fromDate !== firstDayOfMonth() || toDate !== localDate();
-  // Pulling the paybill's transactions from Safaricom: manual "send money to
-  // paybill" gifts land in the ledger without anyone typing them. Idempotent
-  // on the server, so a double-press records nothing twice.
-  const [pulling, setPulling] = useState(false);
   // A report is generated on demand, so the desk is told the document is being
-  // prepared rather than left staring at an unchanged screen; the finished
   // document opens in the preview below — viewed first, downloaded from there.
   const [preparing, setPreparing] = useState<null | "pdf">(null);
   const [preview, setPreview] = useState<ReportPreview | null>(null);
@@ -630,57 +622,6 @@ export default function TreasuryPage() {
   // is named with, so a document opened for the 8th to the 9th says so.
   const rangeLabel = fromDate === toDate ? fromDate : `${fromDate} → ${toDate}`;
 
-  // Pull the paybill's transactions from Safaricom, so a manual "send money to
-  // paybill" gift lands in the ledger without anyone typing it. The server is
-  // idempotent by receipt number, so a double-press records nothing twice —
-  // and the Pull API keeps only 48 hours of transactions, which is the whole
-  // window it will read, so that is what is asked for.
-  async function pullMpesaTransactions() {
-    setPulling(true);
-    try {
-      const res = await fetch(`${API_URL}/api/members/payments/mpesa/pull/`, {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ days: 2 }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        // A dialog, not the banner: the pull's answer is the whole point of
-        // the press, and Safaricom's own sentences (an unregistered shortcode,
-        // a bad credential) name the fix — the treasurer should not have to
-        // spot a line of text under a long ledger.
-        await showAlert(
-          "M-Pesa pull failed",
-          data.detail || "Could not reach M-Pesa. Please try again.",
-          "error"
-        );
-        return;
-      }
-      // load() clears the banner first, so the ledger is reloaded before the
-      // finding is written — otherwise the pull's own answer is wiped by the
-      // reload it triggers. A dialog outlives that reload.
-      await load(fromDate, toDate);
-      if (data.detail) {
-        await showAlert("M-Pesa pull", data.detail, "warning");
-      } else if (data.recorded > 0) {
-        await showAlert(
-          "M-Pesa pull complete",
-          `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; ${data.recorded} new gift(s) recorded.`,
-          "success"
-        );
-      } else {
-        await showAlert(
-          "M-Pesa pull complete",
-          `Pulled ${data.pulled} M-Pesa payment(s) from the last 48 hours; nothing new to record.`,
-          "info"
-        );
-      }
-    } catch {
-      await showAlert("M-Pesa pull failed", "Could not reach M-Pesa. Please try again.", "error");
-    } finally {
-      setPulling(false);
-    }
-  }
 
   const toggleExpandPurpose = async (purposeName: string) => {
     if (expandedPurpose === purposeName) {
@@ -1226,17 +1167,7 @@ export default function TreasuryPage() {
                                   {expandedPurpose} Total: <span className="text-ember">{money(purposeTotal)}</span>
                                 </span>
                               </div>
-                              <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
-                                <button
-                                  type="button"
-                                  onClick={pullMpesaTransactions}
-                                  disabled={pulling}
-                                  className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
-                                  title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours, all the Pull API keeps)."
-                                >
-                                  <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-                                  <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
-                                </button>
+                              <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
                                 <button
                                   type="button"
                                   onClick={() => setIsModalOpen(true)}
@@ -1447,20 +1378,7 @@ export default function TreasuryPage() {
                       <span className="hidden text-moss text-[11px] md:inline md:text-xs">
                         Total Rows Available: <strong className="text-bark">{visibleRows.length}</strong>
                       </span>
-                      <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
-                        {/* The pull sits at the foot of the table with the
-                            desk's other buttons rather than in the header:
-                            it records into the window the footer totals. */}
-                        <button
-                          type="button"
-                          onClick={pullMpesaTransactions}
-                          disabled={pulling}
-                          className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
-                          title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours, all the Pull API keeps)."
-                        >
-                          <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-                          <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
-                        </button>
+                      <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
                         <button
                           type="button"
                           onClick={() => setIsModalOpen(true)}
@@ -1821,20 +1739,7 @@ export default function TreasuryPage() {
                             )}
                           </span>
 
-                          <div className="grid grid-cols-3 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
-                            {/* The pull sits at the foot of the table with the
-                                desk's other buttons rather than in the header:
-                                it records into the window the footer totals. */}
-                            <button
-                              type="button"
-                              onClick={pullMpesaTransactions}
-                              disabled={pulling}
-                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
-                              title="Record any manual paybill gifts Safaricom has received that are not yet in the ledger (last 48 hours, all the Pull API keeps)."
-                            >
-                              <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0 ${pulling ? "animate-spin" : ""}`} aria-hidden="true" />
-                              <span className="truncate">{pulling ? "Pulling…" : "Pull M-Pesa"}</span>
-                            </button>
+                          <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
                             <button
                               type="button"
                               onClick={() => setIsModalOpen(true)}
