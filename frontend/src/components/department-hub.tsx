@@ -57,7 +57,12 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { DEPARTMENT_BLURBS, deaconateViews, departmentDeskCode } from "@/config/navigation";
+import {
+  DEPARTMENT_BLURBS,
+  deaconateViews,
+  departmentDeskCode,
+  MINISTRIES_AND_DEPARTMENTS_HEADING,
+} from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 
@@ -4057,9 +4062,17 @@ function DepartmentDetail({
   }, [onBack]);
   useEffect(() => {
     setHeadingFirst(true);
+    // One heading for the whole ministries and departments page. The desk
+    // used to name itself here as it was opened, so the band renamed the page
+    // on every toggle — the static text stands instead wherever the desk *is*
+    // the page: the leadership console's desk and any area opened from the
+    // ministry map. A desk drawn inside another (the deaconate's pages in
+    // the console) keeps naming itself: there the strip above is the page's
+    // own chrome and the desk is one view of it.
+    const namesItself = embedded && onConsole;
     setCustomHeader({
-      label: department.label,
-      description: department.description,
+      label: namesItself ? department.label : MINISTRIES_AND_DEPARTMENTS_HEADING.label,
+      description: namesItself ? department.description : MINISTRIES_AND_DEPARTMENTS_HEADING.description,
       leading: onBackRef.current ? (
         <button
           type="button"
@@ -4075,7 +4088,7 @@ function DepartmentDetail({
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [department.label, department.description, setCustomHeader, setHeadingFirst]);
+  }, [embedded, onConsole, department.label, department.description, setCustomHeader, setHeadingFirst]);
 
   useEffect(() => {
     // A desk that is one view of a larger one leaves the strip to it entirely
@@ -5133,7 +5146,7 @@ export function DepartmentHub({
   // widths. A single department's desk draws its own search there instead
   // (see `DepartmentDetail`), so opening a row takes the slot over.
   const [directorySearch, setDirectorySearch] = useState("");
-  const { setHeaderRightAction } = usePageHeader();
+  const { setHeaderRightAction, setCustomHeader } = usePageHeader();
   useEffect(() => {
     setHeaderRightAction(
       <input
@@ -5147,6 +5160,46 @@ export function DepartmentHub({
     );
     return () => setHeaderRightAction(null);
   }, [directorySearch, setHeaderRightAction]);
+
+  // One heading and one description for this whole page. The shell used to
+  // take its heading from whichever area was open — the directory named the
+  // desk, and each ministry or department renamed it as it was opened — so on
+  // a wide screen the name and the line under it changed with every toggle
+  // through the ministry and department desks. Both are fixed here: the
+  // console's leadership tab and the ministry map this desk is also drawn
+  // under read the same heading throughout.
+  //
+  // A desk drawn *inside* another (the deaconate's own pages, under
+  // DeaconateManager) leaves the heading to the desk around it — there the
+  // area still names itself, exactly as before.
+  //
+  // `selected` is a dependency so this is rewritten whenever `DepartmentDetail`
+  // — the child that draws chrome over this same band — mounts or clears it:
+  // a parent's effect runs after its child's, so this text is the one that
+  // stands. The back handler rides a ref so a caller's inline arrow does not
+  // re-fire the effect on every render, the way the band above warns.
+  const onBackRef = useRef(onBack);
+  useEffect(() => {
+    onBackRef.current = onBack;
+  }, [onBack]);
+  useEffect(() => {
+    if (embedded) return;
+    setCustomHeader({
+      label: MINISTRIES_AND_DEPARTMENTS_HEADING.label,
+      description: MINISTRIES_AND_DEPARTMENTS_HEADING.description,
+      leading: onBackRef.current ? (
+        <button
+          type="button"
+          onClick={() => onBackRef.current?.()}
+          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Back
+        </button>
+      ) : undefined,
+    });
+    return () => setCustomHeader(null);
+  }, [embedded, selected, setCustomHeader]);
   const directoryNeedle = directorySearch.trim().toLowerCase();
   const visibleDepartments = directoryNeedle
     ? departments.filter((d) =>

@@ -6,7 +6,12 @@ import { ArrowLeft, LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
-import { DEACONATE_ROLES, deaconateViews, isStaffRole } from "@/config/navigation";
+import {
+  DEACONATE_ROLES,
+  deaconateViews,
+  isStaffRole,
+  MINISTRIES_AND_DEPARTMENTS_HEADING,
+} from "@/config/navigation";
 import { DeaconateManager } from "@/components/deaconate-manager";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
@@ -348,40 +353,32 @@ export function MyAreas() {
     return () => setHeaderRightAction(null);
   }, [openArea, search, setHeaderRightAction]);
 
-  // The shell names the area the member opened, or the map they are on. On a
-  // phone the way back out of an area rides above that name: back link, the
-  // place, then the views it answers to.
+  // One heading and one description for this page, whether the reader is on
+  // the map or in an opened area: the name used to follow the toggle being
+  // read (and become the area's own name and line), so the heading renamed
+  // itself with every move. It is fixed now, the same text everywhere, and on
+  // a phone the way back out of an area still rides above it.
+  //
+  // `openView` is a dependency because an opened area draws the desk that
+  // writes this same band: this effect is an ancestor's, so it runs after the
+  // desk's own and its text is the one that stands — a view change would move
+  // the strip under the wrong heading otherwise.
   useEffect(() => {
-    setCustomHeader(
-      openArea
-        ? {
-            label: openArea.label,
-            description: openArea.description,
-            leading: (
-              <button
-                type="button"
-                onClick={showMap}
-                className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                Ministry
-              </button>
-            ),
-          }
-        : {
-            label: "Ministry",
-            // A search reads across both halves, so the line under the name says
-            // so while one is running: results from the half not on show would
-            // otherwise read as cards from nowhere.
-            description: searchNeedle
-              ? "Every ministry and department you can see, both halves of the map."
-              : tab === "mine"
-              ? "The ministries and departments you are part of or serve in."
-              : "Other ministries and departments you can ask to join.",
-          }
-    );
+    setCustomHeader({
+      label: MINISTRIES_AND_DEPARTMENTS_HEADING.label,
+      description: MINISTRIES_AND_DEPARTMENTS_HEADING.description,
+      leading: openArea ? (
+        <button
+          type="button"
+          onClick={showMap}
+          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      ) : undefined,
+    });
     return () => setCustomHeader(null);
-  }, [openArea, searchNeedle, tab, setCustomHeader, showMap]);
+  }, [openArea, openView, setCustomHeader, showMap]);
 
   async function requestToJoin(code: string, label: string) {
     setJoining(code);
@@ -459,7 +456,6 @@ export function MyAreas() {
             className="mb-3 hidden w-fit items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:inline-flex"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Ministry
           </button>
           <div className="min-h-0 w-full flex-1">
             {opensDeaconateDesk ? (

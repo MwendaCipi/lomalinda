@@ -858,6 +858,23 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
 };
 
 /**
+ * One name for the ministry map and every ministry and department desk read
+ * from it — the leadership console's directory and each area opened in it.
+ *
+ * The shell's heading used to follow whatever was on screen: the map named
+ * whichever half its toggles held, and each area renamed the page as it was
+ * opened, so the heading and the line under it changed with every move on a
+ * wide screen (the band is phone-optional chrome — on a phone the strip names
+ * the place). Both are fixed here so every surface the Ministry section draws
+ * reads the same heading and description throughout, and the two places that
+ * write it (`my-areas`, `department-hub`) cannot drift apart.
+ */
+export const MINISTRIES_AND_DEPARTMENTS_HEADING = {
+  label: "Ministries & Departments",
+  description: "Every ministry and department of the church, with its leaders, members and calendar.",
+} as const;
+
+/**
  * The treasury's pages — the treasurer's desk, as its own row on the rail.
  *
  * It answers one question (what does the church hold, and where did it go),
@@ -1178,13 +1195,13 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   education: "Education",
   dorcas: "Dorcas",
   development: "Development",
-};
+};  /**
+   * The areas every member may visit on the rail, whatever roles they hold:
+   * the music ministry, the deaconate and the Possibility Ministries desk are
+   * the church's open doors — a member with no other area still sees these.
+   */
 
-/**
- * The areas every member may visit on the rail, whatever roles they hold:
- * the music ministry, the deaconate and the Possibility Ministries desk are
- * the church's open doors — a member with no other area still sees these.
- */
+export const OPEN_DOOR_AREA_CODES = new Set(["music", "apm", "deaconate"]);
 
 /** What a caller tells the rail about the signed-in member. */
 export type RailMember = {
