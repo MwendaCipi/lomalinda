@@ -4082,17 +4082,9 @@ function DepartmentDetail({
   }, [onBack]);
   useEffect(() => {
     setHeadingFirst(true);
-    // One heading for the whole ministries and departments page. The desk
-    // used to name itself here as it was opened, so the band renamed the page
-    // on every toggle — the static text stands instead wherever the desk *is*
-    // the page: the leadership console's desk and any area opened from the
-    // ministry map. A desk drawn inside another (the deaconate's pages in
-    // the console) keeps naming itself: there the strip above is the page's
-    // own chrome and the desk is one view of it.
-    const namesItself = embedded && onConsole;
     setCustomHeader({
-      label: namesItself ? department.label : MINISTRIES_AND_DEPARTMENTS_HEADING.label,
-      description: namesItself ? department.description : MINISTRIES_AND_DEPARTMENTS_HEADING.description,
+      label: department.label,
+      description: department.description || DEPARTMENT_BLURBS[department.code],
       leading: onBackRef.current ? (
         <button
           type="button"
@@ -4108,7 +4100,7 @@ function DepartmentDetail({
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [embedded, onConsole, department.label, department.description, setCustomHeader, setHeadingFirst]);
+  }, [department.code, department.label, department.description, setCustomHeader, setHeadingFirst]);
 
   useEffect(() => {
     // A desk that is one view of a larger one leaves the strip to it entirely
@@ -5219,7 +5211,7 @@ export function DepartmentHub({
     onBackRef.current = onBack;
   }, [onBack]);
   useEffect(() => {
-    if (embedded) return;
+    if (embedded || selected) return;
     setCustomHeader({
       label: MINISTRIES_AND_DEPARTMENTS_HEADING.label,
       description: MINISTRIES_AND_DEPARTMENTS_HEADING.description,

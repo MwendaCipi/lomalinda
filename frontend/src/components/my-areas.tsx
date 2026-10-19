@@ -9,6 +9,7 @@ import { SubNav } from "@/components/sub-nav";
 import {
   DEACONATE_ROLES,
   deaconateViews,
+  DEPARTMENT_BLURBS,
   isStaffRole,
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
@@ -364,22 +365,31 @@ export function MyAreas() {
   // desk's own and its text is the one that stands — a view change would move
   // the strip under the wrong heading otherwise.
   useEffect(() => {
+    if (openArea) {
+      if (opensDeaconateDesk && !deaconateUsesHub) {
+        setCustomHeader({
+          label: openArea.label,
+          description: openArea.description || DEPARTMENT_BLURBS[openArea.code],
+          leading: (
+            <button
+              type="button"
+              onClick={showMap}
+              aria-label="Back"
+              className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ),
+        });
+      }
+      return;
+    }
     setCustomHeader({
       label: MINISTRIES_AND_DEPARTMENTS_HEADING.label,
       description: MINISTRIES_AND_DEPARTMENTS_HEADING.description,
-      leading: openArea ? (
-        <button
-          type="button"
-          onClick={showMap}
-          aria-label="Back"
-          className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-      ) : undefined,
     });
     return () => setCustomHeader(null);
-  }, [openArea, openView, setCustomHeader, showMap]);
+  }, [openArea, opensDeaconateDesk, deaconateUsesHub, setCustomHeader, showMap]);
 
   async function requestToJoin(code: string, label: string) {
     setJoining(code);
