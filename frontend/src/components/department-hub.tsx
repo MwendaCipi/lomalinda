@@ -3353,9 +3353,6 @@ export function DepartmentAccountsPanel({
           {/* Account Filter Switcher Tabs: when more than 1 account is accessible */}
           {accounts.length > 1 && (
             <div className={`flex shrink-0 items-center gap-1.5 border-b border-sand-line bg-sand/30 px-4 py-2 text-xs overflow-x-auto ${showInlineControls ? "" : "rounded-t-2xl"}`}>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-moss mr-1 shrink-0">
-                Account:
-              </span>
               <button
                 type="button"
                 onClick={() => {
