@@ -68,7 +68,8 @@ async function runEslint(files) {
     ? path.join(FRONTEND, "node_modules", ".bin", "eslint")
     : "npx";
   const run = (entries) => new Promise((resolve, reject) => {
-    const child = spawn(eslint, eslint === "npx" ? ["eslint", "-f", "json", ...entries] : ["-f", "json", ...entries], {
+    const lintArgs = ["--cache", "--cache-location", path.join(FRONTEND, ".eslintcache"), "-f", "json", ...entries];
+    const child = spawn(eslint, eslint === "npx" ? ["eslint", ...lintArgs] : lintArgs, {
       cwd: FRONTEND, shell: process.platform === "win32",
     });
     let stdout = "";
@@ -81,11 +82,8 @@ async function runEslint(files) {
       catch { reject(new Error(stderr || "eslint produced no report")); }
     });
   });
-  // Changed-file linting is independent per file; concurrent processes avoid
-  // making the deploy gate wait for parser startup once per source file.
-  if (files.length > 1 && !files.includes(".")) {
-    return (await Promise.all(files.map((file) => run([file])))).flat();
-  }
+  // One ESLint process reuses its TypeScript program across the changed files;
+  // spawning several workers made the pre-deploy gate slower than a full lint.
   return run(files);
 }
 
