@@ -880,6 +880,16 @@ export const MINISTRIES_AND_DEPARTMENTS_HEADING = {
 } as const;
 
 /**
+ * The static heading and description for the Treasury desk, ensuring it stays
+ * fixed throughout all treasury toggles (individual givings, summary, accounts,
+ * fund drives, expenses, requests, failed).
+ */
+export const TREASURY_HEADING = {
+  label: "Treasury",
+  description: "The church's treasury accounts, ledgers, fund drives and budget.",
+} as const;
+
+/**
  * The treasury's pages — the treasurer's desk, as its own row on the rail.
  *
  * It answers one question (what does the church hold, and where did it go),

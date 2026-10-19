@@ -312,9 +312,9 @@ export function DashboardAnnouncements() {
                and the ask to read on sit under them, so the rail's rule that
                every card takes a comment holds here too. */
             <div className="ml-auto flex w-full flex-col gap-2">
-              <div className="flex items-center justify-end gap-3">
+              <div className="flex items-center justify-end gap-2.5 sm:gap-3">
                 {countdown && (
-                  <span className="text-xs font-semibold text-moss" aria-live="polite">
+                  <span className="whitespace-nowrap text-xs font-semibold text-moss" aria-live="polite">
                     {countdown}
                   </span>
                 )}
@@ -322,7 +322,7 @@ export function DashboardAnnouncements() {
                   href={current.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+                  className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
                 >
                   {platformLabel(current.href)}
                 </a>
@@ -342,9 +342,9 @@ export function DashboardAnnouncements() {
           {/* The next gathering is online: the same way in the conference
               slide carries — the hour it begins, then the join button. */}
           {!current && gathering?.online && gathering.link && (
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex items-center justify-end gap-2.5 sm:gap-3">
               {countdown && (
-                <span className="text-xs font-semibold text-moss" aria-live="polite">
+                <span className="whitespace-nowrap text-xs font-semibold text-moss" aria-live="polite">
                   {countdown}
                 </span>
               )}
@@ -352,7 +352,7 @@ export function DashboardAnnouncements() {
                 href={gathering.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="pointer-events-auto rounded-full bg-ember px-5 py-2 text-xs font-bold text-white transition hover:bg-ember-dark"
+                className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
               >
                 {platformLabel(gathering.link)}
               </a>

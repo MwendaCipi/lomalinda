@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
+import { MoveLeft, LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
@@ -248,16 +248,16 @@ export function MyAreas() {
     // the entry that holds it (the history layer's job, not this page's):
     // one entry per area is what keeps Back one tap per place.
     (code: string) =>
-      router.push(code === "treasury" ? "/administration?tab=accounts" : `/my-areas?area=${code}&view=members`),
+      router.push(code === "treasury" ? "/administration/treasury" : `/my-areas?area=${code}&view=members`),
     [router]
   );
   // …and a `?area=treasury` already in the address bar goes to the desk
-  // too: holders to the accounts desk itself, anyone else back to the map
+  // too: holders to the individual givings desk itself, anyone else back to the map
   // (the row is the treasurer's and the admin's to open). Replacing keeps
   // the map one step back, the way pressing the card is not.
   useEffect(() => {
     if (openCode !== "treasury") return;
-    router.replace(holdsTreasury ? "/administration?tab=accounts" : "/my-areas");
+    router.replace(holdsTreasury ? "/administration/treasury" : "/my-areas");
   }, [openCode, holdsTreasury, router]);
   // The sub-nav: the map's own two halves. An open area draws its own strip
   // — the desk's, exactly as the dashboard's ministry card draws it — so
@@ -375,9 +375,9 @@ export function MyAreas() {
               type="button"
               onClick={showMap}
               aria-label="Back"
-              className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
+              className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
             >
-              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              <MoveLeft className="h-5 w-5" aria-hidden="true" />
             </button>
           ),
         });
@@ -466,7 +466,7 @@ export function MyAreas() {
             onClick={showMap}
             className="mb-3 hidden w-fit items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:inline-flex"
           >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            <MoveLeft className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
           <div className="min-h-0 w-full flex-1">
             {opensDeaconateDesk ? (

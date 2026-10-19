@@ -330,7 +330,7 @@ function AdministrationContent() {
     // in a hand is sent to the ledger: the treasury's strip then opens with the
     // toggle that names their work underscored, instead of the accounts desk
     // where Church Accounts, the fourth, would be the one lit.
-    const opensTreasuryLedger = !onDesk && isFinance && !isClerk && !isElder && !isAdmin;
+    const opensTreasuryLedger = !onDesk && isFinance;
     const fallback = opensTreasuryLedger
       ? "treasury"
       : onDesk
@@ -344,7 +344,7 @@ function AdministrationContent() {
         : isClerk || isElder || isAdmin
           ? "users"
           : isFinance
-            ? "accounts"
+            ? "treasury"
             : "settings";
     // Until the gate answers, the hand reads the overview's cards — the landing
     // a phone gets — and the ledger under it takes over once access is granted.

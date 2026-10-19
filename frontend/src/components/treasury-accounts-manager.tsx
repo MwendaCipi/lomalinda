@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
+import { TREASURY_HEADING } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst, firstDayOfMonth, localDate } from "@/lib/dates";
 import { RecordList } from "./record-list";
@@ -651,7 +652,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // page's own views. Rendering it through the band (rather than as a row in
   // this component's own header) is what keeps the treasury to a single line
   // of toggles — the band shows this strip instead of the section's pages.
-  const { setCustomToggles, setHeaderRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
+  const { setCustomToggles, setHeaderRightAction, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
   // A phone reads the desk top-down the way the ledger does: the view's name
   // first, its search and filters under it, then the treasury strip. The
   // shell hides the heading on a phone unless a page asks to lead with it,
@@ -660,6 +661,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     setHeadingFirst(true);
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
+  useEffect(() => {
+    setTogglesHideOnScroll(true);
+    return () => setTogglesHideOnScroll(false);
+  }, [setTogglesHideOnScroll]);
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
@@ -678,21 +683,30 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     );
     return () => setCustomToggles(null);
   }, [setCustomToggles, view, router]);
-  // The desk answers three of the treasury's views under the console's
-  // accounts tab, and the rail row that led here is named "Church Accounts".
-  // Naming the view the treasurer chose keeps the shell's heading in step with
-  // the toggle strip above, the way the ledger does for its two views.
+  // The treasury desk maintains a static heading throughout all views.
   useEffect(() => {
-    setCustomHeader(
-      {
-        accounts: { label: "Church Accounts", description: "The church's treasury accounts, their balances and their movements." },
-        expenditure: { label: "Expenses", description: "Spending recorded against the church's accounts." },
-        withdrawals: { label: "Requests", description: "The departments' asks for money from their funds." },
-        unassigned: { label: "Unassigned Payments", description: "Paybill gifts whose reference named no account, waiting for one." },
-      }[view]
-    );
+    setCustomHeader({
+      label: TREASURY_HEADING.label,
+      description: TREASURY_HEADING.description,
+      leading: (
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.replace("/administration?tab=overview", { scroll: false });
+            }
+          }}
+          aria-label="Back"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
+        >
+          <MoveLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+      ),
+    });
     return () => setCustomHeader(null);
-  }, [setCustomHeader, view]);
+  }, [setCustomHeader, router]);
 
   const [loading, setLoading] = useState(false);
   // One desk-wide row density, shared with the roster and the other tables.

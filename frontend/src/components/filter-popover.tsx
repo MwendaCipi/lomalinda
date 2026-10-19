@@ -30,6 +30,7 @@ export function FilterPopover({
   active = false,
   title = "Filters",
   minW = 264,
+  align = "left",
   children,
 }: {
   /** The standing choice, short enough for a phone's button. */
@@ -38,6 +39,7 @@ export function FilterPopover({
   active?: boolean;
   title?: string;
   minW?: number;
+  align?: "left" | "right";
   /** The controls themselves, exactly as the wide screens show them. */
   children: ReactNode;
 }) {
@@ -135,7 +137,7 @@ export function FilterPopover({
         panelRef={panelRef}
         open={open}
         minW={minW}
-        align="right"
+        align={align}
         panelClassName="rounded-2xl border border-sand-line bg-white p-3 shadow-2xl"
       >
         <div className="space-y-2.5">

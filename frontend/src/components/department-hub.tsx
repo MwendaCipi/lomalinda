@@ -19,6 +19,7 @@ import {
   Accessibility,
   ArrowDownLeft,
   ArrowLeft,
+  MoveLeft,
   ArrowUpRight,
   Baby,
   BookOpen,
@@ -67,7 +68,11 @@ import {
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
 
-import { invalidateDepartments } from "@/hooks/use-departments";
+import {
+  invalidateDepartments,
+  DEPARTMENT_LABEL_OVERRIDES,
+  DEPARTMENT_DESCRIPTION_OVERRIDES,
+} from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { FilterPopover, FilterSet } from "./filter-popover";
 import { usePageHeader } from "@/components/app-frame";
@@ -4082,17 +4087,21 @@ function DepartmentDetail({
   }, [onBack]);
   useEffect(() => {
     setHeadingFirst(true);
+    const label = DEPARTMENT_LABEL_OVERRIDES[department.code] ?? department.label;
+    const description =
+      DEPARTMENT_DESCRIPTION_OVERRIDES[department.code] ??
+      (department.description || DEPARTMENT_BLURBS[department.code]);
     setCustomHeader({
-      label: department.label,
-      description: department.description || DEPARTMENT_BLURBS[department.code],
+      label,
+      description,
       leading: onBackRef.current ? (
         <button
           type="button"
           onClick={() => onBackRef.current?.()}
           aria-label="Back"
-          className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
         >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <MoveLeft className="h-5 w-5" aria-hidden="true" />
         </button>
       ) : undefined,
     });
@@ -4573,7 +4582,7 @@ function DepartmentDetail({
     <div
       className={`mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col custom-hover-scrollbar ${
         deskFillsPhone
-          ? "md:gap-4 md:overflow-hidden md:px-4 lg:px-6"
+          ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
           : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
       }`}
     >
@@ -4582,7 +4591,7 @@ function DepartmentDetail({
           scroll, the way the roster and treasury read. The department's board
           leads the table, so opening a department shows who leads it first. */}
       {subTab === "members" && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white md:rounded-2xl md:border md:border-sand-line md:shadow-sm">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
@@ -4595,31 +4604,31 @@ function DepartmentDetail({
                     : "No member matches that search."}
               </p>
             ) : (
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-center sm:text-left text-xs">
                 <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
                   <tr className="border-b border-sand-line">
-                    <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                    <th className="px-4 pb-3 pt-3 text-center sm:text-left font-bold">Name</th>
                     {department.code === "children" && (
-                      <th className="px-4 pb-3 pt-3 font-bold">Class</th>
+                      <th className="px-4 pb-3 pt-3 text-center sm:text-left font-bold">Class</th>
                     )}
-                    <th className="px-4 pb-3 pt-3 font-bold">Role</th>
+                    <th className="px-4 pb-3 pt-3 text-center sm:text-left font-bold">Role</th>
                     {/* The desks the church files by age read who they are
                         filed by: Young Adults, Ambassadors and Children's
                         roll carries a sex column. */}
                     {SHOW_SEX.has(department.code) && (
-                      <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Sex</th>
+                      <th className="hidden px-4 pb-3 pt-3 text-center sm:text-left font-bold sm:table-cell">Sex</th>
                     )}
-                    <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Contact</th>
-                    <th className="px-4 pb-3 pt-3 text-right font-bold">Actions</th>
+                    <th className="hidden px-4 pb-3 pt-3 text-center sm:text-left font-bold sm:table-cell">Contact</th>
+                    <th className="px-4 pb-3 pt-3 text-center sm:text-right font-bold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-soft">
                   {visibleMembers.map((row) => (
                     <tr key={row.key}>
-                      <td className={`px-4 ${rowPad} align-middle`}>
+                      <td className={`px-4 ${rowPad} text-center sm:text-left align-middle`}>
                         {/* The badges wrap rather than eat the name: a name
                             squeezed to "Peter Nd…" identifies nobody. */}
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-2 gap-y-1">
                           <p className="font-semibold text-bark">{row.name}</p>
                           {department.code === "children" && (row.class || row.unit) && (
                             <span className="sm:hidden text-[11px] font-medium text-fuchsia-800">
@@ -4663,7 +4672,7 @@ function DepartmentDetail({
                         </div>
                       </td>
                       {department.code === "children" && (
-                        <td className={`px-4 ${rowPad} align-middle`}>
+                        <td className={`px-4 ${rowPad} text-center sm:text-left align-middle`}>
                           {row.class || row.unit ? (
                             <span className="inline-flex rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-0.5 text-[11px] font-semibold text-fuchsia-800">
                               {row.class || row.unit}
@@ -4673,7 +4682,7 @@ function DepartmentDetail({
                           )}
                         </td>
                       )}
-                      <td className={`px-4 ${rowPad} align-middle`}>
+                      <td className={`px-4 ${rowPad} text-center sm:text-left align-middle`}>
                         {row.request ? (
                           // The ask speaks for the row where a role would: the
                           // member's own words while it waits, the desk's
@@ -4696,14 +4705,14 @@ function DepartmentDetail({
                         )}
                       </td>
                       {SHOW_SEX.has(department.code) && (
-                        <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
+                        <td className={`hidden px-4 ${rowPad} text-center sm:text-left align-middle sm:table-cell`}>
                           <span className="text-moss">{row.sex ? (row.sex.toLowerCase() === "female" ? "Female" : "Male") : "—"}</span>
                         </td>
                       )}
-                      <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
+                      <td className={`hidden px-4 ${rowPad} text-center sm:text-left align-middle sm:table-cell`}>
                         <span className="truncate text-moss">{row.phone_number || row.email || `@${row.username}`}</span>
                       </td>
-                      <td className={`px-4 ${rowPad} text-right align-middle`}>
+                      <td className={`px-4 ${rowPad} text-center sm:text-right align-middle`}>
                         <div className="relative inline-block" data-action-menu>
                           <button
                             type="button"
@@ -4834,13 +4843,13 @@ function DepartmentDetail({
               the ask to join beneath the table, where a member reading an
               area they are not on the roll of meets it at the end of the
               list, not as chrome above it. */}
-          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
+          <div className="flex shrink-0 flex-col sm:flex-row items-center justify-between gap-2 border-t border-sand-line px-4 py-3 text-center sm:text-left">
             <p className="text-xs text-moss">
               {visibleMembers.length} {visibleMembers.length === 1 ? "person" : "people"}
               {rollQuery ? ` of ${memberRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             {canManageRoll ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                 {department.code === "children" && (
                   <button
                     type="button"
@@ -5220,9 +5229,9 @@ export function DepartmentHub({
           type="button"
           onClick={() => onBackRef.current?.()}
           aria-label="Back"
-          className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
         >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <MoveLeft className="h-5 w-5" aria-hidden="true" />
         </button>
       ) : undefined,
     });
@@ -5241,11 +5250,16 @@ export function DepartmentHub({
     fetch(`${API_URL}/api/members/departments/`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : { departments: [] }))
       .then((data) => {
-        setDepartments(data.departments || []);
+        const raw = ((data.departments || []) as DepartmentRow[]).map((d) => ({
+          ...d,
+          label: DEPARTMENT_LABEL_OVERRIDES[d.code] ?? d.label,
+          description: DEPARTMENT_DESCRIPTION_OVERRIDES[d.code] ?? d.description,
+        }));
+        setDepartments(raw);
         setSelected(() => {
           const code = departmentDeskCode(initialDept);
           if (!code) return null;
-          return (data.departments || []).find((d: DepartmentRow) => d.code === code) ?? null;
+          return raw.find((d: DepartmentRow) => d.code === code) ?? null;
         });
       })
       .catch(() => setDepartments([]))

@@ -167,14 +167,20 @@ export function countdownTo(target: Date, now: Date): string | null {
     // Hours are the unit of a day already in progress; under the last hour the
     // minutes are what is left, and "in 0 hours" would say nothing.
     const hours = Math.floor(remaining / 3_600_000);
-    const value = hours >= 1 ? plural(hours, "hour") : plural(Math.max(1, totalMinutes), "minute");
+    const value = hours >= 1 ? `${hours}h` : `${Math.max(1, totalMinutes)}m`;
     return `in ${value}`;
   }
 
   const days = Math.floor(totalMinutes / (60 * 24));
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  if (days >= 1 && hours > 0) {
+    return `in ${days}d ${hours}h`;
+  }
+  if (days >= 1) {
+    return `in ${plural(days, "day")}`;
+  }
   const minutes = totalMinutes % 60;
-  return `in ${plural(days, "day")}, ${plural(hours, "hour")}, ${plural(minutes, "minute")}`;
+  return `in ${hours}h ${minutes}m`;
 }
 
 /**
@@ -199,7 +205,7 @@ export function gatheringCountdown(gathering: Gathering, now: Date): string | nu
 export function platformLabel(href: string | null | undefined) {
   if (!href) return "Join online";
   const url = href.toLowerCase();
-  if (url.includes("meet.google.com")) return "Open Google Meet";
+  if (url.includes("meet.google.com")) return "Open on Google Meet";
   if (url.includes("zoom.us") || url.includes("zoom.com")) return "Open Zoom";
   if (url.includes("youtube.com") || url.includes("youtu.be")) return "Open YouTube";
   if (url.includes("teams.microsoft.com")) return "Open Teams";

@@ -39,12 +39,22 @@ export function MobileTabBar() {
   // button: one poller feeds both badges.
   const chatUnread = useChatUnread();
 
-  // On the surfaces that are read by scrolling — the dashboard, the
-  // announcements feed and the live balances board — the bar steps out of
+  // On the surfaces that are read by scrolling — the dashboard, announcements,
+  // ministries, materials, chat and stewardship cards — the bar steps out of
   // the way on the way down and comes straight back on any upward movement,
   // so a long read gets the whole screen without stranding anyone.
   const navHidesOnScroll =
-    pathname === "/dashboard" || pathname.startsWith("/announcements") || pathname === "/support/financial";
+    pathname === "/dashboard" ||
+    pathname.startsWith("/announcements") ||
+    pathname.startsWith("/my-areas") ||
+    pathname.startsWith("/ministries") ||
+    pathname.startsWith("/materials") ||
+    pathname.startsWith("/chat") ||
+    pathname.startsWith("/member/giving") ||
+    pathname.startsWith("/member/givings") ||
+    pathname.startsWith("/support") ||
+    pathname === "/financial" ||
+    pathname === "/give";
   const [scrolledDown, setScrolledDown] = useState(false);
   // The route decides whether hiding is in play at all; the scroll only ever
   // says which way the reader is going. Deriving the bar's state keeps a route
@@ -52,10 +62,24 @@ export function MobileTabBar() {
   const navHidden = navHidesOnScroll && scrolledDown;
 
   useEffect(() => {
-    if (!navHidesOnScroll) return;
-    let lastY = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
+    if (!navHidesOnScroll) {
+      return;
+    }
+    let lastTarget: EventTarget | null = null;
+    let lastY = 0;
+    const onScroll = (event: Event) => {
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      let y = 0;
+      if (element && element !== document.documentElement && element !== document.body) {
+        y = element.scrollTop;
+      } else {
+        y = window.scrollY;
+      }
+      if (event.target !== lastTarget) {
+        lastTarget = event.target;
+        lastY = y;
+        return;
+      }
       const moved = y - lastY;
       lastY = y;
       // Near the top the bar is always shown, whatever the last movement was.
@@ -67,8 +91,8 @@ export function MobileTabBar() {
       if (Math.abs(moved) < 8) return;
       setScrolledDown(moved > 0);
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
   }, [navHidesOnScroll]);
 
   // Count this tab's app entries from the first render, so "go home" knows how

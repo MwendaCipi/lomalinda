@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, X } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -13,6 +13,7 @@ import { TreasuryNav } from "@/components/treasury-nav";
 import { ComboboxPopover } from "@/components/combobox-popover";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
+import { TREASURY_HEADING } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime, timeOnly } from "@/lib/dates";
@@ -134,7 +135,7 @@ export default function TreasuryPage() {
     }
   }, [modeParam]);
 
-  const { setHeaderRightAction, setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
   // A phone reads the desk the way the ministry map reads: the view's name
   // first, the search and the date window under it, then the strip. Without
   // this the shell hides the heading on a phone (the strip names the place)
@@ -144,6 +145,10 @@ export default function TreasuryPage() {
     setHeadingFirst(true);
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
+  useEffect(() => {
+    setTogglesHideOnScroll(true);
+    return () => setTogglesHideOnScroll(false);
+  }, [setTogglesHideOnScroll]);
   const [searchQuery, setSearchQuery] = useState("");
   // A phone holds both dates behind one button in the header, so the desk
   // keeps one row of controls where it used to spend two. The fields
@@ -497,15 +502,28 @@ export default function TreasuryPage() {
   // heading honest, so pressing Individual Givings does not leave the page
   // titled after the ledger it sits in.
   useEffect(() => {
-    setCustomHeader(
-      viewMode === "summary"
-        ? { label: "Summary Contributions", description: "Each purpose's giving, totalled by how it came in." }
-        : viewMode === "failed_givings"
-          ? { label: "Failed Givings", description: "Attempts that never completed." }
-          : { label: "Individual Givings", description: "Every contribution line by line, with its giver, mode and receipt." }
-    );
+    setCustomHeader({
+      label: TREASURY_HEADING.label,
+      description: TREASURY_HEADING.description,
+      leading: (
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.replace("/administration?tab=overview", { scroll: false });
+            }
+          }}
+          aria-label="Back"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
+        >
+          <MoveLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+      ),
+    });
     return () => setCustomHeader(null);
-  }, [setCustomHeader, viewMode]);
+  }, [setCustomHeader, router]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

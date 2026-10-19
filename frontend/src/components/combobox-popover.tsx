@@ -72,8 +72,15 @@ export function ComboboxPopover({
       ) {
         top = rect.top - panelH - gap;
       }
-      const left = align === "right" ? rect.right - width : rect.left;
-      setStyle({ position: "fixed", top, left, width, zIndex: 70 });
+      const screenMargin = 8;
+      const effectiveWidth = Math.min(width, window.innerWidth - screenMargin * 2);
+      let left = align === "right" ? rect.right - effectiveWidth : rect.left;
+      if (left < screenMargin) {
+        left = screenMargin;
+      } else if (left + effectiveWidth > window.innerWidth - screenMargin) {
+        left = Math.max(screenMargin, window.innerWidth - screenMargin - effectiveWidth);
+      }
+      setStyle({ position: "fixed", top, left, width: effectiveWidth, zIndex: 70 });
     };
     update();
     // Re-measure once the panel has actually rendered (its height matters).

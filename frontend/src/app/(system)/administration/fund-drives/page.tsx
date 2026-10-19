@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { MoveLeft } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
+import { TREASURY_HEADING } from "@/config/navigation";
 
 /**
  * Fund drives, with the goal management the treasury needs to run them.
@@ -23,7 +25,41 @@ import { usePageHeader } from "@/components/app-frame";
 export default function FundDrivesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { setCustomToggles } = usePageHeader();
+  const { setCustomToggles, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
+
+  useEffect(() => {
+    setHeadingFirst(true);
+    return () => setHeadingFirst(false);
+  }, [setHeadingFirst]);
+
+  useEffect(() => {
+    setTogglesHideOnScroll(true);
+    return () => setTogglesHideOnScroll(false);
+  }, [setTogglesHideOnScroll]);
+
+  useEffect(() => {
+    setCustomHeader({
+      label: TREASURY_HEADING.label,
+      description: TREASURY_HEADING.description,
+      leading: (
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.replace("/administration?tab=overview", { scroll: false });
+            }
+          }}
+          aria-label="Back"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
+        >
+          <MoveLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+      ),
+    });
+    return () => setCustomHeader(null);
+  }, [setCustomHeader, router]);
 
   useEffect(() => {
     setCustomToggles(

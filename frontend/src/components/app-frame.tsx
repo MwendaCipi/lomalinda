@@ -66,6 +66,11 @@ type PageHeaderContextType = {
    * own scroll.
    */
   setPinnedDesk: (on: boolean) => void;
+  /**
+   * Whether the toggles strip should step aside / hide when the reader scrolls,
+   * giving the height back to the scrolling page content while heading and search stay fixed.
+   */
+  setTogglesHideOnScroll: (on: boolean) => void;
 };
 
 const PageHeaderContext = createContext<PageHeaderContextType>({
@@ -75,6 +80,7 @@ const PageHeaderContext = createContext<PageHeaderContextType>({
   setCustomHeader: () => {},
   setHeadingFirst: () => {},
   setPinnedDesk: () => {},
+  setTogglesHideOnScroll: () => {},
 });
 
 export function usePageHeader() {
@@ -136,13 +142,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * that switch a table between views keep their strip: there the toggles *are*
    * the page, and the calendar asks for the same by holding its own list still.
    */
+  const [togglesHideOnScrollAsked, setTogglesHideOnScroll] = useState(false);
+
   const togglesHideOnScroll =
+    togglesHideOnScrollAsked ||
     pathname === "/member/giving" ||
     pathname === "/member/givings" ||
     pathname === "/support/campaigns" ||
     pathname === "/support/budget" ||
     pathname === "/support/financial" ||
-    pathname === "/support/reports";
+    pathname === "/support/reports" ||
+    pathname === "/administration/treasury" ||
+    pathname === "/administration/fund-drives";
 
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
   const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
@@ -182,8 +193,9 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       setCustomHeader,
       setHeadingFirst,
       setPinnedDesk,
+      setTogglesHideOnScroll,
     }),
-    [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst]
+    [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst, setPinnedDesk, setTogglesHideOnScroll]
   );
 
   // A page's header chrome belongs to the route it was drawn for, so it is
@@ -202,6 +214,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     setCustomHeader(null);
     setHeadingFirst(false);
     setPinnedDesk(false);
+    setTogglesHideOnScroll(false);
     setTogglesScrolledDown(false);
   }
 
@@ -240,8 +253,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       // page's first row, not chrome pinned over it — and taking its height
       // away under a moving page would only shift what the reader is reading.
       const element = event.target instanceof HTMLElement ? event.target : null;
-      if (!element || element === document.documentElement || element === document.body) return;
-      const y = element.scrollTop;
+      let y = 0;
+      if (element && element !== document.documentElement && element !== document.body) {
+        y = element.scrollTop;
+      } else {
+        y = window.scrollY;
+      }
       // A different scroller takes over: the move is measured from here.
       if (event.target !== lastTarget) {
         lastTarget = event.target;
@@ -412,7 +429,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                   ref={togglesBandRef}
                   inert={togglesHideOnScroll && togglesScrolledDown}
                   className={`${headingFirst ? "order-2" : "order-1"} sm:order-none grid shrink-0 transition-[grid-template-rows] duration-300 ease-out ${
-                    togglesHideOnScroll && togglesScrolledDown ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+                    togglesHideOnScroll && togglesScrolledDown ? "grid-rows-[0fr] sm:grid-rows-[1fr]" : "grid-rows-[1fr]"
                   }`}
                 >
                   <div className="flex min-h-0 items-center gap-3 overflow-hidden border-b border-sand-line bg-white px-3 sm:px-5">

@@ -163,13 +163,22 @@ def _signature_flowable(image, max_width, max_height):
         return None
 
 
+def _to_eat(dt):
+    """Convert a datetime to East African Time (Africa/Nairobi, UTC+3)."""
+    if not dt:
+        return None
+    try:
+        return timezone.localtime(dt)
+    except Exception:
+        return dt
+
+
 def _thermal_signatures(c, y, width, margin, signatures):
     """The office signatures at the foot of a thermal receipt.
 
-    Two columns, each with the office above the line, the officer's saved
-    signature resting on it, and their name beneath — what a hand-signed slip
-    looks like. Drawn directly on the 80 mm canvas because the whole receipt
-    is drawn that way; an office with no signature keeps its blank line.
+    When one signature is provided (e.g. Treasurer), it is centred horizontally
+    on the receipt with generous breathing space. If multiple are provided,
+    they are arranged in two columns.
     Returns the ``y`` the caller continues from.
     """
     entries = list(signatures or ())[:2]
@@ -177,9 +186,26 @@ def _thermal_signatures(c, y, width, margin, signatures):
         return y
     dark = colors.HexColor("#26352f")
     muted = colors.HexColor("#617068")
+    image_h = 11 * mm
+
+    if len(entries) == 1:
+        entry = entries[0]
+        slot_w = min(46 * mm, width - 2 * margin)
+        x = (width - slot_w) / 2
+        c.setFillColor(muted)
+        c.setFont("Helvetica", 6.5)
+        c.drawCentredString(width / 2, y, (entry.get("office") or "").upper())
+        _draw_signature(c, entry.get("image"), x + 1.5 * mm, y - image_h - 2, slot_w - 3 * mm, image_h)
+        c.setStrokeColor(dark)
+        c.setLineWidth(0.6)
+        c.line(x, y - image_h - 2, x + slot_w, y - image_h - 2)
+        c.setFillColor(dark)
+        c.setFont("Helvetica", 7)
+        c.drawCentredString(width / 2, y - image_h - 12, (entry.get("name") or "")[:32])
+        return y - image_h - 22
+
     gap = 5 * mm
     slot_w = (width - 2 * margin - gap) / 2
-    image_h = 11 * mm
     for index, entry in enumerate(entries):
         x = margin + index * (slot_w + gap)
         c.setFillColor(muted)
@@ -1324,7 +1350,8 @@ def generate_contribution_thermal_receipt_pdf(
     line_out(f"Received from: {(donor_name or first.donor_name or 'Friend')[:38]}")
     if first.phone_number:
         line_out(f"Phone: {first.phone_number}")
-    date_str = (first.paid_at or first.created_at).strftime("%d %b %Y %H:%M")
+    payment_dt = _to_eat(first.paid_at or first.created_at)
+    date_str = payment_dt.strftime("%d %b %Y %H:%M") if payment_dt else ""
     line_out(f"Date: {date_str}")
     method = (first.payment_method or "mpesa").replace("_", " ").upper()
     line_out(f"Method: {method}")
@@ -1365,10 +1392,10 @@ def generate_contribution_thermal_receipt_pdf(
     # ── Footer ──
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
-    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
-    # The officers behind the slip sign its foot: the treasurer who issued it
-    # and the first elder who authorises it.
-    y = _thermal_signatures(c, y - 4, WIDTH, margin, signatures)
+    issued_eat = _to_eat(issued_at)
+    line_out(f"Issued {issued_eat.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    # The treasurer who issued the slip signs its foot, centered.
+    y = _thermal_signatures(c, y - 8, WIDTH, margin, signatures)
 
     c.showPage()
     c.save()
@@ -1467,8 +1494,9 @@ def generate_in_kind_thermal_receipt_pdf(
     # ── Footer ──
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
-    line_out(f"Issued {issued_at.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
-    y = _thermal_signatures(c, y - 4, WIDTH, margin, signatures)
+    issued_eat = _to_eat(issued_at)
+    line_out(f"Issued {issued_eat.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    y = _thermal_signatures(c, y - 8, WIDTH, margin, signatures)
 
     c.showPage()
     c.save()

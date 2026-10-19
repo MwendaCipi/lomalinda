@@ -11,7 +11,7 @@ const TTL = 60 * 1000;
  * name on the door: the directorate files the choir as Ensemble, while the rail
  * and the choir's own desk call it the Church Choir.
  */
-const DEPARTMENT_LABEL_OVERRIDES: Record<string, string> = {
+export const DEPARTMENT_LABEL_OVERRIDES: Record<string, string> = {
   development: "Development",
   choir: "Church Choir",
 };
@@ -21,7 +21,7 @@ const DEPARTMENT_LABEL_OVERRIDES: Record<string, string> = {
  * anthems and special music was saying what the name already says, so its card
  * and its heading carry the name, who leads it and the roll — nothing else.
  */
-const DEPARTMENT_DESCRIPTION_OVERRIDES: Record<string, string> = {
+export const DEPARTMENT_DESCRIPTION_OVERRIDES: Record<string, string> = {
   choir: "",
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { MoveLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 /**
@@ -30,7 +30,7 @@ export function BackToOverviewArrow({
       onClick={onClick ?? (() => router.replace("/administration?tab=overview", { scroll: false }))}
       className="lg:hidden -ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full text-bark transition hover:bg-sand hover:text-ember"
     >
-      <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+      <MoveLeft className="h-5 w-5" aria-hidden="true" />
     </button>
   );
 }
