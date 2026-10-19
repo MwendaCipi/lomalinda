@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Images, Landmark, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -330,7 +330,10 @@ function AdministrationContent() {
     // in a hand is sent to the ledger: the treasury's strip then opens with the
     // toggle that names their work underscored, instead of the accounts desk
     // where Church Accounts, the fourth, would be the one lit.
-    const opensTreasuryLedger = !onDesk && isFinance;
+    // If the user also holds elder/clerk/admin office, prioritize the administrative
+    // desks rather than forcing them to the treasury ledger on mobile.
+    const isDedicatedTreasurer = userRoles.includes("treasurer") && !isClerk && !isElder && !isAdmin;
+    const opensTreasuryLedger = !onDesk && isDedicatedTreasurer;
     const fallback = opensTreasuryLedger
       ? "treasury"
       : onDesk
@@ -343,7 +346,7 @@ function AdministrationContent() {
               : "settings"
         : isClerk || isElder || isAdmin
           ? "users"
-          : isFinance
+          : isDedicatedTreasurer
             ? "treasury"
             : "settings";
     // Until the gate answers, the hand reads the overview's cards — the landing
@@ -358,7 +361,7 @@ function AdministrationContent() {
         { scroll: false }
       );
     }
-  }, [searchTab, isClerk, isElder, isAdmin, isFinance, status, router]);
+  }, [searchTab, isClerk, isElder, isAdmin, isFinance, userRoles, status, router]);
 
   // The console's own two pages — the register and the church's settings —
   // no longer hang on a rail row (the account menu is the console's only
@@ -458,9 +461,10 @@ function AdministrationContent() {
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
             { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
+            { icon: <Mail size={20} aria-hidden="true" />, label: "Emails", description: "Letters arriving at info@sdalomalinda.or.ke, with replies written from the desk.", href: "/administration?tab=emails" },
+            { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
-            { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
           ],
         }
       : null,
