@@ -5539,34 +5539,13 @@ def member_for_msisdn(msisdn):
 
 
 def member_for_giver_name(safaricom_name):
-    """The member account a Safaricom sender name unambiguously names, or None.
+    """Deprecated: Matching transactions by sender name is intentionally disabled.
 
-    Safaricom obfuscates the payer's number in some paybill payloads, and
-    then the phone thread is cut before it starts — the registered sender
-    name is all that is left. It is compared against the roll (first and
-    last names, case-insensitively) and ties the gift to an account only
-    when exactly ONE member fits: a name two members share names nobody,
-    because crediting and receipting a gift to the wrong member is worse
-    than leaving it to the desk. A bare first name counts only when it too
-    fits exactly one member of the roll.
+    Many members share identical first or last names, leading to false-positive
+    matches, misattributed gifts, and erroneously delivered receipts. Member
+    matching is strictly restricted to phone/MSISDN verification.
     """
-    tokens = [t for t in re.split(r'[^A-Za-z]+', (safaricom_name or '').strip()) if t]
-    if not tokens or len(tokens) > 3:
-        # Nothing name-shaped, or more parts than the roll can safely pair
-        # (suffixes, clan names) — the desk resolves those by hand.
-        return None
-    needle_first = tokens[0]
-    needle_last = tokens[-1] if len(tokens) > 1 else None
-    roll = roster_queryset()
-    if needle_last:
-        pair = list(roll.filter(first_name__iexact=needle_first, last_name__iexact=needle_last)[:2])
-        if len(pair) == 1:
-            return pair[0]
-        # Two members share the full name, or none does: either way the
-        # name alone does not single out an account.
-        return None
-    alone = list(roll.filter(Q(first_name__iexact=needle_first) | Q(last_name__iexact=needle_first))[:2])
-    return alone[0] if len(alone) == 1 else None
+    return None
 
 
 def record_direct_paybill_payment(payload):
@@ -5643,13 +5622,9 @@ def record_direct_paybill_payment(payload):
     # Link to member user if exists and not set
     if not contribution.member:
         matched_user = member_for_msisdn(msisdn) if msisdn else None
-        # Safaricom may hand back an obfuscated payer number, cutting the
-        # phone thread — the registered sender name is the remaining one,
-        # and it ties the gift down only when it names exactly one member
-        # of the roll. Either thread, when it leads somewhere, attaches the
-        # account's own address so the receipt has where to go.
-        if not matched_user and full_name:
-            matched_user = member_for_giver_name(full_name)
+        # Do NOT match transactions by sender name because many individuals share
+        # first or partial names, which causes wrong attribution and misdirected receipts.
+        # Only attach to a member account when the payer's phone number matches.
         if matched_user:
             contribution.member = matched_user
             if not contribution.donor_email and matched_user.email:
@@ -9722,6 +9697,67 @@ class TreasurySpreadsheetView(APIView):
         return response
 
 
+class TreasuryDepartmentAssignmentsView(APIView):
+    """View and update treasury accounts assigned to each department/ministry.
+
+    Only treasurers and admins can update assignments.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import ChurchSettings, Department, TreasuryAccount
+        departments = Department.objects.filter(is_active=True).order_by('sort_order', 'name')
+        settings_row, _ = ChurchSettings.objects.get_or_create(pk=1)
+        cfg = getattr(settings_row, 'department_accounts_config', None) or {}
+
+        # Compute effective accounts per department
+        result = []
+        for dept in departments:
+            # Check configured IDs first
+            configured_ids = cfg.get(dept.code)
+            if isinstance(configured_ids, list):
+                account_ids = configured_ids
+            else:
+                # Derive defaults matching department_accounts()
+                accs = department_accounts(request.user, dept.code)
+                account_ids = [a.id for a in accs]
+
+            result.append({
+                'department_code': dept.code,
+                'department_name': dept.name,
+                'group': dept.group,
+                'account_ids': account_ids,
+            })
+        return Response({
+            'assignments': result,
+            'config': cfg,
+        })
+
+    def put(self, request):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
+            return Response({"detail": "Only finance team can update department account assignments."}, status=status.HTTP_403_FORBIDDEN)
+        from .models import ChurchSettings, Department, TreasuryAccount
+        config = request.data.get('config')
+        if not isinstance(config, dict):
+            return Response({"detail": "config object is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_dept_codes = set(Department.objects.filter(is_active=True).values_list('code', flat=True))
+        valid_account_ids = set(TreasuryAccount.objects.values_list('id', flat=True))
+
+        cleaned_config = {}
+        for dept_code, acc_ids in config.items():
+            if dept_code not in valid_dept_codes:
+                continue
+            if isinstance(acc_ids, list):
+                cleaned_ids = [int(aid) for aid in acc_ids if int(aid) in valid_account_ids]
+                cleaned_config[dept_code] = cleaned_ids
+
+        settings_row, _ = ChurchSettings.objects.get_or_create(pk=1)
+        settings_row.department_accounts_config = cleaned_config
+        settings_row.save(update_fields=['department_accounts_config'])
+        return Response({"status": "success", "config": cleaned_config})
+
+
 class TreasuryAccountListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -12130,7 +12166,7 @@ def department_account(user, code):
     return accounts[0] if accounts else None
 
 
-LCB_DEPARTMENT_ACCESS_CODES = {'awm', 'eldership', 'clerkship', 'deaconate', 'education'}
+LCB_DEPARTMENT_ACCESS_CODES = {'amm', 'awm', 'eldership', 'clerkship', 'deaconate', 'education', 'personal_ministries'}
 #: The desks that read the Msamaria Mwema fund beside their own: the
 #: deaconate serves its welfare work, and the elders answer for the fund.
 MSAMARIA_DEPARTMENT_ACCESS_CODES = {'eldership', 'deaconate'}
@@ -12192,6 +12228,20 @@ def department_accounts(user, code):
     accounts = []
     if dept_account:
         accounts.append(dept_account)
+
+    # Check for custom treasurer assignments in ChurchSettings
+    try:
+        from .models import ChurchSettings
+        settings_row = ChurchSettings.objects.filter(pk=1).first()
+        cfg = getattr(settings_row, 'department_accounts_config', None) or {}
+        assigned_ids = cfg.get(code)
+        if isinstance(assigned_ids, list):
+            assigned_accounts = list(TreasuryAccount.objects.filter(id__in=assigned_ids).order_by('id'))
+            for acc in assigned_accounts:
+                if acc not in accounts:
+                    accounts.append(acc)
+    except Exception:
+        pass
 
     # 1. Development: Church Plot and Church Development accounts (excluding station development)
     if code in ('development', 'church_development', 'building'):

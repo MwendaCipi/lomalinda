@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TreasuryNav } from "@/components/treasury-nav";
 import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
@@ -749,6 +749,13 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // only then does the officer move on to the drives console to manage it.
   const [promoteAccount, setPromoteAccount] = useState<TreasuryAccount | null>(null);
 
+  // Department Account Assignments Setting modal
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [savingAssignments, setSavingAssignments] = useState(false);
+  const [assignmentsConfig, setAssignmentsConfig] = useState<Record<string, number[]>>({});
+  const [selectedDeptForAssign, setSelectedDeptForAssign] = useState<string>("");
+
   // Forms
   const [addForm, setAddForm] = useState({
     name: "",
@@ -848,6 +855,67 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       .catch(() => setDepartments([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const openAssignModal = async () => {
+    setShowAssignModal(true);
+    setLoadingAssignments(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/department-assignments/`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, number[]> = {};
+        if (Array.isArray(data.assignments)) {
+          for (const item of data.assignments) {
+            map[item.department_code] = item.account_ids || [];
+          }
+        }
+        setAssignmentsConfig(map);
+        if (!selectedDeptForAssign && departments.length > 0) {
+          setSelectedDeptForAssign(departments[0].code);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingAssignments(false);
+    }
+  };
+
+  const handleToggleAccountForDept = (deptCode: string, accountId: number) => {
+    setAssignmentsConfig((prev) => {
+      const current = prev[deptCode] || [];
+      const updated = current.includes(accountId)
+        ? current.filter((id) => id !== accountId)
+        : [...current, accountId];
+      return { ...prev, [deptCode]: updated };
+    });
+  };
+
+  const handleSaveAssignments = async () => {
+    setSavingAssignments(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/department-assignments/`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ config: assignmentsConfig }),
+      });
+      if (res.ok) {
+        void showAlert(
+          "Assignments saved",
+          "Treasury accounts have been assigned to ministries and departments successfully.",
+          "success"
+        );
+        setShowAssignModal(false);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        void showAlert("Save failed", err.detail || "Could not save account assignments.", "error");
+      }
+    } catch {
+      void showAlert("Network error", "Failed to connect to the server.", "error");
+    } finally {
+      setSavingAssignments(false);
+    }
+  };
 
   const totalLiquidity = accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
@@ -1480,6 +1548,16 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 <span className="sm:hidden">{preparingReport ? "…" : "Report"}</span>
                 <span className="hidden sm:inline">{preparingReport ? "Preparing…" : "Publish report"}</span>
               </button>
+              <button
+                type="button"
+                onClick={openAssignModal}
+                className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember sm:px-3.5"
+                title="Assign accounts to ministries and departments"
+              >
+                <Settings2 className="h-4 w-4 text-moss" />
+                <span className="sm:hidden">Assign</span>
+                <span className="hidden sm:inline">Assign Accounts</span>
+              </button>
               {/* An account is the one way to a drive: each row can be Promoted,
                   which opens the drive form with that account answering for it.
                   A separate "Add Fund Drive" button was a second, disconnected
@@ -1496,8 +1574,153 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
         </div>
       )}
 
-      {/* Modal: the church's financial statement, opened from the ledger's own
-          month to date and published to members when the desk confirms it. */}
+      {/* Modal: Assign Accounts to Departments / Ministries */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-3xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-sand-line px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-bark">Assign Accounts to Ministries & Departments</h3>
+                <p className="mt-0.5 text-xs text-moss">
+                  Configure which treasury funds are accessible at each ministry desk for viewing and withdrawal requests.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="rounded-full p-1.5 text-moss transition hover:bg-sand hover:text-bark"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            {loadingAssignments ? (
+              <div className="flex flex-1 items-center justify-center p-12 text-xs font-semibold text-moss">
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin text-ember" />
+                Loading department assignments…
+              </div>
+            ) : (
+              <div className="flex flex-1 min-h-0 flex-col md:flex-row">
+                {/* Left side: Department List */}
+                <div className="w-full md:w-56 shrink-0 border-b md:border-b-0 md:border-r border-sand-line overflow-y-auto max-h-48 md:max-h-[60vh] p-2 space-y-1">
+                  <span className="block px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
+                    Ministries & Departments
+                  </span>
+                  {departments.map((dept) => {
+                    const assignedCount = (assignmentsConfig[dept.code] || []).length;
+                    const isSelected = (selectedDeptForAssign || (departments[0]?.code ?? "")) === dept.code;
+                    return (
+                      <button
+                        key={dept.code}
+                        type="button"
+                        onClick={() => setSelectedDeptForAssign(dept.code)}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                          isSelected
+                            ? "bg-ember text-white"
+                            : "text-bark hover:bg-sand"
+                        }`}
+                      >
+                        <span className="truncate">{dept.label}</span>
+                        {assignedCount > 0 && (
+                          <span
+                            className={`ml-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              isSelected ? "bg-white/20 text-white" : "bg-sand text-moss"
+                            }`}
+                          >
+                            {assignedCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Right side: Accounts Checklist for selected department */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-5 max-h-[60vh]">
+                  {(() => {
+                    const activeDeptCode = selectedDeptForAssign || departments[0]?.code || "";
+                    const activeDept = departments.find((d) => d.code === activeDeptCode);
+                    const assignedAccIds = assignmentsConfig[activeDeptCode] || [];
+
+                    if (!activeDept) {
+                      return <div className="text-xs text-moss">Select a department on the left.</div>;
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-bark">{activeDept.label}</h4>
+                            <p className="text-xs text-moss">
+                              {assignedAccIds.length} account{assignedAccIds.length === 1 ? "" : "s"} assigned to this desk.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {accounts.map((acc) => {
+                            const isAssigned = assignedAccIds.includes(acc.id);
+                            return (
+                              <label
+                                key={acc.id}
+                                className={`flex items-start gap-3 rounded-2xl border p-3 cursor-pointer transition ${
+                                  isAssigned
+                                    ? "border-ember bg-amber-50/50"
+                                    : "border-sand-line bg-white hover:border-sand-mute hover:bg-sand-linen"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isAssigned}
+                                  onChange={() => handleToggleAccountForDept(activeDeptCode, acc.id)}
+                                  className="mt-0.5 h-4 w-4 rounded text-ember focus:ring-ember"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="truncate text-xs font-bold text-bark">
+                                      {acc.description || acc.name}
+                                    </span>
+                                  </div>
+                                  <div className="mt-0.5 flex items-center gap-2 text-[11px] text-moss">
+                                    <span className="font-mono">{acc.name}</span>
+                                    <span>•</span>
+                                    <span>KES {Number(acc.balance || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-sand-line px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="rounded-full border border-sand-mute px-5 py-2 text-xs font-bold text-moss hover:bg-sand"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAssignments}
+                disabled={savingAssignments || loadingAssignments}
+                className="rounded-full bg-ember px-6 py-2 text-xs font-bold text-white hover:bg-ember-dark disabled:opacity-60"
+              >
+                {savingAssignments ? "Saving…" : "Save Assignments"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {reportDraft && (
         <ReportComposer
           report={null}

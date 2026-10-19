@@ -1964,6 +1964,14 @@ class ChurchSettings(models.Model):
         blank=True,
         help_text="Rights per role: {role_code: [right_code, ...]}"
     )
+    # Treasury accounts assigned to each department/ministry:
+    # {department_code: [account_id, ...]}. When configured by a treasurer,
+    # the department desk reads these funds and can request withdrawals from them.
+    department_accounts_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Configured treasury accounts per department: {dept_code: [account_id, ...]}"
+    )
     # Web Push (VAPID): the key pair identifies the church server to browser
     # push services. Generate once with the management command; rotate by
     # replacing both values (existing subscriptions keep working only while

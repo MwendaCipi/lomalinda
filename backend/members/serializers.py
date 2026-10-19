@@ -1363,6 +1363,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             # as the account number is the account they are giving for, so the
             # church has nothing else to configure here.
             'mpesa_paybill_number',
+            'department_accounts_config',
         )
 
 
