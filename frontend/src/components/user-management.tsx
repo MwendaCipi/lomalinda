@@ -22,7 +22,6 @@ import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
 import { brand } from "@/lib/brand";
 import { ComboboxPopover } from "./combobox-popover";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { usePageHeader } from "@/components/app-frame";
 import { RecordList } from "./record-list";
 import { useDepartments } from "@/hooks/use-departments";
@@ -2228,19 +2227,6 @@ export function UserManagement() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
-      {/* ── Header ── */}
-      <div className="flex shrink-0 flex-col gap-1.5 border-b border-sand-line px-5 pb-4 pt-2 sm:px-6">
-        {/* Top row: the way back and the desk's name. */}
-        <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span className="flex items-center gap-1">
-            <BackToOverviewArrow />
-            {/* Named by the strip above on a wide screen. */}
-            <h2 className="text-xl font-bold text-bark md:hidden">User Management</h2>
-          </span>
-          {/* Row density left this desk: the roster reads comfortable rows. */}
-        </div>
-      </div>
-
       {/* ── Alert message ── */}
       {message && (
         <div className={`mx-6 mt-3 shrink-0 rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-mist-select text-moss-dark" : "bg-red-50 text-red-700"}`}>

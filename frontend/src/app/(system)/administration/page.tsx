@@ -370,7 +370,7 @@ function AdministrationContent() {
   // Administration from the account menu still meets a row of toggles to move
   // between the two. Desks that own their own strip (treasury, deaconate,
   // etc.) or ride a rail section are left alone.
-  const { setCustomToggles } = usePageHeader();
+  const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
   const consoleTab = activeTab === "users" || activeTab === "settings" || activeTab === "join-requests";
   // Who the toggle is for: the same people the requests desk already admits,
   // because the API behind it answers to those roles and the notices for a
@@ -379,6 +379,11 @@ function AdministrationContent() {
   const canAnswerJoins = isClerk || isElder || isAdmin || isRequestsDeskLead;
   useEffect(() => {
     if (!consoleTab) return;
+    // These are Administration's own pages, so name the console before its
+    // page toggles on a phone instead of making the current toggle's label
+    // carry the heading.
+    setCustomHeader({ label: "Administration" });
+    setHeadingFirst(true);
     setCustomToggles(
       <SectionNav
         label="Administration pages"
@@ -416,8 +421,12 @@ function AdministrationContent() {
         ]}
       />
     );
-    return () => setCustomToggles(null);
-  }, [activeTab, consoleTab, canAnswerJoins, setCustomToggles]);
+    return () => {
+      setCustomToggles(null);
+      setCustomHeader(null);
+      setHeadingFirst(false);
+    };
+  }, [activeTab, consoleTab, canAnswerJoins, setCustomToggles, setCustomHeader, setHeadingFirst]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is
