@@ -350,14 +350,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   return (
     <PageHeaderContext.Provider value={pageHeaderSlots}>
       <div
-        // A pinned page fills the shell at every width, so its foot is the
-        // shell's own bottom: on a phone that bottom is the tab bar's top
-        // edge exactly (bar height + safe area), where a scrolling page keeps
-        // pb-24 — room to scroll its last row clear of the bar.
+        // The mobile tab bar only lives on the dashboard; on any other page,
+        // it is not rendered or shown, so the shell keeps pb-0. On the dashboard,
+        // pinned mode uses calc(3.5rem+env(safe-area-inset-bottom)) and panel mode keeps pb-24.
         className={`app-shell flex min-h-0 flex-1 flex-col md:h-full md:overflow-hidden md:pb-0 ${
-          mode === "pinned" ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]" : "pb-24"
+          pathname === "/dashboard"
+            ? mode === "pinned"
+              ? "pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
+              : "pb-24"
+            : "pb-0"
         }`}
         data-scroll-mode={mode}
+        data-has-mobile-nav={pathname === "/dashboard"}
       >
         <div className="app-shell-body flex min-h-0 flex-1">
           <NavRail />
@@ -456,7 +460,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
-      <MobileTabBar />
+      {pathname === "/dashboard" && <MobileTabBar />}
     </PageHeaderContext.Provider>
   );
 }

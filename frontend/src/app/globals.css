@@ -445,22 +445,22 @@ body {
     display: block;
     height: auto;
   }
-  /* The tab-bar reserve as a trailing in-flow spacer: bar height + the device
-     gesture-bar inset + a small gap. (The bar itself grows by the same env()
-     — see SiteNav.) */
-  .app-shell[data-scroll-mode="panel"]::after {
+  /* The tab-bar reserve as a trailing in-flow spacer: only on the dashboard where
+     the mobile tab bar is shown. On other pages (treasury, stewardship, etc.) the bar
+     is hidden, so no trailing spacer is needed. */
+  .app-shell[data-has-mobile-nav="true"][data-scroll-mode="panel"]::after {
     content: "";
     display: block;
     height: calc(3.5625rem + env(safe-area-inset-bottom, 0px) + 0.625rem);
   }
 
-  /* Pinned pages keep the height chain: the shell is the whole viewport (there
-     is no header any more), the page fills it, and its inner lists scroll. The
-     reserve is trimmed to the bar plus the device inset, so pinned action
-     footers sit tight above the bar instead of floating a gap above it. */
+  /* Pinned pages: only trim bottom padding when mobile nav is present. Without mobile
+     nav, pinned pages fill the viewport without leaving empty bottom space. */
   .app-shell[data-scroll-mode="pinned"] {
     height: 100vh;
     height: 100dvh;
+  }
+  .app-shell[data-has-mobile-nav="true"][data-scroll-mode="pinned"] {
     padding-bottom: calc(3.5625rem + env(safe-area-inset-bottom, 0px));
   }
 }

@@ -13,7 +13,7 @@ import { LiveReportsPanel } from "@/components/live-reports-panel";
 export default function LiveBalancesPage() {
   return (
     <main className="min-h-screen bg-sand text-bark">
-      <div className="p-5 pb-28 sm:p-8 lg:p-10">
+      <div className="p-5 pb-8 sm:p-8 lg:p-10">
         <div className="mx-auto max-w-5xl">
           <LiveReportsPanel />
         </div>

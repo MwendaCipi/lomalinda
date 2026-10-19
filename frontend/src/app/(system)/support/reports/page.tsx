@@ -14,7 +14,7 @@ import { FinancialReportsPanel } from "@/components/financial-reports-panel";
 export default function ReportsPage() {
   return (
     <main className="min-h-screen bg-sand text-bark">
-      <div className="p-5 pb-28 sm:p-8 lg:p-10">
+      <div className="p-5 pb-8 sm:p-8 lg:p-10">
         <div className="mx-auto max-w-5xl">
           <FinancialReportsPanel />
         </div>
