@@ -286,11 +286,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     "items" in entry && entry.items ? entry.items : "href" in entry && entry.href ? [entry as RailRow] : []
   );
   const hereItem = railRows.find((item) => item.href === here.href) ?? null;
-  // A department's desk is its own place even where no blurb is seeded for it:
-  // its rail row names the area in full, so the heading reads the department
-  // rather than falling back to the console's.
-  const pageHeader =
-    hereItem && (hereItem.description || hereItem.dept)
+  // A page that sits inside a section (its toggles are the strip) takes its
+  // heading from the *section* entry — not the active toggle — so pressing a
+  // different toggle never changes the heading. A standalone rail row (a
+  // department's desk) still reads its own entry; a page with no rail entry
+  // falls back to the static registry.
+  const pageHeader = section && ("description" in section || "dept" in section)
+    ? { label: section.label, heading: (section as RailRow).heading, description: (section as RailRow).description }
+    : hereItem && (hereItem.description || hereItem.dept)
       ? { label: hereItem.label, heading: hereItem.heading, description: hereItem.description }
       : pageHeaderFor(pathname);
   // A page that names itself wins over the rail row that led here.
@@ -353,24 +356,32 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 // A page that asks to be named first (`setHeadingFirst`) swaps
                 // those two on the phone: heading, then its own strip beneath.
                 //
-                // The band is one row at every width. Where the strip names the
-                // page, the heading is left to the wider screens and the row
-                // holds the page's control alone, exactly as it did; where the
-                // page names itself first, its control takes the space beside
-                // the name — the room a phone was leaving empty beside the
-                // heading (the Ministry map's search).
+                // On a wide screen the band is one row: the name, its control
+                // to the right. On a phone a page that names itself first reads
+                // top-down instead — the way back and the name on the first
+                // row, the page's own controls (its search and filters) on the
+                // row under it, and the strip below both — so the controls
+                // never squeeze in beside the name they answer to. Where the
+                // strip names the page, the heading is left to the wider
+                // screens and the row holds the page's control alone, exactly
+                // as it always did.
                 <div
-                  className={`${headingFirst ? "order-1" : "order-2"} sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex items-center justify-between gap-3 ${
-                    headerRightAction || headingFirst ? "" : "hidden sm:flex"
-                  }`}
+                  className={`${headingFirst ? "order-1" : "order-2"} sm:order-none shrink-0 bg-white px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-sand-line flex ${
+                    headingFirst
+                      ? "flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                      : "items-center justify-between gap-3"
+                  } ${headerRightAction || headingFirst ? "" : "hidden sm:flex"}`}
                 >
                   {header && (
                     <div className={`min-w-0 ${headingFirst ? "" : "hidden sm:block"}`}>
-                      {/* Above the name on a phone: the way back out of an
-                          opened area, which is read before the name it
-                          returns from. The node carries its own breakpoints. */}
-                      {header.leading}
-                      <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{header.label}</h1>
+                      {/* Before the name on a phone: the way back out of an
+                          opened area, read on the same row and before the
+                          place it returns from. The node carries its own
+                          breakpoints. */}
+                      <div className="flex items-center gap-2">
+                        {header.leading}
+                        <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{header.label}</h1>
+                      </div>
                       {header.description && (
                         <p className="mt-0.5 hidden text-xs text-moss sm:block sm:text-sm">{header.description}</p>
                       )}
@@ -379,10 +390,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                   {headerRightAction && (
                     <div
                       className={
-                        // Beside a name the page is drawing itself: share the
-                        // row, and let the control sit at its right edge.
+                        // Its own full-width row under the name on a phone;
+                        // beside the name on the wider screens, at the right
+                        // edge of the same row.
                         headingFirst
-                          ? "flex min-w-0 flex-1 items-center justify-end gap-2"
+                          ? "flex w-full min-w-0 items-center gap-2 sm:w-auto sm:flex-1 sm:justify-end"
                           : "flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto"
                       }
                     >

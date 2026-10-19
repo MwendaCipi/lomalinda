@@ -651,7 +651,15 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // page's own views. Rendering it through the band (rather than as a row in
   // this component's own header) is what keeps the treasury to a single line
   // of toggles — the band shows this strip instead of the section's pages.
-  const { setCustomToggles, setHeaderRightAction, setCustomHeader } = usePageHeader();
+  const { setCustomToggles, setHeaderRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
+  // A phone reads the desk top-down the way the ledger does: the view's name
+  // first, its search and filters under it, then the treasury strip. The
+  // shell hides the heading on a phone unless a page asks to lead with it,
+  // which left this desk's views unnamed in a hand.
+  useEffect(() => {
+    setHeadingFirst(true);
+    return () => setHeadingFirst(false);
+  }, [setHeadingFirst]);
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav

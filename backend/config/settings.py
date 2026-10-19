@@ -118,11 +118,9 @@ if 'test' in sys.argv:
     INSTALLED_APPS = [app for app in INSTALLED_APPS if app != 'django_tenants']
     MIDDLEWARE = [m for m in MIDDLEWARE if m != 'django_tenants.middleware.main.TenantMainMiddleware']
     DATABASE_ROUTERS = ()
-    # What a test uploads is a twelve-byte fake; it belongs somewhere thrown
-    # away, not beside the pictures the church's albums really hold — every
-    # run used to leave "baptism.jpg" (and its renamed twins) in the media
-    # root, and the next run's file then saved under a stranger's name.
-    MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'loma-test-media')
+    # The uploads a test makes are kept out of the church's own media root
+    # further down the file, beside MEDIA_ROOT itself — the assignment there
+    # would otherwise overwrite anything set here.
 elif DATABASE_URL:
     DATABASE_SSL_REQUIRE = os.getenv('DATABASE_SSL_REQUIRE', 'true' if not DEBUG else 'false').lower() == 'true'
     db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=DATABASE_SSL_REQUIRE)
@@ -318,7 +316,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# The church keeps East African Time (UTC+3): every date and clock the API
+# prints — receipts, invitations, meeting times, the M-Pesa pull window — is
+# read in the parish's own timezone, whatever timezone the server happens to
+# run in.
+TIME_ZONE = 'Africa/Nairobi'
 
 USE_I18N = True
 
@@ -332,6 +334,14 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# What a test uploads is a twelve-byte fake; it belongs somewhere thrown away,
+# not beside the pictures the church's albums really hold — every run used to
+# leave "baptism.jpg" (and its renamed twins) in the media root, and the next
+# run's file then saved under a stranger's name. A *fresh* directory per run
+# rather than one shared name: a directory reused across runs collides the
+# same way the media root did, once one file in it has been saved before.
+if 'test' in sys.argv:
+    MEDIA_ROOT = tempfile.mkdtemp(prefix='loma-test-media-')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

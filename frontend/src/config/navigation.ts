@@ -709,6 +709,11 @@ export const eldershipItems: RailRow[] = [
     roles: REQUESTS_DESK_ROLES,
     description: "The asks the church has received.",
   }),
+  officeTab("eldership-moments", "Moments", Images, {
+    roles: ELDERSHIP_ROLES,
+    short: "Moments",
+    description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
+  }),
   // The elders answer for the church's money the same way the deaconate
   // does: the desk reads every treasury account — LCB and Msamaria Mwema
   // among them — with the movements on each.
@@ -938,6 +943,7 @@ export const railEntries: RailEntry[] = [
   {
     label: "Fellowship",
     icon: Megaphone,
+    description: "Where the church family gathers.",
     // One thing has no row of its own and rides here instead: the requests.
     // Prayer, visitation, dedication and joining used to stand on a rail row
     // of their own, but a member asking the church for something is already in
@@ -962,6 +968,7 @@ export const railEntries: RailEntry[] = [
   {
     label: "Stewardship",
     icon: HandHeart,
+    description: "Returning tithes, giving offerings and supporting the church's ministries.",
     // The rail's row, the strip heading and the page all read Giving for the
     // money page — `page` copies the registry label, so no override rides
     // here. In-Kind is no longer a chip of its own: the Giving page carries
@@ -984,10 +991,10 @@ export const railEntries: RailEntry[] = [
   // treasurer's has always stood on its own. The office console (the roster
   // and the church's settings) is deliberately not here: the account menu is
   // its only door, so the rail carries the desks of ongoing work.
-  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true },
-  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true },
-  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true },
-  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true },
+  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
+  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.clerkship },
+  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
+  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.deaconate },
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.
   // The choir keeps its own desk among the ministries, where its area code is
@@ -1202,6 +1209,23 @@ const RAIL_AREA_LABELS: Record<string, string> = {
    */
 
 export const OPEN_DOOR_AREA_CODES = new Set(["music", "apm", "deaconate"]);
+
+/**
+ * The two areas whose desk carries no Moments view: the Treasury and the
+ * Clerkship. Every other ministry and department keeps Moments — the days it
+ * lived, read from the desk that lived them — because those desks are the
+ * church's programme life. These two are its office record desks: the money
+ * and the minutes, kept as books rather than as the church's days, so the
+ * wall is not theirs to keep.
+ */
+const MOMENTS_LESS_AREA_CODES = new Set(["treasury", "clerkship"]);
+
+/** Does this area's desk carry a Moments view? One rule, asked by the strip
+ *  that draws a desk's pages and by the view itself, so the two can never
+ *  disagree about which areas have the page. */
+export function areaHasMoments(code: string): boolean {
+  return !MOMENTS_LESS_AREA_CODES.has(code.trim().toLowerCase());
+}
 
 /** What a caller tells the rail about the signed-in member. */
 export type RailMember = {

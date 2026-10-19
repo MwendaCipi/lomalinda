@@ -11,6 +11,7 @@ import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
 import { UserManagement } from "@/components/user-management";
 import { DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
+import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
@@ -92,6 +93,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   "deaconate-members": "the deaconate team",
   "deaconate-calendar": "the deaconate calendar",
   "deaconate-funding": "deaconate funding and accounts",
+  "eldership-moments": "the eldership's moments",
   "eldership-funding": "eldership funding and accounts",
   "clerkship-funding": "clerkship funding and accounts",
   settings: "church settings",
@@ -304,7 +306,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — board and business are rows of the Clerkship strip, so the
@@ -456,6 +458,7 @@ function AdministrationContent() {
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
             { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
+            { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
           ],
@@ -690,6 +693,16 @@ function AdministrationContent() {
                       ? "funding"
                       : "inventory"
                   }
+                />
+              </div>
+            )}
+
+            {/* Eldership Moments */}
+            {activeTab === "eldership-moments" && (isElder || isClerk || isAdmin) && (
+              <div className="h-full min-h-0">
+                <AreaMomentsPanel
+                  departmentLabel="Eldership"
+                  canManage={Boolean(isAdmin || profile?.is_staff || profile?.is_superuser)}
                 />
               </div>
             )}

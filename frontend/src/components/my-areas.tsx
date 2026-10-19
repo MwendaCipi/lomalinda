@@ -371,7 +371,8 @@ export function MyAreas() {
         <button
           type="button"
           onClick={showMap}
-          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+          aria-label="Back"
+          className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

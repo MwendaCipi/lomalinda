@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import {
+  areaHasMoments,
   DEPARTMENT_BLURBS,
   deaconateViews,
   departmentDeskCode,
@@ -80,6 +81,7 @@ import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
+import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
@@ -3699,6 +3701,7 @@ export function DepartmentAccountsPanel({
 type DeptSubTab =
   | "members"
   | "calendar"
+  | "moments"
   | "meetings"
   | "singing_groups"
   | "choir"
@@ -3799,6 +3802,17 @@ function DepartmentDetail({
   );
   const canOpenOfficeViews =
     department.code === "eldership" && viewerRoles.some((role) => ["elder", "clerk", "admin"].includes(role));
+  // May this viewer document a moment from the desk? The same answer the
+  // server gives on the POST — administrators, and the deaconate, whose desk
+  // holds the pictures of the church's days — so the button never appears
+  // where it would come back refused.
+  const canDocumentMoments = Boolean(
+    me &&
+      (me.is_staff ||
+        me.is_superuser ||
+        viewerRoles.includes("admin") ||
+        (isDeaconate && onRoll)),
+  );
   const [subTab, setSubTab] = useState<DeptSubTab>(initialTab);
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
@@ -4022,6 +4036,12 @@ function DepartmentDetail({
       // members list, where the desk filters to them and answers from the
       // row (see MembersFilterButton).
       { key: "calendar", label: "Event Calendar", short: "Events", icon: CalendarDays },
+      // Moments — every ministry and department keeps its door to the
+      // church's wall of days, except the two office record desks (Treasury
+      // and Clerkship), whose work is books rather than the church's days.
+      ...(areaHasMoments(department.code)
+        ? [{ key: "moments", label: "Moments", short: "Moments", icon: Sparkles }]
+        : []),
       // The fund ledger and withdrawal requests unified under one desk.
       { key: "accounts", label: "Account Status", short: "Account", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.
@@ -4077,10 +4097,10 @@ function DepartmentDetail({
         <button
           type="button"
           onClick={() => onBackRef.current?.()}
-          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+          aria-label="Back"
+          className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Back
         </button>
       ) : undefined,
     });
@@ -4970,6 +4990,13 @@ function DepartmentDetail({
         </div>
       )}
 
+      {/* Moments — the church's photo and video wall, read from the area that
+          lived the day. Every ministry and department desk carries this view; the
+          Treasury and the Clerkship do not (see `areaHasMoments`). */}
+      {subTab === "moments" && areaHasMoments(department.code) && (
+        <AreaMomentsPanel departmentLabel={department.label} canManage={canDocumentMoments} />
+      )}
+
       {/* Singing groups — the music register: groups registered under the
           department, each with the singers who make it up. */}
       {subTab === "choir" && isMusic && (
@@ -4997,6 +5024,15 @@ function DepartmentDetail({
       {officeViewBlocked && (
         <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
           This desk belongs to the eldership — ask one of the elders to open it for you.
+        </p>
+      )}
+      {/* A deep link may name Moments on a desk that keeps no Moments view:
+          the strip withholds it, and the desk says why rather than opening
+          on an empty panel. */}
+      {subTab === "moments" && !areaHasMoments(department.code) && (
+        <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
+          Moments rides every ministry and department desk — the Treasury and the Clerkship keep the
+          church&apos;s records rather than its days, so the wall is not theirs to keep.
         </p>
       )}
       {subTab === "baptismal-class" && canOpenOfficeViews && (
@@ -5191,10 +5227,10 @@ export function DepartmentHub({
         <button
           type="button"
           onClick={() => onBackRef.current?.()}
-          className="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:hidden"
+          aria-label="Back"
+          className="inline-flex items-center text-moss transition hover:text-bark lg:hidden"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Back
         </button>
       ) : undefined,
     });
