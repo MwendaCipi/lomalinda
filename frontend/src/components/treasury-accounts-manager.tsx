@@ -651,7 +651,11 @@ function GivingChangeRequestsPanel() {
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    // Defer the first read beyond the effect's synchronous pass. This keeps
+    // the request state transition asynchronous, like the withdrawal queue.
+    void Promise.resolve().then(load);
+  }, [load]);
   const decide = async (id: number, action: "approve" | "decline") => {
     setBusy(id);
     try {

@@ -16,7 +16,7 @@
  *   npm run lint:baseline             # regenerate .eslint-baseline.json
  *   node scripts/lint-changed.mjs HEAD~3   # explicit base instead
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,20 +61,32 @@ function collect(base) {
     .map((p) => path.relative(FRONTEND, path.join(REPO, p)));
 }
 
-function runEslint(files) {
-  const res = spawnSync("npx", ["eslint", "-f", "json", ...files], {
-    encoding: "utf8",
-    cwd: FRONTEND,
-    shell: process.platform === "win32",
-    maxBuffer: 64 * 1024 * 1024,
+async function runEslint(files) {
+  // Prefer the installed executable.  Invoking it through npx can spend a
+  // long time probing the registry even though this project pins ESLint.
+  const eslint = existsSync(path.join(FRONTEND, "node_modules", ".bin", "eslint"))
+    ? path.join(FRONTEND, "node_modules", ".bin", "eslint")
+    : "npx";
+  const run = (entries) => new Promise((resolve, reject) => {
+    const child = spawn(eslint, eslint === "npx" ? ["eslint", "-f", "json", ...entries] : ["-f", "json", ...entries], {
+      cwd: FRONTEND, shell: process.platform === "win32",
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", () => {
+      try { resolve(JSON.parse(stdout)); }
+      catch { reject(new Error(stderr || "eslint produced no report")); }
+    });
   });
-  // eslint exits 1 when it finds problems — that is data here, not a crash.
-  try {
-    return JSON.parse(res.stdout);
-  } catch {
-    console.error(res.stderr || "eslint produced no report");
-    process.exit(2);
+  // Changed-file linting is independent per file; concurrent processes avoid
+  // making the deploy gate wait for parser startup once per source file.
+  if (files.length > 1 && !files.includes(".")) {
+    return (await Promise.all(files.map((file) => run([file])))).flat();
   }
+  return run(files);
 }
 
 function counts(report) {
@@ -87,7 +99,7 @@ function counts(report) {
 
 // ---- baseline mode ---------------------------------------------------------
 if (process.argv.includes("--write-baseline")) {
-  const report = runEslint(["."]);
+  const report = await runEslint(["."]);
   const out = {};
   for (const { filePath, errorCount } of report) {
     if (errorCount > 0) out[path.relative(FRONTEND, filePath)] = errorCount;
@@ -113,7 +125,7 @@ console.log(
   `lint:changed — ${files.length} file${files.length === 1 ? "" : "s"} vs ${base ?? "working tree only"}`
 );
 
-const report = runEslint(files);
+const report = await runEslint(files);
 const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : {};
 const linted = counts(report);
 
