@@ -624,6 +624,64 @@ function WithdrawalRequestsPanel({
   );
 }
 
+type GivingChangeRequestRow = {
+  id: number;
+  type: "reappropriate" | "reverse";
+  status: "pending" | "approved" | "declined";
+  amount: string;
+  current_purpose: string;
+  proposed_purpose: string;
+  receipt_number: string;
+  requested_by: string;
+  reply: string;
+  created_at: string;
+};
+
+/** Giver-originated changes live beside withdrawal requests: both await the
+    treasury, but this panel makes it clear that no money moved on submission. */
+function GivingChangeRequestsPanel() {
+  const [rows, setRows] = useState<GivingChangeRequestRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<number | null>(null);
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_URL}/api/members/treasury/giving-change-requests/`, { headers: fundAuthHeaders() })
+      .then((res) => (res.ok ? res.json() : { requests: [] }))
+      .then((data) => setRows(Array.isArray(data?.requests) ? data.requests : []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const decide = async (id: number, action: "approve" | "decline") => {
+    setBusy(id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/giving-change-requests/`, {
+        method: "POST", headers: { ...fundAuthHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ id, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not decide this request.");
+      showAlert("Request updated", action === "approve" ? "The giving request has been approved and recorded." : "The giving request has been declined.", "success");
+      load();
+    } catch (error) {
+      showAlert("Could not update request", error instanceof Error ? error.message : "Try again.", "error");
+    } finally { setBusy(null); }
+  };
+  return (
+    <section className="mb-5 rounded-2xl border border-sand-line bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-sand-line px-4 py-3">
+        <div><h3 className="text-sm font-bold text-bark">Giving requests</h3><p className="mt-0.5 text-xs text-moss">Reappropriations and reversals requested by givers.</p></div>
+        {rows.filter((row) => row.status === "pending").length > 0 && <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-bold text-white">{rows.filter((row) => row.status === "pending").length}</span>}
+      </div>
+      {loading ? <p className="px-4 py-5 text-xs text-moss">Loading requests…</p> : rows.length === 0 ? <p className="px-4 py-5 text-xs text-moss">No giving requests yet.</p> : <div className="divide-y divide-sand-line">
+        {rows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0"><p className="text-xs font-bold text-bark">{row.type === "reappropriate" ? "Reappropriate" : "Reverse"} · KES {Number(row.amount).toLocaleString()}</p><p className="mt-0.5 text-[11px] text-moss">{row.requested_by} · {row.current_purpose}{row.proposed_purpose ? ` → ${row.proposed_purpose}` : ""} · {row.receipt_number}</p>{row.reply && <p className="mt-1 text-[11px] text-moss">{row.reply}</p>}</div>
+          <div className="flex items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${row.status === "pending" ? "bg-amber-50 text-amber-700" : row.status === "approved" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-700"}`}>{row.status}</span>{row.status === "pending" && <><button type="button" disabled={busy === row.id} onClick={() => showAlert("Approve request?", row.type === "reverse" ? "This will reverse the giving in the treasury ledger." : "This will move the giving between treasury accounts.", "warning", { showCancelButton: true, confirmButtonText: "Approve", cancelButtonText: "Cancel" }).then((result) => { if (result.isConfirmed) void decide(row.id, "approve"); })} className="rounded-lg bg-bark px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50">Approve</button><button type="button" disabled={busy === row.id} onClick={() => void decide(row.id, "decline")} className="rounded-lg border border-sand-mute px-2.5 py-1.5 text-[11px] font-semibold text-moss disabled:opacity-50">Decline</button></>}</div>
+        </div>)}
+      </div>}
+    </section>
+  );
+}
+
 type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals" | "unassigned";
 
 /**
@@ -1339,7 +1397,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} onChanged={fetchAccounts} />
+          <>
+            <GivingChangeRequestsPanel />
+            <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} onChanged={fetchAccounts} />
+          </>
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
         ) : view === "unassigned" ? (

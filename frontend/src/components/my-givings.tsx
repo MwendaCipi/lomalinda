@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Printer, Receipt } from "lucide-react";
+import { ArrowRight, MoreVertical, Printer, Receipt } from "lucide-react";
 import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
@@ -61,6 +61,7 @@ export function writeGivingsVisibility(next: boolean): void {
     both records it lands on. */
 type MyGiving = {
   id: number;
+  member?: number | null;
   amount: string | number;
   currency?: string;
   purpose: string;
@@ -83,6 +84,8 @@ type InKindRecord = {
   received_on: string;
   created_at: string;
 };
+
+type GivingAccount = { id: number; name: string; label: string; account: string };
 
 /** One entry on the merged timeline: both kinds, newest day first. */
 type TimelineEntry =
@@ -182,6 +185,28 @@ export function MyGivings() {
   // Status applies to money only — starts on Successful as default.
   const [statusFilter, setStatusFilter] = useState<"successful" | "failed" | "all">("successful");
   const [givingSearch, setGivingSearch] = useState("");
+  const [givingAccounts, setGivingAccounts] = useState<GivingAccount[]>([]);
+  const [openActions, setOpenActions] = useState<number | null>(null);
+  const [reappropriateGift, setReappropriateGift] = useState<MyGiving | null>(null);
+  const [newPurpose, setNewPurpose] = useState("");
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`${API_URL}/api/members/me/`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me) => setCurrentUserId(typeof me?.id === "number" ? me.id : null))
+      .catch(() => setCurrentUserId(null));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/members/giving-accounts/`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => setGivingAccounts(Array.isArray(rows) ? rows : []))
+      .catch(() => setGivingAccounts([]));
+  }, []);
 
   // The spinner is turned on by the initial load and off here:
   // nothing in this body runs synchronously, so calling it from an effect is
@@ -368,21 +393,33 @@ export function MyGivings() {
     win.print();
   };
 
+  const submitChangeRequest = async (gift: MyGiving, type: "reappropriate" | "reverse", purpose = "") => {
+    setSubmittingRequest(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/contributions/${gift.id}/change-requests/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ type, purpose }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not send the request.");
+      setReappropriateGift(null);
+      setOpenActions(null);
+      showAlert("Request sent", type === "reverse" ? "Treasury will review your reversal request." : "Treasury will review your reappropriation request.", "success");
+    } catch (error) {
+      showAlert("Could not send request", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
+
   /** One entry, both kinds — a card on the day's rail. */
   const renderEntry = (e: TimelineEntry) => {
     if (e.kind === "money") {
       const g = e.gift;
       const completed = (g.status || "").toLowerCase() === "completed";
-      const receiptButton = completed && (
-        <button
-          type="button"
-          onClick={() => handleDownloadReceipt("money", g.id, `Giving_Receipt_${g.mpesa_receipt_number || g.id}.pdf`)}
-          title="Download receipt"
-          className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-        >
-          <Receipt size={10} aria-hidden="true" /> Receipt
-        </button>
-      );
+      const canRequestChange = currentUserId !== null && g.member === currentUserId;
       return (
         <div className="rounded-2xl border border-sand-line bg-white p-3.5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
@@ -410,7 +447,24 @@ export function MyGivings() {
             </div>
             <div className="flex shrink-0 flex-col items-end gap-2">
               <p className="whitespace-nowrap text-sm font-bold text-ember">KES {Number(g.amount || 0).toLocaleString()}</p>
-              {receiptButton}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenActions(openActions === g.id ? null : g.id)}
+                  aria-expanded={openActions === g.id}
+                  aria-label="Giving actions"
+                  className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                >
+                  <MoreVertical size={13} aria-hidden="true" /> Actions
+                </button>
+                {openActions === g.id && (
+                  <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-sand-line bg-white p-1 shadow-lg">
+                    <button type="button" disabled={!completed || !canRequestChange} onClick={() => { setNewPurpose(""); setReappropriateGift(g); }} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark hover:bg-sand disabled:cursor-not-allowed disabled:opacity-40">Reappropriate</button>
+                    <button type="button" disabled={!completed || !canRequestChange} onClick={() => showAlert("Request reversal?", "Treasury will review this request before any reversal is made.", "warning", { showCancelButton: true, confirmButtonText: "Request reversal", cancelButtonText: "Cancel" }).then((result) => { if (result.isConfirmed) void submitChangeRequest(g, "reverse"); })} className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">Reverse</button>
+                    <button type="button" disabled={!completed} onClick={() => { setOpenActions(null); void handleDownloadReceipt("money", g.id, `Giving_Receipt_${g.mpesa_receipt_number || g.id}.pdf`); }} className="flex w-full items-center gap-1 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark hover:bg-sand disabled:cursor-not-allowed disabled:opacity-40"><Receipt size={11} /> Receipt</button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -594,6 +648,24 @@ export function MyGivings() {
           </Link>
         </div>
       </div>
+
+      {reappropriateGift && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
+            <h2 className="text-base font-bold text-bark">Reappropriate giving</h2>
+            <p className="mt-1 text-xs text-moss">Move KES {Number(reappropriateGift.amount).toLocaleString()} from {reappropriateGift.purpose} to another giving purpose. Treasury will review your request.</p>
+            <label className="mt-4 block text-xs font-semibold text-bark">New purpose</label>
+            <select value={newPurpose} onChange={(event) => setNewPurpose(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-sand-line bg-white px-3 text-sm text-bark focus:border-ember focus:outline-none">
+              <option value="">Choose a purpose…</option>
+              {givingAccounts.filter((account) => (account.label || account.name) !== reappropriateGift.purpose).map((account) => <option key={account.id} value={account.label || account.name}>{account.label || account.name}</option>)}
+            </select>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setReappropriateGift(null)} disabled={submittingRequest} className="rounded-xl border border-sand-mute px-3.5 py-2 text-xs font-semibold text-moss">Cancel</button>
+              <button type="button" disabled={!newPurpose || submittingRequest} onClick={() => void submitChangeRequest(reappropriateGift, "reappropriate", newPurpose)} className="rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50">{submittingRequest ? "Sending…" : "Send request"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

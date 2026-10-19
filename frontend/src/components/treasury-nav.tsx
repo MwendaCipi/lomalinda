@@ -30,10 +30,10 @@ export const UNASSIGNED_CHANGED_EVENT = "treasury-unassigned-changed";
 export type TreasuryView = "givings" | "summary" | "unassigned" | "accounts" | "drives" | "expenses" | "requests" | "failed";
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
-  { key: "givings", label: "Individual Givings", short: "Individual" },
+  { key: "givings", label: "Givings", short: "Givings" },
   // Each purpose is a fund, so a completed gift sits in one place — the fund
   // drive that owns it, not in a shared falling-away ledger.
-  { key: "summary", label: "Summary Contributions", short: "Summary" },
+  { key: "summary", label: "Summary", short: "Summary" },
   // Paybill payments whose reference named no account wait here: the money
   // is safely in the ledger, and this is where the treasurer names the
   // account it belongs to.
@@ -84,14 +84,15 @@ export function TreasuryNav({
     // If the parent supplies a count there is nothing to fetch.
     if (typeof requestsCount === "number") return;
     let alive = true;
-    fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (alive && Array.isArray(data?.requests)) {
-          const waiting = data.requests.filter(
-            (r: { status: string }) => r.status === "pending" || r.status === "elder_approved"
-          ).length;
-          setFetchedCount(waiting);
+    Promise.all([
+      fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() }).then((res) => (res.ok ? res.json() : null)),
+      fetch(`${API_URL}/api/members/treasury/giving-change-requests/`, { headers: fundAuthHeaders() }).then((res) => (res.ok ? res.json() : null)),
+    ])
+      .then(([withdrawals, givings]) => {
+        if (alive) {
+          const withdrawalCount = Array.isArray(withdrawals?.requests) ? withdrawals.requests.filter((r: { status: string }) => r.status === "pending" || r.status === "elder_approved").length : 0;
+          const givingCount = Array.isArray(givings?.requests) ? givings.requests.filter((r: { status: string }) => r.status === "pending").length : 0;
+          setFetchedCount(withdrawalCount + givingCount);
         }
       })
       .catch(() => {});

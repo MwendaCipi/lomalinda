@@ -749,7 +749,7 @@ class ContributionSerializer(serializers.ModelSerializer):
         model = Contribution
         # honoree_name/relationship name the person a gift was given FOR, so
         # a spouse's tithe reads as such on both records it lands on.
-        fields = ('id', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'honoree_name', 'relationship', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
+        fields = ('id', 'member', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'honoree_name', 'relationship', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
 
 

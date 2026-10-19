@@ -46,7 +46,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -3541,6 +3541,132 @@ class MyContributionsView(generics.ListAPIView):
             Q(member=self.request.user) | Q(honoree=self.request.user),
             status__in=statuses,
         ).order_by('-created_at')
+
+
+class GivingChangeRequestView(APIView):
+    """A giver's reappropriation/reversal requests and Treasury's review queue."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk=None):
+        if pk is not None:
+            # The member UI only needs to know whether it may offer a new ask.
+            rows = GivingChangeRequest.objects.filter(
+                contribution_id=pk, requested_by=request.user,
+            ).order_by('-created_at')
+        else:
+            if not is_treasurer_or_admin(request.user):
+                raise PermissionDenied('Only church treasurers or administrators can review giving requests.')
+            rows = GivingChangeRequest.objects.select_related('contribution', 'requested_by', 'decided_by').all()
+        return Response({'requests': [self._row(row) for row in rows]})
+
+    def post(self, request, pk=None):
+        if pk is not None:
+            return self._create(request, pk)
+        return self._review(request)
+
+    @staticmethod
+    def _row(row):
+        contribution = row.contribution
+        return {
+            'id': row.id,
+            'type': row.request_type,
+            'status': row.status,
+            'contribution_id': contribution.id,
+            'amount': str(contribution.amount),
+            'current_purpose': contribution.purpose,
+            'proposed_purpose': row.proposed_purpose,
+            'receipt_number': contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}',
+            'requested_by': giver_display_name('', member=row.requested_by),
+            'reply': row.reply,
+            'created_at': row.created_at,
+            'decided_at': row.decided_at,
+        }
+
+    def _create(self, request, pk):
+        contribution = Contribution.objects.filter(pk=pk, status='completed', member=request.user).first()
+        if contribution is None:
+            return Response({'detail': 'Only the giver may request a change to a completed giving.'}, status=status.HTTP_404_NOT_FOUND)
+        request_type = str(request.data.get('type') or '').strip()
+        if request_type not in ('reappropriate', 'reverse'):
+            return Response({'detail': 'Choose reappropriate or reverse.'}, status=status.HTTP_400_BAD_REQUEST)
+        proposed_purpose = str(request.data.get('purpose') or '').strip()
+        if request_type == 'reappropriate':
+            account = account_for_purpose(proposed_purpose)
+            if account is None:
+                return Response({'detail': 'Choose a valid giving purpose.'}, status=status.HTTP_400_BAD_REQUEST)
+            proposed_purpose = account.description or account.name
+            if proposed_purpose == contribution.purpose:
+                return Response({'detail': 'Choose a different purpose.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            proposed_purpose = ''
+        if GivingChangeRequest.objects.filter(contribution=contribution, status='pending').exists():
+            return Response({'detail': 'A request for this giving is already waiting for Treasury.'}, status=status.HTTP_400_BAD_REQUEST)
+        row = GivingChangeRequest.objects.create(
+            contribution=contribution, requested_by=request.user,
+            request_type=request_type, proposed_purpose=proposed_purpose,
+        )
+        audience = User.objects.filter(Q(member_profile__role='treasurer') | Q(member_profile__role='admin'), is_active=True).distinct()
+        label = 'reappropriation' if request_type == 'reappropriate' else 'reversal'
+        detail = f"{giver_display_name('', member=request.user)} requested {label} of KES {contribution.amount:,.2f} ({contribution.purpose})."
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=person, title='Giving request awaiting review', message=detail, link='/administration/treasury?view=requests')
+            for person in audience
+        ])
+        return Response({'request': self._row(row), 'detail': 'Your request has been sent to Treasury.'}, status=status.HTTP_201_CREATED)
+
+    def _review(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can review giving requests.')
+        row = GivingChangeRequest.objects.select_related('contribution', 'requested_by').filter(
+            pk=request.data.get('id'), status='pending',
+        ).first()
+        if row is None:
+            return Response({'detail': 'That request is no longer pending.'}, status=status.HTTP_404_NOT_FOUND)
+        action = str(request.data.get('action') or '').strip()
+        reply = str(request.data.get('reply') or '').strip()[:255]
+        if action == 'decline':
+            row.status, row.decided_by, row.decided_at = 'declined', request.user, timezone.now()
+            row.reply = reply or 'The request could not be approved.'
+            row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
+        elif action == 'approve':
+            with transaction.atomic():
+                contribution = Contribution.objects.select_for_update().get(pk=row.contribution_id)
+                source = TreasuryAccount.objects.select_for_update().filter(pk=getattr(account_for_purpose(contribution.purpose), 'pk', None)).first()
+                if source is None:
+                    return Response({'detail': 'The original giving account no longer exists.'}, status=status.HTTP_400_BAD_REQUEST)
+                if source.balance < contribution.amount:
+                    return Response({'detail': f'The {source.description or source.name} account no longer holds enough money to action this request.'}, status=status.HTTP_400_BAD_REQUEST)
+                reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
+                if row.request_type == 'reappropriate':
+                    destination = TreasuryAccount.objects.select_for_update().filter(pk=getattr(account_for_purpose(row.proposed_purpose), 'pk', None)).first()
+                    if destination is None:
+                        return Response({'detail': 'The requested giving purpose no longer exists.'}, status=status.HTTP_400_BAD_REQUEST)
+                    source.balance -= contribution.amount
+                    destination.balance += contribution.amount
+                    source.save(update_fields=['balance'])
+                    destination.save(update_fields=['balance'])
+                    TreasuryAccountTransaction.objects.create(account=source, transaction_type='debit', amount=contribution.amount, description=f'Reappropriated giving to {destination.description or destination.name}'[:255], reference=f'REAPP-{reference}'[:100], created_by=request.user)
+                    TreasuryAccountTransaction.objects.create(account=destination, transaction_type='credit', amount=contribution.amount, description=f'Reappropriated giving from {source.description or source.name}'[:255], reference=f'REAPP-{reference}'[:100], created_by=request.user)
+                    contribution.purpose = destination.description or destination.name
+                    contribution.save(update_fields=['purpose'])
+                else:
+                    source.balance -= contribution.amount
+                    source.save(update_fields=['balance'])
+                    TreasuryAccountTransaction.objects.create(account=source, transaction_type='debit', amount=contribution.amount, description='Reversal of giver-requested contribution', reference=f'REV-{reference}'[:100], created_by=request.user)
+                    contribution.status = 'cancelled'
+                    contribution.save(update_fields=['status'])
+                row.status, row.decided_by, row.decided_at, row.reply = 'approved', request.user, timezone.now(), reply
+                row.save(update_fields=['status', 'decided_by', 'decided_at', 'reply'])
+        else:
+            return Response({'detail': 'Unknown action. Use approve or decline.'}, status=status.HTTP_400_BAD_REQUEST)
+        ChurchNotification.objects.create(
+            user=row.requested_by,
+            title=f"Giving {row.request_type} request {row.status}",
+            message=row.reply or f"Your request concerning KES {row.contribution.amount:,.2f} has been {row.status}.",
+            link='/member/givings',
+        )
+        return Response({'request': self._row(row)})
 
 
 class MemberThermalReceiptView(APIView):

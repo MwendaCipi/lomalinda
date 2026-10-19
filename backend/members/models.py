@@ -1365,6 +1365,41 @@ class ContributionTreasury(models.Model):
         ordering = ['-treasury_date']
 
 
+class GivingChangeRequest(models.Model):
+    """A giver's request to change the destination of a completed gift or reverse it.
+
+    Money is never moved by the giver's request itself.  Treasury reviews the
+    request and records the decision, leaving a small, auditable trail beside
+    the original contribution.
+    """
+
+    TYPE_CHOICES = [
+        ('reappropriate', 'Reappropriate'),
+        ('reverse', 'Reverse'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('declined', 'Declined'),
+    ]
+
+    contribution = models.ForeignKey(Contribution, on_delete=models.PROTECT, related_name='change_requests')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='giving_change_requests')
+    request_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    proposed_purpose = models.CharField(max_length=120, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='giving_change_requests_decided')
+    decided_at = models.DateTimeField(null=True, blank=True)
+    reply = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.get_request_type_display()} for contribution {self.contribution_id} ({self.status})'
+
+
 class SupportSubmission(models.Model):
     TYPE_CHOICES = [('idea', 'Idea'), ('moral_support', 'Prayer and moral support'), ('partnership', 'Partnership request')]
     member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='support_submissions')

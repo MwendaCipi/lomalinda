@@ -3,18 +3,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
-import { Landmark, Mail, MapPin, Megaphone, Scale, Shield, Smartphone, Stamp, HandHelping } from "lucide-react";
+import { Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
-import { ROLE_OPTIONS } from "./roles-combobox";
+import { DepartmentAccountAssignments } from "./department-account-assignments";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-// The right the settings screen shows for each role, straight from the API —
-// the label/description text is the backend's, so the two never drift.
-type RoleRight = { code: string; label: string; description: string };
-type RoleRightsPayload = { rights: RoleRight[]; by_role: Record<string, string[]> };
 
 export function ChurchSettingsManager() {
   const [churchName, setChurchName] = useState("SDA Church Loma Linda, Meru");
@@ -56,10 +51,6 @@ export function ChurchSettingsManager() {
   );
   const [appointmentPlaceholders, setAppointmentPlaceholders] = useState<{ token: string; description: string }[]>([]);
   // The line the dashboard greeting ends with. Short by design; the API caps it
-  // Per-role rights as configured on the Church Roles Configuration box.
-  const [roleRights, setRoleRights] = useState<RoleRightsPayload>({ rights: [], by_role: {} });
-  // Which role's rights the settings screen is currently showing.
-  const [rightsRole, setRightsRole] = useState<string>("clerk");
   const [bankName, setBankName] = useState("KCB Bank Kenya");
   const [bankAccountName, setBankAccountName] = useState("SDA Church Main Account");
   const [bankAccountNumber, setBankAccountNumber] = useState("1122334455");
@@ -118,9 +109,6 @@ export function ChurchSettingsManager() {
           if (data.default_board_meeting_invitation_message) {
             setDefaultBoardMeetingInvitationMessage(data.default_board_meeting_invitation_message);
           }
-          if (data.role_rights && Array.isArray(data.role_rights.rights)) {
-            setRoleRights(data.role_rights);
-          }
           if (data.bank_name) setBankName(data.bank_name);
           if (data.bank_account_name) setBankAccountName(data.bank_account_name);
           if (data.bank_account_number) setBankAccountNumber(data.bank_account_number);
@@ -136,16 +124,6 @@ export function ChurchSettingsManager() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
-
-  const toggleRoleRight = (role: string, right: string) => {
-    setRoleRights((prev) => {
-      const current = prev.by_role[role] ?? [];
-      const next = current.includes(right)
-        ? current.filter((r) => r !== right)
-        : [...current, right];
-      return { ...prev, by_role: { ...prev.by_role, [role]: next } };
-    });
-  };
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -168,7 +146,6 @@ export function ChurchSettingsManager() {
         default_membership_approval_message: membershipApprovalMessage,
         default_appointment_message: appointmentMessage,
         default_release_thank_you_message: releaseThankYouMessage,
-        role_rights: roleRights.by_role,
         bank_name: bankName,
         bank_account_name: bankAccountName,
         bank_account_number: bankAccountNumber,
@@ -405,73 +382,7 @@ export function ChurchSettingsManager() {
           </div>
         </div>
 
-        {/* Church Roles Configuration Box */}
-        <div className="rounded-2xl border border-ember/30 bg-sand-linen p-5">
-          <h3 className="text-base font-bold text-ember flex items-center gap-2">
-            <Shield size={16} aria-hidden="true" /> Church Roles Configuration
-          </h3>
-          <p className="mt-1 text-xs text-moss">
-            Every role holder sits on the church board by default, so board invitations go to them automatically,
-            except assistants, who share the role's work but not its board seat. Pick a role below to give or take away
-            what its holders may do in the app.
-          </p>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {ROLE_OPTIONS.map((role) => (
-              <button
-                key={role.value}
-                type="button"
-                onClick={() => setRightsRole(role.value)}
-                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-                  rightsRole === role.value
-                    ? "border-ember bg-white text-bark shadow-sm"
-                    : "border-sand-line bg-sand/60 text-moss hover:border-ember/50"
-                }`}
-              >
-                {role.label}
-              </button>
-            ))}
-          </div>
-
-          {(() => {
-            const selected = ROLE_OPTIONS.find((r) => r.value === rightsRole) ?? ROLE_OPTIONS[0];
-            const held = new Set(roleRights.by_role[selected.value] ?? []);
-            return (
-              <div className="mt-4 rounded-xl border border-sand-line bg-white p-4">
-                <p className="text-sm font-bold text-bark">
-                  {selected.label}
-                  <span className="ml-2 text-xs font-medium text-moss">(rights held by this role)</span>
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {roleRights.rights.map((right) => {
-                    const isHeld = held.has(right.code);
-                    return (
-                      <label
-                        key={right.code}
-                        className={`flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-xs transition ${
-                          isHeld
-                            ? "border-ember bg-sand-linen text-bark shadow-sm"
-                            : "border-sand-line bg-sand/60 text-moss hover:border-ember/50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isHeld}
-                          onChange={() => toggleRoleRight(selected.value, right.code)}
-                          className="mt-0.5 h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
-                        />
-                        <span className="min-w-0">
-                          <span className="block font-bold">{right.label}</span>
-                          <span className="mt-0.5 block leading-5">{right.description}</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
+        <DepartmentAccountAssignments />
 
         {/* Meeting Invitation Templates Box */}
         <div className="rounded-2xl border border-bark/30 bg-sand p-5">

@@ -7,6 +7,7 @@ import { Suspense, useCallback, useEffect, useState, type ReactNode } from "reac
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { EmailsDesk } from "@/components/emails-desk";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
+import { RoleRightsManager } from "@/components/role-rights-manager";
 import { BusinessMeetingManager } from "@/components/business-meeting-manager";
 import { BoardMeetingManager } from "@/components/board-meeting-manager";
 import { UserManagement } from "@/components/user-management";
@@ -371,7 +372,7 @@ function AdministrationContent() {
   // between the two. Desks that own their own strip (treasury, deaconate,
   // etc.) or ride a rail section are left alone.
   const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
-  const consoleTab = activeTab === "users" || activeTab === "settings" || activeTab === "join-requests";
+  const consoleTab = activeTab === "users" || activeTab === "roles" || activeTab === "settings" || activeTab === "join-requests";
   // Who the toggle is for: the same people the requests desk already admits,
   // because the API behind it answers to those roles and the notices for a
   // join ask name them. The card on the phone overview sits with the console's
@@ -395,6 +396,13 @@ function AdministrationContent() {
             label: "User Management",
             short: "Users",
             help: "The church register.",
+          },
+          {
+            key: "roles",
+            href: "/administration?tab=roles",
+            label: "Roles",
+            short: "Roles",
+            help: "Church-wide role permissions.",
           },
           {
             key: "settings",
@@ -444,6 +452,7 @@ function AdministrationContent() {
           description: "The church's members, their roles and the church's own settings.",
           cards: [
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
+            { icon: <ShieldCheck size={20} aria-hidden="true" />, label: "Roles", description: "Set the permissions each church-wide role holds.", href: "/administration?tab=roles" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
           ],
@@ -591,6 +600,12 @@ function AdministrationContent() {
 
             {/* Users (Members) View */}
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
+
+            {activeTab === "roles" && (isAdmin || isClerk || isElder) && (
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
+                <RoleRightsManager />
+              </div>
+            )}
 
             {/* Leadership — the directory of the church's areas, opened on
                 one of them when a rail row (or a link) names it. The API
