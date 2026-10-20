@@ -67,9 +67,11 @@ REQUEST_LABELS = {
 # Who answers the church's requests. Elders and the clerk take every desk —
 # join, prayer, visitation, dedication, welfare, transfer — and so does the
 # church pastor, whose office sits with the leaders. Administrators are
-# deliberately noise-reduced: join requests are the ones that gate an account
-# (the office cannot admit a member without them), so that is the only desk
-# that reaches the admin role. An account holding both roles still hears both.
+# deliberately noise-reduced to the two doors that decide who is a member:
+# join requests (the office cannot admit one without them) and membership
+# transfers (somebody is being received or sent away). The care desks —
+# prayer, visitation, dedication, welfare — stay off their plate. An account
+# holding both roles still hears both.
 ELDER_ROLE_CODES = frozenset({'elder', 'first_elder', 'second_elder', 'third_elder'})
 CLERK_ROLE_CODES = frozenset({'clerk'})
 PASTOR_ROLE_CODES = frozenset({'pastor'})
@@ -78,6 +80,10 @@ PASTOR_ROLE_CODES = frozenset({'pastor'})
 # roles each desk already admits as viewers. Chaplaincy walks the prayer and
 # visitation desks; the children leader receives dedications; welfare belongs
 # to the welfare leader. A request kind absent here routes to the office only.
+# The desks that decide membership itself — a join ask and a membership
+# transfer — reach the administrators along with the elders and the clerk.
+JOIN_OR_TRANSFER_KINDS = frozenset({'join', 'transfer'})
+
 DESK_EXTRA_ROLE_CODES = {
     'prayer': {'chaplaincy'},
     'visitation': {'chaplaincy'},
@@ -104,7 +110,7 @@ def request_audience(kind='', audience=''):
         wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | DESK_EXTRA_ROLE_CODES.get('prayer', set())
     else:
         wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES)
-        if kind == 'join':
+        if kind in JOIN_OR_TRANSFER_KINDS:
             wanted.add(ADMIN_ROLE)
         wanted |= DESK_EXTRA_ROLE_CODES.get(kind, set())
     audience_ids = set()

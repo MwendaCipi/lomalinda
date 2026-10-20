@@ -12116,9 +12116,10 @@ class DepartmentJoinRequestView(APIView):
         # desk — the people who answer for the area in church — and with the
         # administrators, who answer join asks from Administration's Join
         # Requests toggle. ``request_audience('join')`` is the office rule the
-        # other request desks already answer to; it is the one desk that
-        # reaches the admin role, because admitting a member is the office's
-        # to do. Dept leadership then widens it to the area's own leaders.
+        # other request desks already answer to; join and transfer are the two
+        # desks that reach the admin role, because admitting or sending away a
+        # member is the office's to do. Dept leadership then widens it to the
+        # area's own leaders.
         from .requests import request_audience
 
         audience_ids = set(DepartmentAssignment.objects.filter(

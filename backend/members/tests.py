@@ -70,7 +70,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -4120,7 +4120,7 @@ class RequestNotificationTests(APITestCase):
     it — so each submission must say who asked and link straight to that request
     on the requests desk, and nothing about it may break the member's request.
     Elders hear every desk; the administrator is deliberately noise-reduced to
-    join requests, the desk that gates an account.
+    the two doors that decide membership — join and membership transfer.
     """
 
     def setUp(self):
@@ -4153,8 +4153,9 @@ class RequestNotificationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(self._recipients(), ['notify.elder@example.com'])
-        # Administrators are noise-reduced to join requests — the desk that
-        # gates an account — so a prayer request stays off their plate.
+        # Administrators are noise-reduced to the desks that decide
+        # membership — join and transfer — so a prayer request stays off
+        # their plate.
         self.assertNotIn('notify.admin@example.com', self._recipients())
 
         body = mail.outbox[0].body
@@ -4258,11 +4259,12 @@ class RequestNotificationTests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_201_CREATED, f'{url}: {response.data}')
 
         # One letter per request per recipient: the elder hears every desk,
-        # while the administrator (present in setUp) only hears join requests,
-        # so four desks mean four letters, all to the elder.
+        # while the administrator (present in setUp) only hears the two
+        # membership doors — so of these four desks only the transfer reaches
+        # them: five letters, four of them the elder's.
         self.assertEqual(
             self._recipients(),
-            ['notify.elder@example.com'] * len(submitted),
+            ['notify.admin@example.com'] + ['notify.elder@example.com'] * len(submitted),
         )
         bodies = ' '.join(message.body for message in mail.outbox)
         for who in ('Mary Achieng', 'John Kamau', 'Eunice Nyambura', 'Samuel Otieno'):
@@ -10681,10 +10683,10 @@ class AnnouncementPreferenceTests(APITestCase):
 class RequestAudienceSplitTests(APITestCase):
     """Each desk reaches the office holders who answer that desk.
 
-    Elders and the clerk take every request. Administrators hear only join
-    requests — the desk that gates an account — so the other desks stay off
-    their plate. An account holding several roles hears everything its roles
-    call for.
+    Elders and the clerk take every request. Administrators hear only the two
+    desks that decide membership — join and membership transfer — so the care
+    desks stay off their plate. An account holding several roles hears
+    everything its roles call for.
     """
 
     def setUp(self):
@@ -10698,13 +10700,18 @@ class RequestAudienceSplitTests(APITestCase):
     def _rows_for(self, user):
         return ChurchNotification.objects.filter(user=user)
 
-    def test_admin_hears_join_only(self):
+    def test_admin_hears_join_and_transfer_only(self):
         from .requests import notify_request_safely
 
         notify_request_safely('join', 1, submitted_by='Jane', church_name='C')
-        notify_request_safely('prayer', 2, submitted_by='Jane', church_name='C')
-        self.assertEqual(self._rows_for(self.admin).count(), 1)
-        self.assertIn('join request', self._rows_for(self.admin).first().title)
+        notify_request_safely('transfer', 2, submitted_by='Jane', church_name='C')
+        notify_request_safely('prayer', 3, submitted_by='Jane', church_name='C')
+        titles = [row.title for row in self._rows_for(self.admin)]
+        self.assertEqual(len(titles), 2)
+        self.assertTrue(any('join request' in title for title in titles))
+        self.assertTrue(any('membership transfer request' in title for title in titles))
+        # The care desks are the office's, not the administrator's.
+        self.assertFalse(any('prayer request' in title for title in titles))
 
     def test_elder_and_clerk_hear_every_desk(self):
         from .requests import notify_request_safely
@@ -10713,6 +10720,8 @@ class RequestAudienceSplitTests(APITestCase):
         notify_request_safely('transfer', 4, submitted_by='Jane', church_name='C')
         self.assertEqual(self._rows_for(self.elder).count(), 2)
         self.assertEqual(self._rows_for(self.clerk).count(), 2)
+        # And so does the administrator, for the membership door alone.
+        self.assertEqual(self._rows_for(self.admin).count(), 1)
 
 
 class PastorAndDeskLeadRoutingTests(APITestCase):

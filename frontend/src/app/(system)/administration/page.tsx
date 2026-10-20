@@ -482,7 +482,7 @@ function AdministrationContent() {
                   href: "/administration?tab=join-requests",
                   label: "Join Requests",
                   short: "Join",
-                  help: "New members and ministry asks waiting on an answer.",
+                  help: "New members, ministry asks and membership transfers waiting on an answer.",
                 },
               ]
             : []),
@@ -511,7 +511,7 @@ function AdministrationContent() {
             ...(!hasClerkship
               ? [
                   { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
-                  { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
+                  { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members, ministry asks and membership transfers.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers },
                 ]
               : []),
             { icon: <ShieldCheck size={20} aria-hidden="true" />, label: "Roles", description: "Set the permissions each church-wide role holds.", href: "/administration?tab=roles" },
@@ -532,7 +532,7 @@ function AdministrationContent() {
           cards: [
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
-            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry },
+            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
