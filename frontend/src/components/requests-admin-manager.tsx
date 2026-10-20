@@ -160,14 +160,16 @@ type UnifiedRow = {
  * queue answers for whoever is holding the phone. It names no new row: every
  * row keeps the kind it was filed under, and the view simply reads both.
  */
-type KindFilter = "all" | RequestKind | "joins";
+type KindFilter = "all" | RequestKind | "joins" | "clerk";
 
 /** The combined view's name in filters, counts and the header line. */
 const JOINS_VIEW_LABEL = "Join requests";
+const CLERK_VIEW_LABEL = "Clerkship requests";
 
 function deskMatch(activeTab: KindFilter, kind: RequestKind): boolean {
   if (activeTab === "all") return true;
   if (activeTab === "joins") return kind === "join" || kind === "area";
+  if (activeTab === "clerk") return kind === "join" || kind === "area" || kind === "transfer";
   return kind === activeTab;
 }
 
@@ -301,11 +303,13 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     ];
     // Membership Requests reads every request and shows each row's state, so
     // it needs no review-state control — one popover, and a narrow one.
-    const showStateFilter = activeTab !== "transfer";
+    const showStateFilter = activeTab !== "transfer" && activeTab !== "clerk";
     const stateLabel = statusOpts.find((option) => option.value === statusFilter)?.label ?? "Pending";
     const deskLabel =
       activeTab === "joins"
         ? JOINS_VIEW_LABEL
+        : activeTab === "clerk"
+          ? CLERK_VIEW_LABEL
         : deskOpts.find((option) => option.value === activeTab)?.label ?? "All requests";
     setHeaderRightAction(
       <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -794,7 +798,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   // needs no effect and no request ever disappears behind a control that is
   // not on screen.
   const reviewFilter: StatusFilter | TransferOnlyStatus =
-    activeTab === "transfer" ? "all" : statusFilter;
+    activeTab === "transfer" || activeTab === "clerk" ? "all" : statusFilter;
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -894,7 +898,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   ];
 
   const activeFilterLabel =
-    activeTab === "all" ? "All requests" : activeTab === "joins" ? JOINS_VIEW_LABEL : KIND_META[activeTab].label;
+    activeTab === "all" ? "All requests" : activeTab === "joins" ? JOINS_VIEW_LABEL : activeTab === "clerk" ? CLERK_VIEW_LABEL : KIND_META[activeTab].label;
 
   return (
     <div className="flex h-full min-h-0 flex-col p-4 sm:p-6 lg:p-8">
@@ -908,11 +912,13 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           {/* Named by the strip above on a wide screen. */}
           <div className="md:hidden">
             <h2 className="text-2xl font-semibold text-bark">
-              {activeTab === "joins" ? "Join Requests" : "Received Requests"}
+              {activeTab === "joins" ? "Join Requests" : activeTab === "clerk" ? "Clerkship Requests" : "Received Requests"}
             </h2>
             <p className="mt-0.5 text-sm text-moss">
               {activeTab === "joins"
                 ? "New members and members asking to join a ministry, waiting on an answer."
+                : activeTab === "clerk"
+                  ? "New members, ministry joins and membership transfers waiting on an answer."
                 : "Join requests, prayer, visitation, dedications, welfare and membership transfers."}
             </p>
           </div>

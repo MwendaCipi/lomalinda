@@ -5148,6 +5148,7 @@ export function DepartmentHub({
   initialTab = "members",
   onBack,
   embedded = false,
+  directoryHeading = MINISTRIES_AND_DEPARTMENTS_HEADING,
 }: {
   initialDept?: string | null;
   /** Which of the opened area's views to land on. */
@@ -5161,6 +5162,8 @@ export function DepartmentHub({
   /** One view of a larger desk, which names the views itself (see
       `DepartmentDetail`). */
   embedded?: boolean;
+  /** The desk title when this directory is hosted inside another office. */
+  directoryHeading?: { label: string; description: string };
 } = {}) {
   const [departments, setDepartments] = useState<DepartmentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5219,8 +5222,8 @@ export function DepartmentHub({
   useEffect(() => {
     if (embedded || selected) return;
     setCustomHeader({
-      label: MINISTRIES_AND_DEPARTMENTS_HEADING.label,
-      description: MINISTRIES_AND_DEPARTMENTS_HEADING.description,
+      label: directoryHeading.label,
+      description: directoryHeading.description,
       leading: onBackRef.current ? (
         <button
           type="button"
@@ -5233,7 +5236,7 @@ export function DepartmentHub({
       ) : undefined,
     });
     return () => setCustomHeader(null);
-  }, [embedded, selected, setCustomHeader]);
+  }, [directoryHeading, embedded, selected, setCustomHeader]);
   const directoryNeedle = directorySearch.trim().toLowerCase();
   const visibleDepartments = directoryNeedle
     ? departments.filter((d) =>

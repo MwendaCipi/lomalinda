@@ -668,15 +668,11 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * meeting, register and accounts work. Profiles open from User Management.
  */
 export const clerkshipItems: RailRow[] = [
-  officeTab("join-requests", "Join Requests", UserPlus, {
+  officeTab("clerk-requests", "Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
-    short: "Join Requests",
-    description: "Approve new members and members asking to join a ministry.",
-  }),
-  officeTab("transfers", "Membership Requests", ClipboardList, {
-    roles: CLERKSHIP_ROLES,
-    short: "Transfers",
-    description: "Membership transfers into the church and out of it.",
+    aliasTabs: ["join-requests", "transfers"],
+    short: "Requests",
+    description: "New members, ministry joins and membership transfers waiting on an answer.",
   }),
   officeTab("correspondence", "Correspondences", FileText, {
     roles: CLERKSHIP_ROLES,

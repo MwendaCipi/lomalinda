@@ -26,6 +26,11 @@ import { usePageHeader } from "@/components/app-frame";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+const ELDERSHIP_HEADING = {
+  label: "Eldership",
+  description: "The church's leadership, announcements, accounts and the requests members send.",
+};
+
 type StaffRole =
   | "admin"
   | "clerk"
@@ -299,12 +304,14 @@ function AdministrationContent() {
   const activeTab = searchTab
     ? searchTab === "expenditures"
       ? "accounts"
+      : searchTab === "join-requests" || searchTab === "transfers"
+        ? "clerk-requests"
       : searchTab === "role-management"
         ? "users"
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -463,8 +470,7 @@ function AdministrationContent() {
           icon: <ClipboardList size={16} aria-hidden="true" />,
           description: "The church register, join requests, meetings' minutes and membership transfers.",
           cards: [
-            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
-            { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
+            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "Add, update and maintain the church register and member roll.", href: "/administration?tab=users" },
@@ -611,7 +617,7 @@ function AdministrationContent() {
             {/* Leadership — the directory of the church's areas, opened on
                 one of them when a rail row (or a link) names it. The API
                 decides who may edit; the page itself is open to every office. */}
-            {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} />}
+            {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} directoryHeading={ELDERSHIP_HEADING} />}
 
             {/* Church Meetings — board and business meetings consolidated */}
             {meetingTab && (isClerk || isElder || isAdmin) && (
@@ -646,10 +652,10 @@ function AdministrationContent() {
 
             {/* Received Requests Manager (including Transfers) — the manager
                 owns its own scrolling: toolbar pinned, table scrolls. */}
-            {(activeTab === "requests" || activeTab === "transfers") && (isClerk || isElder || isAdmin || isRequestsDeskLead) && (
+            {(activeTab === "requests" || activeTab === "clerk-requests") && (isClerk || isElder || isAdmin || isRequestsDeskLead) && (
               <div className="h-full min-h-0">
                 <RequestsAdminManager
-                  initialTab={activeTab === "transfers" ? "transfers" : "all"}
+                  initialTab={activeTab === "clerk-requests" ? "clerk" : "all"}
                   focusRequest={searchRequest}
                 />
               </div>

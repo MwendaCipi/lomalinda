@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Receipt, Trash2, X } from "lucide-react";
+import { Plus, Printer, Receipt, Trash2, X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
 import { densityCellPad } from "@/lib/table-density";
@@ -232,6 +232,19 @@ export function ExpenditureManager({
 
   const filteredTotal = filteredExpenditures.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
+  /** Opens a clean report in the browser print dialog, where the treasurer can
+      print it or save it as a PDF without losing the active desk filters. */
+  const printExpenditures = () => {
+    const rows = filteredExpenditures.map((exp, index) => `
+      <tr><td>${index + 1}</td><td>${escapePrint(exp.expenditure_date)}</td><td>${escapePrint(exp.title)}</td><td>${escapePrint(exp.category_display || exp.category)}</td><td>${escapePrint(exp.account_name || "—")}</td><td>${escapePrint(exp.vendor_payee || "—")}</td><td class="amount">KES ${Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}</td></tr>`).join("");
+    const popup = window.open("", "_blank");
+    if (!popup) return;
+    popup.document.write(`<!doctype html><html><head><title>Expenditure Report</title><style>body{font-family:ui-sans-serif,system-ui,sans-serif;color:#28201c;margin:32px}h1{font-size:22px;margin:0 0 4px}p{color:#665a4f;font-size:12px;margin:0 0 20px}table{width:100%;border-collapse:collapse;font-size:11px}th{text-align:left;border-bottom:2px solid #8c4c2f;padding:8px 6px;text-transform:uppercase;font-size:9px;color:#665a4f}td{border-bottom:1px solid #e6ddd5;padding:8px 6px;vertical-align:top}.amount{text-align:right;white-space:nowrap}.total{margin-top:16px;text-align:right;font-weight:700;color:#28201c}@media print{body{margin:16px}}</style></head><body><h1>Church Expenditure Report</h1><p>${filteredExpenditures.length} record${filteredExpenditures.length === 1 ? "" : "s"}${fromDate || toDate ? ` · ${fromDate ? dayFirst(fromDate) : "Start"} to ${toDate ? dayFirst(toDate) : "Today"}` : ""}</p><table><thead><tr><th>#</th><th>Date</th><th>Description</th><th>Category</th><th>Account</th><th>Payee / Vendor</th><th class="amount">Amount</th></tr></thead><tbody>${rows}</tbody></table><p class="total">Total expenditure: KES ${filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</p></body></html>`);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <RecordList
@@ -345,6 +358,17 @@ export function ExpenditureManager({
           Showing <strong className="text-bark">{filteredExpenditures.length}</strong> of {expenditures.length} records · Total:{" "}
           <strong className="text-alert">KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
         </p>
+        <div className="flex shrink-0 gap-2">
+        <button
+          type="button"
+          onClick={printExpenditures}
+          disabled={filteredExpenditures.length === 0}
+          className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3.5 text-xs font-semibold text-bark transition hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <Printer className="h-4 w-4" />
+          <span className="sm:hidden">Print</span>
+          <span className="hidden sm:inline">Print Expenditures</span>
+        </button>
         <button
           onClick={() => setShowModal(true)}
           className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
@@ -352,6 +376,7 @@ export function ExpenditureManager({
           <Plus className="h-4 w-4" />
           <span>Record Expenditure</span>
         </button>
+        </div>
       </div>
 
       {/* Record Expenditure Modal */}
@@ -507,4 +532,8 @@ export function ExpenditureManager({
       )}
     </div>
   );
+}
+
+function escapePrint(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] || character));
 }

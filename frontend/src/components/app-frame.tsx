@@ -207,17 +207,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // section's and two strips seemed to take turns. Adjusting the state during
   // render settles it in the same pass, so the page always has the last word.
   const [routeAtLastReset, setRouteAtLastReset] = useState(pathname);
-  if (pathname !== routeAtLastReset) {
-    setRouteAtLastReset(pathname);
-    setHeaderRightAction(null);
-    setCustomToggles(null);
-    setTogglesRightAction(null);
-    setCustomHeader(null);
-    setHeadingFirst(false);
-    setPinnedDesk(false);
-    setTogglesHideOnScroll(false);
-    setTogglesScrolledDown(false);
-  }
 
   // The scroll the band answers belongs to the page it was read on, so a new
   // page starts with its strip in sight. (The ref itself is written here, never
@@ -294,6 +283,21 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     departments
   );
   const here = useRailHere(pathname, entries);
+  // Console pages share `/administration`; their query is the route. Reset
+  // injected header chrome when that page changes too, otherwise a desk's
+  // toggles can remain visible while the next desk is loading its own strip.
+  const activeRouteKey = here.href ?? pathname;
+  if (activeRouteKey !== routeAtLastReset) {
+    setRouteAtLastReset(activeRouteKey);
+    setHeaderRightAction(null);
+    setCustomToggles(null);
+    setTogglesRightAction(null);
+    setCustomHeader(null);
+    setHeadingFirst(false);
+    setPinnedDesk(false);
+    setTogglesHideOnScroll(false);
+    setTogglesScrolledDown(false);
+  }
 
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
   // The row that is "here", whether it sits inside a section's list (the
