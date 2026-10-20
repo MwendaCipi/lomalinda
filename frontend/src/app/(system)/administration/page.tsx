@@ -23,6 +23,7 @@ import { DeaconateManager } from "@/components/deaconate-manager";
 import { DepartmentManager, DepartmentKey } from "@/components/department-manager";
 import { SectionNav, SubNav } from "@/components/sub-nav";
 import { usePageHeader } from "@/components/app-frame";
+import { deaconateViews } from "@/config/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -311,7 +312,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "clerk-leadership", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "leaders", "leadership", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -374,10 +375,36 @@ function AdministrationContent() {
   // Administration from the account menu still meets a row of toggles to move
   // between the two. Desks that own their own strip (treasury, deaconate,
   const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
+  const deaconateTab = deaconateViews.some((page) => page.tab === activeTab);
+  useEffect(() => {
+    if (!deaconateTab) return;
+    // These six pages share the Deaconate desk. Give the desk its strip
+    // directly, rather than relying on the rail's query reader to catch up:
+    // on a wide screen that reader could still be on the previous console tab
+    // and leave the desktop with no navigation while the phone had already
+    // drawn its own layout.
+    setCustomToggles(
+      <SectionNav
+        label="Deaconate pages"
+        activeHref={`/administration?tab=${activeTab}`}
+        items={deaconateViews.map((page) => ({
+          key: page.tab,
+          href: `/administration?tab=${page.tab}`,
+          label: page.label,
+          short: page.short,
+          icon: page.icon,
+          help: page.description,
+        }))}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [activeTab, deaconateTab, setCustomToggles]);
   const consoleTab =
+    activeTab === "users" ||
     activeTab === "roles" ||
+    activeTab === "leadership" ||
     activeTab === "settings" ||
-    (!hasClerkship && (activeTab === "users" || activeTab === "join-requests"));
+    (!hasClerkship && activeTab === "join-requests");
   // Who the toggle is for: the same people the requests desk already admits,
   // because the API behind it answers to those roles and the notices for a
   // join ask name them. The card on the phone overview sits with the console's
@@ -408,6 +435,13 @@ function AdministrationContent() {
             label: "Roles",
             short: "Roles",
             help: "Church-wide role permissions.",
+          },
+          {
+            key: "leadership",
+            href: "/administration?tab=leadership",
+            label: "Church Leadership",
+            short: "Leadership",
+            help: "The church's offices, ministries and departments, with each leader and assistant.",
           },
           {
             key: "settings",
@@ -472,9 +506,7 @@ function AdministrationContent() {
           cards: [
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
-            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=clerk-leadership" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "Add, update and maintain the church register and member roll.", href: "/administration?tab=users" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
         }
@@ -620,7 +652,7 @@ function AdministrationContent() {
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} directoryHeading={ELDERSHIP_HEADING} />}
 
-            {activeTab === "clerk-leadership" && isClerk && <DepartmentHub key={`clerk-${searchDept ?? "directory"}`} initialDept={searchDept} directoryHeading={{ label: "Clerkship", description: "The church register, correspondence and church leadership records." }} />}
+            {activeTab === "leadership" && (isClerk || isElder || isAdmin) && <DepartmentHub key={`shared-${searchDept ?? "directory"}`} initialDept={searchDept} directoryHeading={{ label: "Administration", description: "The church's offices, ministries and departments, with each leader and assistant." }} />}
 
             {/* Church Meetings — board and business meetings consolidated */}
             {meetingTab && (isClerk || isElder || isAdmin) && (

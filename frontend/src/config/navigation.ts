@@ -682,21 +682,11 @@ export const clerkshipItems: RailRow[] = [
     short: "Letters",
     description: "Write, share and print the church's official correspondence.",
   }),
-  officeTab("clerk-leadership", "Church Leadership", Crown, {
-    roles: CLERKSHIP_ROLES,
-    short: "Leadership",
-    description: "The church's offices, ministries and departments, with each leader and assistant.",
-  }),
   officeTab("meetings", "Meetings", Calendar, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["board", "business"],
     short: "Meetings",
     description: "Church board and business meetings, agendas, files and minutes.",
-  }),
-  officeTab("users", "User Management", Users, {
-    roles: CLERKSHIP_ROLES,
-    short: "Users",
-    description: "Add, update and maintain the church register and member roll.",
   }),
   // The clerk keeps the church's own books, so the desk carries its accounts
   // beside the minutes: the church budget and the two funds the church's
