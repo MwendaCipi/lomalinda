@@ -23,8 +23,6 @@ const categoryLabel: Record<Correspondence["category"], string> = {
 
 const emptyDraft = () => ({
   title: "",
-  sender_or_recipient: "",
-  category: "general" as Correspondence["category"],
   body: "",
   date: new Date().toISOString().slice(0, 10),
 });
@@ -68,7 +66,7 @@ export function CorrespondenceManager() {
       const response = await fetch(`${API_URL}/api/members/correspondence/`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ ...draft, sender_or_recipient: "Church correspondence", category: "general" }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || "Could not save the correspondence.");
@@ -120,7 +118,7 @@ export function CorrespondenceManager() {
           </div>
         ) : (
           <div className="mx-auto max-w-3xl space-y-3">
-            {items.map((item) => <article key={item.id} className="rounded-2xl border border-sand-line p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><h2 className="font-bold text-bark">{item.title}</h2><p className="mt-0.5 text-xs text-moss">{categoryLabel[item.category]} · {item.sender_or_recipient} · {item.date}</p></div></div><p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-bark">{item.body}</p></article>)}
+            {items.map((item) => <article key={item.id} className="rounded-2xl border border-sand-line p-4"><div><h2 className="font-bold text-bark">{item.title}</h2><p className="mt-0.5 text-xs text-moss">{item.date}</p></div><p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-bark">{item.body}</p></article>)}
           </div>
         )}
       </div>
@@ -129,7 +127,7 @@ export function CorrespondenceManager() {
         <button type="button" onClick={() => void share()} disabled={items.length === 0} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute px-3 py-2 text-xs font-semibold text-bark hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"><Share2 size={14} aria-hidden="true" /> Share</button>
         <button type="button" onClick={print} disabled={items.length === 0} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute px-3 py-2 text-xs font-semibold text-bark hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"><Printer size={14} aria-hidden="true" /> Print</button>
       </div>
-      {adding && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><form onSubmit={save} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"><div className="flex items-center justify-between border-b border-sand-line pb-3"><h2 className="text-lg font-bold text-bark">Add Correspondence</h2><button type="button" onClick={() => setAdding(false)} className="rounded-full p-2 text-moss hover:bg-sand"><X size={18} aria-hidden="true" /></button></div><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Title" value={draft.title} onChange={(title) => setDraft({ ...draft, title })} required /><Field label="To / From" value={draft.sender_or_recipient} onChange={(sender_or_recipient) => setDraft({ ...draft, sender_or_recipient })} required /><label className="text-xs font-semibold text-bark">Category<select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as Correspondence["category"] })} className="mt-1 block w-full rounded-xl border border-sand-line px-3 py-2 text-sm font-normal"><option value="general">General correspondence</option><option value="clerk_letter">Clerk letter</option><option value="recommendation">Letter of recommendation</option><option value="board_notice">Board notice</option></select></label><label className="text-xs font-semibold text-bark">Date<input type="date" required value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} className="mt-1 block w-full rounded-xl border border-sand-line px-3 py-2 text-sm font-normal" /></label></div><label className="mt-4 block text-xs font-semibold text-bark">Correspondence<textarea required value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} rows={8} className="mt-1 block w-full rounded-xl border border-sand-line px-3 py-2 text-sm font-normal" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setAdding(false)} className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss">Cancel</button><button type="submit" disabled={saving} className="rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save Correspondence"}</button></div></form></div>}
+      {adding && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><form onSubmit={save} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"><div className="flex items-center justify-between border-b border-sand-line pb-3"><h2 className="text-lg font-bold text-bark">Add Correspondence</h2><button type="button" onClick={() => setAdding(false)} className="rounded-full p-2 text-moss hover:bg-sand"><X size={18} aria-hidden="true" /></button></div><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Title" value={draft.title} onChange={(title) => setDraft({ ...draft, title })} required /><label className="text-xs font-semibold text-bark">Date<input type="date" required value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} className="mt-1 block w-full rounded-xl border border-sand-line px-3 py-2 text-sm font-normal" /></label></div><label className="mt-4 block text-xs font-semibold text-bark">Correspondence<textarea required value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} rows={8} className="mt-1 block w-full rounded-xl border border-sand-line px-3 py-2 text-sm font-normal" /></label><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setAdding(false)} className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss">Cancel</button><button type="submit" disabled={saving} className="rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save Correspondence"}</button></div></form></div>}
     </section>
   );
 }

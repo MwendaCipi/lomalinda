@@ -679,6 +679,11 @@ export const clerkshipItems: RailRow[] = [
     short: "Letters",
     description: "Write, share and print the church's official correspondence.",
   }),
+  officeTab("clerk-leadership", "Church Leadership", Crown, {
+    roles: CLERKSHIP_ROLES,
+    short: "Leadership",
+    description: "The church's offices, ministries and departments, with each leader and assistant.",
+  }),
   officeTab("meetings", "Meetings", Calendar, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["board", "business"],

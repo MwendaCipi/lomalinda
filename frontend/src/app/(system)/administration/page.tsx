@@ -311,7 +311,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "leaders", "clerk-leadership", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -472,6 +472,7 @@ function AdministrationContent() {
           cards: [
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
+            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=clerk-leadership" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "Add, update and maintain the church register and member roll.", href: "/administration?tab=users" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
@@ -618,6 +619,8 @@ function AdministrationContent() {
                 one of them when a rail row (or a link) names it. The API
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} directoryHeading={ELDERSHIP_HEADING} />}
+
+            {activeTab === "clerk-leadership" && isClerk && <DepartmentHub key={`clerk-${searchDept ?? "directory"}`} initialDept={searchDept} directoryHeading={{ label: "Clerkship", description: "The church register, correspondence and church leadership records." }} />}
 
             {/* Church Meetings — board and business meetings consolidated */}
             {meetingTab && (isClerk || isElder || isAdmin) && (

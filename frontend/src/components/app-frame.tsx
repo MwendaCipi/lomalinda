@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
@@ -126,6 +126,7 @@ const HEADING_FIRST_SECTIONS = new Set(["Fellowship", "Stewardship"]);
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
+  const searchParams = useSearchParams();
   const { me, hasToken } = useHeaderData();
 
   /**
@@ -286,7 +287,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // Console pages share `/administration`; their query is the route. Reset
   // injected header chrome when that page changes too, otherwise a desk's
   // toggles can remain visible while the next desk is loading its own strip.
-  const activeRouteKey = here.href ?? pathname;
+  const activeRouteKey = `${pathname}?tab=${searchParams.get("tab") ?? ""}&dept=${searchParams.get("dept") ?? ""}`;
   if (activeRouteKey !== routeAtLastReset) {
     setRouteAtLastReset(activeRouteKey);
     setHeaderRightAction(null);

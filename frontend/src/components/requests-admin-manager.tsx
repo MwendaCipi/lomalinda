@@ -925,16 +925,6 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         </div>
       </div>
 
-      {/* The metrics sit on the toolbar row's far right; the table beneath
-          is the scrolling region. */}
-      <div className="flex shrink-0 items-center justify-end gap-2 pb-1 text-xs text-moss">
-        <span className="text-right">
-          {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
-          {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
-          {reviewFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
-          {search.trim() ? ` · matching “${search.trim()}”` : ""}
-        </span>
-      </div>
       </div>
 
       {/* The table scrolls beneath the pinned toolbar. */}
@@ -1232,6 +1222,14 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         </div>
       )}
       </div>
+      <footer className="flex shrink-0 items-center justify-between border-t border-sand-line bg-white px-4 py-3 text-xs text-moss sm:px-6">
+        <span>
+          {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
+          {activeTab !== "all" ? ` · ${activeFilterLabel}` : ""}
+          {reviewFilter !== "all" ? ` · ${activeStatusLabel.toLowerCase()}` : ""}
+          {search.trim() ? ` · matching “${search.trim()}”` : ""}
+        </span>
+      </footer>
     </div>
   );
 }
