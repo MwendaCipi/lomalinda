@@ -609,6 +609,15 @@ export type RailRow = {
   railMinistry?: true;
   /** The area code whose membership makes a `railMinistry` row the viewer's own. */
   railAreaCode?: string;
+  /**
+   * The desk draws its own strip (`setCustomToggles`), so the shell must not
+   * draw its `items` as one. The treasury is the case: its views are one line
+   * the pages themselves keep (Givings, Accounts, Budget, Refunds and the
+   * rest), and a shell strip of the same pages would flash up first and then
+   * be replaced by the desk's own — two navigations for one desk, disagreeing
+   * on every toggle.
+   */
+  ownStrip?: boolean;
 };
 
 /**
@@ -1046,7 +1055,9 @@ export const railEntries: RailEntry[] = [
   // its only door, so the rail carries the desks of ongoing work.
   { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
   { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.clerkship },
-  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
+  // The treasury's row names the desk; its pages are the desk's own strip (see
+  // `ownStrip`), so the rail never draws a second, older list of them.
+  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, ownStrip: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.deaconate },
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.

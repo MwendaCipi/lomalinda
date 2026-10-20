@@ -27,7 +27,39 @@ const fundAuthHeaders = (): Record<string, string> => {
  */
 export const UNASSIGNED_CHANGED_EVENT = "treasury-unassigned-changed";
 
-export type TreasuryView = "givings" | "summary" | "unassigned" | "accounts" | "drives" | "expenses" | "requests" | "failed";
+export type TreasuryView =
+  | "givings"
+  | "summary"
+  | "unassigned"
+  | "accounts"
+  | "drives"
+  | "budget"
+  | "expenses"
+  | "requests"
+  | "refunds"
+  | "failed";
+
+/**
+ * Where each view stands — the one table every treasury strip reads.
+ *
+ * A view is reachable from the ledger, the accounts desk, the drives page, the
+ * budget and the refunds: five surfaces, one navigation. Each of them answers
+ * for the views it draws in place and sends the rest through this map, so no
+ * strip can offer a toggle that leads somewhere the other strips disagree
+ * with.
+ */
+export const TREASURY_VIEW_HREF: Record<TreasuryView, string> = {
+  givings: "/administration/treasury?mode=all_givings",
+  summary: "/administration/treasury?mode=summary",
+  unassigned: "/administration?tab=accounts&view=unassigned",
+  accounts: "/administration?tab=accounts&view=accounts",
+  drives: "/administration/fund-drives",
+  budget: "/administration?tab=budget",
+  expenses: "/administration?tab=accounts&view=expenditure",
+  requests: "/administration?tab=accounts&view=withdrawals",
+  refunds: "/administration?tab=refunds",
+  failed: "/administration/treasury?mode=failed",
+};
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
   { key: "givings", label: "Givings", short: "Givings" },
@@ -42,8 +74,13 @@ const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
   // A fund drive is born from one of those accounts, so it stands beside
   // them: the treasurer reaches the drives without leaving the treasury.
   { key: "drives", label: "Fund Drives", short: "Drives" },
+  // The year's plan: what the drives and the accounts are measured against,
+  // so it sits beside them rather than in the office console.
+  { key: "budget", label: "Church Budget", short: "Budget" },
   { key: "expenses", label: "Expenses", short: "Expenses" },
   { key: "requests", label: "Requests", short: "Requests" },
+  // Money handed back: a mistaken or doubled gift returned through B2C.
+  { key: "refunds", label: "M-Pesa Refunds", short: "Refunds" },
   // Giving attempts that never completed: recorded so the desk can see what
   // never arrived, credited to nothing, receipted never.
   { key: "failed", label: "Failed", short: "Failed" },
@@ -144,7 +181,8 @@ export function TreasuryNav({
   // rule rather than a pill button. The phone's cells are a quarter of the
   // strip's width, so the padding gives up most of its own on that width and
   // the label sits a little lower: four toggles must read, not merely fit, and
-  // a count has to hold the cell's corner without touching it.
+  // a count has to hold the cell's corner without touching it. The ten views
+  // read as rows of four, so a phone meets them in three lines at most.
   const tabClass = (isActive: boolean) =>
     `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1.5 pt-3 text-sm font-semibold transition sm:px-3.5 sm:pt-0 ${
       isActive ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"

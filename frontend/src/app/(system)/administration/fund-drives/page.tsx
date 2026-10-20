@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MoveLeft } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
-import { TreasuryNav } from "@/components/treasury-nav";
+import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { TREASURY_HEADING } from "@/config/navigation";
 
@@ -65,15 +65,9 @@ export default function FundDrivesPage() {
     setCustomToggles(
       <TreasuryNav
         active="drives"
-        onSelect={(next) => {
-          if (next === "givings") router.replace("/administration/treasury?mode=all_givings");
-          else if (next === "summary") router.replace("/administration/treasury?mode=summary");
-          else if (next === "unassigned") router.replace("/administration?tab=accounts&view=unassigned");
-          else if (next === "accounts") router.replace("/administration?tab=accounts&view=accounts");
-          else if (next === "expenses") router.replace("/administration?tab=accounts&view=expenditure");
-          else if (next === "requests") router.replace("/administration?tab=accounts&view=withdrawals");
-          else if (next === "failed") router.replace("/administration/treasury?mode=failed");
-        }}
+        // The drives are this page's only view; every other chip walks to the
+        // page that holds it, by the one address table in `treasury-nav`.
+        onSelect={(next) => router.replace(TREASURY_VIEW_HREF[next])}
       />
     );
     return () => setCustomToggles(null);

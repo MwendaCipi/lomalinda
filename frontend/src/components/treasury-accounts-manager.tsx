@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
-import { TreasuryNav } from "@/components/treasury-nav";
+import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
@@ -669,15 +669,15 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     setCustomToggles(
       <TreasuryNav
         active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : view === "unassigned" ? "unassigned" : "requests"}
+        // This desk draws the accounts, the spending, the withdrawals and the
+        // unassigned queue in place; every other chip walks to the page that
+        // holds it, by the one address table in `treasury-nav`.
         onSelect={(next) => {
-          if (next === "givings") router.replace("/administration/treasury?mode=all_givings");
-          else if (next === "summary") router.replace("/administration/treasury?mode=summary");
-          else if (next === "unassigned") setView("unassigned");
+          if (next === "unassigned") setView("unassigned");
           else if (next === "accounts") setView("accounts");
-          else if (next === "drives") router.replace("/administration/fund-drives");
           else if (next === "expenses") setView("expenditure");
-          else if (next === "failed") router.replace("/administration/treasury?mode=failed");
-          else setView("withdrawals");
+          else if (next === "requests") setView("withdrawals");
+          else router.replace(TREASURY_VIEW_HREF[next]);
         }}
       />
     );

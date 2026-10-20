@@ -17,6 +17,7 @@ import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { TreasuryAccountsManager } from "@/components/treasury-accounts-manager";
+import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { ChurchBudgetManager } from "@/components/church-budget-manager";
 import { MpesaRefundManager } from "@/components/mpesa-refund-manager";
 import { DeaconateManager } from "@/components/deaconate-manager";
@@ -399,6 +400,22 @@ function AdministrationContent() {
     );
     return () => setCustomToggles(null);
   }, [activeTab, deaconateTab, setCustomToggles]);
+  // The budget and the refunds desk are two more views of the treasury's
+  // money, so they draw the treasury's own strip — the same one the ledger,
+  // the accounts desk and the drives page draw. Without this they fell back to
+  // the rail's older list of treasury pages, and the desk changed its toggles
+  // as the reader moved from the ledger to the budget.
+  const treasuryTab = activeTab === "budget" || activeTab === "refunds";
+  useEffect(() => {
+    if (!treasuryTab || !isFinance) return;
+    setCustomToggles(
+      <TreasuryNav
+        active={activeTab === "budget" ? "budget" : "refunds"}
+        onSelect={(next) => router.replace(TREASURY_VIEW_HREF[next])}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [activeTab, treasuryTab, isFinance, setCustomToggles, router]);
   // The console's own pages draw the Administration strip. The register and
   // the shared leadership directory are pages of the Clerkship desk for the
   // clerk who holds it — that strip names them, with requests, letters,

@@ -334,7 +334,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const headingFirst =
     headingFirstAsked ||
     (section !== null && HEADING_FIRST_SECTIONS.has(section.label));
-  const sectionPages = (section && "items" in section && section.items ? section.items : [])
+  // A desk that keeps its own strip (`ownStrip`) draws it through
+  // `setCustomToggles`; the shell must not turn its `items` into a second,
+  // older navigation that shows first and is then replaced.
+  const ownsItsStrip = section !== null && "ownStrip" in section && section.ownStrip === true;
+  const sectionPages = (section && !ownsItsStrip && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({
       key: item.href as string,

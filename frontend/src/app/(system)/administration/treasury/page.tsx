@@ -9,7 +9,7 @@ import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
 import { ChurchLockup } from "@/components/church-lockup";
-import { TreasuryNav } from "@/components/treasury-nav";
+import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { ComboboxPopover } from "@/components/combobox-popover";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
@@ -432,9 +432,10 @@ export default function TreasuryPage() {
   }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow]);
 
   // The treasury's views, as one line. The ledger owns Individual Givings and
-  // Summary in place; the other three walk to the accounts desk, which is
-  // where those views live. The shell's header band draws it — one strip for
-  // the whole treasury, never a second row under this page's own header.
+  // Summary in place; every other chip walks to the page that holds it by the
+  // one address table in `treasury-nav`. The shell's header band draws it —
+  // one strip for the whole treasury, never a second row under this page's own
+  // header.
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
@@ -457,16 +458,8 @@ export default function TreasuryPage() {
             // drill-down the reader had stepped into.
             setExpandedPurpose(null);
             setViewMode("summary");
-          } else if (view === "unassigned") {
-            router.replace("/administration?tab=accounts&view=unassigned");
-          } else if (view === "accounts") {
-            router.replace("/administration?tab=accounts&view=accounts");
-          } else if (view === "drives") {
-            router.replace("/administration/fund-drives");
-          } else if (view === "expenses") {
-            router.replace("/administration?tab=accounts&view=expenditure");
           } else {
-            router.replace("/administration?tab=accounts&view=withdrawals");
+            router.replace(TREASURY_VIEW_HREF[view]);
           }
         }}
       />
