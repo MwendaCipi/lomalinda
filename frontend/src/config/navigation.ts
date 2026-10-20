@@ -34,6 +34,7 @@ import {
   Target,
   Undo2,
   UserCheck,
+  UserPlus,
   Users,
   Wallet,
 } from "lucide-react";
@@ -662,27 +663,26 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  */
 
 /**
- * Clerkship — the clerk's desk: the minutes of the board and business
- * meetings, and the membership transfers in and out.
- *
- * The register moved to Administration, where the roles and the church's
- * settings stand with it. The clerk keeps the books of every meeting the
- * church holds, so those three pages are one row rather than scattered
- * through the elders' strip. An administrator holds the desk too.
+ * Clerkship — the clerk's desk: the church register (User Management),
+ * Join Requests, church Meetings (board & business), Membership Requests,
+ * and Funding & Accounts.
  */
 export const clerkshipItems: RailRow[] = [
-  // Board and business meetings are two rows of this strip, not a desk
-  // behind another menu. The old "meetings" tab still opens the board list.
-  officeTab("board", "Board Meetings", Armchair, {
+  officeTab("users", "User Management", Users, {
     roles: CLERKSHIP_ROLES,
-    aliasTabs: ["meetings"],
-    short: "Board",
-    description: "The board's minutes, agendas, attendance and follow-ups.",
+    short: "Users",
+    description: "The church register and member roll.",
   }),
-  officeTab("business", "Business Meetings", Briefcase, {
+  officeTab("join-requests", "Join Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
-    short: "Business",
-    description: "The church's business meetings and the decisions they carry.",
+    short: "Join Requests",
+    description: "Approve new members and members asking to join a ministry.",
+  }),
+  officeTab("meetings", "Meetings", Calendar, {
+    roles: CLERKSHIP_ROLES,
+    aliasTabs: ["board", "business"],
+    short: "Meetings",
+    description: "Church board and business meetings, agendas, files and minutes.",
   }),
   officeTab("transfers", "Membership Requests", ClipboardList, {
     roles: CLERKSHIP_ROLES,

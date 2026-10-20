@@ -8,8 +8,7 @@ import { AnnouncementManager } from "@/components/announcement-manager";
 import { EmailsDesk } from "@/components/emails-desk";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { RoleRightsManager } from "@/components/role-rights-manager";
-import { BusinessMeetingManager } from "@/components/business-meeting-manager";
-import { BoardMeetingManager } from "@/components/board-meeting-manager";
+import { MeetingsManager } from "@/components/meetings-manager";
 import { UserManagement } from "@/components/user-management";
 import { DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
@@ -62,9 +61,6 @@ type Transfer = {
   transfer_type: string;
   other_church: string;
 };
-
-/** The two kinds of meeting the Clerk's desk keeps the minutes for. */
-type MeetingKind = "board" | "business";
 
 /** Session cache of the gate result — the API still enforces every request. */
 const ADMIN_GATE_KEY = "admin_gate_profile";
@@ -310,12 +306,11 @@ function AdministrationContent() {
   const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
-   * Meetings — board and business are rows of the Clerkship strip, so the
-   * kind is the tab itself: `?tab=board` and `?tab=business` each open their
-   * own list, and an old `?tab=meetings` link still lands on board.
+   * Meetings — church board and business meetings are consolidated into a single
+   * desk under Clerkship (`?tab=meetings`). `?tab=board` and `?tab=business`
+   * alias to this desk with the corresponding filter pre-selected.
    */
   const meetingTab = activeTab === "meetings" || activeTab === "board" || activeTab === "business";
-  const meetingKind: MeetingKind = activeTab === "business" ? "business" : "board";
 
   // The fallback desk, chosen once the role is known. A URL tab always
   // outranks it (see `activeTab` above), so this never delays a toggle.
@@ -370,9 +365,11 @@ function AdministrationContent() {
   // one here, the same way every other desk's rail section does, so opening
   // Administration from the account menu still meets a row of toggles to move
   // between the two. Desks that own their own strip (treasury, deaconate,
-  // etc.) or ride a rail section are left alone.
   const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
-  const consoleTab = activeTab === "users" || activeTab === "roles" || activeTab === "settings" || activeTab === "join-requests";
+  const consoleTab =
+    activeTab === "roles" ||
+    activeTab === "settings" ||
+    (!hasClerkship && (activeTab === "users" || activeTab === "join-requests"));
   // Who the toggle is for: the same people the requests desk already admits,
   // because the API behind it answers to those roles and the notices for a
   // join ask name them. The card on the phone overview sits with the console's
@@ -441,19 +438,20 @@ function AdministrationContent() {
   // why the whole page is hidden from `lg`.
   const overviewDesks: OverviewDesk[] = (
     [
-    // Administration — the console's own pages, and all the section is: the
-    // church's members and the roles they hold, and the church's own settings.
-    // A ministry or department is administered from Areas (its own desk), and
-    // the desks keep their pages below, so nothing is stranded on a phone.
+    // Administration — the console's own pages: church-wide roles and settings.
     isClerk || isElder || isAdmin
       ? {
           label: "Administration",
           icon: <ShieldCheck size={16} aria-hidden="true" />,
-          description: "The church's members, their roles and the church's own settings.",
+          description: "Church-wide role permissions and church settings.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
+            ...(!hasClerkship
+              ? [
+                  { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
+                  { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
+                ]
+              : []),
             { icon: <ShieldCheck size={20} aria-hidden="true" />, label: "Roles", description: "Set the permissions each church-wide role holds.", href: "/administration?tab=roles" },
-            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
           ],
         }
@@ -462,10 +460,11 @@ function AdministrationContent() {
       ? {
           label: "Clerkship",
           icon: <ClipboardList size={16} aria-hidden="true" />,
-          description: "The meetings' minutes and the membership transfers.",
+          description: "The church register, join requests, meetings' minutes and membership transfers.",
           cards: [
-            { icon: <Armchair size={20} aria-hidden="true" />, label: "Board Meetings", description: "The board's schedules, agendas, files and minutes.", href: "/administration?tab=board" },
-            { icon: <Briefcase size={20} aria-hidden="true" />, label: "Business Meetings", description: "The congregation in session: agendas, files and minutes.", href: "/administration?tab=business" },
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register and member roll.", href: "/administration?tab=users" },
+            { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
+            { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
@@ -612,20 +611,16 @@ function AdministrationContent() {
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} />}
 
-            {/* Board and Business Meetings — two rows of the Clerkship strip,
-                so the desk opens on the kind the row named and no second
-                toggle sits between the two. */}
+            {/* Church Meetings — board and business meetings consolidated */}
             {meetingTab && (isClerk || isElder || isAdmin) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
-                {meetingKind === "board" ? (
-                  <div className="p-4 sm:p-6 lg:p-8">
-                    <BoardMeetingManager />
-                  </div>
-                ) : (
-                  <div className="p-4 sm:p-6 lg:p-8">
-                    <BusinessMeetingManager />
-                  </div>
-                )}
+                <div className="p-4 sm:p-6 lg:p-8">
+                  <MeetingsManager
+                    initialKindFilter={
+                      activeTab === "business" ? "business" : activeTab === "board" ? "board" : "all"
+                    }
+                  />
+                </div>
               </div>
             )}
 
