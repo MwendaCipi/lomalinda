@@ -15,10 +15,17 @@ always been — a receipt is not held back because the treasurer is new.
 
 from .models import MemberProfile
 
-#: The office a giving receipt is signed by: (role code, office label).
-#: The treasurer issues it.
+#: The two offices a giving receipt is signed by, in the order they print:
+#: (role code, office label). The treasurer issues it; the first elder
+#: authorises it.
+#:
+#: Both offices are listed even though a receipt with only one officer held
+#: prints a single centred slot: the treasurer who is also the first elder
+#: answers only as the senior office (see ``office_holder``), so a treasurer-
+#: only list would find nobody and leave the slip unsigned entirely.
 RECEIPT_OFFICES = (
     ('treasurer', 'Treasurer'),
+    ('first_elder', 'First Elder'),
 )
 
 #: Every office that may keep a signature, senior office last so that
