@@ -1549,9 +1549,9 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       {/* ── TAB: FUNDING & ACCOUNTS ── */}
       {(activeTab === "funding" || activeTab === "accounts") && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6 custom-hover-scrollbar">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 md:hidden">
             {backArrow}
-            <div className="md:hidden">
+            <div>
               <h2 className="text-base font-bold text-bark">Deaconate Funding &amp; Accounts</h2>
               <p className="text-xs text-moss">Local Church Budget allocations, transactions ledger, and funding requests.</p>
             </div>

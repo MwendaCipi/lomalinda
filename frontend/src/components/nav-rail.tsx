@@ -72,7 +72,7 @@ export function NavRail() {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const matches = (row: { label: string; short?: string; description?: string }) =>
-    `${row.label} ${row.short ?? ""} ${row.description ?? ""}`.toLowerCase().includes(needle);
+    `${row.label} ${row.short ?? ""}`.toLowerCase().includes(needle);
   const sections = railSectionsFor(entries)
     .map((section) => ({
       ...section,

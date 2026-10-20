@@ -130,13 +130,12 @@ export function onAppLocationChange(listener: () => void) {
 }
 
 /**
- * Tell subscribers the location moved — a tick later, because a wrapper runs
- * *before* the URL is written and they read `window.location`.
+ * Tell subscribers the location moved. The wrappers call this after the native
+ * history method has written the URL, so desk chrome and its page content
+ * change in the same render instead of briefly showing the previous desk.
  */
 function notifyLocation() {
-  window.setTimeout(() => {
-    locationListeners.forEach((listener) => listener());
-  }, 0);
+  locationListeners.forEach((listener) => listener());
 }
 
 /** Index of the entry we are on; 0 is the entry the app opened with. */
