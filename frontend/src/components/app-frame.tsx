@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
@@ -12,7 +12,7 @@ import { normalizePath } from "@/lib/paths";
 import { isMarketingPage } from "@/lib/route-visibility";
 import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
-import { useRailHere } from "@/hooks/use-rail-location";
+import { useRailHere, useRailQuery } from "@/hooks/use-rail-location";
 
 type PageHeaderHeading = {
   label: string;
@@ -126,7 +126,7 @@ const HEADING_FIRST_SECTIONS = new Set(["Fellowship", "Stewardship"]);
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
-  const searchParams = useSearchParams();
+  const railQuery = useRailQuery();
   const { me, hasToken } = useHeaderData();
 
   /**
@@ -287,7 +287,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // Console pages share `/administration`; their query is the route. Reset
   // injected header chrome when that page changes too, otherwise a desk's
   // toggles can remain visible while the next desk is loading its own strip.
-  const activeRouteKey = `${pathname}?tab=${searchParams.get("tab") ?? ""}&dept=${searchParams.get("dept") ?? ""}`;
+  const activeRouteKey = `${pathname}?tab=${railQuery.tab ?? ""}&dept=${railQuery.dept ?? ""}`;
   if (activeRouteKey !== routeAtLastReset) {
     setRouteAtLastReset(activeRouteKey);
     setHeaderRightAction(null);
