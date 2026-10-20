@@ -664,15 +664,10 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
 
 /**
  * Clerkship — the clerk's desk. The pages are ordered by the work a clerk
- * reaches for most: finding a person's record, answering arrivals and
- * transfers, then the less frequent meeting, register and accounts work.
+ * reaches for most: answering arrivals and transfers, then the less frequent
+ * meeting, register and accounts work. Profiles open from User Management.
  */
 export const clerkshipItems: RailRow[] = [
-  officeTab("profiles", "User Profiles", Users, {
-    roles: CLERKSHIP_ROLES,
-    short: "Profiles",
-    description: "Find a person, open their church profile and assign their church-wide roles.",
-  }),
   officeTab("join-requests", "Join Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
     short: "Join Requests",
@@ -682,6 +677,11 @@ export const clerkshipItems: RailRow[] = [
     roles: CLERKSHIP_ROLES,
     short: "Transfers",
     description: "Membership transfers into the church and out of it.",
+  }),
+  officeTab("correspondence", "Correspondences", FileText, {
+    roles: CLERKSHIP_ROLES,
+    short: "Letters",
+    description: "Write, share and print the church's official correspondence.",
   }),
   officeTab("meetings", "Meetings", Calendar, {
     roles: CLERKSHIP_ROLES,

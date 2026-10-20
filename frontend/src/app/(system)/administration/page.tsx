@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, FileText, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -10,6 +10,7 @@ import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { RoleRightsManager } from "@/components/role-rights-manager";
 import { MeetingsManager } from "@/components/meetings-manager";
 import { UserManagement } from "@/components/user-management";
+import { CorrespondenceManager } from "@/components/correspondence-manager";
 import { DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { TransferManagement } from "@/components/transfer-management";
@@ -73,7 +74,6 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
  */
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
-  profiles: "user profiles",
   leaders: "church departments",
   meetings: "meetings",
   board: "meetings",
@@ -304,7 +304,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "profiles", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -463,9 +463,9 @@ function AdministrationContent() {
           icon: <ClipboardList size={16} aria-hidden="true" />,
           description: "The church register, join requests, meetings' minutes and membership transfers.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Profiles", description: "Find a person, open their profile and assign church-wide roles.", href: "/administration?tab=profiles" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
+            { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "Add, update and maintain the church register and member roll.", href: "/administration?tab=users" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
@@ -602,8 +602,6 @@ function AdministrationContent() {
             {/* Users (Members) View */}
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
 
-            {activeTab === "profiles" && isClerk && <UserManagement profileMode />}
-
             {activeTab === "roles" && (isAdmin || isClerk || isElder) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <RoleRightsManager />
@@ -656,6 +654,8 @@ function AdministrationContent() {
                 />
               </div>
             )}
+
+            {activeTab === "correspondence" && isClerk && <CorrespondenceManager />}
 
             {/* Join Requests — the console's own door on both kinds of join
                 ask: a new member whose account waits on approval, and a

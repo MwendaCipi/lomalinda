@@ -1210,7 +1210,7 @@ function InvitationActions({
   );
 }
 
-export function UserManagement({ profileMode = false }: { profileMode?: boolean }) {
+export function UserManagement() {
   const [members, setMembers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -2014,7 +2014,7 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
         <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
           <input
             type="text"
-            placeholder={profileMode ? "Find a person by name, email or phone..." : "Search by name, email, phone..."}
+            placeholder="Search by name, email, phone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
@@ -2023,7 +2023,7 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
       </div>
     );
     return () => setHeaderRightAction(null);
-  }, [search, setHeaderRightAction, recordFilterOpen, invitationFilter, typeFilter, activeRecordLabel, awaitingCount, rosterScoped, profileMode]);
+  }, [search, setHeaderRightAction, recordFilterOpen, invitationFilter, typeFilter, activeRecordLabel, awaitingCount, rosterScoped]);
 
   // Close the filter popover on an outside press.
   useEffect(() => {
@@ -2361,24 +2361,6 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                         SEX heading rather than sitting a nudge to the right. */}
                     <td className={`${cellPad} text-moss ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className={`${cellPad} text-right ${COL_ACTIONS}`}>
-                      {profileMode ? (
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openProfile(m)}
-                            className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand"
-                          >
-                            Profile
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLeadershipMember(m)}
-                            className="rounded-lg bg-bark px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember"
-                          >
-                            Assign role
-                          </button>
-                        </div>
-                      ) : (
                       <div className="relative inline-block" data-action-menu>
                         <button
                           onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
@@ -2407,12 +2389,6 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                               <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
                             </button>
                             <button
-                              onClick={() => { setLeadershipMember(m); setOpenActionMenuId(null); }}
-                              className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
-                            >
-                              <Check size={12} aria-hidden="true" /> Roles
-                            </button>
-                            <button
                               onClick={() => openAccountTypeModal(m)}
                               className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                             >
@@ -2438,7 +2414,6 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                           </div>
                         )}
                       </div>
-                      )}
                     </td>
                   </tr>
                 )}
@@ -2475,24 +2450,6 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                     </div>
                     {/* The card's actions live in one menu, anchored to this
                         button — nothing shows until it is asked for. */}
-                    {profileMode ? (
-                      <div className="flex shrink-0 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openProfile(m)}
-                          className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark hover:border-ember"
-                        >
-                          Profile
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setLeadershipMember(m)}
-                          className="rounded-lg bg-bark px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-ember"
-                        >
-                          Role
-                        </button>
-                      </div>
-                    ) : (
                     <div className="relative inline-block" data-action-menu>
                       <button
                         onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
@@ -2505,10 +2462,10 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                       {openActionMenuId === m.id && (
                         <div className={`absolute right-0 z-50 w-48 rounded-xl border border-sand-line bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                           <button
-                            onClick={() => { handleStartEdit(m); setOpenActionMenuId(null); }}
+                            onClick={() => { openProfile(m); setOpenActionMenuId(null); }}
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
-                            <Pencil size={12} aria-hidden="true" /> Edit Profile
+                            <User size={12} aria-hidden="true" /> See Profile
                           </button>
                           <button
                             onClick={() => { openContactModal(m); setOpenActionMenuId(null); }}
@@ -2521,12 +2478,6 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
                           >
                             <ArrowLeftRight size={12} aria-hidden="true" /> Transfer Member
-                          </button>
-                          <button
-                            onClick={() => { setLeadershipMember(m); setOpenActionMenuId(null); }}
-                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
-                          >
-                            <Check size={12} aria-hidden="true" /> Roles
                           </button>
                           <button
                             onClick={() => openAccountTypeModal(m)}
@@ -2554,7 +2505,6 @@ export function UserManagement({ profileMode = false }: { profileMode?: boolean 
                         </div>
                       )}
                     </div>
-                    )}
                   </div>
                 </div>
               );
