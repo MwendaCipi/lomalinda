@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, X, MoveLeft } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -99,6 +99,14 @@ type IndividualGiving = {
 const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.status === "Recorded";
 
 /**
+ * A gift that can be handed back through Safaricom's B2C payout: a completed
+ * M-Pesa payment. Cash is the counter's own, a cheque is the bank's, and a
+ * card gift never passed through a phone; only M-Pesa can be refunded back to
+ * the number that paid, which is what the Refund action promises.
+ */
+const isMpesaGiving = (g: IndividualGiving) => g.source === "digital" && /^m-?pesa$/i.test(g.payment_method || "");
+
+/**
  * A finished report, held for the desk to look at before it decides to save
  * it — sometimes one wants to read the document first. The PDF is drawn as
  * itself, in the browser's own viewer.
@@ -189,6 +197,11 @@ export default function TreasuryPage() {
   // A failed attempt can be taken off the ledger; the row it came from
   // shows this while its removal is in flight.
   const [removingId, setRemovingId] = useState<string | null>(null);
+  // A refund is a B2C payout Safaricom confirms later: the row shows it is in
+  // flight, and remembers which gifts have already been handed back so the
+  // action cannot be pressed twice on the same payment.
+  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [refundedIds, setRefundedIds] = useState<number[]>([]);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
   // The Failed badge is counted from the exact rows rendered by the Failed
@@ -305,6 +318,71 @@ export default function TreasuryPage() {
       showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  // A gift handed back: Safaricom pays the giver's phone through B2C, so the
+  // desk asks for the number and the reason before anything leaves the church
+  // account — the reason is what the refund record keeps for the audit.
+  const handleRefundGiving = async (giving: IndividualGiving) => {
+    const escape = (value: string) =>
+      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const result = await showAlert("Refund this M-Pesa gift?", "", "warning", {
+      html: `
+        <div style="text-align:left;font-size:14px">
+          <p style="margin:0 0 12px">KES ${escape(money(giving.amount))} for <b>${escape(giving.purpose)}</b> goes back to the giver's phone through M-Pesa. Safaricom pays it out, so it cannot be undone once accepted.</p>
+          <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:600">Phone to refund</label>
+          <input id="refund-phone-value" class="swal2-input" style="margin-top:0" placeholder="07XXXXXXXX" value="${escape(giving.giver_phone || "")}" />
+          <label style="display:block;margin-bottom:4px;font-size:12px;font-weight:600">Reason</label>
+          <textarea id="refund-reason-value" class="swal2-textarea" style="margin-top:0" placeholder="e.g. Duplicate gift on 21/09/2026"></textarea>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Refund via M-Pesa",
+      confirmButtonColor: brand.bark,
+      cancelButtonText: "Cancel",
+      preConfirm: () => {
+        const phone = ((document.getElementById("refund-phone-value") as HTMLInputElement | null)?.value || "").trim();
+        const reason = ((document.getElementById("refund-reason-value") as HTMLTextAreaElement | null)?.value || "").trim();
+        const digits = phone.replace(/\D/g, "");
+        if (!phone || digits.length < 9 || digits.length > 15) {
+          Swal.showValidationMessage("Enter the phone number to refund to (9 to 15 digits).");
+          return false;
+        }
+        if (!reason) {
+          Swal.showValidationMessage("Say why this gift is being refunded.");
+          return false;
+        }
+        return { phone, reason };
+      },
+    });
+    if (!result.isConfirmed || !result.value) return;
+    const { phone, reason } = result.value as { phone: string; reason: string };
+
+    setRefundingId(giving.id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/contributions/${giving.raw_id}/refund/`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ phone_number: phone, reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Refund not sent", data.detail || "M-Pesa did not accept the refund.", "error");
+        return;
+      }
+      // The payout is still travelling when this answers: the Refunds view is
+      // where the desk watches Safaricom's callback settle it.
+      showAlert(
+        "Refund submitted",
+        data.detail || "M-Pesa accepted the refund. It is tracked under M-Pesa Refunds until the money arrives.",
+        "success"
+      );
+      setRefundedIds((prev) => (prev.includes(giving.raw_id) ? prev : [...prev, giving.raw_id]));
+    } catch (error) {
+      showAlert("Refund not sent", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setRefundingId(null);
     }
   };
 
@@ -464,6 +542,10 @@ export default function TreasuryPage() {
         }}
       />
     );
+    // The strip belongs to this desk: leaving it (for the budget, say) takes
+    // the row of views with it, so the next page is not drawn under the
+    // treasury's chips.
+    return () => setCustomToggles(null);
   }, [setCustomToggles, viewMode, loadAllGivings, loadFailedGivings, failedCount, router]);
 
   // This desk answers two of the treasury's six views under one route, and
@@ -1501,6 +1583,26 @@ export default function TreasuryPage() {
                                         {removingId === giving.id ? "Removing…" : "Remove"}
                                       </button>
                                     )}
+                                    {isReceivedGiving(giving) && isMpesaGiving(giving) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRefundGiving(giving)}
+                                        disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                        title={
+                                          refundedIds.includes(giving.raw_id)
+                                            ? "This gift has already been refunded"
+                                            : "Send this gift back to the giver's phone through M-Pesa"
+                                        }
+                                        className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-ember hover:bg-sand disabled:opacity-60"
+                                      >
+                                        {refundingId === giving.id ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Undo2 className="h-3 w-3" aria-hidden="true" />
+                                        )}
+                                        {refundedIds.includes(giving.raw_id) ? "Refunded" : "Refund"}
+                                      </button>
+                                    )}
                                     {isReceivedGiving(giving) && (
                                       <button
                                         type="button"
@@ -1629,6 +1731,34 @@ export default function TreasuryPage() {
                                                   <Send className="h-3.5 w-3.5 text-ember" />
                                                 )}
                                                 <span>Resend Receipt</span>
+                                              </button>
+                                            )}
+
+                                            {/* Only an M-Pesa gift that actually
+                                                arrived can go back the way it
+                                                came: Safaricom pays the giver's
+                                                phone through B2C. */}
+                                            {isReceivedGiving(giving) && isMpesaGiving(giving) && (
+                                              <button
+                                                type="button"
+                                                disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                title={
+                                                  refundedIds.includes(giving.raw_id)
+                                                    ? "This gift has already been refunded"
+                                                    : "Send this gift back to the giver's phone through M-Pesa"
+                                                }
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  void handleRefundGiving(giving);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition disabled:opacity-50"
+                                              >
+                                                {refundingId === giving.id ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                ) : (
+                                                  <Undo2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                )}
+                                                <span>{refundedIds.includes(giving.raw_id) ? "Refunded" : "Refund"}</span>
                                               </button>
                                             )}
 

@@ -523,8 +523,15 @@ function AdministrationContent() {
       ? {
           label: "Clerkship",
           icon: <ClipboardList size={16} aria-hidden="true" />,
-          description: "The church register, join requests, meetings' minutes and membership transfers.",
+          description: "The church register, its leadership, join requests, meetings' minutes and membership transfers.",
+          // The rail's Clerkship section names six pages; this card list is
+          // the phone's copy of that same strip. User Management and Church
+          // Leadership were missing here, and the Administration desk above
+          // drops them once this officer holds the clerkship — so a clerk on a
+          // phone had no door to either page at all.
           cards: [
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
+            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },

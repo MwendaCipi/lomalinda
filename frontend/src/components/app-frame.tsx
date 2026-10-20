@@ -32,7 +32,17 @@ type PageHeaderHeading = {
 
 type PageHeaderContextType = {
   setHeaderRightAction: (node: React.ReactNode) => void;
+  /**
+   * The strip of views a page draws under its heading. `usePageHeader` binds
+   * every caller to a token of its own, so the shell can tell a page's clear
+   * from a page that has already been replaced: React may run a leaving page's
+   * cleanup *after* the arriving page's effect has drawn its own strip, and an
+   * unclaimed clear then wiped a strip that was already correct — the treasury
+   * lost its whole row of views when its rail row was opened from another desk.
+   * The field is filled in by `usePageHeader`, never by the shell itself.
+   */
   setCustomToggles: (node: React.ReactNode) => void;
+  claimStrip: (token: object, node: React.ReactNode) => void;
   /**
    * An action that rides the right edge of the row of toggles, on a wide
    * screen — the place a page puts a control that belongs with its views
@@ -73,9 +83,12 @@ type PageHeaderContextType = {
   setTogglesHideOnScroll: (on: boolean) => void;
 };
 
+const noop = () => {};
+
 const PageHeaderContext = createContext<PageHeaderContextType>({
-  setHeaderRightAction: () => {},
-  setCustomToggles: () => {},
+  setHeaderRightAction: noop,
+  setCustomToggles: noop,
+  claimStrip: noop,
   setTogglesRightAction: () => {},
   setCustomHeader: () => {},
   setHeadingFirst: () => {},
@@ -83,8 +96,17 @@ const PageHeaderContext = createContext<PageHeaderContextType>({
   setTogglesHideOnScroll: () => {},
 });
 
-export function usePageHeader() {
-  return useContext(PageHeaderContext);
+export function usePageHeader(): PageHeaderContextType {
+  const context = useContext(PageHeaderContext);
+  // One token per page that asks for the slot: its clear only counts while it
+  // still holds it (see `claimStrip`).
+  const tokenRef = useRef<object | null>(null);
+  if (tokenRef.current === null) tokenRef.current = {};
+  const token = tokenRef.current;
+  return useMemo(
+    () => ({ ...context, setCustomToggles: (node: React.ReactNode) => context.claimStrip(token, node) }),
+    [context, token]
+  );
 }
 
 export type ScrollMode = "panel" | "pinned";
@@ -158,7 +180,16 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     pathname === "/administration/fund-drives";
 
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
-  const [customToggles, setCustomToggles] = useState<React.ReactNode>(null);
+  const [customToggles, setCustomTogglesState] = useState<React.ReactNode>(null);
+  // Which page drew the strip now on screen. A page's clear only counts while
+  // it still holds the slot, so a page that has already been replaced cannot
+  // wipe the strip its successor drew (see `claimStrip`).
+  const stripOwnerRef = useRef<object | null>(null);
+  const claimStrip = useCallback((token: object, node: React.ReactNode) => {
+    if (node === null && stripOwnerRef.current !== token) return;
+    stripOwnerRef.current = node === null ? null : token;
+    setCustomTogglesState(node);
+  }, []);
   const [togglesRightAction, setTogglesRightAction] = useState<React.ReactNode>(null);
   const [customHeader, setCustomHeader] = useState<PageHeaderHeading | null>(null);
   const [headingFirstAsked, setHeadingFirst] = useState(false);
@@ -190,14 +221,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const pageHeaderSlots = useMemo(
     () => ({
       setHeaderRightAction,
-      setCustomToggles,
+      setCustomToggles: noop,
+      claimStrip,
       setTogglesRightAction,
       setCustomHeader,
       setHeadingFirst,
       setPinnedDesk,
       setTogglesHideOnScroll,
     }),
-    [setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst, setPinnedDesk, setTogglesHideOnScroll]
+    [setHeaderRightAction, claimStrip, setTogglesRightAction, setCustomHeader, setHeadingFirst, setPinnedDesk, setTogglesHideOnScroll]
   );
 
   // A page's header chrome belongs to the route it was drawn for, so it is
@@ -286,12 +318,19 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const here = useRailHere(pathname, entries);
   // Console pages share `/administration`; their query is the route. Reset
   // injected header chrome when that page changes too, otherwise a desk's
-  // toggles can remain visible while the next desk is loading its own strip.
+  // controls can remain visible while the next page is loading its own.
+  //
+  // The strip itself is deliberately *not* cleared here. A page owns that
+  // slot, clears it when it unmounts, and the shell cannot tell whose strip it
+  // is holding: clearing here raced the page that had just replaced it — a
+  // navigation changes the key twice (the query lands a render before the
+  // pathname), so the second reset ran after the new page had already drawn
+  // its own strip and wiped it, leaving the treasury with no toggles at all
+  // after a tap on its rail row.
   const activeRouteKey = `${pathname}?tab=${railQuery.tab ?? ""}&dept=${railQuery.dept ?? ""}`;
   if (activeRouteKey !== routeAtLastReset) {
     setRouteAtLastReset(activeRouteKey);
     setHeaderRightAction(null);
-    setCustomToggles(null);
     setTogglesRightAction(null);
     setCustomHeader(null);
     setHeadingFirst(false);

@@ -4067,6 +4067,52 @@ class JoinRequestApprovalTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class TransferApprovalTests(APITestCase):
+    """Join and membership-transfer requests are answered by admin, elder and clerk."""
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('transfer.clerk', 'transfer.clerk@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        self.elder = User.objects.create_user('transfer.elder', 'transfer.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.plain = User.objects.create_user('transfer.plain', 'transfer.plain@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        self.transfer = MembershipTransferRequest.objects.create(
+            member_name='Samuel Otieno', transfer_type='incoming',
+            other_church='SDA Nyeri', phone_number='0744000333', status='pending',
+        )
+
+    def test_a_clerk_can_approve_a_transfer_request(self):
+        self.client.force_authenticate(self.clerk)
+        response = self.client.patch(
+            f'/api/members/transfers/{self.transfer.pk}/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.transfer.refresh_from_db()
+        self.assertEqual(self.transfer.status, 'approved')
+
+    def test_an_elder_can_approve_a_transfer_request(self):
+        self.client.force_authenticate(self.elder)
+        response = self.client.patch(
+            f'/api/members/transfers/{self.transfer.pk}/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.transfer.refresh_from_db()
+        self.assertEqual(self.transfer.status, 'approved')
+
+    def test_a_plain_member_cannot_approve_a_transfer_request(self):
+        self.client.force_authenticate(self.plain)
+        response = self.client.patch(
+            f'/api/members/transfers/{self.transfer.pk}/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.transfer.refresh_from_db()
+        self.assertEqual(self.transfer.status, 'pending')
+
+
 class RequestNotificationTests(APITestCase):
     """A request from the public reaches the office that answers its desk.
 
@@ -14428,7 +14474,9 @@ class SignatureOnTheChurchsPaperTests(APITestCase):
 
     # -- what the paper prints ------------------------------------------
 
-    def test_the_receipt_carries_both_offices_and_their_names(self):
+    def test_the_receipt_carries_the_treasurers_signature_alone(self):
+        """A slip is the treasurer's word for the money handed over, so it
+        carries their pen alone — one centred block, never a pair of columns."""
         self._upload(self.treasurer)
         self._upload(self.elder)
         self.client.force_authenticate(self.member)
@@ -14440,9 +14488,9 @@ class SignatureOnTheChurchsPaperTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         text = _pdf_text(response.content)
         self.assertTrue(self._printed(text, 'TREASURER'))
-        self.assertTrue(self._printed(text, 'FIRST ELDER'))
         self.assertTrue(self._printed(text, 'Tessa Treasurer'))
-        self.assertTrue(self._printed(text, 'Fred Elder'))
+        self.assertFalse(self._printed(text, 'FIRST ELDER'))
+        self.assertFalse(self._printed(text, 'Fred Elder'))
 
     def test_the_in_kind_receipt_is_signed_too(self):
         from .models import InKindContribution
@@ -14456,8 +14504,9 @@ class SignatureOnTheChurchsPaperTests(APITestCase):
         response = self.client.get(f'/api/members/in-kind/{gift.pk}/receipt/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         text = _pdf_text(response.content)
-        self.assertTrue(self._printed(text, 'FIRST ELDER'))
-        self.assertTrue(self._printed(text, 'Fred Elder'))
+        self.assertTrue(self._printed(text, 'TREASURER'))
+        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
+        self.assertFalse(self._printed(text, 'FIRST ELDER'))
 
     def test_a_receipt_with_nobody_in_the_offices_keeps_its_blank_lines(self):
         """An empty office signs nothing: the slip keeps the two rules it has

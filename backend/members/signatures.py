@@ -15,14 +15,14 @@ always been — a receipt is not held back because the treasurer is new.
 
 from .models import MemberProfile
 
-#: The two offices a giving receipt is signed by, in the order they print:
-#: (role code, office label). The treasurer issues it; the first elder
-#: authorises it.
+#: The offices a giving receipt may be signed by, in the order they print:
+#: (role code, office label). The treasurer issues it, and a slip prints only
+#: the first entry (see ``receipt_signatures``).
 #:
-#: Both offices are listed even though a receipt with only one officer held
-#: prints a single centred slot: the treasurer who is also the first elder
-#: answers only as the senior office (see ``office_holder``), so a treasurer-
-#: only list would find nobody and leave the slip unsigned entirely.
+#: The first elder is listed even though the slip prints one centred slot: the
+#: treasurer who is also the first elder answers only as the senior office (see
+#: ``office_holder``), so a treasurer-only list would find nobody and leave the
+#: slip unsigned entirely.
 RECEIPT_OFFICES = (
     ('treasurer', 'Treasurer'),
     ('first_elder', 'First Elder'),
@@ -147,8 +147,21 @@ def signatories(codes=None):
 
 
 def receipt_signatures():
-    """The two signatures a giving receipt prints, treasurer first."""
-    return signatories(tuple(code for code, _label in RECEIPT_OFFICES))
+    """The one signature a giving receipt prints: the treasurer's.
+
+    A slip is the treasurer's word for the money handed over, so it carries
+    their pen alone, centred on the paper, rather than a pair of columns. The
+    first elder stays listed as a fallback for the church where that seat is
+    vacant — a treasurer who also holds the elder's office is answered by the
+    senior office (see ``office_holder``), so without the fallback that church
+    would print a receipt with nobody's signature at all.
+    """
+    entries = signatories(tuple(code for code, _label in RECEIPT_OFFICES))
+    # The signature that was actually drawn answers for the slip: a treasurer
+    # seat filled by someone who has not signed yet must not hide the pen the
+    # church does have (the officer who holds both offices signs as the elder).
+    drawn = [entry for entry in entries if entry.get('image')]
+    return (drawn or entries)[:1]
 
 
 def report_signatures():

@@ -662,6 +662,8 @@ function officeTab(tab: string, label: string, icon: LucideIcon, extra: Partial<
  * of the viewer.
  */
 export const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deaconess", "admin"];
+// Join and membership-transfer requests reach the three who answer them —
+// admin, elder and clerk — plus the pastoral and care roles that share the desk.
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
 /** Elders and clerks share the church's programmes; the register is the clerk's. */
 const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];

@@ -7343,8 +7343,8 @@ class MembershipTransferRequestDetailView(generics.RetrieveUpdateDestroyAPIView)
         instance = self.get_object()
         next_status = request.data.get('status')
         current_profile = getattr(request.user, 'member_profile', None) if request.user.is_authenticated else None
-        if next_status == 'approved' and (not current_profile or not current_profile.has_role('admin', 'elder')):
-            return Response({'detail': 'Only elders or administrators can approve transfer requests.'}, status=status.HTTP_403_FORBIDDEN)
+        if next_status == 'approved' and (not current_profile or not current_profile.has_role('admin', 'elder', 'clerk')):
+            return Response({'detail': 'Only elders, clerks or administrators can approve transfer requests.'}, status=status.HTTP_403_FORBIDDEN)
 
         response = super().partial_update(request, *args, **kwargs)
         instance.refresh_from_db()
