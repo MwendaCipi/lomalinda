@@ -609,6 +609,17 @@ export type RailRow = {
   railMinistry?: true;
   /** The area code whose membership makes a `railMinistry` row the viewer's own. */
   railAreaCode?: string;
+  /**
+   * A desk may supply the shell's top strip without becoming a destination in
+   * the rail. The rail is reserved for ministries and departments; office
+   * work opens from the account menu and its existing direct links.
+   */
+  hideFromRail?: boolean;
+  /**
+   * A shortcut displayed in another desk's strip whose destination belongs to
+   * Administration. It must never make that desk claim the destination.
+   */
+  independent?: boolean;
 };
 
 /**
@@ -671,6 +682,21 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * meeting, register and accounts work. Profiles open from User Management.
  */
 export const clerkshipItems: RailRow[] = [
+  // These shared Administration pages remain their own destinations. They
+  // live in the Clerkship strip as convenient shortcuts, but opening either
+  // one switches to Administration rather than making it a Clerkship page.
+  officeTab("users", "User Management", Users, {
+    roles: CLERKSHIP_ROLES,
+    short: "Users",
+    description: "Church users, profiles and their assigned roles.",
+    independent: true,
+  }),
+  officeTab("leadership", "Church Leadership", Crown, {
+    roles: CLERKSHIP_ROLES,
+    short: "Leadership",
+    description: "The church's offices, ministries and departments, with each leader and assistant.",
+    independent: true,
+  }),
   officeTab("clerk-requests", "Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["join-requests", "transfers"],
@@ -1028,10 +1054,10 @@ export const railEntries: RailEntry[] = [
   // treasurer's has always stood on its own. The office console (the roster
   // and the church's settings) is deliberately not here: the account menu is
   // its only door, so the rail carries the desks of ongoing work.
-  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
-  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.clerkship },
-  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
-  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.deaconate },
+  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, hideFromRail: true, description: DEPARTMENT_BLURBS.eldership },
+  { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, hideFromRail: true, description: DEPARTMENT_BLURBS.clerkship },
+  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, hideFromRail: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
+  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, hideFromRail: true, description: DEPARTMENT_BLURBS.deaconate },
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.
   // The choir keeps its own desk among the ministries, where its area code is
@@ -1428,6 +1454,9 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
    */
   const measure = (item: RailRow): number => {
     if (!item.href) return -1;
+    // A shared Administration shortcut can appear in a desk's top strip, but
+    // its URL belongs to Administration, never to the desk that linked to it.
+    if (item.independent) return -1;
     // A console tab matches on the query, not the path: every one of them is
     // /administration, so the tab is what tells them apart. A page that took
     // over an older tab answers to that name too.

@@ -43,6 +43,10 @@ export function NavRail() {
     departments
   );
   const here = useRailHere(pathname, entries);
+  // Office desks use the same navigation registry to populate their top
+  // strips, but they are not rail destinations. The rail itself remains the
+  // map of ministries and departments.
+  const railEntries = entries.filter((entry) => !("hideFromRail" in entry && entry.hideFromRail));
 
   // The join and contact affordances: which heading's modal is open.
   const [joinArea, setJoinArea] = useState<string | null>(null);
@@ -68,20 +72,22 @@ export function NavRail() {
 
   // The rail's own search — it holds the slot the Dashboard row gave up, since
   // the logo above already is the way home. It narrows the rows below: a
-  // section's own name, or the pages a section row carries.
+  // section's own name, or the pages a section row carries. A group-name hit
+  // never expands the whole group: searching "Treasury" must not surface its
+  // Requests and Funding pages as unrelated rail results.
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const matches = (row: { label: string; short?: string; description?: string }) =>
     `${row.label} ${row.short ?? ""}`.toLowerCase().includes(needle);
-  const sections = railSectionsFor(entries)
+  const sections = railSectionsFor(railEntries)
     .map((section) => ({
       ...section,
       entries: needle
         ? section.entries.flatMap((entry) =>
-            matches(entry)
-              ? [entry]
-              : "items" in entry && entry.items
-                ? entry.items.filter(matches)
+            "items" in entry && entry.items
+              ? entry.items.filter(matches)
+              : matches(entry)
+                ? [entry]
                 : []
           )
         : section.entries,
