@@ -75,7 +75,15 @@ export function PwaRegister() {
     // a rotated subscription) starts from `getRegistration("/")`. Ask the
     // document where it already is instead of assuming the event is still
     // ahead of us.
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+    // Development keeps no worker: `next-pwa` is disabled there, so `/sw.js`
+    // is whatever the last production build left in `public/` — an old worker
+    // then hands the dev server's pages its own cached chunks, and the code on
+    // screen stops being the code in the editor.
+    if (
+      process.env.NODE_ENV !== "development" &&
+      typeof window !== "undefined" &&
+      "serviceWorker" in navigator
+    ) {
       const registerWorker = () => {
         navigator.serviceWorker
           .register("/sw.js")

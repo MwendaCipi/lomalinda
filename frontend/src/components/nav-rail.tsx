@@ -43,10 +43,6 @@ export function NavRail() {
     departments
   );
   const here = useRailHere(pathname, entries);
-  // Office desks use the same navigation registry to populate their top
-  // strips, but they are not rail destinations. The rail itself remains the
-  // map of ministries and departments.
-  const railEntries = entries.filter((entry) => !("hideFromRail" in entry && entry.hideFromRail));
 
   // The join and contact affordances: which heading's modal is open.
   const [joinArea, setJoinArea] = useState<string | null>(null);
@@ -71,26 +67,22 @@ export function NavRail() {
   };
 
   // The rail's own search — it holds the slot the Dashboard row gave up, since
-  // the logo above already is the way home. It narrows the rows below: a
-  // section's own name, or the pages a section row carries. A group-name hit
-  // never expands the whole group: searching "Treasury" must not surface its
-  // Requests and Funding pages as unrelated rail results.
+  // the logo above already is the way home. It narrows the rows below, and only
+  // the rows: the rail lists *places*, so a desk's pages are never minted into
+  // rows of their own. A row is matched on the words it shows, never on its
+  // description — searching "Treasury" names the Treasury row, not the clerks'
+  // and elders' "Funding & Accounts" page whose description happens to say
+  // treasury. Nor does the search unfold a desk into its pages: three desks
+  // keep a Funding page, and listing them would put three identical "Funding"
+  // rows in the rail, two of them under My Ministry.
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
-  const matches = (row: { label: string; short?: string; description?: string }) =>
+  const matches = (row: { label: string; short?: string }) =>
     `${row.label} ${row.short ?? ""}`.toLowerCase().includes(needle);
-  const sections = railSectionsFor(railEntries)
+  const sections = railSectionsFor(entries)
     .map((section) => ({
       ...section,
-      entries: needle
-        ? section.entries.flatMap((entry) =>
-            "items" in entry && entry.items
-              ? entry.items.filter(matches)
-              : matches(entry)
-                ? [entry]
-                : []
-          )
-        : section.entries,
+      entries: needle ? section.entries.filter(matches) : section.entries,
     }))
     .filter((section) => section.entries.length > 0);
 
@@ -219,7 +211,13 @@ export function NavRail() {
                   const shown = entry.short ?? entry.label;
                   return (
                     <Link
-                      key={entry.label}
+                      // A search lists pages as rows of their own, and two
+                      // desks may name the same page ("Funding" is the
+                      // clerks' and the elders' strip both). The address is
+                      // what tells them apart, so it is the key — a label
+                      // would repeat, and React leaves a stale row behind
+                      // when it meets two children under one key.
+                      key={href}
                       href={href}
                       aria-current={active ? "page" : undefined}
                       title={shown}

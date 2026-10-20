@@ -399,12 +399,16 @@ function AdministrationContent() {
     );
     return () => setCustomToggles(null);
   }, [activeTab, deaconateTab, setCustomToggles]);
+  // The console's own pages draw the Administration strip. The register and
+  // the shared leadership directory are pages of the Clerkship desk for the
+  // clerk who holds it — that strip names them, with requests, letters,
+  // meetings and the funds beside them — so they are only the console's when
+  // there is no clerkship row to name them (an elder reading the register).
   const consoleTab =
-    activeTab === "users" ||
     activeTab === "roles" ||
-    activeTab === "leadership" ||
     activeTab === "settings" ||
-    (!hasClerkship && activeTab === "join-requests");
+    (!hasClerkship &&
+      (activeTab === "users" || activeTab === "leadership" || activeTab === "join-requests"));
   // Who the toggle is for: the same people the requests desk already admits,
   // because the API behind it answers to those roles and the notices for a
   // join ask name them. The card on the phone overview sits with the console's
