@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 
 /** One view of a page, as its sub-navigation names it. */
@@ -174,11 +175,21 @@ export function SectionNav({
   className?: string;
 }) {
   const router = useRouter();
+  // A console page changes only its query string. The shell's rail reader is
+  // intentionally client-side and may receive that update a tick later, so
+  // remember a press locally: the underline moves with the page immediately
+  // instead of clinging to the previously active Clerkship toggle.
+  const [pressedHref, setPressedHref] = useState<string | null>(null);
   // As in `SubNav`: a page the section's rows do not name marks the first of
   // them, so the strip never opens without an underscore. The press below
   // still answers to the address bar rather than to this mark, so a chip held
   // up this way still leads where it says.
-  const currentHref = items.some((item) => item.href === activeHref) ? activeHref : items[0]?.href ?? null;
+  const pressedPageIsCurrent =
+    pressedHref !== null &&
+    typeof window !== "undefined" &&
+    `${window.location.pathname}${window.location.search}` === pressedHref;
+  const selectedHref = pressedPageIsCurrent ? pressedHref : activeHref;
+  const currentHref = items.some((item) => item.href === selectedHref) ? selectedHref : items[0]?.href ?? null;
   return (
     <nav aria-label={label} className={className}>
       {/* The grid class carries its own display (`grid`, `sm:flex`); the
@@ -195,7 +206,10 @@ export function SectionNav({
               aria-pressed={active}
               title={item.help}
               onClick={() => {
-                if (item.href !== activeHref) router.replace(item.href, { scroll: false });
+                if (item.href !== currentHref) {
+                  setPressedHref(item.href);
+                  router.replace(item.href, { scroll: false });
+                }
               }}
               className={tabClass(active)}
             >

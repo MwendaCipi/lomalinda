@@ -409,7 +409,10 @@ export const destinations = {
     match: ["/community/welfare"],
   },
   administration: {
-    href: "/administration",
+    // The account menu opens the console itself — role-specific desks (such
+    // as Clerkship) are reached from the rail, so this must not fall into the
+    // bare route's role-based landing redirect.
+    href: "/administration?tab=roles",
     label: "Administration",
     short: "Admin",
     description: "The church's members and the roles they hold, and the church's own settings.",
