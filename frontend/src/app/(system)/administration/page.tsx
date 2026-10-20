@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, FileText, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, Undo2, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, FileText, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -400,17 +400,19 @@ function AdministrationContent() {
     );
     return () => setCustomToggles(null);
   }, [activeTab, deaconateTab, setCustomToggles]);
-  // The budget and the refunds desk are two more views of the treasury's
-  // money, so they draw the treasury's own strip — the same one the ledger,
-  // the accounts desk and the drives page draw. Without this they fell back to
-  // the rail's older list of treasury pages, and the desk changed its toggles
-  // as the reader moved from the ledger to the budget.
+  // The budget is another view of the treasury's money, so it draws the
+  // treasury's own strip — the same one the ledger, the accounts desk and the
+  // drives page draw. Without this it fell back to the rail's older list of
+  // treasury pages, and the desk changed its toggles as the reader moved from
+  // the ledger to the budget. The retired `refunds` desk still draws it too:
+  // the link is kept alive so a refund already in flight can be watched, but
+  // the strip no longer offers a Refunds toggle, so it underlines Givings.
   const treasuryTab = activeTab === "budget" || activeTab === "refunds";
   useEffect(() => {
     if (!treasuryTab || !isFinance) return;
     setCustomToggles(
       <TreasuryNav
-        active={activeTab === "budget" ? "budget" : "refunds"}
+        active={activeTab === "budget" ? "budget" : "givings"}
         onSelect={(next) => router.replace(TREASURY_VIEW_HREF[next])}
       />
     );
@@ -558,13 +560,12 @@ function AdministrationContent() {
       ? {
           label: "Treasury & Finance",
           icon: <Landmark size={16} aria-hidden="true" />,
-          description: "Accounts, ledger, fund drives, budget and refunds.",
+          description: "Accounts, ledger, fund drives and the year's budget.",
           cards: [
             { icon: <Scale size={20} aria-hidden="true" />, label: "Contributions Ledger", description: "Record cash receipts and track all giving breakdown ledgers.", href: "/administration/treasury" },
             { icon: <Landmark size={20} aria-hidden="true" />, label: "Church Accounts", description: "Set up church accounts, watch balances, track income and spending, and promote an account into a fund drive.", href: "/administration?tab=accounts" },
             { icon: <Heart size={20} aria-hidden="true" />, label: "Fund Drives", description: "Manage the church's fund drives.", href: "/administration/fund-drives" },
             { icon: <BarChart3 size={20} aria-hidden="true" />, label: "Church Budget", description: "Post the year's plan and publish it to the congregation.", href: "/administration?tab=budget" },
-            { icon: <Undo2 size={20} aria-hidden="true" />, label: "M-Pesa Refunds", description: "Return mistaken or duplicate giving through B2C payouts.", href: "/administration?tab=refunds" },
           ],
         }
       : null,

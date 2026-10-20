@@ -371,11 +371,12 @@ export default function TreasuryPage() {
         showAlert("Refund not sent", data.detail || "M-Pesa did not accept the refund.", "error");
         return;
       }
-      // The payout is still travelling when this answers: the Refunds view is
-      // where the desk watches Safaricom's callback settle it.
+      // The payout is still travelling when this answers: this line is where
+      // the desk watches Safaricom's callback settle it, so the refund's own
+      // row — its Refunded pill and status — is what carries the waiting.
       showAlert(
         "Refund submitted",
-        data.detail || "M-Pesa accepted the refund. It is tracked under M-Pesa Refunds until the money arrives.",
+        data.detail || "M-Pesa accepted the refund. This line shows its status until the money arrives.",
         "success"
       );
       setRefundedIds((prev) => (prev.includes(giving.raw_id) ? prev : [...prev, giving.raw_id]));

@@ -32,7 +32,6 @@ import {
   Sparkles,
   Sun,
   Target,
-  Undo2,
   UserCheck,
   UserPlus,
   Users,
@@ -612,8 +611,8 @@ export type RailRow = {
   /**
    * The desk draws its own strip (`setCustomToggles`), so the shell must not
    * draw its `items` as one. The treasury is the case: its views are one line
-   * the pages themselves keep (Givings, Accounts, Budget, Refunds and the
-   * rest), and a shell strip of the same pages would flash up first and then
+   * the pages themselves keep (Givings, Accounts, Budget and the rest), and
+   * a shell strip of the same pages would flash up first and then
    * be replaced by the desk's own — two navigations for one desk, disagreeing
    * on every toggle.
    */
@@ -984,11 +983,11 @@ export const treasuryItems: RailRow[] = [
     short: "Budget",
     description: "The church's annual budgets and how the ministries and departments plan to use them.",
   }),
-  officeTab("refunds", "M-Pesa Refunds", Undo2, {
-    roles: ["treasurer", "admin"],
-    short: "Refunds",
-    description: "M-Pesa refunds issued back to givers, and where each one stands.",
-  }),
+  // M-Pesa Refunds is no longer a page of this strip. A refund is one line's
+  // own affair now: it is issued from the Contributions Ledger, where the
+  // gift it returns sits, and it will be asked for through the Requests desk
+  // like every other ask the office answers. The old `?tab=refunds` link
+  // still opens the desk, so a refund already in flight can still be watched.
 ];
 
 /**
