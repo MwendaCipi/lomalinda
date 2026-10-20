@@ -663,20 +663,25 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  */
 
 /**
- * Clerkship — the clerk's desk: the church register (User Management),
- * Join Requests, church Meetings (board & business), Membership Requests,
- * and Funding & Accounts.
+ * Clerkship — the clerk's desk. The pages are ordered by the work a clerk
+ * reaches for most: finding a person's record, answering arrivals and
+ * transfers, then the less frequent meeting, register and accounts work.
  */
 export const clerkshipItems: RailRow[] = [
-  officeTab("users", "User Management", Users, {
+  officeTab("profiles", "User Profiles", Users, {
     roles: CLERKSHIP_ROLES,
-    short: "Users",
-    description: "The church register and member roll.",
+    short: "Profiles",
+    description: "Find a person, open their church profile and assign their church-wide roles.",
   }),
   officeTab("join-requests", "Join Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
     short: "Join Requests",
     description: "Approve new members and members asking to join a ministry.",
+  }),
+  officeTab("transfers", "Membership Requests", ClipboardList, {
+    roles: CLERKSHIP_ROLES,
+    short: "Transfers",
+    description: "Membership transfers into the church and out of it.",
   }),
   officeTab("meetings", "Meetings", Calendar, {
     roles: CLERKSHIP_ROLES,
@@ -684,10 +689,10 @@ export const clerkshipItems: RailRow[] = [
     short: "Meetings",
     description: "Church board and business meetings, agendas, files and minutes.",
   }),
-  officeTab("transfers", "Membership Requests", ClipboardList, {
+  officeTab("users", "User Management", Users, {
     roles: CLERKSHIP_ROLES,
-    short: "Transfers",
-    description: "Membership transfers into the church and out of it.",
+    short: "Users",
+    description: "Add, update and maintain the church register and member roll.",
   }),
   // The clerk keeps the church's own books, so the desk carries its accounts
   // beside the minutes: the church budget and the two funds the church's

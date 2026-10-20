@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, X } from "lucide-react";
+import { ArrowLeftRight, Briefcase, Check, ChevronDown, Mail, Pencil, Phone, Printer, SlidersHorizontal, Sparkles, Trash2, Undo2, User, UserPlus, X } from "lucide-react";
 import { ContactMemberModal } from "@/components/contact-modal";
 import {
   accountTypeOf,
@@ -1210,7 +1210,7 @@ function InvitationActions({
   );
 }
 
-export function UserManagement() {
+export function UserManagement({ profileMode = false }: { profileMode?: boolean }) {
   const [members, setMembers] = useState<MemberUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -2014,7 +2014,7 @@ export function UserManagement() {
         <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
           <input
             type="text"
-            placeholder="Search by name, email, phone..."
+            placeholder={profileMode ? "Find a person by name, email or phone..." : "Search by name, email, phone..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
@@ -2023,7 +2023,7 @@ export function UserManagement() {
       </div>
     );
     return () => setHeaderRightAction(null);
-  }, [search, setHeaderRightAction, recordFilterOpen, invitationFilter, typeFilter, activeRecordLabel, awaitingCount, rosterScoped]);
+  }, [search, setHeaderRightAction, recordFilterOpen, invitationFilter, typeFilter, activeRecordLabel, awaitingCount, rosterScoped, profileMode]);
 
   // Close the filter popover on an outside press.
   useEffect(() => {
@@ -2361,6 +2361,24 @@ export function UserManagement() {
                         SEX heading rather than sitting a nudge to the right. */}
                     <td className={`${cellPad} text-moss ${COL_SEX}`}>{m.gender || "—"}</td>
                     <td className={`${cellPad} text-right ${COL_ACTIONS}`}>
+                      {profileMode ? (
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openProfile(m)}
+                            className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                          >
+                            Profile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLeadershipMember(m)}
+                            className="rounded-lg bg-bark px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember"
+                          >
+                            Assign role
+                          </button>
+                        </div>
+                      ) : (
                       <div className="relative inline-block" data-action-menu>
                         <button
                           onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
@@ -2420,6 +2438,7 @@ export function UserManagement() {
                           </div>
                         )}
                       </div>
+                      )}
                     </td>
                   </tr>
                 )}
@@ -2456,6 +2475,24 @@ export function UserManagement() {
                     </div>
                     {/* The card's actions live in one menu, anchored to this
                         button — nothing shows until it is asked for. */}
+                    {profileMode ? (
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openProfile(m)}
+                          className="rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-[11px] font-semibold text-bark hover:border-ember"
+                        >
+                          Profile
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLeadershipMember(m)}
+                          className="rounded-lg bg-bark px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-ember"
+                        >
+                          Role
+                        </button>
+                      </div>
+                    ) : (
                     <div className="relative inline-block" data-action-menu>
                       <button
                         onClick={(e) => toggleActionMenu(m.id, e.currentTarget)}
@@ -2517,6 +2554,7 @@ export function UserManagement() {
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 </div>
               );
@@ -2530,29 +2568,31 @@ export function UserManagement() {
         <p className="hidden text-[11px] text-moss sm:block">
           {invitationFilter === "pending" ? `${filteredPendingRows.length} of ${pendingRows.length} pending invite${pendingRows.length === 1 ? "" : "s"} shown` : `${filteredMembers.length} of ${rosterScoped.length} confirmed records shown`}
         </p>
-        {/* Large screens get one row of three equal-width buttons under their
-            full names; below that the same actions stay a three-column grid of
-            compact labels, which is all a phone has room for. */}
+        {/* The three recurring desk actions keep the same leading icons at
+            every width, so their compact and full-label forms stay familiar. */}
         <div className="grid grid-cols-3 gap-2 lg:flex lg:w-auto lg:gap-2">
           <button
             onClick={() => { setInviteFormData(inviteFormInitial); setShowInviteForm(true); setLastInviteLink(""); fetchInvitations(); }}
             className="rounded-xl bg-bark px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember lg:w-44"
           >
-            <span className="lg:hidden"><Mail size={12} className="inline" aria-hidden="true" /> Invite</span>
+            <Mail size={14} className="mr-1.5 inline-block" aria-hidden="true" />
+            <span className="lg:hidden">Invite</span>
             <span className="hidden lg:inline">Invite via Email</span>
           </button>
           <button
             onClick={() => { setFormData(initialForm); setFriendFormData(friendFormInitial); setAge(""); setAddStep(1); setAddAccountType("member"); setShowAddForm(true); setEditingMember(null); }}
             className="rounded-xl border border-bark bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:bg-sand lg:w-44"
           >
-            <span className="lg:hidden">+ Add</span>
+            <UserPlus size={14} className="mr-1.5 inline-block" aria-hidden="true" />
+            <span className="lg:hidden">Add</span>
             <span className="hidden lg:inline">Add Manually</span>
           </button>
           <button
             onClick={handlePrintMemberList}
             className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand lg:w-44"
           >
-            <span className="lg:hidden"><Printer size={12} className="inline" aria-hidden="true" /> Print</span>
+            <Printer size={14} className="mr-1.5 inline-block" aria-hidden="true" />
+            <span className="lg:hidden">Print</span>
             <span className="hidden lg:inline">Print Users List</span>
           </button>
         </div>
@@ -3196,6 +3236,20 @@ export function UserManagement() {
               })()}
 
               <div className="flex items-center gap-3 pb-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const member = members.find((m) => m.id === profileMemberId);
+                    if (member) {
+                      setProfileMemberId(null);
+                      setProfileData(null);
+                      setLeadershipMember(member);
+                    }
+                  }}
+                  className="rounded-full border border-bark bg-white px-5 py-2.5 text-xs font-semibold text-bark transition hover:bg-sand"
+                >
+                  Assign role
+                </button>
                 <button type="button"
                   onClick={() => { const member = members.find((m) => m.id === profileMemberId); if (member) { setProfileMemberId(null); setProfileData(null); handleStartEdit(member); } }}
                   className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">

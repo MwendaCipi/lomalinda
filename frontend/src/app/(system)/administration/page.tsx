@@ -73,6 +73,7 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
  */
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
+  profiles: "user profiles",
   leaders: "church departments",
   meetings: "meetings",
   board: "meetings",
@@ -303,7 +304,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "profiles", "leaders", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "transfers", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -462,10 +463,11 @@ function AdministrationContent() {
           icon: <ClipboardList size={16} aria-hidden="true" />,
           description: "The church register, join requests, meetings' minutes and membership transfers.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register and member roll.", href: "/administration?tab=users" },
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Profiles", description: "Find a person, open their profile and assign church-wide roles.", href: "/administration?tab=profiles" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members and members asking to join a ministry.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry },
-            { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Membership Requests", description: "Process incoming & outgoing church membership requests.", href: "/administration?tab=transfers" },
+            { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "Add, update and maintain the church register and member roll.", href: "/administration?tab=users" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
         }
@@ -599,6 +601,8 @@ function AdministrationContent() {
 
             {/* Users (Members) View */}
             {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
+
+            {activeTab === "profiles" && isClerk && <UserManagement profileMode />}
 
             {activeTab === "roles" && (isAdmin || isClerk || isElder) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
