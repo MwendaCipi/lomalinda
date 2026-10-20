@@ -52,7 +52,7 @@ export function CorrespondenceManager() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void Promise.resolve().then(load); }, []);
 
   const openAdd = () => {
     setDraft(emptyDraft());
