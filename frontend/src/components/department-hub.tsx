@@ -98,6 +98,14 @@ import {
   monthNames,
   type CalendarView,
 } from "@/components/calendar-views";
+import {
+  ProgramDocument,
+  parseProgramItems,
+  programItemHasContent,
+  serializeProgramItems,
+  type ProgramItem,
+  type ProgramParticipant,
+} from "@/components/program-document";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -355,6 +363,8 @@ type DeptEvent = {
   location: string;
   meeting_link: string;
   program_file: string | null;
+  /** The programme typed at the desk — sessions with hours and facilitators. */
+  program_items: ProgramItem[];
   lead: string;
   notes: string;
   unit?: string;
@@ -836,7 +846,6 @@ function AddEventModal({
     meeting_link: string;
     /** The area whose calendar holds the event; "" is this desk's own. */
     department: string;
-    program_file: File | null;
   }) => void;
 }) {
   const [form, setForm] = useState({
@@ -850,8 +859,6 @@ function AddEventModal({
     meeting_link: "",
     department: "",
   });
-  const [programFile, setProgramFile] = useState<File | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   // Which area's calendar will hold the event. The desk writing it is the
   // default — the church's own week is filed into the ministry that runs it,
   // so the heading follows the choice.
@@ -864,20 +871,23 @@ function AddEventModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Add event to ${targetLabel}`}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
           <h3 className="text-lg font-bold text-bark">Add event for {targetLabel}</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
+        {/* The programme is not this form's to carry: an event is filed in a
+            line and given its programme afterwards, from its own row — so the
+            form keeps only what names the event itself. */}
         <form
-          className="mt-4 space-y-4"
+          className="mt-3 space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!valid) return;
-            onAdd({ ...form, program_file: programFile });
+            onAdd({ ...form });
           }}
         >
           {/* Title */}
@@ -1026,29 +1036,6 @@ function AddEventModal({
             </div>
           )}
 
-          {/* Program file */}
-          <div>
-            <label className="text-xs font-semibold text-bark">Upload program</label>
-            <div
-              className="mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-sand-line bg-sand px-3 py-2.5 text-xs text-moss hover:border-ember"
-              onClick={() => fileRef.current?.click()}
-            >
-              <Plus className="h-3.5 w-3.5 shrink-0" />
-              {programFile ? (
-                <span className="truncate text-bark">{programFile.name}</span>
-              ) : (
-                <span>Choose file (PDF, Word, image…)</span>
-              )}
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={(e) => setProgramFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
-
           <button
             type="submit"
             disabled={!valid}
@@ -1062,7 +1049,456 @@ function AddEventModal({
   );
 }
 
+/** An event's programme, as the church reads it: a file, typed rows, or both. */
+function eventHasProgram(event: DeptEvent) {
+  return Boolean(event.program_file) || parseProgramItems(event.program_items).length > 0;
+}
 
+/** The row's time: a range when the event finishes on the day it starts. */
+function eventTimeRange(event: DeptEvent) {
+  const start = clockTime(event.time);
+  const end = event.end_date === event.date ? clockTime(event.end_time) : "";
+  if (start && end) return `${start} – ${end}`;
+  return start || end;
+}
+
+/**
+ * An event's own programme actions — the same choices in the table's row, a
+ * phone's card, and a day in the month grid, so no view offers less than
+ * another. The sheet is offered only when the event has one to show.
+ */
+function EventProgramMenu({
+  event,
+  onView,
+  onCreate,
+  onUpload,
+  onRemove,
+}: {
+  event: DeptEvent;
+  onView: () => void;
+  onCreate: () => void;
+  onUpload: () => void;
+  onRemove: () => void;
+}) {
+  const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
+  const hasProgram = eventHasProgram(event);
+  return (
+    <div>
+      {hasProgram && (
+        <button type="button" onClick={onView} className={`${item} font-semibold text-bark`}>
+          View program
+        </button>
+      )}
+      <button type="button" onClick={onCreate} className={`${item} text-bark`}>
+        {parseProgramItems(event.program_items).length > 0 ? "Edit program" : "Create program"}
+      </button>
+      <button type="button" onClick={onUpload} className={`${item} text-bark`}>
+        Upload program
+      </button>
+      <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
+        Remove
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Type an event's programme: one row per item of the order of service, and
+ * the sheet it will be read as laid out beneath as it is typed — the desk
+ * sees the programme the congregation will see, not the rows behind it.
+ */
+function ProgramEditorModal({
+  event,
+  departmentLabel,
+  onClose,
+  onSave,
+}: {
+  event: DeptEvent;
+  departmentLabel: string;
+  onClose: () => void;
+  onSave: (items: ProgramItem[]) => void;
+}) {
+  const [items, setItems] = useState<ProgramItem[]>(() => {
+    const parsed = parseProgramItems(event.program_items);
+    return parsed.length > 0
+      ? parsed
+      : [{ start: "", end: "", title: "", participants: [], parts: [] }];
+  });
+  const setSession = (index: number, patch: Partial<ProgramItem>) =>
+    setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const setPerson = (index: number, personIndex: number, patch: Partial<ProgramParticipant>) =>
+    setItems((current) =>
+      current.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              participants: item.participants.map((person, p) =>
+                p === personIndex ? { ...person, ...patch } : person,
+              ),
+            }
+          : item,
+      ),
+    );
+  const dropPerson = (index: number, personIndex: number) =>
+    setItems((current) =>
+      current.map((item, i) =>
+        i === index
+          ? { ...item, participants: item.participants.filter((_, p) => p !== personIndex) }
+          : item,
+      ),
+    );
+  const emptyPart = { start: "", end: "", title: "", participants: [] };
+  /** One change to one part of one session — the row every edit below makes. */
+  const mapPart = (index: number, partIndex: number, edit: (part: ProgramItem["parts"][number]) => ProgramItem["parts"][number]) =>
+    setItems((current) =>
+      current.map((item, i) =>
+        i === index ? { ...item, parts: item.parts.map((part, p) => (p === partIndex ? edit(part) : part)) } : item,
+      ),
+    );
+  const dropPart = (index: number, partIndex: number) =>
+    setItems((current) =>
+      current.map((item, i) =>
+        i === index ? { ...item, parts: item.parts.filter((_, p) => p !== partIndex) } : item,
+      ),
+    );
+  const setPartPerson = (index: number, partIndex: number, personIndex: number, patch: Partial<ProgramParticipant>) =>
+    mapPart(index, partIndex, (part) => ({
+      ...part,
+      participants: part.participants.map((person, p) => (p === personIndex ? { ...person, ...patch } : person)),
+    }));
+  const valid = items.some(programItemHasContent);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Program for ${event.title}`}
+        className="my-6 w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
+          <div>
+            <h3 className="text-lg font-bold text-bark">{eventHasProgram(event) ? "Edit program" : "Create program"}</h3>
+            <p className="text-xs text-moss">{event.title}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-moss">
+          Each session is one part of the day — the hours it runs and what it is. The events inside
+          a session and every facilitator are optional.
+        </p>
+        <div className="mt-3 space-y-3">
+          {items.map((session, index) => (
+            <div key={index} className="rounded-2xl border border-sand-line bg-white p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  value={session.start}
+                  onChange={(e) => setSession(index, { start: e.target.value })}
+                  aria-label={`Start time for session ${index + 1}`}
+                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                />
+                <span className="text-[11px] text-moss">to</span>
+                <input
+                  type="time"
+                  value={session.end}
+                  onChange={(e) => setSession(index, { end: e.target.value })}
+                  aria-label={`End time for session ${index + 1}`}
+                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
+                  aria-label={`Remove session ${index + 1}`}
+                  className="ml-auto shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <input
+                type="text"
+                value={session.title}
+                onChange={(e) => setSession(index, { title: e.target.value })}
+                aria-label={`Session ${index + 1}`}
+                placeholder="Sabbath School"
+                className="mt-2 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+              />
+              {/* Facilitators, optional: a session may name who runs it under
+                  the part they play, or name nobody at all. */}
+              <div className="mt-2 space-y-1.5 border-t border-sand-line pt-2">
+                {session.participants.map((person, personIndex) => (
+                  <div key={personIndex} className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={person.name}
+                      onChange={(e) => setPerson(index, personIndex, { name: e.target.value })}
+                      aria-label={`Facilitator ${personIndex + 1} for session ${index + 1}`}
+                      placeholder="Name"
+                      className="w-full min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={person.role}
+                      onChange={(e) => setPerson(index, personIndex, { role: e.target.value })}
+                      aria-label={`Role of facilitator ${personIndex + 1} for session ${index + 1}`}
+                      placeholder="Role"
+                      className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => dropPerson(index, personIndex)}
+                      aria-label={`Remove facilitator ${personIndex + 1} from session ${index + 1}`}
+                      className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSession(index, {
+                      participants: [...session.participants, { name: "", role: "" }],
+                    })
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-ember hover:underline"
+                >
+                  <Plus className="h-3 w-3" /> Add facilitator
+                </button>
+              </div>
+
+              {/* What happens *inside* the session — the opening song, the
+                  mission reading — each with its own hours and facilitator. */}
+              <div className="mt-2 space-y-2 border-t border-sand-line pt-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-moss">
+                  In this session
+                </p>
+                {session.parts.map((part, partIndex) => (
+                  <div key={partIndex} className="rounded-xl border border-sand-line bg-sand p-2.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={part.start}
+                        onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, start: e.target.value }))}
+                        aria-label={`Start time of item ${partIndex + 1} in session ${index + 1}`}
+                        className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                      />
+                      <span className="text-[11px] text-moss">to</span>
+                      <input
+                        type="time"
+                        value={part.end}
+                        onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, end: e.target.value }))}
+                        aria-label={`End time of item ${partIndex + 1} in session ${index + 1}`}
+                        className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => dropPart(index, partIndex)}
+                        aria-label={`Remove item ${partIndex + 1} from session ${index + 1}`}
+                        className="ml-auto shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={part.title}
+                      onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, title: e.target.value }))}
+                      aria-label={`Item ${partIndex + 1} in session ${index + 1}`}
+                      placeholder="Opening song"
+                      className="mt-2 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                    />
+                    <div className="mt-1.5 space-y-1">
+                      {part.participants.map((person, personIndex) => (
+                        <div key={personIndex} className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={person.name}
+                            onChange={(e) => setPartPerson(index, partIndex, personIndex, { name: e.target.value })}
+                            aria-label={`Facilitator ${personIndex + 1} of item ${partIndex + 1} in session ${index + 1}`}
+                            placeholder="Name"
+                            className="w-full min-w-0 flex-1 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={person.role}
+                            onChange={(e) => setPartPerson(index, partIndex, personIndex, { role: e.target.value })}
+                            aria-label={`Role of facilitator ${personIndex + 1} of item ${partIndex + 1}`}
+                            placeholder="Role"
+                            className="w-24 shrink-0 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              mapPart(index, partIndex, (p) => ({
+                                ...p,
+                                participants: p.participants.filter((_, c) => c !== personIndex),
+                              }))
+                            }
+                            aria-label={`Remove facilitator ${personIndex + 1} from item ${partIndex + 1}`}
+                            className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          mapPart(index, partIndex, (p) => ({
+                            ...p,
+                            participants: [...p.participants, { name: "", role: "" }],
+                          }))
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-ember hover:underline"
+                      >
+                        <Plus className="h-3 w-3" /> Add facilitator
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSession(index, { parts: [...session.parts, emptyPart] })}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember"
+                >
+                  <Plus className="h-3 w-3" /> Add to session
+                </button>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setItems((current) => [
+                ...current,
+                { start: "", end: "", title: "", participants: [], parts: [] },
+              ])
+            }
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add session
+          </button>
+        </div>
+
+        {/* The sheet as it will be read, live: what is saved is what is seen. */}
+        {valid && (
+          <div className="mt-5 border-t border-sand-line pt-5">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
+              How it will look
+            </p>
+            <div className="rounded-xl bg-sand p-4">
+              <ProgramDocument
+                title={event.title}
+                date={event.date}
+                department={departmentLabel}
+                lead={event.lead}
+                items={items.filter(programItemHasContent)}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-sand-line pt-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-sand-line bg-white px-4 py-2 text-sm font-semibold text-moss hover:border-ember"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!valid}
+            onClick={() => onSave(items)}
+            className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+          >
+            Save program
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * An event's programme, read as the sheet it was created on — an uploaded
+ * file shown as itself, typed rows shown as the document they were fixed
+ * into, and both together when the event carries both.
+ */
+function ProgramViewerModal({
+  event,
+  departmentLabel,
+  onClose,
+}: {
+  event: DeptEvent;
+  departmentLabel: string;
+  onClose: () => void;
+}) {
+  const items = parseProgramItems(event.program_items);
+  const file = event.program_file
+    ? event.program_file.startsWith("http")
+      ? event.program_file
+      : `${API_URL}${event.program_file}`
+    : null;
+  const isImage = file ? /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(file) : false;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Program for ${event.title}`}
+        className="my-6 w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
+          <div>
+            <h3 className="text-lg font-bold text-bark">Program</h3>
+            <p className="text-xs text-moss">{event.title}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-4">
+          {file &&
+            (isImage ? (
+              // eslint-disable-next-line @next/next/no-img-element -- the church's own upload, of any origin: optimizing it would mean proxying member files through the app
+              <img src={file} alt={`${event.title} program`} className="mx-auto max-h-[65vh] w-auto rounded-lg object-contain" />
+            ) : (
+              <a
+                href={file}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-ember hover:underline"
+              >
+                Open uploaded program
+              </a>
+            ))}
+          {items.length > 0 && (
+            <div className="rounded-xl bg-sand p-4">
+              <ProgramDocument
+                title={event.title}
+                date={event.date}
+                department={departmentLabel}
+                lead={event.lead}
+                items={items}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Register a singing group: a name, an optional leader found by the same
@@ -3846,6 +4282,29 @@ function DepartmentDetail({
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [openGridAction, setOpenGridAction] = useState<string | null>(null);
+  // The event whose programme is being typed, the one whose sheet is being
+  // read, and which row's menu is open — a programme belongs to an event and
+  // is reached from it, so all three live with the calendar they serve.
+  const [programFor, setProgramFor] = useState<DeptEvent | null>(null);
+  const [programViewer, setProgramViewer] = useState<DeptEvent | null>(null);
+  const [openEventMenuKey, setOpenEventMenuKey] = useState<string | null>(null);
+  // One hidden file input, asked which event it is for at the moment a row
+  // says "Upload program" — a picker per row would be a picker per event.
+  const programUploadRef = useRef<HTMLInputElement>(null);
+  const uploadTarget = useRef<DeptEvent | null>(null);
+  const chooseProgramFile = (event: DeptEvent) => {
+    uploadTarget.current = event;
+    programUploadRef.current?.click();
+  };
+  useEffect(() => {
+    function handleDown(event: MouseEvent) {
+      if (!(event.target as Element | null)?.closest?.("[data-calendar-action-menu]")) {
+        setOpenEventMenuKey(null);
+      }
+    }
+    if (openEventMenuKey) document.addEventListener("mousedown", handleDown);
+    return () => document.removeEventListener("mousedown", handleDown);
+  }, [openEventMenuKey]);
   const shiftCalendarMonth = (amount: number) =>
     setCalendarMonth((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
   // The list's rows and the grid's month both honour the desk's search.
@@ -4330,7 +4789,6 @@ function DepartmentDetail({
     location: string;
     meeting_link: string;
     department: string;
-    program_file: File | null;
   }) => {
     const body = new FormData();
     body.append("title", event.title);
@@ -4346,7 +4804,6 @@ function DepartmentDetail({
     // desk that wrote it; the personal ministries desk may name another and
     // the server refuses anyone else who tries.
     body.append("department", event.department);
-    if (event.program_file) body.append("program_file", event.program_file);
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/`, {
       method: "POST",
       headers: authHeaders(),
@@ -4382,6 +4839,60 @@ function DepartmentDetail({
     } else {
       showAlert("Could not remove", "The event could not be removed.", "error");
     }
+  };
+
+  /**
+   * A programme saved on the event itself — the rows the desk typed, or a
+   * file it sent in — so an event can be given its programme at any point
+   * after it is filed, rather than only inside the form that created it.
+   */
+  const patchProgram = async (
+    event: DeptEvent,
+    init: { headers: HeadersInit; body: BodyInit },
+    done: () => void,
+  ) => {
+    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/`, {
+      method: "PATCH",
+      ...init,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      loadEvents();
+      onChanged();
+      done();
+    } else {
+      showAlert("Could not save the program", data.detail || "The program could not be saved.", "error");
+    }
+  };
+
+  /** The typed programme, saved — and then read as the sheet it was fixed into. */
+  const saveProgram = (event: DeptEvent, items: ProgramItem[]) => {
+    const saved = serializeProgramItems(items);
+    patchProgram(
+      event,
+      {
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ program_items: saved }),
+      },
+      () => {
+        setProgramFor(null);
+        setProgramViewer({ ...event, program_items: saved });
+      },
+    );
+  };
+
+  /** A programme sent in as a file, attached to the event already on the calendar. */
+  const uploadProgram = (event: DeptEvent, file: File) => {
+    const body = new FormData();
+    body.append("program_file", file);
+    patchProgram(event, { headers: authHeaders(), body }, () => {
+      showAlert(
+        "Program uploaded",
+        `"${event.title}" now carries ${file.name}.`,
+        "success",
+        { toast: true, timer: 4000, showConfirmButton: false },
+      );
+    });
   };
 
   /**
@@ -4940,50 +5451,151 @@ function DepartmentDetail({
                 onToggleActions={(key) => setOpenGridAction(openGridAction === key ? null : key)}
                 onCloseActions={() => setOpenGridAction(null)}
                 renderMenu={(event, onClose) => (
-                  <div className="text-xs">
-                    <p className="px-3 py-2 font-semibold text-bark">{event.title}</p>
-                    <p className="px-3 pb-2 text-moss">
+                  <div>
+                    <p className="px-3 py-2 text-sm font-semibold text-bark">{event.title}</p>
+                    <p className="px-3 pb-2 text-xs text-moss">
                       {dayFirst(event.date)}
                       {event.time ? ` · ${clockTime(event.time)}` : ""}
                       {event.location ? ` · ${event.location}` : ""}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => { onClose(); removeEvent(event); }}
-                      className="block w-full rounded-lg px-3 py-2 text-left text-red-600 hover:bg-sand"
-                    >
-                      Remove
-                    </button>
+                    <EventProgramMenu
+                      event={event}
+                      onView={() => { onClose(); setProgramViewer(event); }}
+                      onCreate={() => { onClose(); setProgramFor(event); }}
+                      onUpload={() => { onClose(); chooseProgramFile(event); }}
+                      onRemove={() => { onClose(); removeEvent(event); }}
+                    />
                   </div>
                 )}
               />
             </div>
           ) : (
-            <div className="mt-3 divide-y divide-sand-soft">
-              {filteredEvents.map((event) => (
-                <div key={event.id} className="flex items-start justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-bark">{event.title}</p>
-                    <p className="text-[11px] text-moss">
-                      {dayFirst(event.date)}
-                      {event.time ? ` · ${event.time}` : ""}
-                      {event.location ? ` · ${event.location}` : ""}
-                    </p>
-                    {event.notes && <p className="mt-0.5 text-[11px] italic text-moss-faint">{event.notes}</p>}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeEvent(event)}
-                    className="shrink-0 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+            <>
+              {/* The calendar read the church's way: the same table its own
+                  calendar draws — the day, the event, the hour, the actions —
+                  and the cards a phone reads below it. */}
+              <div className="mt-3 hidden overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line md:block">
+                <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+                  <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
+                    <tr>
+                      <th className="px-5 py-4 font-semibold">Date</th>
+                      <th className="px-5 py-4 font-semibold">Event</th>
+                      <th className="px-5 py-4 font-semibold">Time</th>
+                      <th className="px-5 py-4 font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sand-wash">
+                    {filteredEvents.map((event) => {
+                      const actionKey = `event-${event.id}`;
+                      return (
+                        <tr key={event.id} className="hover:bg-sand-plate">
+                          <td className="whitespace-nowrap px-5 py-4 text-moss">{dayFirst(event.date)}</td>
+                          <td className="px-5 py-4 font-semibold">
+                            {event.title}
+                            {event.lead && <span className="block text-xs font-normal text-moss">Led by {event.lead}</span>}
+                            {event.location && <span className="block text-xs font-normal text-moss">{event.location}</span>}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-4 text-moss">{eventTimeRange(event) || "-"}</td>
+                          <td data-calendar-action-menu className="relative px-5 py-4">
+                            <button
+                              type="button"
+                              aria-expanded={openEventMenuKey === actionKey}
+                              onClick={() => setOpenEventMenuKey(openEventMenuKey === actionKey ? null : actionKey)}
+                              className="rounded-lg border border-sand-mute px-3 py-2 text-sm font-semibold text-bark hover:border-ember"
+                            >
+                              Actions <span aria-hidden="true">▾</span>
+                            </button>
+                            {openEventMenuKey === actionKey && (
+                              <div className="absolute right-5 top-14 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
+                                <EventProgramMenu
+                                  event={event}
+                                  onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
+                                  onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                  onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
+                                  onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
+                                />
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* A phone reads the same events as cards — the table's four
+                  columns cannot sit on a phone's width without scrolling. */}
+              <div className="mt-3 grid gap-4 md:hidden">
+                {filteredEvents.map((event) => {
+                  const actionKey = `mobile-event-${event.id}`;
+                  const hasProgram = eventHasProgram(event);
+                  return (
+                    <div key={event.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-semibold text-ember">{dayFirst(event.date)}</span>
+                          <h3 className="mt-0.5 text-base font-bold text-bark">{event.title}</h3>
+                        </div>
+                        {event.unit && (
+                          <span className="shrink-0 rounded-full bg-mist-select px-2.5 py-1 text-[10px] font-bold text-moss-dark">
+                            {event.unit}
+                          </span>
+                        )}
+                      </div>
+                      {eventTimeRange(event) && (
+                        <p className="mt-2 text-xs text-moss">
+                          <span className="font-semibold text-bark">Time:</span> {eventTimeRange(event)}
+                        </p>
+                      )}
+                      {event.location && (
+                        <p className="mt-1 text-xs text-moss">
+                          <span className="font-semibold text-bark">Location:</span> {event.location}
+                        </p>
+                      )}
+                      <div data-calendar-action-menu className="relative mt-3 flex items-center justify-between gap-2 border-t border-sand-line/60 pt-3">
+                        {hasProgram ? (
+                          <button
+                            type="button"
+                            onClick={() => setProgramViewer(event)}
+                            className="text-xs font-bold text-ember hover:underline"
+                          >
+                            View program &rarr;
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            aria-expanded={openEventMenuKey === actionKey}
+                            onClick={() => setOpenEventMenuKey(openEventMenuKey === actionKey ? null : actionKey)}
+                            className="rounded-lg border border-sand-mute px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember"
+                          >
+                            Actions ▾
+                          </button>
+                          {openEventMenuKey === actionKey && (
+                            <div className="absolute bottom-full right-0 z-20 mb-1.5 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
+                              <EventProgramMenu
+                                event={event}
+                                onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
+                                onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
+                                onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               {filteredEvents.length === 0 && (
                 <p className="py-6 text-center text-xs text-moss">No events match your search.</p>
               )}
-            </div>
+            </>
           )}
         </div>
       )}
@@ -5073,6 +5685,35 @@ function DepartmentDetail({
         </div>
       )}
 
+      {programFor && (
+        <ProgramEditorModal
+          event={programFor}
+          departmentLabel={department.label}
+          onClose={() => setProgramFor(null)}
+          onSave={(items) => saveProgram(programFor, items)}
+        />
+      )}
+      {programViewer && (
+        <ProgramViewerModal
+          event={programViewer}
+          departmentLabel={department.label}
+          onClose={() => setProgramViewer(null)}
+        />
+      )}
+      {/* The one picker every row's "Upload program" opens; which event it
+          belongs to is read from the row that asked. */}
+      <input
+        ref={programUploadRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
+          const target = uploadTarget.current;
+          e.target.value = "";
+          if (file && target) uploadProgram(target, file);
+        }}
+      />
       {showAddChild && (
         <AddChildModal
           initialUnit={unit}

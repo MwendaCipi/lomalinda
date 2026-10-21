@@ -10014,6 +10014,113 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(res.status_code, 403)
         self.assertFalse(DepartmentEvent.objects.filter(department='awm').exists())
 
+    def test_a_program_is_given_to_an_event_after_it_is_filed(self):
+        """An event is filed in a line and given its programme later: the
+        sessions the desk types are saved on the event, read back by the desk,
+        and carried to the congregation on the church's own calendar — the
+        file picker that used to sit in the add form is gone with them."""
+        self._auth(self.leader)
+        filed = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Men Sabbath', 'date': '2026-10-10', 'time': '09:30',
+        }, format='json')
+        event_id = filed.data['id']
+        listed = self.client.get('/api/members/departments/amm/events/')
+        self.assertEqual(listed.data['events'][0]['program_items'], [])
+
+        sessions = [
+            {'start': '08:00', 'end': '10:00', 'title': 'Sabbath School',
+             'participants': [{'name': 'Jane Wanjiru', 'role': 'Teacher'}],
+             'parts': [
+                 {'start': '08:00', 'end': '08:15', 'title': 'Opening song',
+                  'participants': [{'name': 'Grace Muthoni', 'role': 'Song Leader'}]},
+             ]},
+            {'start': '11:00', 'end': '', 'title': 'Divine service',
+             'participants': [], 'parts': []},
+        ]
+        saved = self.client.patch(
+            f'/api/members/departments/amm/events/{event_id}/',
+            {'program_items': sessions}, format='json',
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.data['program_items'], sessions)
+
+        listed = self.client.get('/api/members/departments/amm/events/')
+        self.assertEqual(listed.data['events'][0]['program_items'], sessions)
+        self.client.force_authenticate(user=None)
+        rows = self.client.get('/api/members/church-calendar/').data['events']
+        row = next(event for event in rows if event['title'] == 'Men Sabbath')
+        self.assertEqual(row['program_items'], sessions)
+
+        # An empty programme is the clear the desk meant: the sheet has
+        # nothing to show and the congregation stops being given one.
+        self._auth(self.leader)
+        cleared = self.client.patch(
+            f'/api/members/departments/amm/events/{event_id}/', {'program_items': []}, format='json',
+        )
+        self.assertEqual(cleared.data['program_items'], [])
+
+    def test_a_program_session_is_stored_in_the_shape_the_sheet_reads(self):
+        """The rows are printed to the congregation, so what is stored is
+        what the sheet can draw: sessions with clock hours, a title and
+        facilitators under their roles — anything else the client sent is
+        dropped rather than saved."""
+        self._auth(self.leader)
+        event = DepartmentEvent.objects.create(
+            department='amm', title='Men Sabbath', event_date='2026-10-10',
+        )
+        saved = self.client.patch(
+            f'/api/members/departments/amm/events/{event.id}/',
+            {'program_items': [
+                {'start': '8:00', 'end': '10:00', 'title': 'Sabbath School',
+                 'participants': [
+                     {'name': 'Jane Wanjiru', 'role': 'Teacher'},
+                     {'name': '', 'role': 'Nobody'},
+                     'not a person',
+                 ],
+                 'parts': [
+                     {'start': '8:00', 'end': '8:15', 'title': 'Opening song',
+                      'participants': [
+                          {'name': 'Grace Muthoni', 'role': 'Song Leader'},
+                          {'name': '', 'role': 'Nobody'},
+                      ]},
+                     {'start': 'at dawn', 'end': '', 'title': '  ', 'participants': []},
+                     'not an item',
+                 ]},
+                {'start': 'at dawn', 'end': '12:00', 'title': '  ', 'participants': []},
+                'not a session',
+                {'title': 'Afternoon program', 'start': '14:00', 'end': '16:00',
+                 'participants': [{'name': 'Peter Kimani', 'role': 'Pianist'}]},
+            ]}, format='json',
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.data['program_items'], [
+            {'start': '08:00', 'end': '10:00', 'title': 'Sabbath School',
+             'participants': [{'name': 'Jane Wanjiru', 'role': 'Teacher'}],
+             'parts': [
+                 {'start': '08:00', 'end': '08:15', 'title': 'Opening song',
+                  'participants': [{'name': 'Grace Muthoni', 'role': 'Song Leader'}]},
+             ]},
+            {'start': '14:00', 'end': '16:00', 'title': 'Afternoon program',
+             'participants': [{'name': 'Peter Kimani', 'role': 'Pianist'}],
+             'parts': []},
+        ])
+
+    def test_only_the_desk_holding_the_calendar_gives_it_a_program(self):
+        """The programme is the calendar's own writing: a member with no seat
+        on the desk cannot give an event one."""
+        event = DepartmentEvent.objects.create(
+            department='amm', title='Men Sabbath', event_date='2026-10-10',
+        )
+        self._auth(self.plain)
+        res = self.client.patch(
+            f'/api/members/departments/amm/events/{event.id}/',
+            {'program_items': [{'start': '08:00', 'end': '', 'title': 'Sabbath School', 'participants': []}]},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        event.refresh_from_db()
+        self.assertEqual(event.program_items, [])
+
     def test_the_church_calendar_gathers_every_ministry(self):
         """The congregation's calendar is the ministries' own events, read
         without signing in, each carrying the ministry's name rather than its

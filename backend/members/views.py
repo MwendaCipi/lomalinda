@@ -11733,6 +11733,88 @@ class SingingGroupMembersView(APIView):
         return Response({'detail': 'Member removed from the group.'})
 
 
+def clean_program_items(raw):
+    """An event's programme sessions, trimmed to the shape the sheet reads.
+
+    Each entry is one session of the order of service — Sabbath School from
+    8:00 to 10:00, say — carrying the hours it runs, what it is called, the
+    people facilitating it under their roles, and the events *inside* it: the
+    opening song, the mission reading, each with its own hours and its own
+    facilitator. Anything else the client sent is dropped rather than stored:
+    these rows are printed to the congregation, so a malformed one would
+    print as one.
+    """
+    def clock(value):
+        """An hour as ``HH:MM``, or '' when it is not one.
+
+        Padded, because an ``<input type="time">`` only reads a two-digit
+        hour back out — a programme typed as "8:00" would open in the
+        editor as an empty start time — and refused past a day's bounds,
+        since these hours are printed to the congregation.
+        """
+        value = str(value or '').strip()
+        match = re.match(r'^(\d{1,2}):(\d{2})$', value)
+        if not match:
+            return ''
+        hour, minute = int(match.group(1)), int(match.group(2))
+        if hour > 23 or minute > 59:
+            return ''
+        return f'{hour:02d}:{minute:02d}'
+
+    # A browser sending the rows alongside a file would have encoded them as
+    # a JSON string on multipart form data; read that as the list it holds.
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return []
+    if not isinstance(raw, list):
+        return []
+    def people(entry):
+        named = []
+        for person in (entry.get('participants') or [])[:20]:
+            if not isinstance(person, dict):
+                continue
+            name = str(person.get('name') or '').strip()[:120]
+            if name:
+                named.append({'name': name, 'role': str(person.get('role') or '').strip()[:120]})
+        return named
+
+    def part_shapes(raw_parts):
+        """The events inside a session, each an entry of its own."""
+        if not isinstance(raw_parts, list):
+            return []
+        shaped_parts = []
+        for part in raw_parts[:40]:
+            if not isinstance(part, dict):
+                continue
+            shaped = {
+                'start': clock(part.get('start')),
+                'end': clock(part.get('end')),
+                'title': str(part.get('title') or '').strip()[:200],
+                'participants': people(part),
+            }
+            if shaped['title'] or shaped['participants']:
+                shaped_parts.append(shaped)
+        return shaped_parts
+
+    shaped_items = []
+    for entry in raw[:60]:
+        if not isinstance(entry, dict):
+            continue
+        parts = part_shapes(entry.get('parts'))
+        shaped = {
+            'start': clock(entry.get('start')),
+            'end': clock(entry.get('end')),
+            'title': str(entry.get('title') or '').strip()[:200],
+            'participants': people(entry),
+            'parts': parts,
+        }
+        if shaped['title'] or shaped['participants'] or parts:
+            shaped_items.append(shaped)
+    return shaped_items
+
+
 class DepartmentEventsView(APIView):
     """A department's calendar: the stored events behind the ministry pages."""
 
@@ -11761,6 +11843,7 @@ class DepartmentEventsView(APIView):
                 'location': event.location,
                 'meeting_link': event.meeting_link,
                 'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None,
+                'program_items': event.program_items,
                 'lead': event.lead,
                 'notes': event.notes,
                 'unit': event.unit,
@@ -11839,6 +11922,29 @@ class DepartmentEventsView(APIView):
         )
 
 
+    def patch(self, request, department, event_id=None):
+        """An event's programme, once the event is on the calendar.
+
+        The desk adds an event in a line and gives it its programme later —
+        typing its sessions into ``program_items`` (an empty list clearing
+        it) or attaching ``program_file`` as a file. Either is the same
+        programme the congregation reads from the church calendar, so the
+        write is held to the same officers the add and the remove are.
+        """
+        if not Department.objects.filter(code=department, is_active=True).exists():
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response({'detail': 'Only church officers or this department\'s leader can edit events.'}, status=status.HTTP_403_FORBIDDEN)
+        event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()
+        if event is None:
+            return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if 'program_file' in request.FILES:
+            event.program_file = request.FILES['program_file']
+        if 'program_items' in request.data:
+            event.program_items = clean_program_items(request.data.get('program_items'))
+        event.save()
+        return Response({'detail': 'Programme saved.', 'id': event.id, 'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None, 'program_items': event.program_items})
+
     def delete(self, request, department, event_id=None):
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
@@ -11906,6 +12012,7 @@ class ChurchCalendarView(APIView):
                 'lead': event.lead,
                 'unit': event.unit,
                 'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None,
+                'program_items': event.program_items,
             }
             for event in events
         ]})

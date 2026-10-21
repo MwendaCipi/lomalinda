@@ -13,6 +13,7 @@ import {
   type CalendarView,
 } from "@/components/calendar-views";
 import SabbathProgramModal, { SabbathProgramData } from "../../components/sabbath-program-modal";
+import { parseProgramItems, type ProgramItem } from "@/components/program-document";
 import { getMinistryGivingPurpose } from "@/config/ministries";
 import { dayFirst, weekdayOf } from "@/lib/dates";
 import { churchMapHref } from "@/hooks/use-church-settings";
@@ -70,6 +71,8 @@ type CalendarEvent = {
   lead?: string;
   unit?: string;
   program_file?: string | null;
+  /** The programme typed at the ministry's desk — its sessions with hours. */
+  program_items?: ProgramItem[] | null;
 };
 
 /**
@@ -431,7 +434,19 @@ function CalendarPageContent() {
 
   function openProgram(row: CalendarEvent) {
     const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null;
-    setActiveProgram({ name: row.title, department: row.department_name, date: weekdayLabel(row.date), programText: undefined, programFile: file, programItems: undefined, isDesignated: true });
+    setActiveProgram({
+      name: row.title,
+      department: row.department_name,
+      lead: row.lead,
+      date: weekdayLabel(row.date),
+      dateISO: row.date,
+      programText: undefined,
+      programFile: file,
+      // The programme the ministry typed, read back into its sessions: it is
+      // shown on the same sheet an uploaded file would be handed out on.
+      programItems: parseProgramItems(row.program_items),
+      isDesignated: true,
+    });
   }
 
   return (

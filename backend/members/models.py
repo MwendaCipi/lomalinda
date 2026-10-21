@@ -793,6 +793,16 @@ class DepartmentEvent(models.Model):
     location = models.CharField(max_length=160, blank=True)
     meeting_link = models.URLField(max_length=500, blank=True)
     program_file = models.FileField(upload_to='dept_event_programs/', null=True, blank=True)
+    # The programme typed at the desk rather than uploaded as a file: one
+    # session of the order of service per entry — the hours it runs, what it
+    # is, and who facilitates it — the same rows the programme sheet shows.
+    # The two are peers, not a sequence: an event may carry either or both,
+    # and the congregation is shown the file first, the typed rows after.
+    program_items = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='The typed programme: sessions, the events inside each, their hours and facilitators',
+    )
     lead = models.CharField(max_length=120, blank=True, help_text="Who leads the event; blank means the department itself")
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='department_events_created')
