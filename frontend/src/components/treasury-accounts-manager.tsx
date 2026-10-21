@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
-import { UnassignedPaymentsPanel } from "@/components/unassigned-payments-panel";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { TREASURY_HEADING } from "@/config/navigation";
@@ -624,15 +623,16 @@ function WithdrawalRequestsPanel({
   );
 }
 
-type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals" | "unassigned";
+type TreasuryDeskView = "accounts" | "expenditure" | "withdrawals";
 
 /**
- * The desk answers four views. Anything else in the address bar — an old
- * `?view=income` link, say — opens Church Accounts rather than a view that no
- * longer exists.
+ * The desk answers three views. Anything else in the address bar — an old
+ * `?view=income` link, or the retired `?view=unassigned` queue — opens Church
+ * Accounts rather than a view that no longer exists: held payments are
+ * written as rows in Individual Givings, with Assign on the row itself.
  */
 const deskViewOf = (value?: string): TreasuryDeskView =>
-  value === "expenditure" || value === "withdrawals" || value === "unassigned" ? value : "accounts";
+  value === "expenditure" || value === "withdrawals" ? value : "accounts";
 
 export function TreasuryAccountsManager({ initialView }: { initialView?: TreasuryDeskView } = {}) {
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
@@ -668,13 +668,12 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
-        active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : view === "unassigned" ? "unassigned" : "requests"}
-        // This desk draws the accounts, the spending, the withdrawals and the
-        // unassigned queue in place; every other chip walks to the page that
-        // holds it, by the one address table in `treasury-nav`.
+        active={view === "accounts" ? "accounts" : view === "expenditure" ? "expenses" : "requests"}
+        // This desk draws the accounts, the spending and the withdrawal queue
+        // in place; every other chip walks to the page that holds it, by the
+        // one address table in `treasury-nav`.
         onSelect={(next) => {
-          if (next === "unassigned") setView("unassigned");
-          else if (next === "accounts") setView("accounts");
+          if (next === "accounts") setView("accounts");
           else if (next === "expenses") setView("expenditure");
           else if (next === "requests") setView("withdrawals");
           else router.replace(TREASURY_VIEW_HREF[next]);
@@ -944,12 +943,6 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // header beside the page's name, so the heading and its search share a row
   // and the toggles sit below both.
   useEffect(() => {
-    if (view === "unassigned") {
-      // The queue carries its own assignment controls; the header keeps only
-      // the page's name.
-      setHeaderRightAction(null);
-      return () => setHeaderRightAction(null);
-    }
     if (view === "withdrawals") {
       setHeaderRightAction(
         <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -1342,8 +1335,6 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} onChanged={fetchAccounts} />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
-        ) : view === "unassigned" ? (
-          <UnassignedPaymentsPanel />
         ) : (
         /* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */
         <RecordList

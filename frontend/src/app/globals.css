@@ -848,6 +848,10 @@ table {
 
   table {
     width: 100% !important;
+    /* A screen table claims its minimum width to stay readable while it
+       scrolls sideways; on paper that claim only pushes the sheet off the
+       page, so the printed table takes the width it is given. */
+    min-width: 0 !important;
     border-collapse: collapse !important;
   }
 
@@ -868,6 +872,36 @@ table {
     font-weight: bold !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* The desk's calendar card is its own scroll box so the screen keeps its
+     buttons within reach; on paper that box would print only the strip of
+     rows the reader happened to be looking at. Unrolled here, a printout
+     carries the whole calendar — every month of the wall, all the rows. */
+  .desk-calendar {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* The shell clips too: a pinned page is a flex column that fills the panel
+     and hides what overflows. Printed, the page flows instead, so what leaves
+     the printer is the page rather than its first screen. */
+  .app-shell,
+  .app-shell-body,
+  .app-panel-column,
+  .app-content,
+  .app-panel,
+  .app-panel > main,
+  .app-panel > * {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+  .app-panel {
+    display: block !important;
   }
 }
 

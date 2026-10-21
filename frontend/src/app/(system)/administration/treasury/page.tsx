@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, FolderCheck, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
 import { ChurchLockup } from "@/components/church-lockup";
-import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
+import { TREASURY_VIEW_HREF, TreasuryNav, UNASSIGNED_CHANGED_EVENT } from "@/components/treasury-nav";
+import { AssignPaymentModal, ContactGiverModal } from "@/components/unassigned-payments-panel";
+import type { AccountOption, HeldPayment } from "@/components/unassigned-payments-panel";
 import { ComboboxPopover } from "@/components/combobox-popover";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
@@ -187,8 +189,8 @@ export default function TreasuryPage() {
   const [loadingAllGivings, setLoadingAllGivings] = useState(false);
   // Each purpose block is a fund: a completed gift sits under the account the
   // giver typed, so a held row — needs_review but still completed — sits right
-  // where the fund shows it. The Unassigned desk keeps its own copy of every
-  // held row until the treasurer files it.
+  // where the fund shows it. The Individual view carries the same rows with
+  // Assign on them; this copy is what the Summary drill-down marks apart.
   const [heldGivings, setHeldGivings] = useState<IndividualGiving[]>([]);
   const [loadingHeld, setLoadingHeld] = useState(false);
   // The Failed tab's own rows: written only by loadFailedGivings, apart
@@ -278,6 +280,179 @@ export default function TreasuryPage() {
     // use — so the effect's own synchronous body sets nothing.
     void Promise.resolve().then(() => loadFailedGivings());
   }, [loadFailedGivings]);
+
+  // A payment still held for assignment is a normal row in Individual
+  // Givings — under the account name the giver typed — and it carries the
+  // old Unassigned desk's own actions: Assign files the gift to an account
+  // and thanks the giver, Contact reaches them, Remove takes a payment the
+  // church is not going to keep off the ledger at all. The desk is gone; the
+  // row is where the work happens.
+  const [assigningGiving, setAssigningGiving] = useState<IndividualGiving | null>(null);
+  const [contactingGiving, setContactingGiving] = useState<HeldPayment | null>(null);
+  // The account list and receipt template the Assign sheet needs, fetched the
+  // first time it opens rather than on every read of the ledger.
+  const [heldAccounts, setHeldAccounts] = useState<AccountOption[] | null>(null);
+  const [heldReceipt, setHeldReceipt] = useState("");
+  // The child table's footer buttons step aside while the table is read by
+  // scrolling down — the same move the strip above makes — and come back the
+  // moment the reader turns upward or returns to the top of the table.
+  const [footerHidden, setFooterHidden] = useState(false);
+  const footerHiddenRef = useRef(false);
+  const footerMovedAt = useRef(0);
+  const footerScroller = useRef<EventTarget | null>(null);
+  const footerLastY = useRef(0);
+  const footerLastBoxH = useRef(-1);
+
+  // The footer answers the two tables' own scrollers, read in the capture
+  // phase — a scroll event does not bubble, and the shell reads the strip's
+  // hide the same way. Only the tables of this view carry the class, so the
+  // window scrolling a phone's page is not this footer's to answer.
+  useEffect(() => {
+    const setFooterAway = (hidden: boolean) => {
+      if (footerHiddenRef.current === hidden) return;
+      footerHiddenRef.current = hidden;
+      footerMovedAt.current = Date.now();
+      setFooterHidden(hidden);
+    };
+    const onScroll = (event: Event) => {
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      if (!element || !element.classList.contains("ledger-table-scroll")) return;
+      const y = element.scrollTop;
+      const boxH = element.clientHeight;
+      // A different scroller takes over: the move is measured from here.
+      if (event.target !== footerScroller.current) {
+        footerScroller.current = event.target;
+        footerLastY.current = y;
+        footerLastBoxH.current = boxH;
+        return;
+      }
+      // Hiding the footer — or giving it back — resizes the table's scroller,
+      // and the browser answers with scrolls of its own: a clamp of a position
+      // that no longer fits, an anchoring adjustment as the rows shift. A
+      // changed box says that is what moved, not the reader — the new position
+      // is where the reader's own next move is measured from, and this move is
+      // not answered.
+      if (boxH !== footerLastBoxH.current) {
+        footerLastBoxH.current = boxH;
+        footerLastY.current = y;
+        return;
+      }
+      const moved = y - footerLastY.current;
+      footerLastY.current = y;
+      // The browser keeps the table where it was reading while the footer
+      // gives its height back; those moves are not answered, but the position
+      // above stays current so the reader's own next move is measured from it.
+      if (Date.now() - footerMovedAt.current < 400) return;
+      // A few pixels of jitter is not a scroll: without this the footer
+      // flickers — and a browser clamp that parks the table just under the
+      // top reads as no motion at all, so it must not open the buttons again.
+      if (Math.abs(moved) < 8) return;
+      // Near the top the buttons are in sight, whatever the direction — the
+      // one exception to the reader's own hand.
+      if (y <= 64) {
+        setFooterAway(false);
+        return;
+      }
+      setFooterAway(moved > 0);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, []);
+
+  // A switch of view starts with the buttons in sight: the scroll they were
+  // hiding on belongs to the table they stood under. The state reset rides
+  // the microtask — the shape every reset on this page uses — so the effect's
+  // own synchronous body sets nothing.
+  useEffect(() => {
+    footerHiddenRef.current = false;
+    footerMovedAt.current = 0;
+    footerScroller.current = null;
+    footerLastBoxH.current = -1;
+    void Promise.resolve().then(() => setFooterHidden(false));
+  }, [viewMode]);
+
+  /** A held row as the assignment sheet reads it — the same payload the
+      Unassigned desk used to list; `raw_id` is the contribution itself. */
+  const toHeldPayment = (giving: IndividualGiving): HeldPayment => ({
+    id: giving.raw_id,
+    amount: giving.amount,
+    currency: "KES",
+    typed_reference: giving.purpose,
+    mpesa_receipt_number: giving.receipt_number || "",
+    donor_name: giving.donor_name,
+    donor_email: giving.giver_email || "",
+    phone_number: giving.giver_phone || "",
+    member_id: giving.member_id ?? null,
+    paid_at: giving.received_at,
+  });
+
+  /** Open the Assign sheet, reading the church's accounts and default receipt
+      message once so every later press opens straight onto the sheet. */
+  const openAssign = async (giving: IndividualGiving) => {
+    if (!heldAccounts) {
+      try {
+        const [accountsRes, settings] = await Promise.all([
+          fetch(`${API_URL}/api/members/giving-accounts/`, { headers: headers() }),
+          fetch(`${API_URL}/api/members/church-settings/`).then((res) => (res.ok ? res.json() : null)),
+        ]);
+        const accounts = accountsRes.ok ? await accountsRes.json() : [];
+        setHeldAccounts(Array.isArray(accounts) ? accounts : []);
+        if (settings?.default_receipt_message) setHeldReceipt(settings.default_receipt_message);
+      } catch {
+        setHeldAccounts([]);
+      }
+    }
+    setAssigningGiving(giving);
+  };
+
+  // The strip's badge counts held payments from its own read: tell it the
+  // queue moved when one is filed or removed, or it keeps counting a row the
+  // ledger no longer shows.
+  const heldQueueMoved = () => {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(UNASSIGNED_CHANGED_EVENT));
+  };
+
+  /** After an assignment: the rows re-read under their new account names and
+      the strip's badge drops by one. */
+  const afterHeldChange = () => {
+    heldQueueMoved();
+    void loadAllGivings();
+  };
+
+  const handleRemoveHeld = async (giving: IndividualGiving) => {
+    const result = await showAlert(
+      "Remove this payment?",
+      `KES ${money(giving.amount)} · ${giving.receipt_number || "no receipt number"}. It is credited to no account and removes the row from the church's ledger for good.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Remove",
+        cancelButtonText: "Keep",
+        confirmButtonColor: brand.ember,
+      },
+    );
+    if (!result.isConfirmed) return;
+    setRemovingId(giving.id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/unassigned/${giving.raw_id}/`, {
+        method: "DELETE",
+        headers: headers(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not remove the payment.");
+      showAlert("Payment removed", data.detail || "It is off the ledger.", "success", {
+        toast: true,
+        timer: 3500,
+        showConfirmButton: false,
+      });
+      heldQueueMoved();
+      void loadAllGivings();
+    } catch (error) {
+      showAlert("Could not remove", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   // The desk reaches the giver the way a message actually gets read: a
   // thread in this app when they hold an account, WhatsApp, or a call.
@@ -522,11 +697,9 @@ export default function TreasuryPage() {
     );
   }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow]);
 
-  // The treasury's views, as one line. The ledger owns Individual Givings and
-  // Summary in place — and owns them as the pair they are: Givings is drawn
-  // here as its two toggles, Individual and Summary, because summary lives
-  // inside givings rather than beside it. Every other chip walks to the page
-  // that holds it by the one address table in `treasury-nav`. The shell's
+  // The treasury's views, as one line. The ledger answers for Individual
+  // Givings and Summary in place; every other chip walks to the page that
+  // holds it by the one address table in `treasury-nav`. The shell's
   // header band draws it — one strip for the whole treasury, never a second
   // row under this page's own header.
   useEffect(() => {
@@ -534,7 +707,6 @@ export default function TreasuryPage() {
       <TreasuryNav
         active={viewMode === "summary" ? "summary" : viewMode === "failed_givings" ? "failed" : "givings"}
         failedCount={failedCount ?? undefined}
-        givingsViews
         onSelect={(view) => {
           if (view === "givings") {
             setExpandedPurpose(null);
@@ -1516,7 +1688,7 @@ export default function TreasuryPage() {
                             with no sideways scroll, and every field the desktop
                             shows still reads down the row. The columns the wide
                             screen keeps (date, mode, receipt) ride above it. */}
-                        <div className="md:hidden flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
+                        <div className="ledger-table-scroll [overflow-anchor:none] md:hidden flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
                           {isLoading ? (
                             <div className="py-12 text-center text-sm text-moss">
                               Loading member givings...
@@ -1572,6 +1744,9 @@ export default function TreasuryPage() {
                                         ) : (
                                           <span className="rounded-full bg-amber-50 px-1.5 py-px font-semibold text-amber-700">receipt failed</span>
                                         )}
+                                        {giving.needs_review && (
+                                          <span className="rounded-full bg-ember/10 px-1.5 py-px font-semibold text-ember">needs assignment</span>
+                                        )}
                                         {giving.receipt_number && (
                                           <span className="font-mono text-moss">#{giving.receipt_number}</span>
                                         )}
@@ -1612,6 +1787,49 @@ export default function TreasuryPage() {
                                             className={`absolute right-0 z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in duration-150 ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}
                                             onClick={(e) => e.stopPropagation()}
                                           >
+                                            {giving.needs_review ? (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    void openAssign(giving);
+                                                  }}
+                                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition"
+                                                >
+                                                  <FolderCheck className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                  <span>Assign account</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    setContactingGiving(toHeldPayment(giving));
+                                                  }}
+                                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition"
+                                                >
+                                                  <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
+                                                  <span>Contact</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  disabled={removingId === giving.id}
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    void handleRemoveHeld(giving);
+                                                  }}
+                                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition disabled:opacity-50"
+                                                >
+                                                  {removingId === giving.id ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                  ) : (
+                                                    <Trash2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                  )}
+                                                  <span>Remove</span>
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <>
                                             {isReceivedGiving(giving) && (
                                               <button
                                                 type="button"
@@ -1716,6 +1934,8 @@ export default function TreasuryPage() {
                                                 <span>Remove</span>
                                               </button>
                                             )}
+                                              </>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -1728,7 +1948,7 @@ export default function TreasuryPage() {
                         </div>
 
                         {/* PC Desktop Table View (visible on md and up) */}
-                        <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
+                        <div className="ledger-table-scroll [overflow-anchor:none] hidden md:block flex-1 min-h-0 overflow-auto custom-table-scrollbar">
                           {isLoading ? (
                             <div className="py-16 text-center text-sm text-moss">
                               Loading member givings...
@@ -1769,6 +1989,15 @@ export default function TreasuryPage() {
                                       <span className="inline-block rounded-lg bg-sand-linen border border-sand-line px-2 py-0.5 text-xs text-ember truncate max-w-[170px]" title={giving.purpose}>
                                         {giving.purpose}
                                       </span>
+                                      {/* The held payment shows its own state
+                                          beside the account the giver typed —
+                                          the Receipt column stays what it is:
+                                          sent or failed, nothing else. */}
+                                      {giving.needs_review && (
+                                        <span className="mt-1 block w-fit rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-semibold text-ember">
+                                          Needs assignment
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="px-3 py-3">
                                       <span className="inline-block rounded-full bg-mist-select px-2.5 py-0.5 text-[11px] font-semibold text-sage">
@@ -1782,9 +2011,12 @@ export default function TreasuryPage() {
                                       {money(giving.amount)}
                                     </td>
                                     <td className="px-3 py-3">
-                                      {!isReceivedGiving(giving) ? (
-                                        <span className="text-[11px] text-moss">—</span>
-                                      ) : giving.receipt_sent_at ? (
+                                      {/* The receipt is one of two things: a
+                                          channel carried it — the row is
+                                          stamped the moment email OR SMS
+                                          lands — or neither did, which is a
+                                          failure. Nothing in between. */}
+                                      {giving.receipt_sent_at ? (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sage-strong">
                                           <CheckCircle2 className="h-3.5 w-3.5" />
                                           Sent
@@ -1822,6 +2054,49 @@ export default function TreasuryPage() {
                                             className={`absolute right-0 z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in duration-150 ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}
                                             onClick={(e) => e.stopPropagation()}
                                           >
+                                            {giving.needs_review ? (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    void openAssign(giving);
+                                                  }}
+                                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition"
+                                                >
+                                                  <FolderCheck className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                  <span>Assign account</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    setContactingGiving(toHeldPayment(giving));
+                                                  }}
+                                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage hover:bg-mist-select transition"
+                                                >
+                                                  <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
+                                                  <span>Contact</span>
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  disabled={removingId === giving.id}
+                                                  onClick={() => {
+                                                    setActiveActionMenuId(null);
+                                                    void handleRemoveHeld(giving);
+                                                  }}
+                                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition disabled:opacity-50"
+                                                >
+                                                  {removingId === giving.id ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                  ) : (
+                                                    <Trash2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                  )}
+                                                  <span>Remove</span>
+                                                </button>
+                                              </>
+                                            ) : (
+                                              <>
                                             {isReceivedGiving(giving) && (
                                               <button
                                                 type="button"
@@ -1929,6 +2204,8 @@ export default function TreasuryPage() {
                                                 <span>Remove</span>
                                               </button>
                                             )}
+                                              </>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -1940,8 +2217,17 @@ export default function TreasuryPage() {
                           )}
                         </div>
 
-                        {/* Fixed Child Table Footer — sits flush on the tab bar. */}
-                        <div className="shrink-0 sticky bottom-0 md:static z-30 border-t border-sand-line bg-white px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2.5">
+                        {/* Fixed Child Table Footer — sits flush on the tab bar.
+                            It steps aside while the table is read by scrolling
+                            down — the same move the strip above makes — and
+                            returns the moment the reader turns back up or comes
+                            back to the top of the table. */}
+                        <div
+                          inert={footerHidden}
+                          className={`grid shrink-0 transition-[grid-template-rows] duration-300 ease-out ${footerHidden ? "grid-rows-[0fr]" : "grid-rows-[1fr]"}`}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                          <div className="shrink-0 sticky bottom-0 md:static z-30 border-t border-sand-line bg-white px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2.5">
                           <span className="text-moss text-[11px] sm:text-xs">
                             {showFailed ? (
                               <>
@@ -1978,6 +2264,8 @@ export default function TreasuryPage() {
                             </button>
                           </div>
                         </div>
+                          </div>
+                        </div>
                       </>
                     );
                   })()}
@@ -1996,6 +2284,22 @@ export default function TreasuryPage() {
         onClose={() => setIsModalOpen(false)}
         onSaved={handleReceiptSaved}
       />
+
+      {/* A held payment's own sheets — the same Assign and Contact the old
+          Unassigned desk opened, now reached from the row itself in
+          Individual Givings. */}
+      {assigningGiving && (
+        <AssignPaymentModal
+          row={toHeldPayment(assigningGiving)}
+          accounts={heldAccounts ?? []}
+          defaultReceipt={heldReceipt}
+          onClose={() => setAssigningGiving(null)}
+          onAssigned={afterHeldChange}
+        />
+      )}
+      {contactingGiving && (
+        <ContactGiverModal row={contactingGiving} onClose={() => setContactingGiving(null)} />
+      )}
 
       {/* Preparing the document: generation runs on the server and can take a
           moment, so the desk is told what is being made and for which dates

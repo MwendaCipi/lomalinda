@@ -274,6 +274,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     if (!togglesHideOnScroll) return;
     let lastTarget: EventTarget | null = null;
     let lastY = 0;
+    let lastBoxH = -1;
     const onScroll = (event: Event) => {
       // The band's own box scrolls as it collapses — its content is taller than
       // the row while the row shrinks — and that is the band moving, not the
@@ -285,14 +286,29 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       // away under a moving page would only shift what the reader is reading.
       const element = event.target instanceof HTMLElement ? event.target : null;
       let y = 0;
+      let boxH = 0;
       if (element && element !== document.documentElement && element !== document.body) {
         y = element.scrollTop;
+        boxH = element.clientHeight;
       } else {
         y = window.scrollY;
+        boxH = window.innerHeight;
       }
       // A different scroller takes over: the move is measured from here.
       if (event.target !== lastTarget) {
         lastTarget = event.target;
+        lastY = y;
+        lastBoxH = boxH;
+        return;
+      }
+      // Hiding the band — or giving it back — resizes the scroller, and the
+      // browser answers with scrolls of its own: a clamp of an out-of-range
+      // position, an anchoring adjustment as rows shift. A changed box says
+      // that is what moved, not the reader — so the new position is where
+      // the reader's own next move is measured from, and this move is not
+      // answered.
+      if (boxH !== lastBoxH) {
+        lastBoxH = boxH;
         lastY = y;
         return;
       }
@@ -302,13 +318,16 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       // its height back; those moves are not answered, but the position above
       // is left current so the reader's own next move is measured from it.
       if (Date.now() - togglesMovedAt.current < 400) return;
-      // Near the top the strip is always shown, whatever the last move was.
+      // A few pixels of jitter is not a scroll: without this the strip
+      // flickers — and a browser clamp that parks the page just under the
+      // top reads as no motion at all, so it must not open the band again.
+      if (Math.abs(moved) < 8) return;
+      // Near the top the strip is shown, whatever the direction — the one
+      // exception to the reader's own hand.
       if (y <= 64) {
         setTogglesHidden(false);
         return;
       }
-      // A few pixels of jitter is not a scroll: without this the strip flickers.
-      if (Math.abs(moved) < 8) return;
       setTogglesHidden(moved > 0);
     };
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
@@ -488,7 +507,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                   ref={togglesBandRef}
                   inert={togglesHideOnScroll && togglesScrolledDown}
                   className={`${headingFirst ? "order-2" : "order-1"} sm:order-none grid shrink-0 transition-[grid-template-rows] duration-300 ease-out ${
-                    togglesHideOnScroll && togglesScrolledDown ? "grid-rows-[0fr] sm:grid-rows-[1fr]" : "grid-rows-[1fr]"
+                    togglesHideOnScroll && togglesScrolledDown ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
                   }`}
                 >
                   <div className="flex min-h-0 items-center gap-3 overflow-hidden border-b border-sand-line bg-white px-3 sm:px-5">

@@ -15,28 +15,26 @@ const fundAuthHeaders = (): Record<string, string> => {
  * The treasury's views, as one line of toggles.
  *
  * The ledger, the accounts desk, the drives page and the budget all show
- * this same strip — Givings, Unassigned, Church Accounts, Fund Drives,
- * Church Budget, Expenses, Requests and Failed — so the treasurer meets one
- * navigation wherever in the treasury they stand. Summary is deliberately
- * not a chip beside Givings: it lives *inside* it, so the strip draws
- * Givings' two views only where Givings stands — as the pair Individual and
- * Summary on the ledger, which owns them both in place, and as the one door
- * that walks there from every other desk. Each page renders
- * it into the shell's header band (`usePageHeader().setCustomToggles`), which
- * is what keeps it a single strip: the band shows either this one or the
- * section's own pages, never both.
+ * this same strip — Givings, Summary, Church Accounts, Fund Drives, Church
+ * Budget, Expenses, Requests and Failed — so the treasurer meets one
+ * navigation wherever in the treasury they stand. Every chip is one step to
+ * the view it names: a page answers for the views it draws in place and
+ * walks to the page that holds the rest, through the one address table
+ * below. Each page renders it into the shell's header band
+ * (`usePageHeader().setCustomToggles`), which is what keeps it a single
+ * strip: the band shows either this one or the section's own pages, never
+ * both.
  */
 /**
- * Announced by the unassigned desk whenever its queue changes — a payment
- * assigned or removed — so the strip's badge answers on the spot rather than
- * counting a row the desk has already dealt with.
+ * Announced by the ledger whenever a held payment is filed or removed from
+ * its row in Individual Givings — so the strip's badge answers on the spot
+ * rather than counting a payment that is no longer held.
  */
 export const UNASSIGNED_CHANGED_EVENT = "treasury-unassigned-changed";
 
 export type TreasuryView =
   | "givings"
   | "summary"
-  | "unassigned"
   | "accounts"
   | "drives"
   | "budget"
@@ -56,7 +54,6 @@ export type TreasuryView =
 export const TREASURY_VIEW_HREF: Record<TreasuryView, string> = {
   givings: "/administration/treasury?mode=all_givings",
   summary: "/administration/treasury?mode=summary",
-  unassigned: "/administration?tab=accounts&view=unassigned",
   accounts: "/administration?tab=accounts&view=accounts",
   drives: "/administration/fund-drives",
   budget: "/administration?tab=budget",
@@ -66,18 +63,17 @@ export const TREASURY_VIEW_HREF: Record<TreasuryView, string> = {
 };
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
-  // Givings is one door from every desk that walks to the ledger. The ledger
-  // owns both of its views in place, so there this cell opens into the two
-  // toggles it holds — Individual and Summary — drawn by the `givingsViews`
-  // branch in the component below; summary never sits beside it as a chip.
+  // Givings opens the ledger's Individual view — every gift that actually
+  // arrived, one row each. A paybill payment whose reference named no
+  // account stands there too, under the name the giver typed, so this is
+  // also the cell that wears the count of the ones still waiting to be
+  // filed: the treasurer sees the backlog on the very view whose rows carry
+  // it, with Assign on the row to clear it.
   { key: "givings", label: "Givings", short: "Givings" },
   // Each purpose is a fund, so a completed gift sits in one place — the fund
   // drive that owns it, not in a shared falling-away ledger; the Summary
-  // beside Individual is how those places are read together.
-  // Paybill payments whose reference named no account wait here: the money
-  // is safely in the ledger, and this is where the treasurer names the
-  // account it belongs to.
-  { key: "unassigned", label: "Unassigned", short: "Unassigned" },
+  // beside Givings is how those places are read together.
+  { key: "summary", label: "Summary", short: "Summary" },
   { key: "accounts", label: "Church Accounts", short: "Accounts" },
   // A fund drive is born from one of those accounts, so it stands beside
   // them: the treasurer reaches the drives without leaving the treasury.
@@ -102,21 +98,16 @@ export function TreasuryNav({
   requestsCount,
   unassignedCount,
   failedCount,
-  givingsViews = false,
 }: {
   /** Which of the treasury's views the page is showing. */
   active: TreasuryView;
   onSelect: (view: TreasuryView) => void;
   /** Optional override for the badge count. */
   requestsCount?: number;
-  /** Optional override for the unassigned badge count. */
+  /** Optional override for the count of payments still held for assignment. */
   unassignedCount?: number;
   /** Optional override for the failed-givings badge count. */
   failedCount?: number;
-  /** The page owns the givings views in place — only the ledger does — so
-      there the strip draws Givings as the two toggles it holds, Individual
-      and Summary, rather than the single door every other desk walks. */
-  givingsViews?: boolean;
 }) {
   // Track only the counts fetched from the API; when a prop is provided the
   // parent's value wins and no fetch is needed.
@@ -126,22 +117,13 @@ export function TreasuryNav({
   const displayCount = typeof requestsCount === "number" ? requestsCount : fetchedCount;
   const displayUnassigned = typeof unassignedCount === "number" ? unassignedCount : fetchedUnassigned;
   const displayFailed = typeof failedCount === "number" ? failedCount : fetchedFailed;
-  // The strip's cells: Givings stands as one door from every desk that walks
-  // to the ledger, and as its two toggles — Individual and Summary — on the
-  // ledger itself, which owns both views in place.
-  const cells = TREASURY_VIEWS.flatMap((view) =>
-    view.key === "givings" && givingsViews
-      ? [
-          { key: "givings" as const, label: "Individual", short: "Individual" },
-          { key: "summary" as const, label: "Summary", short: "Summary" },
-        ]
-      : [view]
-  );
+  // The strip's cells: the views themselves, one chip each — no cell opens
+  // into a second row of toggles.
+  const cells = TREASURY_VIEWS;
   // The strip always says where the treasurer stands: a view the cells do not
   // name — an old link's key, a view retired since it was filed — marks the
-  // first toggle (Individual where the pair stands, the Givings door
-  // everywhere else), rather than leaving the strip with no underscore under
-  // it at all.
+  // first toggle, Givings, rather than leaving the strip with no underscore
+  // under it at all.
   const shown: TreasuryView = cells.some((cell) => cell.key === active) ? active : "givings";
 
   useEffect(() => {
@@ -165,11 +147,12 @@ export function TreasuryNav({
     };
   }, [requestsCount]);
 
-  // The unassigned badge: paybill payments waiting for an account. The strip
-  // is drawn on every treasury page, so this is what keeps the count honest
-  // wherever the treasurer stands — and the desk above it says when a payment
-  // has been assigned or removed, because the strip is not on the page that
-  // changed and would otherwise keep counting a row that is no longer there.
+  // The held-payments badge: paybill payments waiting for an account, worn
+  // by the Givings chip — the view whose rows carry them. The strip is drawn
+  // on every treasury page, so this is what keeps the count honest wherever
+  // the treasurer stands — and the ledger says when a payment has been
+  // assigned or removed, because the strip would otherwise keep counting a
+  // row that is no longer there.
   useEffect(() => {
     if (typeof unassignedCount === "number") return;
     let alive = true;
@@ -216,24 +199,21 @@ export function TreasuryNav({
   }, [failedCount]);
 
   // The same underline tabs the rest of the app uses — a label over the band's
-  // rule rather than a pill button. A phone reads the views in two level rows,
-  // four across when the strip holds the eight doors and five when Givings'
-  // pair makes it nine, so the cells are a slice of the strip's width: the
-  // padding gives up most of its own and the label steps down a size, because
-  // those toggles must read, not merely fit. A count holds the cell's corner
-  // without touching the name, and the wider screens keep the natural line.
+  // rule rather than a pill button. A phone reads the views in two level rows
+  // of four, so the cells are a slice of the strip's width: the padding gives
+  // up most of its own and the label steps down a size, because those toggles
+  // must read, not merely fit. A count holds the cell's corner without
+  // touching the name, and the wider screens keep the natural line.
   const tabClass = (isActive: boolean) =>
     `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pt-3 text-[10px] font-semibold tracking-tight transition sm:px-3.5 sm:pt-0 sm:text-sm ${
       isActive ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"
     }`;
 
   return (
-    // A phone reads the treasury in two level rows — four chips a row when
-    // the strip holds the eight doors, five when Givings' pair makes it
-    // nine — the grid shares the width equally, so the strip has the same
-    // shape on every desk and never spends a third row of the screen's
-    // height. A screen wide enough keeps the natural line, which wraps when
-    // it must.
+    // A phone reads the treasury in two level rows — four chips a row — the
+    // grid shares the width equally, so the strip has the same shape on
+    // every desk and never spends a third row of the screen's height. A
+    // screen wide enough keeps the natural line, which wraps when it must.
     <div
       role="group"
       aria-label="Treasury views"
@@ -254,7 +234,10 @@ export function TreasuryNav({
               {displayCount}
             </span>
           )}
-          {view.key === "unassigned" && displayUnassigned > 0 && (
+          {/* The held-payments count wears the strip's own ember, not a
+              signal red: the badge says how many wait, and a colour of its
+              own would shout louder than the view it sits on. */}
+          {view.key === "givings" && displayUnassigned > 0 && (
             <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white shadow-2xs sm:static sm:h-5 sm:min-w-5 sm:px-1.5 sm:text-[10px]">
               {displayUnassigned}
             </span>

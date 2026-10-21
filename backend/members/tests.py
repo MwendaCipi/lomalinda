@@ -9511,6 +9511,64 @@ class ReceiptResendWithoutAnAddressTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class ReceiptSentOrFailedTests(APITestCase):
+    """The desk reads a receipt one of two ways: Sent or Failed.
+
+    Sent means a channel carried it — the row is stamped the moment email OR
+    SMS lands, so the SMS alone is delivery enough when the address bounced.
+    Failed means neither did: the row keeps no stamp, which is what draws the
+    Failed badge beside it, until a later resend gets through.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('rsof.treasurer', 'rsof.treasurer@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(self.treasurer)
+
+    def _cash(self, **kwargs):
+        defaults = dict(
+            received_on=timezone.now().date(), amount=Decimal('200.00'), purpose='Farewell',
+            entry_type='individual', donor_name='Duncan Mwirigi',
+            giver_phone='0791000746', received_by=self.treasurer,
+        )
+        defaults.update(kwargs)
+        return CashContribution.objects.create(**defaults)
+
+    @patch('members.views._deliver_receipt_message')
+    def test_an_sms_the_email_could_not_carry_still_reads_as_sent(self, mock_deliver):
+        mock_deliver.return_value = {'email_sent': False, 'sms_sent': True, 'sms_configured': True}
+        cash = self._cash(giver_email='bounced@example.com')
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'channels': ['sms']},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(response.data['sent'])
+        self.assertIsNotNone(response.data['receipt_sent_at'])
+        cash.refresh_from_db()
+        self.assertIsNotNone(cash.receipt_sent_at)
+
+    @patch('members.views._deliver_receipt_message')
+    def test_both_channels_missing_leaves_the_row_failed(self, mock_deliver):
+        mock_deliver.return_value = {'email_sent': False, 'sms_sent': False, 'sms_configured': True}
+        cash = self._cash(giver_email='bounced@example.com')
+
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'cash', 'id': cash.id, 'channels': ['email', 'sms']},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertFalse(response.data['sent'])
+        self.assertIsNone(response.data['receipt_sent_at'])
+        cash.refresh_from_db()
+        self.assertIsNone(cash.receipt_sent_at)
+
+
 class SmsGatewayTests(APITestCase):
     """Ping Africa's gateway, at the three points a guess would break it.
 
