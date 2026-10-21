@@ -12,7 +12,7 @@ import { normalizePath } from "@/lib/paths";
 import { isMarketingPage } from "@/lib/route-visibility";
 import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
-import { useRailHere, useRailQuery } from "@/hooks/use-rail-location";
+import { useRailHere } from "@/hooks/use-rail-location";
 
 type PageHeaderHeading = {
   label: string;
@@ -148,7 +148,6 @@ const HEADING_FIRST_SECTIONS = new Set(["Fellowship", "Stewardship"]);
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
-  const railQuery = useRailQuery();
   const { me, hasToken } = useHeaderData();
 
   /**
@@ -232,14 +231,23 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     [setHeaderRightAction, claimStrip, setTogglesRightAction, setCustomHeader, setHeadingFirst, setPinnedDesk, setTogglesHideOnScroll]
   );
 
-  // A page's header chrome belongs to the route it was drawn for, so it is
-  // cleared the moment the route changes — but the clearing has to land
+  // A page's header chrome belongs to the page it was drawn for, so it is
+  // cleared the moment that page changes — but the clearing has to land
   // *before* the new page's effects register their own. Left to an effect it
   // ran after the child's (a child's effects fire first), wiping the strip the
   // page had just set; that is how a page's own toggles kept losing to the
   // section's and two strips seemed to take turns. Adjusting the state during
   // render settles it in the same pass, so the page always has the last word.
-  const [routeAtLastReset, setRouteAtLastReset] = useState(pathname);
+  //
+  // Only the pathname is a page. The query is not: on a client navigation it
+  // settles a render after the pathname, so keying the reset on it ran a second
+  // time *after* the arriving page had drawn its heading — the treasury lost
+  // its name on a phone every time it was opened from another treasury surface
+  // (Accounts → Givings), because the desks that share `/administration` read
+  // the URL as their page and the ledger's `?mode=` arrived last. A desk that
+  // changes under one pathname is the page's own business: it registers its
+  // chrome from an effect keyed on that state and clears it on unmount.
+  const [pathAtLastReset, setPathAtLastReset] = useState(pathname);
 
   // The scroll the band answers belongs to the page it was read on, so a new
   // page starts with its strip in sight. (The ref itself is written here, never
@@ -316,20 +324,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     departments
   );
   const here = useRailHere(pathname, entries);
-  // Console pages share `/administration`; their query is the route. Reset
-  // injected header chrome when that page changes too, otherwise a desk's
-  // controls can remain visible while the next page is loading its own.
+  // A page that replaces another must not inherit its controls: reset the
+  // injected header chrome the moment the pathnames differ, so a desk's search
+  // and filters cannot remain on screen while the next page loads its own.
   //
   // The strip itself is deliberately *not* cleared here. A page owns that
   // slot, clears it when it unmounts, and the shell cannot tell whose strip it
-  // is holding: clearing here raced the page that had just replaced it — a
-  // navigation changes the key twice (the query lands a render before the
-  // pathname), so the second reset ran after the new page had already drawn
-  // its own strip and wiped it, leaving the treasury with no toggles at all
-  // after a tap on its rail row.
-  const activeRouteKey = `${pathname}?tab=${railQuery.tab ?? ""}&dept=${railQuery.dept ?? ""}`;
-  if (activeRouteKey !== routeAtLastReset) {
-    setRouteAtLastReset(activeRouteKey);
+  // is holding: clearing here raced the page that had just replaced it and
+  // wiped it, leaving the treasury with no toggles at all after a tap on its
+  // rail row. Header chrome follows the same rule for a query: a desk that
+  // changes tab under one pathname registers and clears its own.
+  if (pathname !== pathAtLastReset) {
+    setPathAtLastReset(pathname);
     setHeaderRightAction(null);
     setTogglesRightAction(null);
     setCustomHeader(null);

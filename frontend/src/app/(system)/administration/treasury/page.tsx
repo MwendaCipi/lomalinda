@@ -173,7 +173,17 @@ export default function TreasuryPage() {
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"summary" | "all_givings" | "failed_givings">("all_givings");
-  const [allGivingsList, setAllGivingsList] = useState<IndividualGiving[]>([]);
+  const [allGivingsList, setAllGivingsList] = useState<IndividualGiving[]>(
+    // TEMPORARY PREVIEW SEED — REVERT BEFORE COMMIT.
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("seedtable")
+      ? [
+          { id: "s1", raw_id: 90001, member_id: 12, source: "digital", giving_type: "financial", purpose: "Local Church Budget", amount: "1250.00", donor_name: "Festus Matumo", giver_phone: "0729753684", payment_method: "M-Pesa", receipt_number: "SGH7K2QX1P", received_at: "2026-10-20T09:14:00", receipt_sent_at: "2026-10-20T09:14:20", status: "Completed" },
+          { id: "s2", raw_id: 90002, member_id: null, source: "cash", giving_type: "financial", purpose: "Sabbath School", amount: "500.00", donor_name: "Grace Wanjiku", payment_method: "Cash", receipt_number: "CASH-0042", received_at: "2026-10-19T11:02:00", receipt_sent_at: null, status: "Recorded" },
+          { id: "s3", raw_id: 90003, member_id: 44, source: "digital", giving_type: "financial", purpose: "Adventist Youth Ministry", amount: "2000.00", donor_name: "A Long Giver Name To Show Truncation", giver_phone: "0711222333", giver_email: "long.name@example.com", payment_method: "M-Pesa", receipt_number: "SGH9Z8Y7V6", received_at: "2026-10-18T18:40:00", receipt_sent_at: "2026-10-18T18:41:00", status: "Completed", item_description: "Youth camp support, box of tents and cooking pots." },
+          { id: "s4", raw_id: 90004, member_id: null, source: "digital", giving_type: "financial", purpose: "Tithe", amount: "300.00", donor_name: "Peter Otieno", payment_method: "Bank-to-Bank", receipt_number: "BB-2291", received_at: "2026-10-17T08:05:00", receipt_sent_at: null, status: "Completed" },
+        ]
+      : []
+  );
   const [loadingAllGivings, setLoadingAllGivings] = useState(false);
   // Each purpose block is a fund: a completed gift sits under the account the
   // giver typed, so a held row — needs_review but still completed — sits right
@@ -236,6 +246,8 @@ export default function TreasuryPage() {
         // A payload that is not the array this endpoint promises leaves the
         // list as it was rather than taking the desk down at .filter.
         if (Array.isArray(data) && (which !== "failed" || request === failedGivingsRequest.current)) {
+          // TEMPORARY PREVIEW SEED — REVERT BEFORE COMMIT.
+          if (which !== "failed" && typeof window !== "undefined" && new URLSearchParams(window.location.search).has("seedtable")) return;
           setList(data);
           if (which === "failed") setFailedCount(data.filter((giving: IndividualGiving) => !isReceivedGiving(giving)).length);
         }
@@ -511,15 +523,18 @@ export default function TreasuryPage() {
   }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow]);
 
   // The treasury's views, as one line. The ledger owns Individual Givings and
-  // Summary in place; every other chip walks to the page that holds it by the
-  // one address table in `treasury-nav`. The shell's header band draws it —
-  // one strip for the whole treasury, never a second row under this page's own
-  // header.
+  // Summary in place — and owns them as the pair they are: Givings is drawn
+  // here as its two toggles, Individual and Summary, because summary lives
+  // inside givings rather than beside it. Every other chip walks to the page
+  // that holds it by the one address table in `treasury-nav`. The shell's
+  // header band draws it — one strip for the whole treasury, never a second
+  // row under this page's own header.
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
         active={viewMode === "summary" ? "summary" : viewMode === "failed_givings" ? "failed" : "givings"}
         failedCount={failedCount ?? undefined}
+        givingsViews
         onSelect={(view) => {
           if (view === "givings") {
             setExpandedPurpose(null);
@@ -1490,134 +1505,225 @@ export default function TreasuryPage() {
 
                     return (
                       <>
-                        {/* Mobile Cards View (visible on md:hidden) */}
-                        <div className="md:hidden flex-1 min-h-0 overflow-y-auto p-3 space-y-3 custom-table-scrollbar">
+                        {/* Mobile Table View (visible on md:hidden). A table,
+                            not the stack of tall cards this used to be: a phone
+                            reads a ledger in rows. Four columns — giver, amount,
+                            purpose, actions — measured 571px against a 363px
+                            phone viewport, which shoved purpose off the side
+                            behind a horizontal scroll. Purpose is the one long,
+                            unbounded value here, so it moves under the giver on
+                            a line of its own: three columns now fit the phone
+                            with no sideways scroll, and every field the desktop
+                            shows still reads down the row. The columns the wide
+                            screen keeps (date, mode, receipt) ride above it. */}
+                        <div className="md:hidden flex-1 min-h-0 overflow-y-auto custom-table-scrollbar">
                           {isLoading ? (
-                            <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
+                            <div className="py-12 text-center text-sm text-moss">
                               Loading member givings...
                             </div>
                           ) : listToDisplay.length === 0 ? (
-                            <div className="py-12 text-center text-sm text-moss bg-white rounded-xl p-4 border border-sand-line">
+                            <div className="py-12 text-center text-sm text-moss">
                               {showFailed ? "No failed transactions in the selected date range." : "No individual givings recorded for the selected date range."}
                             </div>
                           ) : (
-                            listToDisplay.map((giving, idx) => (
-                              <div key={giving.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm space-y-3">
-                                <div className="flex items-center justify-between gap-2 border-b border-sand-soft pb-2">
-                                  <div>
-                                    <div className="font-bold text-sm text-bark">{giving.donor_name}</div>
-                                    <div className="text-[11px] text-moss">
-                                      {dayFirst(giving.received_at)}
-                                      {timeOnly(giving.received_at) ? ` · ${timeOnly(giving.received_at)}` : ""}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold text-sm text-sage">
-                                      {money(giving.amount || 0)}
-                                    </div>
-                                    <span className="inline-block rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-semibold text-sage">
-                                      {giving.payment_method}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                  <span className="rounded-lg bg-sand-linen border border-sand-line px-2 py-0.5 text-xs font-semibold text-ember">
-                                    {giving.purpose}
-                                  </span>
-                                  <span className="font-mono text-[11px] text-moss">Receipt: {giving.receipt_number || "N/A"}</span>
-                                </div>
-
-                                {giving.item_description && (
-                                  <p className="text-xs text-moss italic bg-sand-linen p-2 rounded-lg border border-sand-line">
-                                    Description: {giving.item_description}
-                                  </p>
-                                )}
-
-                                <div className="flex items-center justify-between gap-2 pt-2 border-t border-sand-soft">
-                                  {isReceivedGiving(giving) ? (
-                                    <span className={`text-[11px] font-semibold ${giving.receipt_sent_at ? "text-sage" : "text-ember"}`}>
-                                      {giving.receipt_sent_at ? "Sent" : "Failed"}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[11px] font-semibold text-moss">No receipt (payment failed)</span>
-                                  )}
-                                  <div className="flex items-center gap-2">
-                                    {giving.member_id && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleChatGiver(giving)}
-                                        aria-label="Chat"
-                                        title="Chat in this app"
-                                        className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
-                                      >
-                                        <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-                                      </button>
-                                    )}
-                                    {giving.giver_phone && (
-                                      <a
-                                        href={`https://wa.me/${waMeNumber(giving.giver_phone)}`}
-                                        aria-label="WhatsApp"
-                                        title="WhatsApp"
-                                        className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
-                                      >
-                                        <WhatsAppIcon className="h-4 w-4 text-sage" />
-                                      </a>
-                                    )}
-                                    {giving.giver_phone && (
-                                      <a
-                                        href={`tel:${giving.giver_phone}`}
-                                        aria-label="Call"
-                                        title="Call"
-                                        className="rounded-lg border border-sand-mute bg-white p-1.5 text-bark hover:bg-sand"
-                                      >
-                                        <Phone className="h-3.5 w-3.5" aria-hidden="true" />
-                                      </a>
-                                    )}
-                                    {!isReceivedGiving(giving) && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveFailed(giving)}
-                                        disabled={removingId === giving.id}
-                                        className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-ember hover:bg-sand disabled:opacity-60"
-                                      >
-                                        {removingId === giving.id ? "Removing…" : "Remove"}
-                                      </button>
-                                    )}
-                                    {isReceivedGiving(giving) && isMpesaGiving(giving) && (
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleRefundGiving(giving)}
-                                        disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
-                                        title={
-                                          refundedIds.includes(giving.raw_id)
-                                            ? "This gift has already been refunded"
-                                            : "Send this gift back to the giver's phone through M-Pesa"
-                                        }
-                                        className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-ember hover:bg-sand disabled:opacity-60"
-                                      >
-                                        {refundingId === giving.id ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
+                            <table className="w-full table-fixed text-left align-top text-xs">
+                              <colgroup>
+                                <col />
+                                <col className="w-24" />
+                                <col className="w-[76px]" />
+                              </colgroup>
+                              <thead className="sticky top-0 z-10 bg-sand font-semibold uppercase tracking-wider text-moss shadow-sm">
+                                <tr>
+                                  <th className="px-2.5 py-2.5 text-[10px]">Giver</th>
+                                  <th className="px-2.5 py-2.5 text-[10px] text-right">Amount</th>
+                                  <th className="px-2.5 py-2.5 text-center text-[10px]">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-sand-soft bg-white">
+                                {listToDisplay.map((giving) => (
+                                  <tr key={giving.id} className="align-top hover:bg-sand-plate">
+                                    <td className="px-2.5 py-2.5 min-w-0">
+                                      <div className="truncate font-semibold text-bark" title={giving.donor_name}>
+                                        {giving.donor_name}
+                                      </div>
+                                      {/* Purpose first: it is what the gift was
+                                          for, so it reads under the giver's own
+                                          name rather than in a column the phone
+                                          has no room for. */}
+                                      <div className="mt-0.5 truncate text-[11px] font-semibold text-ember" title={giving.purpose}>
+                                        {giving.purpose}
+                                      </div>
+                                      {/* The wide columns, folded under it: a
+                                          phone has no room for them as columns,
+                                          but the treasurer still needs to read
+                                          a row's date, mode and receipt. */}
+                                      <div className="mt-0.5 truncate text-[10px] text-moss">
+                                        {dayFirst(giving.received_at)}
+                                        {timeOnly(giving.received_at) ? ` · ${timeOnly(giving.received_at)}` : ""}
+                                      </div>
+                                      <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-moss">
+                                        <span className="inline-block rounded-full bg-mist-select px-1.5 py-px font-semibold text-sage">
+                                          {giving.payment_method}
+                                        </span>
+                                        {!isReceivedGiving(giving) ? (
+                                          <span className="font-semibold text-moss">payment failed</span>
+                                        ) : giving.receipt_sent_at ? (
+                                          <span className="font-semibold text-sage-strong">receipt sent</span>
                                         ) : (
-                                          <Undo2 className="h-3 w-3" aria-hidden="true" />
+                                          <span className="rounded-full bg-amber-50 px-1.5 py-px font-semibold text-amber-700">receipt failed</span>
                                         )}
-                                        {refundedIds.includes(giving.raw_id) ? "Refunded" : "Refund"}
-                                      </button>
-                                    )}
-                                    {isReceivedGiving(giving) && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResendReceipt(giving)}
-                                        disabled={resendingId === giving.id}
-                                        className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark"
-                                      >
-                                        {resendingId === giving.id ? "Sending..." : "Resend Receipt"}
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))
+                                        {giving.receipt_number && (
+                                          <span className="font-mono text-moss">#{giving.receipt_number}</span>
+                                        )}
+                                      </div>
+                                      {giving.item_description && (
+                                        <div className="mt-0.5 truncate text-[10px] italic text-moss" title={giving.item_description}>
+                                          {giving.item_description}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="px-2.5 py-2.5 text-right font-semibold text-bark tabular-nums">
+                                      {money(giving.amount || 0)}
+                                    </td>
+                                    <td className="px-2.5 py-2.5 text-center">
+                                      <div className="relative inline-block text-left actions-menu-container">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (activeActionMenuId === giving.id) {
+                                              setActiveActionMenuId(null);
+                                            } else {
+                                              // Open upward near the viewport bottom so the popup is not hidden behind the footer buttons.
+                                              const rect = e.currentTarget.getBoundingClientRect();
+                                              setActionDropUp(window.innerHeight - rect.bottom < 260);
+                                              setActiveActionMenuId(giving.id);
+                                            }
+                                          }}
+                                          aria-label={`Actions for ${giving.donor_name}`}
+                                          className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-bark shadow-sm transition hover:bg-sand"
+                                        >
+                                          <span>Actions</span>
+                                          <ChevronDown className="h-3 w-3 text-moss" />
+                                        </button>
+
+                                        {activeActionMenuId === giving.id && (
+                                          <div
+                                            className={`absolute right-0 z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in duration-150 ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            {isReceivedGiving(giving) && (
+                                              <button
+                                                type="button"
+                                                disabled={resendingId === giving.id}
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  handleResendReceipt(giving);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand disabled:opacity-50"
+                                              >
+                                                {resendingId === giving.id ? (
+                                                  <RotateCw className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                ) : (
+                                                  <Send className="h-3.5 w-3.5 text-ember" />
+                                                )}
+                                                <span>Resend Receipt</span>
+                                              </button>
+                                            )}
+
+                                            {/* Only an M-Pesa gift that actually arrived can go back the way it came: Safaricom pays the giver's phone through B2C. */}
+                                            {isReceivedGiving(giving) && isMpesaGiving(giving) && (
+                                              <button
+                                                type="button"
+                                                disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                title={
+                                                  refundedIds.includes(giving.raw_id)
+                                                    ? "This gift has already been refunded"
+                                                    : "Send this gift back to the giver's phone through M-Pesa"
+                                                }
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  void handleRefundGiving(giving);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember transition hover:bg-sand disabled:opacity-50"
+                                              >
+                                                {refundingId === giving.id ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                ) : (
+                                                  <Undo2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                )}
+                                                <span>{refundedIds.includes(giving.raw_id) ? "Refunded" : "Refund"}</span>
+                                              </button>
+                                            )}
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveActionMenuId(null);
+                                                handleChatGiver(giving);
+                                              }}
+                                              disabled={!giving.member_id}
+                                              title={giving.member_id ? "Open a thread in this app" : "This giver holds no member account. Use WhatsApp or Call."}
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage transition hover:bg-mist-select disabled:opacity-45"
+                                            >
+                                              <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
+                                              <span>Chat</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveActionMenuId(null);
+                                                if (giving.giver_phone) window.location.href = `https://wa.me/${waMeNumber(giving.giver_phone)}`;
+                                              }}
+                                              disabled={!giving.giver_phone}
+                                              title={giving.giver_phone ? "WhatsApp this giver" : "No phone number recorded for this giver"}
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage transition hover:bg-mist-select disabled:opacity-45"
+                                            >
+                                              <WhatsAppIcon className="h-4 w-4 text-sage" />
+                                              <span>WhatsApp</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveActionMenuId(null);
+                                                if (giving.giver_phone) window.location.href = `tel:${giving.giver_phone}`;
+                                              }}
+                                              disabled={!giving.giver_phone}
+                                              title={giving.giver_phone ? "Call this giver" : "No phone number recorded for this giver"}
+                                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-sage transition hover:bg-mist-select disabled:opacity-45"
+                                            >
+                                              <Phone className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
+                                              <span>Call</span>
+                                            </button>
+
+                                            {!isReceivedGiving(giving) && (
+                                              <button
+                                                type="button"
+                                                disabled={removingId === giving.id}
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  handleRemoveFailed(giving);
+                                                }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember transition hover:bg-sand disabled:opacity-50"
+                                              >
+                                                {removingId === giving.id ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                ) : (
+                                                  <Trash2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                )}
+                                                <span>Remove</span>
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           )}
                         </div>
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { firstDayOfMonth, localDate } from "@/lib/dates";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 const fundAuthHeaders = (): Record<string, string> => {
@@ -12,13 +14,17 @@ const fundAuthHeaders = (): Record<string, string> => {
 /**
  * The treasury's views, as one line of toggles.
  *
- * The ledger, the accounts desk and the drives page all show
- * this same strip — Individual Givings, Summary Contributions, Church
- * Accounts, Fund Drives, Expenses, Requests and Failed — so the treasurer meets one
- * navigation wherever in the treasury they stand. Each page renders it into
- * the shell's header band
- * (`usePageHeader().setCustomToggles`), which is what keeps it a single line:
- * the band shows either this strip or the section's own pages, never both.
+ * The ledger, the accounts desk, the drives page and the budget all show
+ * this same strip — Givings, Unassigned, Church Accounts, Fund Drives,
+ * Church Budget, Expenses, Requests and Failed — so the treasurer meets one
+ * navigation wherever in the treasury they stand. Summary is deliberately
+ * not a chip beside Givings: it lives *inside* it, so the strip draws
+ * Givings' two views only where Givings stands — as the pair Individual and
+ * Summary on the ledger, which owns them both in place, and as the one door
+ * that walks there from every other desk. Each page renders
+ * it into the shell's header band (`usePageHeader().setCustomToggles`), which
+ * is what keeps it a single strip: the band shows either this one or the
+ * section's own pages, never both.
  */
 /**
  * Announced by the unassigned desk whenever its queue changes — a payment
@@ -60,10 +66,14 @@ export const TREASURY_VIEW_HREF: Record<TreasuryView, string> = {
 };
 
 const TREASURY_VIEWS: { key: TreasuryView; label: string; short: string }[] = [
+  // Givings is one door from every desk that walks to the ledger. The ledger
+  // owns both of its views in place, so there this cell opens into the two
+  // toggles it holds — Individual and Summary — drawn by the `givingsViews`
+  // branch in the component below; summary never sits beside it as a chip.
   { key: "givings", label: "Givings", short: "Givings" },
   // Each purpose is a fund, so a completed gift sits in one place — the fund
-  // drive that owns it, not in a shared falling-away ledger.
-  { key: "summary", label: "Summary", short: "Summary" },
+  // drive that owns it, not in a shared falling-away ledger; the Summary
+  // beside Individual is how those places are read together.
   // Paybill payments whose reference named no account wait here: the money
   // is safely in the ledger, and this is where the treasurer names the
   // account it belongs to.
@@ -92,6 +102,7 @@ export function TreasuryNav({
   requestsCount,
   unassignedCount,
   failedCount,
+  givingsViews = false,
 }: {
   /** Which of the treasury's views the page is showing. */
   active: TreasuryView;
@@ -102,6 +113,10 @@ export function TreasuryNav({
   unassignedCount?: number;
   /** Optional override for the failed-givings badge count. */
   failedCount?: number;
+  /** The page owns the givings views in place — only the ledger does — so
+      there the strip draws Givings as the two toggles it holds, Individual
+      and Summary, rather than the single door every other desk walks. */
+  givingsViews?: boolean;
 }) {
   // Track only the counts fetched from the API; when a prop is provided the
   // parent's value wins and no fetch is needed.
@@ -111,11 +126,23 @@ export function TreasuryNav({
   const displayCount = typeof requestsCount === "number" ? requestsCount : fetchedCount;
   const displayUnassigned = typeof unassignedCount === "number" ? unassignedCount : fetchedUnassigned;
   const displayFailed = typeof failedCount === "number" ? failedCount : fetchedFailed;
-  // The strip always says where the treasurer stands: a view the list does not
+  // The strip's cells: Givings stands as one door from every desk that walks
+  // to the ledger, and as its two toggles — Individual and Summary — on the
+  // ledger itself, which owns both views in place.
+  const cells = TREASURY_VIEWS.flatMap((view) =>
+    view.key === "givings" && givingsViews
+      ? [
+          { key: "givings" as const, label: "Individual", short: "Individual" },
+          { key: "summary" as const, label: "Summary", short: "Summary" },
+        ]
+      : [view]
+  );
+  // The strip always says where the treasurer stands: a view the cells do not
   // name — an old link's key, a view retired since it was filed — marks the
-  // first toggle, Individual Givings, rather than leaving the strip with no
-  // underscore under it at all.
-  const shown: TreasuryView = TREASURY_VIEWS.some((view) => view.key === active) ? active : "givings";
+  // first toggle (Individual where the pair stands, the Givings door
+  // everywhere else), rather than leaving the strip with no underscore under
+  // it at all.
+  const shown: TreasuryView = cells.some((cell) => cell.key === active) ? active : "givings";
 
   useEffect(() => {
     // If the parent supplies a count there is nothing to fetch.
@@ -163,10 +190,21 @@ export function TreasuryNav({
 
   // The failed badge: attempts that never arrived. The desk clears them off
   // the ledger one by one, and the count says how much noise is left.
+  //
+  // It is counted over the window the ledger opens on — the month so far — and
+  // not the counter's own default of the last thirty days. That default ran
+  // past the first of the month: a strip drawn beside the budget counted the
+  // attempts of late last month, and the Failed tab it leads to listed this
+  // month's and found none, so the badge read eight with nothing behind it. A
+  // badge must never outnumber the rows its tab shows. The ledger itself
+  // passes its own count whenever the treasurer has moved the window there.
   useEffect(() => {
     if (typeof failedCount === "number") return;
     let alive = true;
-    fetch(`${API_URL}/api/members/treasury/failed/`, { headers: fundAuthHeaders() })
+    fetch(
+      `${API_URL}/api/members/treasury/failed/?from_date=${firstDayOfMonth()}&to_date=${localDate()}`,
+      { headers: fundAuthHeaders() }
+    )
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (alive && typeof data?.count === "number") setFetchedFailed(data.count);
@@ -178,26 +216,30 @@ export function TreasuryNav({
   }, [failedCount]);
 
   // The same underline tabs the rest of the app uses — a label over the band's
-  // rule rather than a pill button. The phone's cells are a quarter of the
-  // strip's width, so the padding gives up most of its own on that width and
-  // the label sits a little lower: four toggles must read, not merely fit, and
-  // a count has to hold the cell's corner without touching it. The nine views
-  // read as rows of four, so a phone meets them in three lines at most.
+  // rule rather than a pill button. A phone reads the views in two level rows,
+  // four across when the strip holds the eight doors and five when Givings'
+  // pair makes it nine, so the cells are a slice of the strip's width: the
+  // padding gives up most of its own and the label steps down a size, because
+  // those toggles must read, not merely fit. A count holds the cell's corner
+  // without touching the name, and the wider screens keep the natural line.
   const tabClass = (isActive: boolean) =>
-    `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1.5 pt-3 text-sm font-semibold transition sm:px-3.5 sm:pt-0 ${
+    `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pt-3 text-[10px] font-semibold tracking-tight transition sm:px-3.5 sm:pt-0 sm:text-sm ${
       isActive ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"
     }`;
 
   return (
-    // A phone reads the treasury in two level rows of four — the grid shares
-    // the width equally, so the strip has the same shape on every desk. A
-    // screen wide enough keeps the natural line, which wraps when it must.
+    // A phone reads the treasury in two level rows — four chips a row when
+    // the strip holds the eight doors, five when Givings' pair makes it
+    // nine — the grid shares the width equally, so the strip has the same
+    // shape on every desk and never spends a third row of the screen's
+    // height. A screen wide enough keeps the natural line, which wraps when
+    // it must.
     <div
       role="group"
       aria-label="Treasury views"
-      className="grid grid-cols-4 items-stretch gap-1 sm:flex sm:flex-wrap sm:items-center"
+      className={`grid ${cells.length % 4 === 0 ? "grid-cols-4" : "grid-cols-5"} items-stretch gap-1 sm:flex sm:flex-wrap sm:items-center`}
     >
-      {TREASURY_VIEWS.map((view) => (
+      {cells.map((view) => (
         <button
           key={view.key}
           type="button"
