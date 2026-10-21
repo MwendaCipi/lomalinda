@@ -71,9 +71,10 @@ export function AppTopBar() {
        the controls keep the right end of the bar with `lg:justify-end` — the
        place they held before the bar carried a mark of its own. */
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-bark px-3 text-white shadow-sm sm:px-5 lg:justify-end">
-      {/* The way into a conference that is happening now. Phones keep the
-          middle of the bar for the church's own name — the dashboard's rail
-          says the same thing there and carries the join button. */}
+      {/* The way into a conference that is happening now. Every width wears
+          it: the dashboard's gathering card also offers the join, but only on
+          the dashboard — the bar is the one place a phone learns a meeting is
+          running wherever it is in the app. */}
       {liveHref && (
         <a
           href={liveHref}
@@ -81,7 +82,7 @@ export function AppTopBar() {
           rel="noreferrer"
           title={`${gathering?.name} is meeting now: join`}
           aria-label={`${gathering?.name} is meeting now: join the web conference`}
-          className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full bg-ember px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-ember-deep sm:inline-flex"
+          className="absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full bg-ember px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-ember-deep sm:px-3"
         >
           <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70" />
