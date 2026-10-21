@@ -733,8 +733,11 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
               doors, then the bank — while a desk keeps the shape it has
               always had: the two doors first, the paybill and the bank
               beside each other underneath them. One set of children, ordered
-              per width rather than two copies of the page. */}
-          <div className="flex flex-col gap-6 sm:grid sm:grid-cols-2 sm:items-start">
+              per width rather than two copies of the page. Beside each other
+              the two bands share the row's height — a card ending above its
+              neighbour read as a broken row — so each stretches to the pair's
+              taller card and its own footnote grows down to its foot. */}
+          <div className="flex flex-col gap-6 sm:grid sm:grid-cols-2">
             {/* The strip names the page on the desk; the public page keeps the title. */}
             <h1 className={memberDesk ? "sr-only" : "mt-3 hidden shrink-0 text-3xl font-semibold tracking-tight sm:text-4xl md:block"}>
               Giving
@@ -747,11 +750,13 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
                 sits it beside the bank card under the doors, half the row
                 each. It disappears while the church has not set a paybill. */}
             {churchBankDetails.mpesa_paybill_number && (
-              <article className="order-1 rounded-3xl border border-sand-line bg-white p-5 shadow-sm sm:order-2">
+              <article className="order-1 flex flex-col rounded-3xl border border-sand-line bg-white p-5 shadow-sm sm:order-2">
                 <p className="flex items-center gap-2 text-sm font-bold text-bark">
                   <Smartphone size={14} aria-hidden="true" /> Pay with Safaricom M-Pesa
                 </p>
-                <dl className="mt-3 space-y-2 text-xs">
+                {/* The list takes the room the stretched card leaves over, so
+                    the footnote below holds the same foot as the bank card. */}
+                <dl className="mt-3 flex-1 space-y-2 text-xs">
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-moss">Pay Bill number</dt>
                     <dd className="font-mono text-base font-bold text-bark">{churchBankDetails.mpesa_paybill_number}</dd>
@@ -817,11 +822,12 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
                 The bank account is the band under the buttons in a hand and
                 the paybill's neighbour in a row on a desk — the second way to
                 push the money oneself. */}
-            <article className="order-3 rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
+            <article className="order-3 flex flex-col rounded-3xl border border-sand-line bg-white p-5 shadow-sm">
               <p className="flex items-center gap-2 text-sm font-bold text-bark">
                 <Landmark size={14} aria-hidden="true" /> Pay by bank transfer
               </p>
-              <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+              {/* Same foot as its neighbour: the list absorbs the stretch. */}
+              <dl className="mt-3 grid flex-1 gap-2 text-xs sm:grid-cols-2">
                 <div>
                   <dt className="text-moss">Bank</dt>
                   <dd className="font-semibold text-bark">{churchBankDetails.bank_name}</dd>
