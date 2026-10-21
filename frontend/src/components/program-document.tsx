@@ -9,7 +9,7 @@
  * own letterhead, the day spelled out, and the order of service beneath a
  * rule.
  *
- * A session carries the events *inside* it: Sabbath School from 8:00 to
+ * A session carries the activities *inside* it: Sabbath School from 8:00 to
  * 10:00 holds an opening song, a mission reading and the lesson study, each
  * with its own hours and its own facilitator. Those sit under the session
  * behind a rule, the way a printed programme indents what happens within a
@@ -21,13 +21,13 @@ import { ChurchLockup } from "./church-lockup";
 import { clockTime } from "@/components/calendar-views";
 import { dayFirst, weekdayOf } from "@/lib/dates";
 
-/** One person facilitating a session or an event within it, and their part. */
+/** One person facilitating a session or an activity within it, and their part. */
 export type ProgramParticipant = {
   name: string;
   role: string;
 };
 
-/** One event inside a session — the opening song, the mission reading. */
+/** One activity inside a session — the opening song, the mission reading. */
 export type ProgramPart = {
   /** The hour it starts, HH:MM; blank when it has no set hour. */
   start: string;
@@ -38,7 +38,7 @@ export type ProgramPart = {
 
 /** One session of the order of service — Sabbath School, 8:00 to 10:00. */
 export type ProgramItem = ProgramPart & {
-  /** The events held inside the session, in the order they run. */
+  /** The activities held inside the session, in the order they run. */
   parts: ProgramPart[];
 };
 
@@ -115,7 +115,7 @@ export function serializeProgramItems(items: ProgramItem[]): ProgramItem[] {
   return parseProgramItems(JSON.stringify(items));
 }
 
-/** Does this session have anything to print — a name, or an event within it? */
+/** Does this session have anything to print — a name, or an activity within it? */
 export function programItemHasContent(item: ProgramItem): boolean {
   return Boolean(item.title.trim()) || item.participants.length > 0 || item.parts.length > 0;
 }
@@ -227,7 +227,7 @@ export function ProgramDocument({
 
                 {/* What happens inside the session, indented behind a rule —
                     the printed programme's own way of showing a part of the
-                    day holding the events that run through it. */}
+                    day holding the activities that run through it. */}
                 {item.parts.length > 0 && (
                   <ul className="mt-2 ml-4 space-y-2 border-l-2 border-sand-line pl-4">
                     {item.parts.map((part, partIndex) => (

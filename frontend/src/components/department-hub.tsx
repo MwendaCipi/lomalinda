@@ -25,8 +25,6 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Church,
   Clock,
   HandHeart,
@@ -43,6 +41,7 @@ import {
   PenLine,
   Phone,
   Plus,
+  Printer,
   Pencil,
   Search,
   Sparkles,
@@ -63,6 +62,7 @@ import {
   DEPARTMENT_BLURBS,
   deaconateViews,
   departmentDeskCode,
+  eldershipViews,
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
@@ -103,6 +103,7 @@ import {
   parseProgramItems,
   programItemHasContent,
   serializeProgramItems,
+  sessionRange,
   type ProgramItem,
   type ProgramParticipant,
 } from "@/components/program-document";
@@ -1118,35 +1119,23 @@ function ProgramEditorModal({
   onClose: () => void;
   onSave: (items: ProgramItem[]) => void;
 }) {
-  const [items, setItems] = useState<ProgramItem[]>(() => {
-    const parsed = parseProgramItems(event.program_items);
-    return parsed.length > 0
-      ? parsed
-      : [{ start: "", end: "", title: "", participants: [], parts: [] }];
-  });
+  // The programme as it stands — nothing is drawn until the desk asks for it,
+  // so a new programme begins with its heading and its paragraph and then the
+  // one button that adds the first session, rather than with a blank session
+  // already open.
+  const [items, setItems] = useState<ProgramItem[]>(() => parseProgramItems(event.program_items));
+  // Which session is unfolded — one at a time, so opening a session closes
+  // whichever other was open and the desk reads one part of the day rather
+  // than all of them at once.
+  const [openSession, setOpenSession] = useState<number | null>(items.length > 0 ? 0 : null);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-  const setPerson = (index: number, personIndex: number, patch: Partial<ProgramParticipant>) =>
-    setItems((current) =>
-      current.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              participants: item.participants.map((person, p) =>
-                p === personIndex ? { ...person, ...patch } : person,
-              ),
-            }
-          : item,
-      ),
-    );
-  const dropPerson = (index: number, personIndex: number) =>
-    setItems((current) =>
-      current.map((item, i) =>
-        i === index
-          ? { ...item, participants: item.participants.filter((_, p) => p !== personIndex) }
-          : item,
-      ),
-    );
+  /** Removing a session also settles which one is left open. */
+  const removeSession = (index: number) => {
+    setItems((current) => current.filter((_, i) => i !== index));
+    setOpenSession((open) => (open === null ? null : open > index ? open - 1 : open === index ? null : open));
+  };
+  const emptySession = { start: "", end: "", title: "", participants: [], parts: [] };
   const emptyPart = { start: "", end: "", title: "", participants: [] };
   /** One change to one part of one session — the row every edit below makes. */
   const mapPart = (index: number, partIndex: number, edit: (part: ProgramItem["parts"][number]) => ProgramItem["parts"][number]) =>
@@ -1189,197 +1178,212 @@ function ProgramEditorModal({
           </button>
         </div>
         <p className="mt-2 text-xs text-moss">
-          Each session is one part of the day — the hours it runs and what it is. The events inside
-          a session and every facilitator are optional.
+          Each session is one part of the day — the hours it runs and its name. Open a session to
+          add the activities inside it: each carries its time, name and facilitator.
         </p>
         <div className="mt-3 space-y-3">
-          {items.map((session, index) => (
-            <div key={index} className="rounded-2xl border border-sand-line bg-white p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="time"
-                  value={session.start}
-                  onChange={(e) => setSession(index, { start: e.target.value })}
-                  aria-label={`Start time for session ${index + 1}`}
-                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
-                />
-                <span className="text-[11px] text-moss">to</span>
-                <input
-                  type="time"
-                  value={session.end}
-                  onChange={(e) => setSession(index, { end: e.target.value })}
-                  aria-label={`End time for session ${index + 1}`}
-                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-                  aria-label={`Remove session ${index + 1}`}
-                  className="ml-auto shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <input
-                type="text"
-                value={session.title}
-                onChange={(e) => setSession(index, { title: e.target.value })}
-                aria-label={`Session ${index + 1}`}
-                placeholder="Sabbath School"
-                className="mt-2 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
-              />
-              {/* Facilitators, optional: a session may name who runs it under
-                  the part they play, or name nobody at all. */}
-              <div className="mt-2 space-y-1.5 border-t border-sand-line pt-2">
-                {session.participants.map((person, personIndex) => (
-                  <div key={personIndex} className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      value={person.name}
-                      onChange={(e) => setPerson(index, personIndex, { name: e.target.value })}
-                      aria-label={`Facilitator ${personIndex + 1} for session ${index + 1}`}
-                      placeholder="Name"
-                      className="w-full min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+          {items.map((session, index) => {
+            const open = openSession === index;
+            return (
+              <div key={index} className="overflow-hidden rounded-2xl border border-sand-line bg-white">
+                {/* The session shut: its hours and its name on the outside.
+                    Opening one closes the other, so only one part of the day
+                    is ever unfolded. */}
+                <div className="flex items-center gap-2 p-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setOpenSession(open ? null : index)}
+                    aria-expanded={open}
+                    aria-controls={`session-${index}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 text-moss transition ${open ? "" : "-rotate-90"}`}
+                      aria-hidden="true"
                     />
-                    <input
-                      type="text"
-                      value={person.role}
-                      onChange={(e) => setPerson(index, personIndex, { role: e.target.value })}
-                      aria-label={`Role of facilitator ${personIndex + 1} for session ${index + 1}`}
-                      placeholder="Role"
-                      className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => dropPerson(index, personIndex)}
-                      aria-label={`Remove facilitator ${personIndex + 1} from session ${index + 1}`}
-                      className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSession(index, {
-                      participants: [...session.participants, { name: "", role: "" }],
-                    })
-                  }
-                  className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-ember hover:underline"
-                >
-                  <Plus className="h-3 w-3" /> Add facilitator
-                </button>
-              </div>
+                    <span className="w-28 shrink-0 text-xs font-semibold text-ember">
+                      {sessionRange(session)}
+                    </span>
+                    <span className="min-w-0 truncate text-xs font-semibold text-bark">
+                      {session.title || "Untitled session"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeSession(index)}
+                    aria-label={`Remove session ${index + 1}`}
+                    className="shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
 
-              {/* What happens *inside* the session — the opening song, the
-                  mission reading — each with its own hours and facilitator. */}
-              <div className="mt-2 space-y-2 border-t border-sand-line pt-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-moss">
-                  In this session
-                </p>
-                {session.parts.map((part, partIndex) => (
-                  <div key={partIndex} className="rounded-xl border border-sand-line bg-sand p-2.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="time"
-                        value={part.start}
-                        onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, start: e.target.value }))}
-                        aria-label={`Start time of item ${partIndex + 1} in session ${index + 1}`}
-                        className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
-                      />
-                      <span className="text-[11px] text-moss">to</span>
-                      <input
-                        type="time"
-                        value={part.end}
-                        onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, end: e.target.value }))}
-                        aria-label={`End time of item ${partIndex + 1} in session ${index + 1}`}
-                        className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => dropPart(index, partIndex)}
-                        aria-label={`Remove item ${partIndex + 1} from session ${index + 1}`}
-                        className="ml-auto shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                {open && (
+                  <div
+                    id={`session-${index}`}
+                    className="space-y-3 border-t border-sand-line bg-sand-plate p-3"
+                  >
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="block text-[11px] font-semibold text-moss">Time</span>
+                        <span className="mt-1 flex items-center gap-1.5">
+                          <input
+                            type="time"
+                            value={session.start}
+                            onChange={(e) => setSession(index, { start: e.target.value })}
+                            aria-label={`Start time for session ${index + 1}`}
+                            className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                          />
+                          <span className="text-[11px] text-moss">to</span>
+                          <input
+                            type="time"
+                            value={session.end}
+                            onChange={(e) => setSession(index, { end: e.target.value })}
+                            aria-label={`End time for session ${index + 1}`}
+                            className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                          />
+                        </span>
+                      </label>
+                      <label className="block">
+                        <span className="block text-[11px] font-semibold text-moss">Name</span>
+                        <input
+                          type="text"
+                          value={session.title}
+                          onChange={(e) => setSession(index, { title: e.target.value })}
+                          aria-label={`Name of session ${index + 1}`}
+                          placeholder="Sabbath School"
+                          className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                        />
+                      </label>
                     </div>
-                    <input
-                      type="text"
-                      value={part.title}
-                      onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, title: e.target.value }))}
-                      aria-label={`Item ${partIndex + 1} in session ${index + 1}`}
-                      placeholder="Opening song"
-                      className="mt-2 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
-                    />
-                    <div className="mt-1.5 space-y-1">
-                      {part.participants.map((person, personIndex) => (
-                        <div key={personIndex} className="flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            value={person.name}
-                            onChange={(e) => setPartPerson(index, partIndex, personIndex, { name: e.target.value })}
-                            aria-label={`Facilitator ${personIndex + 1} of item ${partIndex + 1} in session ${index + 1}`}
-                            placeholder="Name"
-                            className="w-full min-w-0 flex-1 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
-                          />
-                          <input
-                            type="text"
-                            value={person.role}
-                            onChange={(e) => setPartPerson(index, partIndex, personIndex, { role: e.target.value })}
-                            aria-label={`Role of facilitator ${personIndex + 1} of item ${partIndex + 1}`}
-                            placeholder="Role"
-                            className="w-24 shrink-0 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              mapPart(index, partIndex, (p) => ({
-                                ...p,
-                                participants: p.participants.filter((_, c) => c !== personIndex),
-                              }))
-                            }
-                            aria-label={`Remove facilitator ${personIndex + 1} from item ${partIndex + 1}`}
-                            className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+
+                    {/* The activities this session holds: each opened by its own
+                        button, and each one entered under the time it runs,
+                        its name and its facilitator. */}
+                    <div className="space-y-2 border-t border-sand-line pt-3">
+                      {session.parts.length > 0 && (
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-moss">
+                          Activities
+                        </p>
+                      )}
+
+                      {session.parts.map((part, partIndex) => (
+                        <div key={partIndex} className="rounded-xl border border-sand-line bg-white p-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
+                              Activity {partIndex + 1}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => dropPart(index, partIndex)}
+                              aria-label={`Remove activity ${partIndex + 1} from session ${index + 1}`}
+                              className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <label className="block">
+                              <span className="block text-[11px] font-semibold text-moss">Time</span>
+                              <span className="mt-1 flex items-center gap-1.5">
+                                <input
+                                  type="time"
+                                  value={part.start}
+                                  onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, start: e.target.value }))}
+                                  aria-label={`Start time of activity ${partIndex + 1} in session ${index + 1}`}
+                                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                                />
+                                <span className="text-[11px] text-moss">to</span>
+                                <input
+                                  type="time"
+                                  value={part.end}
+                                  onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, end: e.target.value }))}
+                                  aria-label={`End time of activity ${partIndex + 1} in session ${index + 1}`}
+                                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
+                                />
+                              </span>
+                            </label>
+                            <label className="block">
+                              <span className="block text-[11px] font-semibold text-moss">Name</span>
+                              <input
+                                type="text"
+                                value={part.title}
+                                onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, title: e.target.value }))}
+                                aria-label={`Activity ${partIndex + 1} in session ${index + 1}`}
+                                placeholder="Opening song"
+                                className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                              />
+                            </label>
+                          </div>
+                          <div className="mt-2 space-y-1.5">
+                            <p className="text-[11px] font-semibold text-moss">Facilitator</p>
+                            {part.participants.map((person, personIndex) => (
+                              <div key={personIndex} className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={person.name}
+                                  onChange={(e) => setPartPerson(index, partIndex, personIndex, { name: e.target.value })}
+                                  aria-label={`Facilitator ${personIndex + 1} of activity ${partIndex + 1} in session ${index + 1}`}
+                                  placeholder="Name"
+                                  className="w-full min-w-0 flex-1 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  value={person.role}
+                                  onChange={(e) => setPartPerson(index, partIndex, personIndex, { role: e.target.value })}
+                                  aria-label={`Role of facilitator ${personIndex + 1} of activity ${partIndex + 1}`}
+                                  placeholder="Role"
+                                  className="w-24 shrink-0 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    mapPart(index, partIndex, (p) => ({
+                                      ...p,
+                                      participants: p.participants.filter((_, c) => c !== personIndex),
+                                    }))
+                                  }
+                                  aria-label={`Remove facilitator ${personIndex + 1} from activity ${partIndex + 1}`}
+                                  className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                mapPart(index, partIndex, (p) => ({
+                                  ...p,
+                                  participants: [...p.participants, { name: "", role: "" }],
+                                }))
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-ember hover:underline"
+                            >
+                              <Plus className="h-3 w-3" /> Add facilitator
+                            </button>
+                          </div>
                         </div>
                       ))}
                       <button
                         type="button"
-                        onClick={() =>
-                          mapPart(index, partIndex, (p) => ({
-                            ...p,
-                            participants: [...p.participants, { name: "", role: "" }],
-                          }))
-                        }
-                        className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-ember hover:underline"
+                        onClick={() => setSession(index, { parts: [...session.parts, emptyPart] })}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember"
                       >
-                        <Plus className="h-3 w-3" /> Add facilitator
+                        <Plus className="h-3 w-3" /> Add activity
                       </button>
                     </div>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setSession(index, { parts: [...session.parts, emptyPart] })}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember"
-                >
-                  <Plus className="h-3 w-3" /> Add to session
-                </button>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           <button
             type="button"
-            onClick={() =>
-              setItems((current) => [
-                ...current,
-                { start: "", end: "", title: "", participants: [], parts: [] },
-              ])
-            }
+            onClick={() => {
+              setItems((current) => [...current, emptySession]);
+              setOpenSession(items.length);
+            }}
             className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember"
           >
             <Plus className="h-3.5 w-3.5" /> Add session
@@ -4149,6 +4153,32 @@ type DeptSubTab =
   | "daily-word"
   | "announcements";
 
+/**
+ * The month a search names, as an index into the year's wall: "mar",
+ * "March", "March 2026", "2026-03" or a bare month number. Null when the
+ * words name no month — the wall's search only ever moves the reader, so a
+ * query that is not a month (an event's title, say) leaves the calendar
+ * where it is rather than filtering the months it cannot match.
+ */
+function monthIndexForQuery(raw: string, year: number): number | null {
+  const query = raw.trim().toLowerCase();
+  if (!query) return null;
+  const iso = query.match(/^(\d{4})-(\d{1,2})/);
+  if (iso) {
+    if (Number(iso[1]) !== year) return null;
+    const month = Number(iso[2]);
+    return month >= 1 && month <= 12 ? month - 1 : null;
+  }
+  const named = monthNames.findIndex((name) => {
+    const month = name.toLowerCase();
+    return query === month || query.startsWith(month) || (month.startsWith(query) && query.length >= 3);
+  });
+  if (named >= 0) return named;
+  const numeric = query.match(/^(\d{1,2})$/);
+  if (numeric && Number(numeric[1]) >= 1 && Number(numeric[1]) <= 12) return Number(numeric[1]) - 1;
+  return null;
+}
+
 function DepartmentDetail({
   department,
   onChanged,
@@ -4277,10 +4307,6 @@ function DepartmentDetail({
   // The calendar reads as the church's does: the list leads (cards on a
   // phone, a table on a desk), and the month wall-grid is one toggle away.
   const [calendarView, setCalendarView] = useState<CalendarView>("table");
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
   const [openGridAction, setOpenGridAction] = useState<string | null>(null);
   // The event whose programme is being typed, the one whose sheet is being
   // read, and which row's menu is open — a programme belongs to an event and
@@ -4305,19 +4331,58 @@ function DepartmentDetail({
     if (openEventMenuKey) document.addEventListener("mousedown", handleDown);
     return () => document.removeEventListener("mousedown", handleDown);
   }, [openEventMenuKey]);
-  const shiftCalendarMonth = (amount: number) =>
-    setCalendarMonth((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
-  // The list's rows and the grid's month both honour the desk's search.
+  // The list's rows honour the desk's search. The wall of months does not:
+  // there the search finds a month to travel to (see `monthIndexForQuery`).
   const filteredEvents = useMemo(() => {
     const needle = eventSearch.trim().toLowerCase();
     return events.filter((event) =>
       `${event.title} ${event.date} ${event.location || ""} ${event.notes || ""}`.toLowerCase().includes(needle),
     );
   }, [events, eventSearch]);
-  const monthEvents = useMemo(() => {
-    const prefix = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, "0")}-`;
-    return filteredEvents.filter((event) => (event.date ?? "").startsWith(prefix));
-  }, [filteredEvents, calendarMonth]);
+
+  // The wall is this year's own — twelve months, one under the other — so
+  // scrolling down walks the months forward and up walks them back. The list
+  // beside it still reads every event on file, whenever it was filed.
+  const calendarYear = new Date().getFullYear();
+  const eventsByMonth = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, index) => {
+        const prefix = `${calendarYear}-${String(index + 1).padStart(2, "0")}-`;
+        return events.filter((event) => (event.date ?? "").startsWith(prefix));
+      }),
+    [events, calendarYear],
+  );
+  const yearEvents = useMemo(() => eventsByMonth.flat(), [eventsByMonth]);
+
+  // The card is the calendar's own window: the months are sections inside it,
+  // and this is the box that moves when the reader scrolls or a month is named.
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const monthRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const scrollToMonth = useCallback((index: number, behavior: ScrollBehavior) => {
+    const box = calendarScrollRef.current;
+    const section = monthRefs.current[index];
+    if (!box || !section) return;
+    box.scrollTo({
+      top: box.scrollTop + section.getBoundingClientRect().top - box.getBoundingClientRect().top,
+      behavior,
+    });
+  }, []);
+
+  // Opening the wall lands on the month the church is in, so the year reads
+  // outward from today rather than starting at January every time.
+  useEffect(() => {
+    if (calendarView !== "calendar" || loadingEvents) return;
+    const now = new Date();
+    scrollToMonth(now.getFullYear() === calendarYear ? now.getMonth() : 0, "auto");
+  }, [calendarView, loadingEvents, calendarYear, scrollToMonth]);
+
+  // On the wall, the search travels rather than filters: naming a month
+  // scrolls that month into view.
+  useEffect(() => {
+    if (calendarView !== "calendar" || loadingEvents) return;
+    const target = monthIndexForQuery(eventSearch, calendarYear);
+    if (target !== null) scrollToMonth(target, "smooth");
+  }, [calendarView, eventSearch, loadingEvents, calendarYear, scrollToMonth]);
   const [choirSearch, setChoirSearch] = useState("");
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
@@ -4373,14 +4438,24 @@ function DepartmentDetail({
         </div>
       );
     } else if (subTab === "calendar") {
+      // The view switches ride this same row, immediately before the search:
+      // the heading's right edge is where a desk's controls live, and these
+      // two answer one another — the search reads a month when the wall of
+      // months is open, and the rows when the list is.
       setHeaderRightAction(
-        <input
-          type="text"
-          value={eventSearch}
-          onChange={(e) => setEventSearch(e.target.value)}
-          placeholder="Search the calendar…"
-          className={inputCls}
-        />
+        <div className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
+          <CalendarViewToggle view={calendarView} onChange={setCalendarView} />
+          <input
+            type="text"
+            value={eventSearch}
+            onChange={(e) => setEventSearch(e.target.value)}
+            placeholder={calendarView === "calendar" ? "Search a month…" : "Search the calendar…"}
+            aria-label={
+              calendarView === "calendar" ? "Search the calendar for a month" : "Search the calendar"
+            }
+            className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
+          />
+        </div>
       );
     } else if (subTab === "choir") {
       // The church choir's roll searches from the same place every other
@@ -4439,6 +4514,7 @@ function DepartmentDetail({
     subTab,
     rollSearch,
     eventSearch,
+    calendarView,
     memberFilter,
     joinRequests,
     choirSearch,
@@ -4528,6 +4604,57 @@ function DepartmentDetail({
     }
     setSubTab(key as DeptSubTab);
   }, []);
+  // The eldership's strip is one list at every width and every door (see
+  // `eldershipViews`): the desk's roll and calendar are views of this desk,
+  // so a press takes them in place, while the rest are console pages, so a
+  // press walks to the page that holds them. The phone's map and the rail
+  // therefore meet the same eight chips, in the same order.
+  const eldershipStripItems = useMemo(
+    () =>
+      eldershipViews.map((view) => ({
+        key: view.key,
+        label: view.label,
+        short: view.short,
+        icon: view.icon,
+        help: view.description,
+      })),
+    []
+  );
+  // Which chip the desk underlines while it stands on one of its own views:
+  // Moments, Accounts and Announcements are the pages the console holds under
+  // those same names, so the desk reads the same chip it would there.
+  const eldershipChip = useMemo(() => {
+    switch (subTab) {
+      case "calendar":
+        return "calendar";
+      case "moments":
+        return "moments";
+      case "accounts":
+        return "funding";
+      case "announcements":
+        return "announcements";
+      default:
+        return "members";
+    }
+  }, [subTab]);
+  const handleEldershipChip = useCallback(
+    (key: string) => {
+      const view = eldershipViews.find((candidate) => candidate.key === key);
+      if (!view) return;
+      if (key === "members" || key === "calendar") {
+        // A view of this desk. On the map the address bar names it too, so a
+        // reload lands where the reader stood; on the console the desk is one
+        // department of the directory, so the press walks to it instead.
+        if (!onConsole) {
+          setSubTab(key as DeptSubTab);
+          router.replace(view.href, { scroll: false });
+          return;
+        }
+      }
+      router.push(view.href);
+    },
+    [onConsole, router]
+  );
   // On a phone the area names itself above the strip it answers to: the
   // shell's heading band carries the area's name — with the way back out of
   // it on its own line, where the rail that opened the desk is out of sight —
@@ -4601,6 +4728,21 @@ function DepartmentDetail({
       );
       return () => setCustomToggles(null);
     }
+    // The eldership reads one strip wherever it is opened — the rail's row on
+    // a desk, the Eldership card in a hand — so this desk draws the same
+    // eight pages the console's strip names, rather than a second list of its
+    // own. Eight chips sit as four a row on a phone: two level rows.
+    if (department.code === "eldership") {
+      setCustomToggles(
+        <SubNav
+          label="Eldership pages"
+          items={eldershipStripItems}
+          value={eldershipChip}
+          onChange={handleEldershipChip}
+        />
+      );
+      return () => setCustomToggles(null);
+    }
     setCustomToggles(
       <SubNav label="Department views" items={stripItems} value={activeStripKey} onChange={handleStripChange} />
     );
@@ -4614,6 +4756,10 @@ function DepartmentDetail({
     stripItems,
     activeStripKey,
     handleStripChange,
+    department.code,
+    eldershipStripItems,
+    eldershipChip,
+    handleEldershipChip,
   ]);
 
   const loadRoll = useCallback(() => {
@@ -5398,43 +5544,14 @@ function DepartmentDetail({
         />
       )}
       {subTab === "calendar" && (
-        <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-sm font-bold text-bark">Department calendar</h3>
-            <div className="flex items-center gap-2">
-              <CalendarViewToggle view={calendarView} onChange={setCalendarView} />
-              {calendarView === "calendar" && (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => shiftCalendarMonth(-1)}
-                    aria-label="Previous month"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
-                  >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <span className="min-w-24 text-center text-xs font-semibold text-bark">
-                    {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => shiftCalendarMonth(1)}
-                    aria-label="Next month"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sand-line bg-white text-bark hover:border-ember hover:text-ember"
-                  >
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowAddEvent(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-              >
-                <CalendarDays className="h-3.5 w-3.5" /> Add event
-              </button>
-            </div>
-          </div>
+        // The card is the calendar's own window: the rows and months travel
+        // inside it, while the buttons at its foot stay in reach — the desk
+        // reads a year without hunting for its own controls again.
+        <div
+          className="desk-calendar custom-table-scrollbar max-h-[calc(100dvh_-_18rem)] min-h-[16rem] overflow-y-auto overscroll-contain rounded-2xl border border-sand-line bg-white p-5 pb-0 shadow-sm"
+          ref={calendarScrollRef}
+        >
+          <h3 className="text-sm font-bold text-bark">Department calendar</h3>
           {loadingEvents ? (
             <p className="py-8 text-center text-xs text-moss">Loading the calendar…</p>
           ) : events.length === 0 ? (
@@ -5442,32 +5559,44 @@ function DepartmentDetail({
               Nothing on the calendar yet. Events added here are stored and can be published to the congregation.
             </p>
           ) : calendarView === "calendar" ? (
-            <div className="mt-3">
-              <MonthGrid
-                year={calendarMonth.getFullYear()}
-                month={calendarMonth.getMonth()}
-                events={monthEvents}
-                openActions={openGridAction}
-                onToggleActions={(key) => setOpenGridAction(openGridAction === key ? null : key)}
-                onCloseActions={() => setOpenGridAction(null)}
-                renderMenu={(event, onClose) => (
-                  <div>
-                    <p className="px-3 py-2 text-sm font-semibold text-bark">{event.title}</p>
-                    <p className="px-3 pb-2 text-xs text-moss">
-                      {dayFirst(event.date)}
-                      {event.time ? ` · ${clockTime(event.time)}` : ""}
-                      {event.location ? ` · ${event.location}` : ""}
-                    </p>
-                    <EventProgramMenu
-                      event={event}
-                      onView={() => { onClose(); setProgramViewer(event); }}
-                      onCreate={() => { onClose(); setProgramFor(event); }}
-                      onUpload={() => { onClose(); chooseProgramFile(event); }}
-                      onRemove={() => { onClose(); removeEvent(event); }}
-                    />
-                  </div>
-                )}
-              />
+            // The year as one wall: every month of it, one under the other.
+            // There are no arrows here — the wall itself is scrolled, and the
+            // search above names a month to land on.
+            <div className="mt-3 space-y-4">
+              {Array.from({ length: 12 }, (_, index) => (
+                <div
+                  key={index}
+                  ref={(node) => {
+                    monthRefs.current[index] = node;
+                  }}
+                >
+                  <MonthGrid
+                    year={calendarYear}
+                    month={index}
+                    events={eventsByMonth[index]}
+                    openActions={openGridAction}
+                    onToggleActions={(key) => setOpenGridAction(openGridAction === key ? null : key)}
+                    onCloseActions={() => setOpenGridAction(null)}
+                    renderMenu={(event, onClose) => (
+                      <div>
+                        <p className="px-3 py-2 text-sm font-semibold text-bark">{event.title}</p>
+                        <p className="px-3 pb-2 text-xs text-moss">
+                          {dayFirst(event.date)}
+                          {event.time ? ` · ${clockTime(event.time)}` : ""}
+                          {event.location ? ` · ${event.location}` : ""}
+                        </p>
+                        <EventProgramMenu
+                          event={event}
+                          onView={() => { onClose(); setProgramViewer(event); }}
+                          onCreate={() => { onClose(); setProgramFor(event); }}
+                          onUpload={() => { onClose(); chooseProgramFile(event); }}
+                          onRemove={() => { onClose(); removeEvent(event); }}
+                        />
+                      </div>
+                    )}
+                  />
+                </div>
+              ))}
             </div>
           ) : (
             <>
@@ -5597,6 +5726,32 @@ function DepartmentDetail({
               )}
             </>
           )}
+          {/* The foot keeps still while the calendar moves behind it: the count
+              on the left, and the two things the desk does with a calendar on
+              the right — file one, or print what is here. */}
+          <div className="sticky bottom-0 z-10 -mx-5 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-5 pb-5 pt-3 print:hidden">
+            <p className="text-xs text-moss">
+              {calendarView === "calendar"
+                ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
+                : `${filteredEvents.length} ${filteredEvents.length === 1 ? "event" : "events"}`}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddEvent(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+              >
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Add event
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+              >
+                <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print Calendar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

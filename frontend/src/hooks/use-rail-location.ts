@@ -9,9 +9,12 @@ import { railHere, type RailEntry, type RailHere, type RailQuery } from "@/confi
 function readRailQuery(): RailQuery {
   // Prerendered pages are built without a location; the shell draws no chrome
   // until the token is known, so this empty answer never reaches a screen.
-  if (typeof window === "undefined") return { tab: null, dept: null };
+  if (typeof window === "undefined") return { tab: null, dept: null, search: "" };
   const params = new URLSearchParams(window.location.search);
-  return { tab: params.get("tab"), dept: params.get("dept") };
+  // The whole query rides along for the rows that name their place in it — a
+  // desk's `?area=` and `?view=` — so the rail lights the row the reader
+  // actually stands on.
+  return { tab: params.get("tab"), dept: params.get("dept"), search: window.location.search };
 }
 
 /**

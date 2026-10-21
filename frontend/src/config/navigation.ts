@@ -725,57 +725,125 @@ export const clerkshipItems: RailRow[] = [
 ];
 
 /**
- * Eldership — the elders' desk: the church's programmes, the Leadership desk
- * that appoints the church's areas, the church's accounts the elders answer
- * for, and the requests members send.
+ * The eldership's pages, written once — the one list its strip draws.
+ *
+ * The rail's Eldership row opens the desk itself, and so does a phone's
+ * Eldership card; but the desk's own views and the console's pages used to be
+ * two different strips, so the same desk named a different set of pages in a
+ * hand and on a screen. These eight are the church's desk either way: the
+ * elders' roll and the church's calendar, which the desk keeps, and the
+ * leadership register, the board, the mailbox, the asks, the wall and the
+ * accounts, which the console holds. Eight chips sit four a row on a phone —
+ * two level rows — and as one line on a wide screen, at every door.
  *
  * Church Settings moved to Administration, where the roster and the roles
  * stand with it; the meetings' minutes and the transfers are the clerk's own
- * desk beside this one (Clerkship). Elders and clerks still share every
- * remaining row here.
+ * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
-export const eldershipItems: RailRow[] = [
-  // Assigning the church's leaders rides the Eldership strip: appointing a
-  // leader is work the offices do together, so it is a page of their desk
-  // rather than a row of its own.
-  officeTab("leaders", "Church Leadership", Crown, {
-    roles: ELDERSHIP_ROLES,
-    // The one-worder rides a phone; the desk's full name rides everywhere else.
+export const eldershipViews: {
+  key: "members" | "leaders" | "calendar" | "announcements" | "emails" | "requests" | "moments" | "funding";
+  label: string;
+  short?: string;
+  icon: LucideIcon;
+  href: string;
+  description: string;
+}[] = [
+  // The desk's roll: everyone the elders answer for, with the asks to join it.
+  {
+    key: "members",
+    label: "All Members",
+    short: "Members",
+    icon: Users,
+    href: "/my-areas?area=eldership&view=members",
+    description: "The elders' roll, with each member's area and the asks to join it.",
+  },
+  // Assigning the church's leaders: appointing a leader is work the offices do
+  // together, so it is a page of their desk rather than a row of its own.
+  {
+    key: "leaders",
+    label: "Church Leadership",
     short: "Leadership",
+    icon: Crown,
+    href: "/administration?tab=leaders",
     description: "The church's offices, ministries and departments, with each leader and assistant.",
-  }),
-  officeTab("announcements", "Announcements", Megaphone, {
-    roles: ELDERSHIP_ROLES,
-    // The desk's own name rides every width: it is the church's board, and a
-    // phone reads the five toggles on two level rows, which the word fits.
+  },
+  // The church's days as the desk keeps them.
+  {
+    key: "calendar",
+    label: "Event Calendar",
+    short: "Events",
+    icon: Calendar,
+    href: "/my-areas?area=eldership&view=calendar",
+    description: "The church's calendar, with the gatherings the elders keep.",
+  },
+  {
+    key: "announcements",
+    label: "Announcements",
+    icon: Megaphone,
+    href: "/administration?tab=announcements",
     description: "Notices and updates shared with the church family.",
-  }),
+  },
   // The church's own mailbox. Announcements are what the church says to
   // everyone; this desk is what arrives for somebody to answer — so it sits
   // beside the broadcast rather than behind it, and sends as info@ only.
-  officeTab("emails", "Emails", Mail, {
-    roles: ELDERSHIP_ROLES,
+  {
+    key: "emails",
+    label: "Emails",
     short: "Emails",
+    icon: Mail,
+    href: "/administration?tab=emails",
     description: "Letters arriving at info@sdalomalinda.or.ke, with replies written from the desk.",
-  }),
-  officeTab("requests", "Requests", HeartHandshake, {
-    roles: REQUESTS_DESK_ROLES,
+  },
+  {
+    key: "requests",
+    label: "Requests",
+    icon: HeartHandshake,
+    href: "/administration?tab=requests",
     description: "The asks the church has received.",
-  }),
-  officeTab("eldership-moments", "Moments", Images, {
-    roles: ELDERSHIP_ROLES,
+  },
+  {
+    key: "moments",
+    label: "Moments",
     short: "Moments",
+    icon: Images,
+    href: "/administration?tab=eldership-moments",
     description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
-  }),
+  },
   // The elders answer for the church's money the same way the deaconate
   // does: the desk reads every treasury account — LCB and Msamaria Mwema
   // among them — with the movements on each.
-  officeTab("eldership-funding", "Funding & Accounts", Wallet, {
-    roles: ELDERSHIP_ROLES,
+  {
+    key: "funding",
+    label: "Funding & Accounts",
     short: "Funding",
+    icon: Wallet,
+    href: "/administration?tab=eldership-funding",
     description: "The church's treasury accounts, with balances and movements.",
-  }),
+  },
 ];
+
+/**
+ * The same eight as rail rows, so the rail, the shell's strip and the desk's
+ * own strip can never name a different set.
+ *
+ * A console page answers on its `?tab=`, which is how the console's own pages
+ * are told apart; a desk view rides its address, which is what keeps the two
+ * devices on the same list rather than two.
+ */
+export const eldershipItems: RailRow[] = eldershipViews.map((view) => ({
+  href: view.href,
+  label: view.label,
+  short: view.short,
+  icon: view.icon,
+  description: view.description,
+  roles: view.key === "requests" ? REQUESTS_DESK_ROLES : ELDERSHIP_ROLES,
+  // The tab a console page answers on is the one its address carries —
+  // "Moments" rides `eldership-moments`, "Funding" `eldership-funding` — so
+  // the rail lights the desk the reader is standing on.
+  ...(view.href.includes("?tab=")
+    ? { tab: new URLSearchParams(view.href.split("?")[1]).get("tab") ?? view.key }
+    : {}),
+}));
 
 /**
  * The deaconate's own pages, written once: the desk is read in two places, and
@@ -1424,7 +1492,12 @@ export function railFor(
 export type RailHere = { group: string | null; href: string | null };
 
 /** The query values that tell two pages of one route apart. */
-export type RailQuery = { tab?: string | null; dept?: string | null };
+export type RailQuery = {
+  tab?: string | null;
+  dept?: string | null;
+  /** The whole query, for a row whose address names its place — `?area=`. */
+  search?: string;
+};
 
 /**
  * Retired spellings a `?dept=` value may carry: the rail once named AMM's
@@ -1479,7 +1552,21 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
       // says so: the directory rows point at `?tab=leaders` like every other
       // console page, and scoring them by bare path would light them on every
       // page of the console. (The bare-path branch below is for plain pages.)
-      return /\?/.test(item.href) ? -1 : 100_000 + item.href.length;
+      if (/\?/.test(item.href)) {
+        // A desk opened through the ministry map names its place in the query —
+        // the eldership's roll and calendar are two views of one area — so the
+        // params the row carries decide, and only on the path they name. Every
+        // other query-ful href (the console's `?tab=` pages) is settled above.
+        if (/[?&]area=/.test(item.href)) {
+          const wanted = new URLSearchParams(item.href.split("?")[1]);
+          const current = new URLSearchParams(query?.search ?? "");
+          if ([...wanted.entries()].every(([key, value]) => current.get(key) === value)) {
+            return 60_000 + item.href.length;
+          }
+        }
+        return -1;
+      }
+      return 100_000 + item.href.length;
     }
     if (/\?/.test(item.href)) {
       // A query-ful href never claims a path it is not exactly on.

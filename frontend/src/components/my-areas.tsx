@@ -482,7 +482,15 @@ export function MyAreas() {
                 <DeaconateManager initialTab={deaconateView} embedded onBack={showMap} />
               )
             ) : (
-              <DepartmentHub key={openArea.code} initialDept={openArea.code} onBack={showMap} />
+              <DepartmentHub
+                key={openArea.code}
+                initialDept={openArea.code}
+                // The address bar names the view a desk's strip pressed — the
+                // eldership's Event Calendar is one — so the desk opens on the
+                // view the link named rather than always on its roll.
+                initialTab={openView === "calendar" ? "calendar" : "members"}
+                onBack={showMap}
+              />
             )}
           </div>
         </div>
