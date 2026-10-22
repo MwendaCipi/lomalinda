@@ -346,6 +346,12 @@ function AdministrationContent() {
     // desks rather than forcing them to the treasury ledger on mobile.
     const isDedicatedTreasurer = userRoles.includes("treasurer") && !isClerk && !isElder && !isAdmin;
     const opensTreasuryLedger = !onDesk && isDedicatedTreasurer;
+    // Whoever lands on the console proper opens on its **first** toggle —
+    // User Management — so the desk never opens on a page further down the
+    // strip than where it begins. The two branches that name another desk's
+    // own page (the eldership's announcements, the treasury's accounts) stay
+    // as they are: those desks draw their own strip, and its first toggle is
+    // theirs to choose.
     const fallback = opensTreasuryLedger
       ? "treasury"
       : onDesk
@@ -355,12 +361,12 @@ function AdministrationContent() {
             ? "announcements"
             : isFinance
               ? "accounts"
-              : "settings"
+              : "users"
         : isClerk || isElder || isAdmin
           ? "users"
           : isDedicatedTreasurer
             ? "treasury"
-            : "settings";
+            : "users";
     // Until the gate answers, the hand reads the overview's cards — the landing
     // a phone gets — and the ledger under it takes over once access is granted.
     setDefaultTab(fallback === "treasury" ? "overview" : fallback);

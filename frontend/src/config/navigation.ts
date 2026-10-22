@@ -411,7 +411,11 @@ export const destinations = {
     // The account menu opens the console itself — role-specific desks (such
     // as Clerkship) are reached from the rail, so this must not fall into the
     // bare route's role-based landing redirect.
-    href: "/administration?tab=roles",
+    //
+    // It opens on the console's **first** toggle, User Management, so the door
+    // always lands where the Administration strip begins. Naming a later page
+    // here made the strip open with a toggle that was not the one lit first.
+    href: "/administration?tab=users",
     label: "Administration",
     short: "Admin",
     description: "The church's members and the roles they hold, and the church's own settings.",
