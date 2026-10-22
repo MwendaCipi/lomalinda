@@ -5546,7 +5546,7 @@ function DepartmentDetail({
                   <button
                     type="button"
                     onClick={() => setShowContactLeader(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl flex-1 sm:flex-none inline-flex items-center justify-center border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
                     <Phone className="h-3.5 w-3.5" /> Contact leader
                   </button>
@@ -5565,7 +5565,7 @@ function DepartmentDetail({
                 <button
                   type="button"
                   onClick={() => setShowContactLeader(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl flex-1 sm:flex-none inline-flex items-center justify-center border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                 >
                   <Phone className="h-3.5 w-3.5" /> Contact leader
                 </button>
