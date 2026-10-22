@@ -1502,7 +1502,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
               >
                 <Plus className="h-4 w-4" />
-                Add Schedule
+                <span className="sm:hidden">Schedule</span>
+                <span className="hidden sm:inline">Add Schedule</span>
               </button>
             </div>
           </div>
