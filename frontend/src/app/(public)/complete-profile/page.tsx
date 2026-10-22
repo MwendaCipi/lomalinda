@@ -11,7 +11,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 const GIFTS_OPTIONS = [
   "Preaching",
-  "Ushering",
   "Children Teacher",
   "Lesson Facilitation",
   "Choir Teaching",
@@ -255,7 +254,11 @@ export default function CompleteProfilePage() {
           }),
         );
         const depts = rows.filter((r) => r.group === "department");
-        const mins = rows.filter((r) => r.group === "ministry");
+        // Groups that are not ministries the member servant-picks — e.g.
+        // pastoral named groups — stay off the roster picker.
+        const mins = rows
+          .filter((r) => r.group === "ministry")
+          .filter((r) => r.label.trim().toLowerCase() !== "young couples" && r.label.trim().toLowerCase() !== "single parents");
         setDepartmentOptions(depts);
         setMinistryOptions(mins);
 
@@ -440,7 +443,7 @@ export default function CompleteProfilePage() {
             onChange={setDepartmentRef}
             placeholder="-- Select Department --"
             allowUnassigned
-            helpText="The department you belong to (e.g. Beginners, Primary, Junior, Teens, Young Adults)."
+            helpText="The department you belong to (e.g. Beginners, Primary, Junior, Teens)."
           />
 
           <CheckboxCombobox
