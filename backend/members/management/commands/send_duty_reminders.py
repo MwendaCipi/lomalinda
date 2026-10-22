@@ -21,7 +21,7 @@ from contextlib import nullcontext
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from ...duty import lines_due, reminder_recipients, send_duty_reminder
+from ...duty import duty_title, lines_due, reminder_recipients, send_duty_reminder
 
 
 class Command(BaseCommand):
@@ -75,7 +75,7 @@ class Command(BaseCommand):
 
         for entry in lines:
             summary['lines'] += 1
-            title = entry.title or entry.duty_type or 'Duty'
+            title = duty_title(entry)
             recipients = reminder_recipients(entry)
             if dry_run:
                 self.stdout.write(

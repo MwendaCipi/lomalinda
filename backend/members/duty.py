@@ -52,14 +52,34 @@ def rota_link(entry) -> str:
     return DUTY_ROTA_LINK
 
 
+#: What a line of each desk's rota is called when the desk names none — the
+#: same text that desk's own save form writes into the title field, so a line
+#: reads the same on its card, in a share and in the message an officer
+#: receives. Without this an unnamed line reached the officer as a bare
+#: "Duty", which says nothing about the rota they are being called to.
+DESK_DEFAULT_TITLES = {
+    DutyRota.DESK_PULPIT: 'Sabbath Pulpit Team',
+    DutyRota.DESK_DEACONATE: 'Sabbath Duty Rota',
+}
+
+
+def default_rota_title(desk: str) -> str:
+    """What a line of this desk's rota is called when the desk named none."""
+    return DESK_DEFAULT_TITLES.get(desk or '', 'Sabbath Duty Rota')
+
+
 def duty_title(entry) -> str:
     """What a line is called on paper and on a phone.
 
     The desk names a duty more often than it does not, but the title is
-    optional: a line without one reads by the part being served, and a bare
-    date still reads as a duty.
+    optional: a line without one reads by the part being served, and failing
+    that by the rota it sits on rather than by nothing at all.
     """
-    return (entry.title or entry.duty_type or 'Duty').strip()
+    return (
+        entry.title
+        or entry.duty_type
+        or default_rota_title(getattr(entry, 'desk', ''))
+    ).strip()
 
 
 def duty_when(entry) -> str:

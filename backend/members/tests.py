@@ -5651,6 +5651,30 @@ class DutyRotaAPITests(APITestCase):
         self.assertEqual(listed.data[0]['title'], 'Main Sanctuary Ushering Team A')
         self.assertEqual(DutyRota.objects.count(), 1)
 
+    def test_a_blank_title_saves_and_the_export_still_names_the_rota(self):
+        """The title is optional, so a line the desk leaves unnamed is saved
+        blank — and every surface that prints it must still have a name to
+        print. That name is the rota's own default, never a bare "Duty".
+        """
+        from .duty import default_rota_title
+        from .pdf_generator import generate_duty_rota_pdf
+        from .serializers import DutyRotaSerializer
+
+        self.client.force_authenticate(self.head_deaconess)
+        created = self._schedule(title='', duty_type='')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['title'], '')
+
+        entries = DutyRotaSerializer(DutyRota.objects.all(), many=True).data
+        pdf_bytes = generate_duty_rota_pdf(church_name='Test Church', rota_entries=entries)
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
+        # Each desk's lines fall back to that desk's own name.
+        self.assertEqual(default_rota_title('deaconate'), 'Sabbath Duty Rota')
+        self.assertEqual(default_rota_title('pulpit'), 'Sabbath Pulpit Team')
+        # A line written before the desk field existed still reads as a rota.
+        self.assertEqual(default_rota_title(''), 'Sabbath Duty Rota')
+
     def test_the_rota_reads_earliest_duty_first(self):
         self.client.force_authenticate(self.head_deaconess)
 
@@ -6126,6 +6150,31 @@ class DutyReminderCronTests(TestCase):
         # The typed name has nobody behind it; only the officer was rung.
         self.assertEqual(ChurchNotification.objects.count(), 1)
         self.assertEqual(ChurchNotification.objects.filter(user=self.desk).count(), 0)
+
+    def test_an_unnamed_line_reads_by_its_rota_and_not_by_a_bare_duty(self):
+        """The title is optional, so a line the desk left unnamed must not
+        reach the officer as a bare "Duty". It falls back to the same text the
+        desk's own save form writes into the title field — "Sabbath Duty
+        Rota" — and the pulpit team's lines fall back to theirs.
+        """
+        from .duty import duty_title
+
+        unnamed = self._line(title='')
+        self.assertEqual(duty_title(unnamed), 'Sabbath Duty Rota')
+
+        unnamed.desk = DutyRota.DESK_PULPIT
+        self.assertEqual(duty_title(unnamed), 'Sabbath Pulpit Team')
+
+        # A part the desk recorded still names the line before the default:
+        # the fallback replaces a missing name, never a recorded one.
+        unnamed.duty_type = 'Communion'
+        self.assertEqual(duty_title(unnamed), 'Communion')
+
+    def test_a_named_line_keeps_the_name_the_desk_gave_it(self):
+        """The default only fills a gap — it never overwrites a title."""
+        from .duty import duty_title
+
+        self.assertEqual(duty_title(self._line(title='Sanctuary care')), 'Sanctuary care')
 
     def test_a_second_run_rings_nobody_twice(self):
         self._line()

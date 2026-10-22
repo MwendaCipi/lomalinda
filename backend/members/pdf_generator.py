@@ -2046,6 +2046,10 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
 def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=None, search=None) -> bytes:
     """Generate a clean, printable duty rota schedule PDF aggregated for a period."""
+    # Imported here rather than at the top: this module is loaded only when a
+    # PDF is asked for, and the rota's own naming lives with the rota.
+    from .duty import default_rota_title
+
     church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -2109,7 +2113,10 @@ def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=
             date_col = f"<b>{date_str}</b><br/><font color='#617068' size='8'>{shift_str}</font>"
 
             duty_type = escape(str(item.get("duty_type") or ""))
-            title = escape(str(item.get("title") or "Duty"))
+            # A line the desk left unnamed reads by its rota, not by a bare
+            # "Duty". The part recorded stays on its own line below, so the
+            # default fills the gap without repeating it.
+            title = escape(str(item.get("title") or default_rota_title(item.get("desk"))))
             duty_col = f"<b>{title}</b>"
             if duty_type:
                 duty_col += f"<br/><font color='#b36b3c' size='8'><b>{duty_type}</b></font>"
