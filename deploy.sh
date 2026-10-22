@@ -91,11 +91,11 @@ crontab -l 2>/dev/null | grep -F 'send_pledge_reminders' > /dev/null \
   || fail "the pledge-reminder cron entry could not be installed."
 
 echo "⏰ Ensuring the deaconate's duty-reminder cron is installed..."
-# The rota's officers are reminded at 4:00 pm EAT the day before the duty they serve; the
+# The rota's officers are reminded at 4:00 pm EAT (TZ pins this line only; the server runs UTC) the day before the duty they serve; the
 # command stamps each line as it rings it, so a re-run a minute later sends
 # nothing. Idempotent in the same shape as the pledge line: rewritten, never
 # duplicated.
-DUTY_CRON="0 16 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send_duty_reminders >> /var/log/loma_linda_duty_reminders.log 2>&1"
+DUTY_CRON="0 16 * * * TZ=Africa/Nairobi cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send_duty_reminders >> /var/log/loma_linda_duty_reminders.log 2>&1"
 ( crontab -l 2>/dev/null | grep -vF 'send_duty_reminders' || true; echo "$DUTY_CRON" ) | crontab -
 crontab -l 2>/dev/null | grep -F 'send_duty_reminders' > /dev/null \
   || fail "the duty-reminder cron entry could not be installed."
