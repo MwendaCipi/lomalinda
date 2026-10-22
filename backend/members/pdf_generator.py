@@ -2044,6 +2044,157 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     return buffer.getvalue()
 
 
+def _spoken_hour(clk):
+    """A stored ``HH:MM`` hour spoken as a programme says it — ``8:15 PM``."""
+    match = re.match(r'^(\d{1,2}):(\d{2})$', str(clk or '').strip())
+    if not match:
+        return ''
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if hour > 23 or minute > 59:
+        return ''
+    hour12 = hour % 12 or 12
+    return f'{hour12}:{minute:02d} ' + ('PM' if hour >= 12 else 'AM')
+
+
+def _spoken_range(start, end):
+    """Two hours the way a programme prints them: the meridiem said once when
+    both ends of the run sit in the same half of the day — ``8:00 – 10:00 AM``.
+    An hourless entry prints as the one hour it carries, or nothing at all."""
+    first, second = _spoken_hour(start), _spoken_hour(end)
+    if first and second:
+        if first[-2:] == second[-2:]:
+            return f'{first[:-3]} – {second}'
+        return f'{first} – {second}'
+    return first or second
+
+
+def generate_event_program_pdf(event, department_name: str = '') -> bytes:
+    """One calendar event's programme, printed on the church's own paper.
+
+    The rows the desk typed onto the calendar — the sessions of the day, the
+    activities inside each one, and who facilitates them — laid out as the
+    sheet a member is handed at the door: the church's letterhead above, the
+    day and the ministry under the title, and the order of service running
+    down the page with its hours spoken the sheet's way and its facilitators
+    named under what they carry.
+
+    An uploaded file cannot be folded into a typed sheet's paper, so this
+    prints what was typed; a file rides on the event beside it and is opened
+    as itself.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=2.0 * cm,
+        bottomMargin=2.2 * cm,
+    )
+
+    st = get_pdf_styles()
+    time_style = ParagraphStyle('ProgramTime', parent=st['cell'], alignment=2)  # right-aligned hours
+    story = []
+
+    story.append(Paragraph(escape(str(event.title or 'Program')), st['title_big']))
+
+    meta_bits = []
+    date_text = str(event.event_date)[:10]
+    try:
+        parsed_day = datetime.strptime(date_text, '%Y-%m-%d')
+        meta_bits.append(parsed_day.strftime('%A'))
+        meta_bits.append(parsed_day.strftime('%d/%m/%Y'))
+    except ValueError:
+        if date_text:
+            meta_bits.append(date_text)
+    if department_name:
+        meta_bits.append(department_name)
+    if event.unit:
+        meta_bits.append(f'Unit: {event.unit}')
+    if event.lead:
+        meta_bits.append(f'Led by {event.lead}')
+    if event.mode == 'virtual':
+        meta_bits.append('Virtual')
+    elif event.location:
+        meta_bits.append(event.location)
+    if meta_bits:
+        story.append(Paragraph(escape(' · '.join(meta_bits)), st['meta']))
+    story.append(Spacer(1, 6))
+    story.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#26352f')))
+    story.append(Spacer(1, 10))
+
+    sessions = event.program_items if isinstance(event.program_items, list) else []
+
+    def facilitator_lines(people):
+        lines = []
+        for person in (people or [])[:20]:
+            if isinstance(person, dict) and str(person.get('name') or '').strip():
+                name = escape(str(person['name']).strip())
+                role = escape(str(person.get('role') or '').strip())
+                lines.append(f'\u2022 <b>{name}</b>' + (f' \u00b7 {role}' if role else ''))
+        return '<br/>'.join(lines)
+
+    rows = []
+    for session in sessions[:60]:
+        if not isinstance(session, dict):
+            continue
+        title = str(session.get('title') or '').strip()
+        people = facilitator_lines(session.get('participants'))
+        activities = []
+        for part in (session.get('parts') or [])[:40]:
+            if not isinstance(part, dict):
+                continue
+            part_title = str(part.get('title') or '').strip()
+            part_people = facilitator_lines(part.get('participants'))
+            if not part_title and not part_people:
+                continue
+            part_content = f"<b>{escape(part_title) if part_title else '\u2014'}</b>"
+            if part_people:
+                part_content += f"<br/><font color='#617068' size='8'>{part_people}</font>"
+            activities.append((_spoken_range(part.get('start'), part.get('end')), part_content))
+        if not title and not people and not activities:
+            continue
+        content = f"<font size='10.5'><b>{escape(title) if title else '\u2014'}</b></font>"
+        if people:
+            content += f"<br/><font color='#617068' size='8'>{people}</font>"
+        rows.append((_spoken_range(session.get('start'), session.get('end')), content, 0))
+        rows.extend((hours, part_content, 1) for hours, part_content in activities)
+
+    if not rows:
+        story.append(Paragraph('The order of service has not been typed yet.', st['cell']))
+    else:
+        table_data = []
+        table_style = [
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('LINEBELOW', (0, 0), (-1, -1), 0.4, colors.HexColor('#dfdbd1')),
+        ]
+        for row_index, (hours, content, indent) in enumerate(rows):
+            table_data.append([
+                Paragraph(
+                    f"<font color='#b36b3c'><b>{escape(hours)}</b></font>" if hours else '',
+                    time_style,
+                ),
+                Paragraph(content, st['cell']),
+            ])
+            if indent:
+                # An activity hangs under its session the sheet indents it:
+                # pushed right, so the day reads inside-out from the session
+                # down to what runs through it.
+                table_style.append(('LEFTPADDING', (0, row_index), (0, row_index), int(2.2 * cm)))
+                table_style.append(('LEFTPADDING', (1, row_index), (1, row_index), int(2.2 * cm)))
+        table = Table(table_data, colWidths=[3.0 * cm, 15.0 * cm])
+        table.setStyle(TableStyle(table_style))
+        story.append(table)
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=None, search=None) -> bytes:
     """Generate a clean, printable duty rota schedule PDF aggregated for a period."""
     # Imported here rather than at the top: this module is loaded only when a

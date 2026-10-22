@@ -319,7 +319,7 @@ export function ProgramDocument({
                       the printed programme's own way of showing a part of the
                       day holding the activities that run through it. */}
                   {item.parts.length > 0 && (
-                    <ul className="mt-2 ml-4 space-y-2 border-l-2 border-sand-line pl-4">
+                    <ul className="mt-1.5 ml-2 space-y-2 border-l-2 border-sand-line pl-3">
                       {item.parts.map((part, partIndex) => {
                         const partRange = sessionRange(part);
                         return (

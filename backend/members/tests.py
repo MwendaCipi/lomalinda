@@ -10548,6 +10548,59 @@ class DepartmentApiTests(APITestCase):
         )
         self.assertEqual(cleared.data['program_items'], [])
 
+    def test_the_program_prints_and_can_be_taken_off_the_event(self):
+        """The typed programme prints as the letterhead sheet it reads as —
+        an open read, no sign-in asked, because the same rows already ride
+        the congregation's calendar — and taking a programme off an event is
+        the desk's own write: the rows and any uploaded file cleared at once,
+        while a member with no seat on the desk is refused."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self._auth(self.leader)
+        event = DepartmentEvent.objects.create(
+            department='amm', title='Men Sabbath', event_date='2026-10-10',
+            program_items=[
+                {'start': '08:00', 'end': '10:00', 'title': 'Sabbath School',
+                 'participants': [{'name': 'Jane Wanjiru', 'role': 'Teacher'}],
+                 'parts': [{'start': '08:00', 'end': '08:15', 'title': 'Opening song',
+                            'participants': [{'name': 'Grace Muthoni', 'role': 'Song Leader'}]}]},
+            ],
+            program_file=SimpleUploadedFile('printed-program.pdf', b'%PDF-1.4 fake', content_type='application/pdf'),
+        )
+
+        # The printout is open: the congregation reads the sheet without
+        # signing in, exactly as the calendar feed already hands it over.
+        self.client.force_authenticate(user=None)
+        printed = self.client.get(f'/api/members/departments/amm/events/{event.id}/program/')
+        self.assertEqual(printed.status_code, 200)
+        self.assertEqual(printed['Content-Type'], 'application/pdf')
+        self.assertTrue(printed.content[:5] in (b'%PDF-', b'%PDF\n'))
+        self.assertIn('attachment', printed['Content-Disposition'])
+
+        # Taking the programme off is the desk's own write.
+        self._auth(self.leader)
+        removed = self.client.delete(f'/api/members/departments/amm/events/{event.id}/program/')
+        self.assertEqual(removed.status_code, 200)
+        event.refresh_from_db()
+        self.assertEqual(event.program_items, [])
+        self.assertFalse(event.program_file)
+
+        # A member with no seat on the desk is refused the write.
+        event.program_items = [
+            {'start': '08:00', 'end': '', 'title': 'Sabbath School', 'participants': []},
+        ]
+        event.save()
+        self._auth(self.plain)
+        refused = self.client.delete(f'/api/members/departments/amm/events/{event.id}/program/')
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        event.refresh_from_db()
+        self.assertTrue(event.program_items)
+
+        # An unknown event is nobody's programme.
+        self._auth(self.leader)
+        missing = self.client.get('/api/members/departments/amm/events/999999/program/')
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_a_program_session_is_stored_in_the_shape_the_sheet_reads(self):
         """The rows are printed to the congregation, so what is stored is
         what the sheet can draw: sessions with clock hours, a title and

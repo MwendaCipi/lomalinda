@@ -12128,6 +12128,55 @@ class DepartmentEventsView(APIView):
         return Response({'detail': 'Event removed from the calendar.'})
 
 
+class DepartmentEventProgramView(APIView):
+    """One calendar event's programme, printed on the church's own paper.
+
+    Reading the sheet is open — the same rows already ride the congregation's
+    public calendar feed — so the letterhead printout can be opened, saved and
+    shared without the reader being signed in. Taking a programme off an event
+    is still the desk's own write, held to the same officers who file events;
+    it clears the two parts of a programme at once, the typed rows and the
+    file the desk uploaded, since either is the programme the event carries.
+    """
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAuthenticated()]
+
+    def get(self, request, department, event_id):
+        department_row = Department.objects.filter(code=department, is_active=True).first()
+        if department_row is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()
+        if event is None:
+            return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from .pdf_generator import generate_event_program_pdf
+        pdf_bytes = generate_event_program_pdf(event, department_row.name)
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Event_Program_{event.event_date}.pdf"'
+        return response
+
+    def delete(self, request, department, event_id):
+        if not Department.objects.filter(code=department, is_active=True).exists():
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only church officers or this department's leader can remove a program."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()
+        if event is None:
+            return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if event.program_file:
+            event.program_file.delete(save=False)
+        event.program_file = None
+        event.program_items = []
+        event.save(update_fields=['program_file', 'program_items'])
+        return Response({'detail': 'Program removed from the event.'})
+
+
 class ChurchCalendarView(APIView):
     """The church calendar: every ministry's own events in one feed.
 
