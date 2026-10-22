@@ -4618,7 +4618,7 @@ function DepartmentDetail({
   // `eldershipViews`): the desk's roll and calendar are views of this desk,
   // so a press takes them in place, while the rest are console pages, so a
   // press walks to the page that holds them. The phone's map and the rail
-  // therefore meet the same eight chips, in the same order.
+  // therefore meet the same seven chips, in the same order.
   const eldershipStripItems = useMemo(
     () =>
       eldershipViews.map((view) => ({
@@ -4740,8 +4740,9 @@ function DepartmentDetail({
     }
     // The eldership reads one strip wherever it is opened — the rail's row on
     // a desk, the Eldership card in a hand — so this desk draws the same
-    // eight pages the console's strip names, rather than a second list of its
-    // own. Eight chips sit as four a row on a phone: two level rows.
+    // seven pages the console's strip names, rather than a second list of its
+    // own. Seven chips sit as four a row on a phone: a row of four, a row of
+    // three.
     if (department.code === "eldership") {
       setCustomToggles(
         <SubNav
