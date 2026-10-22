@@ -15738,6 +15738,40 @@ class EldershipDeskToolsTests(APITestCase):
         self.assertEqual(posted.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(BaptismalClassEntry.objects.count(), 0)
 
+    def test_an_elected_elder_keeps_the_class_too(self):
+        """This church seats its eldership as First, Second and Third Elder —
+        the codes the leaders table grants, never the plain "elder" an older
+        account may still carry. The desk        is the eldership's either way, so an elected First Elder reads and
+        writes the register like any elder."""
+        from .views import sync_role_flags_from_assignments
+
+        elder = User.objects.create_user(
+            'seat.first', 'seat.first@example.com', 'StrongPass#2026',
+            first_name='Filia', last_name='First',
+        )
+        MemberProfile.objects.create(user=elder, role='member', roles='member')
+        eldership = Department.objects.get(code='eldership')
+        DepartmentAssignment.objects.create(
+            department=eldership,
+            role=eldership.roles.get(name='First Elder'),
+            member=elder, kind='leader',
+        )
+        sync_role_flags_from_assignments()
+        elder.member_profile.refresh_from_db()
+        self.assertIn('first_elder', elder.member_profile.get_roles())
+
+        self.client.force_authenticate(elder)
+        added = self.client.post(
+            self.CLASS_URL, {'member_id': self.candidate.id}, format='json',
+        )
+        listed = self.client.get(self.CLASS_URL)
+
+        self.assertEqual(added.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {row['name'] for row in listed.data['entries']}, {'Candice Candidate'},
+        )
+
     def test_the_elder_adds_a_roll_member_and_a_candidate_without_an_account(self):
         self.client.force_authenticate(self.elder)
         added = self.client.post(self.CLASS_URL, {'member_id': self.candidate.id, 'note': 'Studying weekly.'}, format='json')

@@ -63,6 +63,7 @@ import {
   DEPARTMENT_BLURBS,
   deaconateViews,
   departmentDeskCode,
+  ELDERSHIP_ROLES,
   eldershipViews,
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
@@ -4257,8 +4258,12 @@ function DepartmentDetail({
   const viewerRoles = (Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || ""]).map((role) =>
     role.toLowerCase().trim()
   );
+  // The same list the rail gates the eldership section with, so the desk
+  // never shows a page its reader cannot reach from the rail — and the
+  // elected elders (First, Second and Third Elder) are let in, since those
+  // are the seats this church actually fills.
   const canOpenOfficeViews =
-    department.code === "eldership" && viewerRoles.some((role) => ["elder", "clerk", "admin"].includes(role));
+    department.code === "eldership" && viewerRoles.some((role) => ELDERSHIP_ROLES.includes(role));
   // May this viewer document a moment from the desk? The same answer the
   // server gives on the POST — administrators, and the deaconate, whose desk
   // holds the pictures of the church's days — so the button never appears

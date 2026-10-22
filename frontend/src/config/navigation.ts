@@ -664,8 +664,14 @@ export const DEACONATE_ROLES = ["deacon", "deaconess", "head_deacon", "head_deac
 // Join and membership-transfer requests reach the three who answer them —
 // admin, elder and clerk — plus the pastoral and care roles that share the desk.
 const REQUESTS_DESK_ROLES = ["elder", "clerk", "admin", "pastor", "chaplaincy", "children_ministry", "welfare_leader"];
-/** Elders and clerks share the church's programmes; the register is the clerk's. */
-const ELDERSHIP_ROLES = ["elder", "clerk", "admin"];
+/** Elders and clerks share the church's programmes; the register is the clerk's.
+ *
+ *  The eldership seats are First, Second and Third Elder — those are the codes
+ *  the leaders table grants and the server checks — so the seat codes ride
+ *  beside the plain "elder" an account may still hold from the old role list.
+ *  Exported so the desk's own gate (see `DepartmentDetail`) answers with this
+ *  same list rather than a second copy that could drift out of step with it. */
+export const ELDERSHIP_ROLES = ["elder", "first_elder", "second_elder", "third_elder", "clerk", "admin"];
 /** The clerk's desk: the meetings' minutes and the membership transfers. */
 const CLERKSHIP_ROLES = ["clerk", "admin"];
 /**
