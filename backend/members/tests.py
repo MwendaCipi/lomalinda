@@ -10575,7 +10575,10 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(printed.status_code, 200)
         self.assertEqual(printed['Content-Type'], 'application/pdf')
         self.assertTrue(printed.content[:5] in (b'%PDF-', b'%PDF\n'))
-        self.assertIn('attachment', printed['Content-Disposition'])
+        # Inline, not attachment: the desk's "View program" opens the sheet
+        # in its own tab to be read; keeping a copy is the Download button's
+        # own work, whose `download` attribute fixes the filename.
+        self.assertIn('inline', printed['Content-Disposition'])
 
         # Taking the programme off is the desk's own write.
         self._auth(self.leader)

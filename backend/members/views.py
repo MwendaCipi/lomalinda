@@ -12155,7 +12155,11 @@ class DepartmentEventProgramView(APIView):
         from .pdf_generator import generate_event_program_pdf
         pdf_bytes = generate_event_program_pdf(event, department_row.name)
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="Event_Program_{event.event_date}.pdf"'
+        # Served inline: the desk's "View program" opens the sheet in its own
+        # tab to be read. The Download button carries its own `download`
+        # attribute, which still decides the filename when this same link is
+        # used to keep a copy.
+        response['Content-Disposition'] = f'inline; filename="Event_Program_{event.event_date}.pdf"'
         return response
 
     def delete(self, request, department, event_id):

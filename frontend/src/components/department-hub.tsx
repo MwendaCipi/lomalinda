@@ -1085,8 +1085,6 @@ function EventProgramMenu({
   onView,
   onEdit,
   onCreate,
-  onUpload,
-  onRemoveProgram,
   onRemove,
 }: {
   event: DeptEvent;
@@ -1094,33 +1092,31 @@ function EventProgramMenu({
   /** Correct the event's details — the form, open on what it holds. */
   onEdit: () => void;
   onCreate: () => void;
-  onUpload: () => void;
-  /** Clear the event's own programme — the typed rows and any uploaded
-      file — while the event itself stays on the calendar. */
-  onRemoveProgram: () => void;
   onRemove: () => void;
 }) {
   const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
   const hasProgram = eventHasProgram(event);
+  // Two programme actions, one job each: "View program" opens the programme
+  // itself — the letterhead PDF where typed rows exist, otherwise the file
+  // the desk uploaded; "Edit program" opens the inline page, where the sheet
+  // is typed, uploaded to, printed and taken off.
   return (
     <div>
       <button type="button" onClick={onEdit} className={`${item} text-bark`}>
         Edit event
       </button>
-      {hasProgram && (
-        <button type="button" onClick={onView} className={`${item} font-semibold text-bark`}>
-          View program
-        </button>
-      )}
-      <button type="button" onClick={onCreate} className={`${item} text-bark`}>
-        {parseProgramItems(event.program_items).length > 0 ? "Edit program" : "Create program"}
-      </button>
-      <button type="button" onClick={onUpload} className={`${item} text-bark`}>
-        Upload program
-      </button>
-      {hasProgram && onRemoveProgram && (
-        <button type="button" onClick={onRemoveProgram} className={`${item} text-red-600`}>
-          Remove program
+      {hasProgram ? (
+        <>
+          <button type="button" onClick={onView} className={`${item} font-semibold text-bark`}>
+            View program
+          </button>
+          <button type="button" onClick={onCreate} className={`${item} text-bark`}>
+            Edit program
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={onCreate} className={`${item} font-semibold text-bark`}>
+          Add program
         </button>
       )}
       <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
@@ -1132,17 +1128,18 @@ function EventProgramMenu({
 
 /**
  * Type an event's programme: one row per item of the order of service, and
- * the sheet it will be read as laid out beneath as it is typed — the desk
+ * the sheet it will be read as laid out beside what is typed — the desk
  * sees the programme the congregation will see, not the rows behind it.
  *
  * It opens two ways. In a modal it is the create/edit form — that is the
- * phone's read. On a desk it opens as a page of its own: it takes the
- * viewport under a "Back to events" link, the uploaded file (when the
- * event carries one) rides above the rows, and the actions live on a bar
- * at the foot of the page — Save program (the sheet is editable in place,
- * so there is no separate edit), Remove program, Download program and
- * Share — so the programme is typed, printed and handed on from where it
- * is read.
+ * phone's read. On a desk it opens as a page of its own, and the page is
+ * a workbench: it takes the viewport under a "Back to events" link, the
+ * typing sits on the left, and beside it the programme as the church will
+ * see it — the uploaded file when the event carries one, and the live
+ * sheet beneath it. Its actions live on a bar at the foot: Save program
+ * (the sheet is editable in place, so there is no separate edit), Remove
+ * program, Download program, Upload program and Share — so the programme
+ * is typed, printed and handed on from where it is read.
  */
 function ProgramEditorModal({
   event,
@@ -1153,19 +1150,23 @@ function ProgramEditorModal({
   onRemoveProgram,
   programDownloadHref,
   onShare,
+  onUpload,
 }: {
   event: DeptEvent;
   departmentLabel: string;
   variant?: "modal" | "page";
   onClose: () => void;
   onSave: (items: ProgramItem[]) => void;
-  /** Page variant only: take the whole programme off the event. */
+  /** Take the whole programme off the event — the page's bar, and on a
+      phone the modal's own bar, serve it. */
   onRemoveProgram?: () => void;
-  /** Page variant only: what "Download program" hands out — the letterhead
-      PDF of the typed rows, or the file the desk uploaded. Blank hides it. */
+  /** What "Download program" hands out — the letterhead PDF of the typed
+      rows, or the file the desk uploaded. Blank hides it. */
   programDownloadHref?: string;
-  /** Page variant only: share the printed programme or its link. */
+  /** Share the printed programme or its link. */
   onShare?: () => void;
+  /** Send the programme in as a file, replacing what the event carries. */
+  onUpload?: () => void;
 }) {
   const isPage = variant === "page";
   // The programme as it stands. A programme that does not exist yet opens
@@ -1176,10 +1177,11 @@ function ProgramEditorModal({
   const [items, setItems] = useState<ProgramItem[]>(
     initialItems.length > 0 ? initialItems : [{ start: "", end: "", title: "", participants: [], parts: [] }],
   );
-  // Unfolded — the first session, whichever way the sheet opened — one at a
-  // time, so opening a session closes whichever other was open and the desk
-  // reads one part of the day rather than all of them at once.
-  const [openSession, setOpenSession] = useState<number | null>(0);
+  // Nothing unfolded when the sheet opens; the desk opens the session it
+  // is working on. One at a time, so opening a session closes whichever
+  // other was open and the desk reads one part of the day rather than all
+  // of them at once.
+  const [openSession, setOpenSession] = useState<number | null>(null);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   /** Removing a session also settles which one is left open. */
@@ -1238,6 +1240,51 @@ function ProgramEditorModal({
       </a>
     )
   ) : null;
+
+  // The things a finished programme is done with, identical on the page's
+  // bar and the phone modal's: taken off the event, printed to paper, a
+  // file sent in to replace the typed rows, handed on.
+  const programBarButtons = (
+    <>
+      {onRemoveProgram && eventHasProgram(event) && (
+        <button
+          type="button"
+          onClick={onRemoveProgram}
+          className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-red-600 transition hover:border-red-300"
+        >
+          Remove program
+        </button>
+      )}
+      {programDownloadHref && (
+        <a
+          href={programDownloadHref}
+          download
+          className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+        >
+          Download program
+        </a>
+      )}
+      {onUpload && (
+        <button
+          type="button"
+          onClick={onUpload}
+          className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+        >
+          Upload program
+        </button>
+      )}
+      {onShare && programDownloadHref && (
+        <button
+          type="button"
+          onClick={onShare}
+          className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+        >
+          Share
+        </button>
+      )}
+    </>
+  );
+
   return (
     // Clicking the dimmed area outside the sheet does **not** close this one:
     // a stray desktop click — while reaching for the panel, or scrolling —
@@ -1274,15 +1321,18 @@ function ProgramEditorModal({
         aria-label={`Program for ${event.title}`}
         className={
           isPage
-            ? "mx-auto w-full max-w-3xl bg-white px-4 pb-5 pt-4 shadow-sm sm:px-6"
+            ? "mx-auto w-full max-w-6xl bg-white px-4 pb-5 pt-4 shadow-sm sm:px-6"
             : "my-6 w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
         }
       >
         {isPage ? (
           <div className="border-b border-sand-line pb-2.5">
             <h3 className="text-lg font-bold text-bark">{event.title}</h3>
-            <p className="text-xs text-moss">{uploadedFile ? "Uploaded file and typed rows below" : "Typed below, read as it will print"}</p>
-            {uploadedProgramBlock}
+            <p className="text-xs text-moss">
+              {uploadedFile
+                ? "Typed on the left; the programme as the church sees it on the right."
+                : "Typed on the left, read on the right as it will print."}
+            </p>
           </div>
         ) : (
           <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
@@ -1295,10 +1345,13 @@ function ProgramEditorModal({
             </button>
           </div>
         )}
-        <p className="mt-2 text-xs text-moss">
-          Each session is one part of the day. Open a session to add the activities inside it.
-        </p>
-        <div className="mt-3 space-y-3">
+        <div className="mt-4 md:grid md:grid-cols-2 md:items-start md:gap-6">
+          {/* The typing, on the left. */}
+          <div className="min-w-0">
+            <p className="text-xs text-moss">
+              Each session is one part of the day. Open a session to add the activities inside it.
+            </p>
+            <div className="mt-3 space-y-3">
           {items.map((session, index) => {
             const open = openSession === index;
             // A session's own hours are no longer asked for — the time
@@ -1439,7 +1492,7 @@ function ProgramEditorModal({
                                   onChange={(e) => setPartPerson(index, partIndex, personIndex, { role: e.target.value })}
                                   aria-label={`Role of facilitator ${personIndex + 1} of activity ${partIndex + 1}`}
                                   placeholder="Role"
-                                  className="w-24 shrink-0 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
+                                  className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
                                 />
                                 <button
                                   type="button"
@@ -1498,61 +1551,50 @@ function ProgramEditorModal({
           >
             <Plus className="h-3.5 w-3.5" /> Add session
           </button>
-        </div>
-
-        {/* The sheet as it will be read, live: what is saved is what is seen. */}
-        {valid && (
-          <div className="mt-5 border-t border-sand-line pt-5">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
-              How it will look
-            </p>
-            <div className="rounded-xl bg-sand p-4">
-              <ProgramDocument
-                title={event.title}
-                date={event.date}
-                department={departmentLabel}
-                lead={event.lead}
-                items={items.filter(programItemHasContent)}
-              />
             </div>
           </div>
-        )}
+
+          {/* The sheet as it will be read, live, beside the typing: what is
+              typed is what is seen — with the uploaded file above it when the
+              event carries one. On a phone this stacks under the form. */}
+          <aside className="min-w-0 md:sticky md:top-16">
+            {uploadedProgramBlock && (
+              <div className="mb-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
+                  Uploaded file
+                </p>
+                {uploadedProgramBlock}
+              </div>
+            )}
+            {valid && (
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
+                  How it will look
+                </p>
+                <div className="rounded-xl bg-sand p-4">
+                  <ProgramDocument
+                    title={event.title}
+                    date={event.date}
+                    department={departmentLabel}
+                    lead={event.lead}
+                    items={items.filter(programItemHasContent)}
+                  />
+                </div>
+              </div>
+            )}
+            {!uploadedProgramBlock && !valid && (
+              <p className="text-xs text-moss">Name a session — the sheet grows here as it is typed.</p>
+            )}
+          </aside>
+        </div>
 
         {isPage ? (
           // The page's action bar: save what has been typed (the sheet is
           // editable in place, so there is no separate "Edit program"),
-          // and on its left the three things a finished programme is done
-          // with — taken off the event, printed to paper, handed on.
+          // and on its left the things a finished programme is done with —
+          // taken off the event, printed to paper, a file sent in, handed on.
           <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3 sm:-mx-6 sm:px-6">
-            <div className="flex flex-wrap items-center gap-2">
-              {onRemoveProgram && eventHasProgram(event) && (
-                <button
-                  type="button"
-                  onClick={onRemoveProgram}
-                  className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-red-600 transition hover:border-red-300"
-                >
-                  Remove program
-                </button>
-              )}
-              {programDownloadHref && (
-                <a
-                  href={programDownloadHref}
-                  download
-                  className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  Download program
-                </a>
-              )}
-              {onShare && (
-                <button
-                  type="button"
-                  onClick={onShare}
-                  className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  Share
-                </button>
-              )}
-            </div>
+            <div className="flex flex-wrap items-center gap-2">{programBarButtons}</div>
             <button
               type="button"
               disabled={!valid}
@@ -1563,98 +1605,27 @@ function ProgramEditorModal({
             </button>
           </div>
         ) : (
-          <div className="mt-5 flex justify-end gap-2 border-t border-sand-line pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-sand-line bg-white px-4 py-2 text-sm font-semibold text-moss hover:border-ember"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={!valid}
-              onClick={() => onSave(items)}
-              className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-            >
-              Save program
-            </button>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line pt-3">
+            <div className="flex flex-wrap items-center gap-2">{programBarButtons}</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-sand-line bg-white px-4 py-2 text-sm font-semibold text-moss hover:border-ember"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!valid}
+                onClick={() => onSave(items)}
+                className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+              >
+                Save program
+              </button>
+            </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * An event's programme, read as the sheet it was created on — an uploaded
- * file shown as itself, typed rows shown as the document they were fixed
- * into, and both together when the event carries both.
- */
-function ProgramViewerModal({
-  event,
-  departmentLabel,
-  onClose,
-}: {
-  event: DeptEvent;
-  departmentLabel: string;
-  onClose: () => void;
-}) {
-  const items = parseProgramItems(event.program_items);
-  const file = event.program_file
-    ? event.program_file.startsWith("http")
-      ? event.program_file
-      : `${API_URL}${event.program_file}`
-    : null;
-  const isImage = file ? /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(file) : false;
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
-      role="presentation"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Program for ${event.title}`}
-        className="my-6 w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
-      >
-        <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
-          <div>
-            <h3 className="text-lg font-bold text-bark">Program</h3>
-            <p className="text-xs text-moss">{event.title}</p>
-          </div>
-          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="mt-4 space-y-4">
-          {file &&
-            (isImage ? (
-              // eslint-disable-next-line @next/next/no-img-element -- the church's own upload, of any origin: optimizing it would mean proxying member files through the app
-              <img src={file} alt={`${event.title} program`} className="mx-auto max-h-[65vh] w-auto rounded-lg object-contain" />
-            ) : (
-              <a
-                href={file}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 font-semibold text-ember hover:underline"
-              >
-                Open uploaded program
-              </a>
-            ))}
-          {items.length > 0 && (
-            <div className="rounded-xl bg-sand p-4">
-              <ProgramDocument
-                title={event.title}
-                date={event.date}
-                department={departmentLabel}
-                lead={event.lead}
-                items={items}
-              />
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -4478,11 +4449,10 @@ function DepartmentDetail({
   // phone, a table on a desk), and the month wall-grid is one toggle away.
   const [calendarView, setCalendarView] = useState<CalendarView>("table");
   const [openGridAction, setOpenGridAction] = useState<string | null>(null);
-  // The event whose programme is being typed, the one whose sheet is being
-  // read, and which row's menu is open — a programme belongs to an event and
-  // is reached from it, so all three live with the calendar they serve.
+  // The event whose programme is being typed, and which row's menu is open
+  // — a programme belongs to an event and is reached from it, so both live
+  // with the calendar they serve.
   const [programFor, setProgramFor] = useState<DeptEvent | null>(null);
-  const [programViewer, setProgramViewer] = useState<DeptEvent | null>(null);
   // The event being corrected — the Actions menu's "Edit event" opens the
   // same form the desk files events with, but shaped by what it already holds.
   const [editEvent, setEditEvent] = useState<DeptEvent | null>(null);
@@ -5307,7 +5277,6 @@ function DepartmentDetail({
       },
       () => {
         setProgramFor(null);
-        setProgramViewer({ ...event, program_items: saved });
       },
     );
   };
@@ -5332,7 +5301,6 @@ function DepartmentDetail({
           "success",
           { toast: true, timer: 4000, showConfirmButton: false },
         );
-        setProgramViewer({ ...event, program_items: saved });
       },
     );
   };
@@ -5359,7 +5327,6 @@ function DepartmentDetail({
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setProgramFor(null);
-      setProgramViewer(null);
       loadEvents();
       onChanged();
     } else {
@@ -5381,6 +5348,13 @@ function DepartmentDetail({
       return event.program_file.startsWith("http") ? event.program_file : `${API_URL}${event.program_file}`;
     }
     return "";
+  };
+
+  /** The menu's "View program": the programme itself in its own tab — the
+      letterhead PDF where typed rows are, otherwise the uploaded file. */
+  const viewProgram = (event: DeptEvent) => {
+    const url = programDownloadHref(event);
+    if (url) window.open(url, "_blank", "noopener");
   };
 
   /** The programme handed on: its link, by the phone's own share sheet when
@@ -6017,15 +5991,12 @@ function DepartmentDetail({
                           {dayFirst(event.date)}
                           {event.time ? ` · ${clockTime(event.time)}` : ""}
                           {event.location ? ` · ${event.location}` : ""}
-                        </p>
-                        <EventProgramMenu
+                        </p>                        <EventProgramMenu
                           event={event}
-                          onView={() => { onClose(); setProgramViewer(event); }}
-                          onEdit={() => { setEditEvent(event); }}
+                          onView={() => { onClose(); viewProgram(event); }}
+                          onEdit={() => { onClose(); setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
-                          onUpload={() => { onClose(); chooseProgramFile(event); }}
                           onRemove={() => { onClose(); removeEvent(event); }}
-                          onRemoveProgram={() => { onClose(); void removeProgram(event); }}
                         />
                       </div>
                     )}
@@ -6105,15 +6076,13 @@ function DepartmentDetail({
                                       : { right: window.innerWidth - eventMenuAnchor.x, top: eventMenuAnchor.y + 8 }
                                   }
                                 >
-                                  <EventProgramMenu
-                                    event={event}
-                                    onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
-                                    onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
-                                    onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
-                                    onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
-                                    onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
-                                    onRemoveProgram={() => { setOpenEventMenuKey(null); void removeProgram(event); }}
-                                  />
+                                      <EventProgramMenu
+                                        event={event}
+                                        onView={() => { setOpenEventMenuKey(null); viewProgram(event); }}
+                                        onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
+                                        onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                        onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
+                                      />
                                 </div>,
                                 document.body,
                               )
@@ -6159,7 +6128,7 @@ function DepartmentDetail({
                         {hasProgram ? (
                           <button
                             type="button"
-                            onClick={() => setProgramViewer(event)}
+                            onClick={() => viewProgram(event)}
                             className="text-xs font-bold text-ember hover:underline"
                           >
                             View program &rarr;
@@ -6179,13 +6148,11 @@ function DepartmentDetail({
                           {openEventMenuKey === actionKey && (
                             <div className="absolute bottom-full right-0 z-20 mb-1.5 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
                               <EventProgramMenu
-                                event={event}
-                                onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
-                                onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
-                                onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
-                                onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
-                                onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
-                                onRemoveProgram={() => { setOpenEventMenuKey(null); void removeProgram(event); }}
+                                    event={event}
+                                    onView={() => { setOpenEventMenuKey(null); viewProgram(event); }}
+                                    onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
+                                    onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                    onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                               />
                             </div>
                           )}
@@ -6329,13 +6296,18 @@ function DepartmentDetail({
       {programFor && (
         <>
           {/* The phone keeps the modal it knew: the create/edit form as one
-              card over a dimmed sheet. */}
+              card over a dimmed sheet, with the programme's other actions —
+              remove, download, upload, share — on its own bar. */}
           <div className="md:hidden">
             <ProgramEditorModal
               event={programFor}
               departmentLabel={department.label}
               onClose={() => setProgramFor(null)}
               onSave={(items) => saveProgram(programFor, items)}
+              onRemoveProgram={() => void removeProgram(programFor)}
+              programDownloadHref={programDownloadHref(programFor)}
+              onUpload={() => chooseProgramFile(programFor)}
+              onShare={() => void shareProgram(programFor)}
             />
           </div>
           {/* A desk opens the programme as a page: it takes the viewport, the
@@ -6350,37 +6322,13 @@ function DepartmentDetail({
               onSave={(items) => saveProgramInline(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
+              onUpload={() => chooseProgramFile(programFor)}
               onShare={() => void shareProgram(programFor)}
             />
           </div>
         </>
       )}
-      {programViewer && (
-        <>
-          <div className="md:hidden">
-            <ProgramViewerModal
-              event={programViewer}
-              departmentLabel={department.label}
-              onClose={() => setProgramViewer(null)}
-            />
-          </div>
-          {/* "View program" on a desk opens the same page: the sheet read
-              where it was typed, still editable, its actions at the foot. */}
-          <div className="hidden md:block">
-            <ProgramEditorModal
-              event={programViewer}
-              departmentLabel={department.label}
-              variant="page"
-              onClose={() => setProgramViewer(null)}
-              onSave={(items) => saveProgramInline(programViewer, items)}
-              onRemoveProgram={() => void removeProgram(programViewer)}
-              programDownloadHref={programDownloadHref(programViewer)}
-              onShare={() => void shareProgram(programViewer)}
-            />
-          </div>
-        </>
-      )}
-      {/* The one picker every row's "Upload program" opens; which event it
+      {/* The one picker the program page's "Upload program" opens; which event it
           belongs to is read from the row that asked. */}
       <input
         ref={programUploadRef}
