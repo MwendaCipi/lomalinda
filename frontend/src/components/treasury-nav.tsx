@@ -205,7 +205,7 @@ export function TreasuryNav({
   // must read, not merely fit. A count holds the cell's corner without
   // touching the name, and the wider screens keep the natural line.
   const tabClass = (isActive: boolean) =>
-    `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pt-3 text-[10px] font-semibold tracking-tight transition sm:px-3.5 sm:pt-0 sm:text-sm ${
+    `relative flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-1 pt-3 text-sm font-semibold tracking-tight transition sm:px-3.5 sm:pt-0 ${
       isActive ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"
     }`;
 
