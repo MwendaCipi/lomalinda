@@ -312,7 +312,7 @@ function AdministrationContent() {
   const activeTab = searchTab
     ? searchTab === "expenditures"
       ? "accounts"
-      : searchTab === "join-requests" || searchTab === "transfers"
+      : searchTab === "transfers"
         ? "clerk-requests"
       : searchTab === "role-management"
         ? "users"
@@ -430,16 +430,13 @@ function AdministrationContent() {
     );
     return () => setCustomToggles(null);
   }, [activeTab, treasuryTab, isFinance, setCustomToggles, router]);
-  // The console's own pages draw the Administration strip. The register and
-  // the shared leadership directory are pages of the Clerkship desk for the
-  // clerk who holds it — that strip names them, with requests, letters,
-  // meetings and the funds beside them — so they are only the console's when
-  // there is no clerkship row to name them (an elder reading the register).
+  // The console's own pages draw the Administration strip.
   const consoleTab =
+    activeTab === "users" ||
     activeTab === "roles" ||
+    activeTab === "leadership" ||
     activeTab === "settings" ||
-    (!hasClerkship &&
-      (activeTab === "users" || activeTab === "leadership" || activeTab === "join-requests"));
+    activeTab === "join-requests";
   // Who the toggle is for: the same people the requests desk already admits,
   // because the API behind it answers to those roles and the notices for a
   // join ask name them. The card on the phone overview sits with the console's
@@ -522,14 +519,13 @@ function AdministrationContent() {
           icon: <ShieldCheck size={16} aria-hidden="true" />,
           description: "Church-wide role permissions and church settings.",
           cards: [
-            ...(!hasClerkship
-              ? [
-                  { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register.", href: "/administration?tab=users" },
-                  { icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members, ministry asks and membership transfers.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers },
-                ]
-              : []),
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
             { icon: <ShieldCheck size={20} aria-hidden="true" />, label: "Roles", description: "Set the permissions each church-wide role holds.", href: "/administration?tab=roles" },
+            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
             { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
+            ...(canAnswerJoins
+              ? [{ icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members, ministry asks and membership transfers.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers }]
+              : []),
           ],
         }
       : null,
@@ -537,15 +533,8 @@ function AdministrationContent() {
       ? {
           label: "Clerkship",
           icon: <ClipboardList size={16} aria-hidden="true" />,
-          description: "The church register, its leadership, join requests, meetings' minutes and membership transfers.",
-          // The rail's Clerkship section names six pages; this card list is
-          // the phone's copy of that same strip. User Management and Church
-          // Leadership were missing here, and the Administration desk above
-          // drops them once this officer holds the clerkship — so a clerk on a
-          // phone had no door to either page at all.
+          description: "Join requests, meetings' minutes, letters, messages and church funds.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
-            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Mail size={20} aria-hidden="true" />, label: "Messaging", description: "Letters arriving at info@sdalomalinda.or.ke, and the messages the church sends.", href: "/administration?tab=emails" },

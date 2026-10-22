@@ -693,25 +693,9 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * Management.
  */
 export const clerkshipItems: RailRow[] = [
-  // The register and the church's leadership records are pages of the clerk's
-  // own strip: keeping the roll and appointing the church's areas is the work
-  // of this desk, so the clerk meets them beside their queues rather than
-  // hunting for a second console. Leadership reads the shared directory, which
-  // Administration also opens, so the two pages answer to the tab the strip
-  // names.
-  officeTab("users", "User Management", Users, {
-    roles: CLERKSHIP_ROLES,
-    short: "Users",
-    description: "Church users, profiles and their assigned roles.",
-  }),
-  officeTab("leadership", "Church Leadership", Crown, {
-    roles: CLERKSHIP_ROLES,
-    short: "Leadership",
-    description: "The church's offices, ministries and departments, with each leader and assistant.",
-  }),
   officeTab("clerk-requests", "Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
-    aliasTabs: ["join-requests", "transfers"],
+    aliasTabs: ["transfers"],
     short: "Requests",
     description: "New members, ministry joins and membership transfers waiting on an answer.",
   }),
