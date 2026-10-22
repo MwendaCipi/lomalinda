@@ -1161,10 +1161,14 @@ function ProgramEditorModal({
     }));
   const valid = items.some(programItemHasContent);
   return (
+    // Clicking the dimmed area outside the sheet does **not** close this one:
+    // a stray desktop click — while reaching for the panel, or scrolling —
+    // would throw away the whole order of service typed so far. The sheet is
+    // left by its own buttons (Cancel, the X) alone; the read-only viewer
+    // below keeps the click-outside, it has nothing to lose.
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
       role="presentation"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
@@ -1345,7 +1349,7 @@ function ProgramEditorModal({
                                   participants: [...p.participants, { name: "", role: "" }],
                                 }))
                               }
-                              className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-ember hover:underline"
+                              className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-bark hover:underline"
                             >
                               <Plus className="h-3 w-3" /> Add facilitator
                             </button>

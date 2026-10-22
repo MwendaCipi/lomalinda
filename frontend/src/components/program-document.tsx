@@ -264,10 +264,7 @@ export function ProgramDocument({
       <div className="flex justify-center">
         <ChurchLockup />
       </div>
-      <div className="mx-auto mt-5 h-px w-16 bg-ember" aria-hidden="true" />
-
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.28em] text-ember">Programme</p>
-      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-bark sm:text-3xl">{title}</h2>
+      <h2 className="mt-4 text-2xl font-semibold tracking-tight text-bark sm:text-3xl">{title}</h2>
       {department && <p className="mt-1.5 text-sm font-semibold text-moss-dark">{department}</p>}
       {(date || lead) && (
         <p className="mt-2 text-sm text-moss">
