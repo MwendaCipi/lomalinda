@@ -6209,6 +6209,49 @@ class DutyReminderCronTests(TestCase):
         line.refresh_from_db()
         self.assertIsNotNone(line.reminder_sent_at)
 
+    def test_a_reminder_signs_itself_with_the_church_in_full(self):
+        """The name at the end of the text is the full one. The app stores the
+        short "SDA Loma Linda, Meru" for screens, but an officer reading a
+        duty notice is left with the church's name, and that closing wants
+        "Church" in it — the same split the printed documents already make.
+        """
+        from unittest import mock
+
+        self._line()
+
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            self._run()
+
+        notice = ChurchNotification.objects.get(user=self.officer)
+        self.assertTrue(notice.message.endswith('SDA Church Loma Linda, Meru'), notice.message)
+        # The officer is left with the same name wherever the notice reaches
+        # them — the bell, and the text itself.
+        self.assertTrue(texted.call_args.args[1].endswith('SDA Church Loma Linda, Meru'))
+
+    def test_a_rostered_officer_is_told_the_church_in_full_at_the_end(self):
+        """The notice sent when the desk rosters someone closes the same way
+        as the day-before text: with the full name, not the short one.
+        """
+        from .duty import assignment_message
+        from .views import current_church_name
+
+        line = self._line(title='Sanctuary care')
+        message = assignment_message(line, {'name': 'David', 'role': 'Ushering'}, self.officer, current_church_name())
+
+        self.assertTrue(message.endswith('SDA Church Loma Linda, Meru'), message)
+
+    def test_a_name_the_office_already_wrote_in_full_is_left_alone(self):
+        """The closing only fills the short form in. A church renamed to say
+        "Church" itself keeps that wording, and one without the SDA prefix is
+        not given one.
+        """
+        from .duty import church_name_full
+
+        self.assertEqual(church_name_full('SDA Church Loma Linda, Meru'), 'SDA Church Loma Linda, Meru')
+        self.assertEqual(church_name_full('Loma Linda SDA Church'), 'Loma Linda SDA Church')
+        # The short form the app stores is what gets the word added.
+        self.assertEqual(church_name_full('SDA Loma Linda, Meru'), 'SDA Church Loma Linda, Meru')
+
     def test_force_rings_a_line_again(self):
         """The desk's own re-send: a deliberate second run, never the cron's."""
         self._line()

@@ -134,6 +134,22 @@ def reminder_recipients(entry):
     ]
 
 
+def church_name_full(church_name: str = '') -> str:
+    """The name a duty notice signs itself with: the full form, with "Church".
+
+    A duty notice closes with the church's name, and that closing wants the
+    name in full — "SDA Church Loma Linda" rather than the short "SDA Loma
+    Linda" the app stores for screens. This is the same split the printed
+    documents already make (see ``pdf_church_name``), applied to the name an
+    officer is left with at the end of a text. A name the office already wrote
+    with "Church", and a name without the SDA prefix, pass through untouched,
+    so renaming the church keeps whatever wording was chosen.
+    """
+    from .pdf_generator import pdf_church_name
+
+    return pdf_church_name(church_name)
+
+
 def duty_context(entry, officer, user, church_name: str = '') -> dict:
     """The placeholder values one officer's duty message is filled with."""
     return {
@@ -212,7 +228,7 @@ def render_duty_message(kind: str, entry, officer, user=None, church_name: str =
     same way wherever the message goes out.
     """
     template = duty_template(kind, desk=getattr(entry, 'desk', ''))
-    context = duty_context(entry, officer, user, church_name)
+    context = duty_context(entry, officer, user, church_name_full(church_name))
     if not context['role']:
         template = drop_part_sentence(template)
     return render_message(template, context)
