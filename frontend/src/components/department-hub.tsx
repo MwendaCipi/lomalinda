@@ -3920,7 +3920,7 @@ export function DepartmentAccountsPanel({
               (single row). On a phone it stays put: sticky against the scroll
               it sits in (lifted clear of the bottom tab bar), so the Drive and
               Withdraw buttons never scroll out of reach behind the ledger. */}
-          <div className="sticky bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] z-20 shrink-0 rounded-b-2xl border-t border-sand-line bg-white px-4 py-2.5 md:bottom-0 sm:px-6">
+          <div className="shrink-0 rounded-b-2xl border-t border-sand-line bg-white px-4 py-2.5 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Left — balance */}
               <div className="flex min-w-0 items-center gap-x-2 text-xs text-moss">
@@ -3965,12 +3965,12 @@ export function DepartmentAccountsPanel({
               )}
 
               {/* Right — request button */}
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
                 {canStartDrive && startableDriveAccount && (
                   <button
                     type="button"
                     onClick={openDriveForm}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-sage px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep sm:px-4"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-sage px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep"
                   >
                     <Megaphone className="h-4 w-4" />
                     <span className="sm:hidden">Fund Drive</span>
@@ -3981,7 +3981,7 @@ export function DepartmentAccountsPanel({
                   <button
                     type="button"
                     onClick={openWithdraw}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep sm:px-4"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
                   >
                     {isDeaconate ? <Wallet className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
                     <span className="sm:hidden">{isDeaconate ? "Request" : "Withdraw"}</span>
@@ -5500,7 +5500,7 @@ function DepartmentDetail({
             </p>
             {canManageRoll ? (
               /* Leader / assistant: Chat (group) + Add Member */
-              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 <button
                   type="button"
                   onClick={async () => {
@@ -5511,7 +5511,7 @@ function DepartmentDetail({
                       showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> Chat
                 </button>
@@ -5527,18 +5527,18 @@ function DepartmentDetail({
                 <button
                   type="button"
                   onClick={() => setShowAddMember(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
                 >
                   <UserPlus className="h-3.5 w-3.5" /> Add Member
                 </button>
               </div>
             ) : !onRoll && !holdsOffice ? (
               /* Non-member: Request to join + Contact leader, same row on mobile */
-              <div className="flex flex-row items-center gap-2">
+              <div className="flex w-full flex-row items-center gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setShowJoin(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
                 >
                   <UserPlus className="h-3.5 w-3.5" /> Request to join
                 </button>
@@ -5546,7 +5546,7 @@ function DepartmentDetail({
                   <button
                     type="button"
                     onClick={() => setShowContactLeader(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    className="inline-flex items-center gap-1.5 rounded-xl flex-1 sm:flex-none inline-flex items-center justify-center border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
                     <Phone className="h-3.5 w-3.5" /> Contact leader
                   </button>
@@ -5554,18 +5554,18 @@ function DepartmentDetail({
               </div>
             ) : (onRoll || holdsOffice) && department.leader ? (
               /* Member (not leader): Chat + Contact leader */
-              <div className="flex flex-row items-center gap-2">
+              <div className="flex w-full flex-row items-center gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => void chatWith(department.leader!.id)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> Chat
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowContactLeader(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  className="inline-flex items-center gap-1.5 rounded-xl flex-1 sm:flex-none inline-flex items-center justify-center border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                 >
                   <Phone className="h-3.5 w-3.5" /> Contact leader
                 </button>

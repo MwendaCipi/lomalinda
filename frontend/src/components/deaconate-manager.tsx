@@ -626,36 +626,33 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       description: "Sabbath & midweek service duty rosters, communion preparation team assignments.",
     });
     setHeaderRightAction(
-      <div className="flex w-full flex-wrap sm:flex-nowrap items-center gap-2 sm:w-auto">
-        <div className="relative min-w-0 flex-1 sm:w-52">
+      <div className="flex w-full items-center gap-1.5 sm:w-auto">
+        <div className="relative min-w-0 flex-1 sm:flex-none sm:w-48">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
           <input
             type="text"
-            placeholder="Search rota..."
+            placeholder="Search rota…"
             value={rotaSearchQuery}
             onChange={(e) => setRotaSearchQuery(e.target.value)}
-            className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
+            className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
           />
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <input
-            type="date"
-            value={rotaFromDate}
-            onChange={(e) => setRotaFromDate(e.target.value)}
-            aria-label="From date"
-            title="From date"
-            className="h-8 rounded-full border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
-          />
-          <span className="text-xs text-moss">to</span>
-          <input
-            type="date"
-            value={rotaToDate}
-            onChange={(e) => setRotaToDate(e.target.value)}
-            aria-label="To date"
-            title="To date"
-            className="h-8 rounded-full border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
-          />
-        </div>
+        <input
+          type="date"
+          value={rotaFromDate}
+          onChange={(e) => setRotaFromDate(e.target.value)}
+          aria-label="From date"
+          title="From date"
+          className="h-[30px] rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none hidden sm:block"
+        />
+        <input
+          type="date"
+          value={rotaToDate}
+          onChange={(e) => setRotaToDate(e.target.value)}
+          aria-label="To date"
+          title="To date"
+          className="h-[30px] rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none hidden sm:block"
+        />
       </div>
     );
     return () => {
@@ -1378,11 +1375,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
             <p className="hidden text-[11px] text-moss sm:block">
               {filteredRota.length} of {rota.length} {rota.length === 1 ? "duty" : "duties"} scheduled
             </p>
-            <div className="flex flex-wrap items-center justify-between gap-2 w-full sm:w-auto">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <button
                 type="button"
                 onClick={() => openShareModal(null)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
               >
                 <Share2 className="h-3.5 w-3.5 text-ember" />
                 Share
@@ -1390,7 +1387,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
               <button
                 type="button"
                 onClick={() => void printRotaPdf()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
               >
                 <Printer className="h-3.5 w-3.5 text-ember" />
                 Print
@@ -1399,10 +1396,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                 type="button"
                 disabled={downloadingRotaPdf}
                 onClick={() => void downloadRotaPdf()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand disabled:opacity-50"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand disabled:opacity-50"
               >
                 <FileDown className="h-3.5 w-3.5 text-ember" />
-                {downloadingRotaPdf ? "Downloading..." : "Download Rota"}
+                {downloadingRotaPdf ? "Downloading…" : "Download"}
               </button>
               <button
                 type="button"
