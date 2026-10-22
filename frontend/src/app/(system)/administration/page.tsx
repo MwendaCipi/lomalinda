@@ -548,6 +548,7 @@ function AdministrationContent() {
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
+            { icon: <Mail size={20} aria-hidden="true" />, label: "Messaging", description: "Letters arriving at info@sdalomalinda.or.ke, and the messages the church sends.", href: "/administration?tab=emails" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
@@ -561,7 +562,6 @@ function AdministrationContent() {
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
             { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
-            { icon: <Mail size={20} aria-hidden="true" />, label: "Emails", description: "Letters arriving at info@sdalomalinda.or.ke, with replies written from the desk.", href: "/administration?tab=emails" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
@@ -725,11 +725,12 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Emails — the church's own mailbox at info@. Announcements are
-                what the office says to everyone; this is what arrived for
-                somebody to answer, so it gets its own desk on the strip. The
-                API decides who may read it (elders, clerks, admin); the page
-                simply gives it the full height, since it scrolls itself. */}
+            {/* Messaging — the church's own mailbox at info@, now a page of
+                the clerk's strip since the clerk is who writes to the church.
+                Announcements are what the office says to everyone; this is
+                what arrived for somebody to answer. The API decides who may
+                read it; the page simply gives it the full height, since it
+                scrolls itself. */}
             {activeTab === "emails" && (isClerk || isElder || isAdmin) && (
               <div className="h-full min-h-0">
                 <EmailsDesk />

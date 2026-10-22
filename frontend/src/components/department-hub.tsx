@@ -3433,6 +3433,9 @@ export function DepartmentAccountsPanel({
   className?: string;
 }) {
   const isDeaconate = department.code === "deaconate";
+  // The elders' funding desk reads the church's accounts; its strip carries
+  // no request button (see the effect below).
+  const isEldership = department.code === "eldership";
   const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [movements, setMovements] = useState<FundMovement[]>([]);
@@ -3518,13 +3521,17 @@ export function DepartmentAccountsPanel({
     setShowWithdrawModal(true);
   }, [withdrawAccountId, accounts]);
 
-  // A second Request Withdrawal at the toggles strip's far right — a PC
+  // A second request button at the toggles strip's far right — a PC
   // convenience beside the one in the footer, pointing at the same modal,
   // and never the only way to reach it: the shell draws that slot on large
   // screens only (hidden below lg), so a phone keeps the footer's.
+  //
+  // The eldership's strip carries no such button. Its funding desk is a read
+  // of the church's accounts and the elders ask through the footer's own
+  // button; every other desk keeps its slot.
   const { setTogglesRightAction } = usePageHeader();
   useEffect(() => {
-    if (!canRequest) return;
+    if (!canRequest || isEldership) return;
     setTogglesRightAction(
       <button
         type="button"
@@ -3536,7 +3543,7 @@ export function DepartmentAccountsPanel({
       </button>
     );
     return () => setTogglesRightAction(null);
-  }, [canRequest, openWithdraw, isDeaconate, setTogglesRightAction]);
+  }, [canRequest, isEldership, openWithdraw, isDeaconate, setTogglesRightAction]);
 
   const selectedWithdrawAccount = useMemo(() => {
     if (withdrawAccountId !== null) {

@@ -687,8 +687,10 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
 
 /**
  * Clerkship — the clerk's desk. The pages are ordered by the work a clerk
- * reaches for most: answering arrivals and transfers, then the less frequent
- * meeting, register and accounts work. Profiles open from User Management.
+ * reaches for most: answering arrivals and transfers, then the writing the
+ * clerk does — the letters and the church's messages — and after that the
+ * less frequent meeting, register and accounts work. Profiles open from User
+ * Management.
  */
 export const clerkshipItems: RailRow[] = [
   // The register and the church's leadership records are pages of the clerk's
@@ -718,6 +720,16 @@ export const clerkshipItems: RailRow[] = [
     short: "Letters",
     description: "Write, share and print the church's official correspondence.",
   }),
+  // The church's own outbox. It moved here from the eldership because it is
+  // no longer only the mailbox at info@: the clerk is the one who writes to
+  // the church, so the letters and the messages the church sends belong on
+  // the same desk. It answers to the tab it always did, so a link to it —
+  // and the sync of who holds it — is unchanged.
+  officeTab("emails", "Messaging", Mail, {
+    roles: CLERKSHIP_ROLES,
+    short: "Messaging",
+    description: "Letters arriving at info@sdalomalinda.or.ke, and the messages the church sends.",
+  }),
   officeTab("meetings", "Meetings", Calendar, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["board", "business"],
@@ -740,18 +752,18 @@ export const clerkshipItems: RailRow[] = [
  * The rail's Eldership row opens the desk itself, and so does a phone's
  * Eldership card; but the desk's own views and the console's pages used to be
  * two different strips, so the same desk named a different set of pages in a
- * hand and on a screen. These eight are the church's desk either way: the
+ * hand and on a screen. These seven are the church's desk either way: the
  * elders' roll and the church's calendar, which the desk keeps, and the
- * leadership register, the board, the mailbox, the asks, the wall and the
- * accounts, which the console holds. Eight chips sit four a row on a phone —
- * two level rows — and as one line on a wide screen, at every door.
+ * leadership register, the board, the asks, the wall and the accounts, which
+ * the console holds. Seven chips sit four a row on a phone — a row of four
+ * and a row of three — and as one line on a wide screen, at every door.
  *
  * Church Settings moved to Administration, where the roster and the roles
  * stand with it; the meetings' minutes and the transfers are the clerk's own
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "members" | "leaders" | "calendar" | "announcements" | "emails" | "requests" | "moments" | "funding";
+  key: "members" | "leaders" | "calendar" | "announcements" | "requests" | "moments" | "funding";
   label: string;
   short?: string;
   icon: LucideIcon;
@@ -793,17 +805,6 @@ export const eldershipViews: {
     href: "/administration?tab=announcements",
     description: "Notices and updates shared with the church family.",
   },
-  // The church's own mailbox. Announcements are what the church says to
-  // everyone; this desk is what arrives for somebody to answer — so it sits
-  // beside the broadcast rather than behind it, and sends as info@ only.
-  {
-    key: "emails",
-    label: "Emails",
-    short: "Emails",
-    icon: Mail,
-    href: "/administration?tab=emails",
-    description: "Letters arriving at info@sdalomalinda.or.ke, with replies written from the desk.",
-  },
   {
     key: "requests",
     label: "Requests",
@@ -833,7 +834,7 @@ export const eldershipViews: {
 ];
 
 /**
- * The same eight as rail rows, so the rail, the shell's strip and the desk's
+ * The same seven as rail rows, so the rail, the shell's strip and the desk's
  * own strip can never name a different set.
  *
  * A console page answers on its `?tab=`, which is how the console's own pages
