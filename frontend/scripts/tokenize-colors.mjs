@@ -107,6 +107,9 @@ const TOKENS = {
   "8a968d": "sage-fog",
   "d0ddca": "leaf",
   "dce9dd": "leaf-wash",
+  // Lake blues (quiet growth actions: "add" affordances)
+  "4c7ca8": "lake",
+  "3d6a91": "lake-deep",
   // Cool near-white greens (selected/active surfaces)
   "f4f7f4": "mist",
   "f4f7f2": "mist-tint",

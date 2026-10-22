@@ -828,6 +828,11 @@ function AddEventModal({
   departmentLabel,
   defaultLocation,
   departments = [],
+  /** The event being corrected. Given, the form opens on what the row holds
+      and its programme is untouched — only the fields here answer to the edit
+      — and the choice of another calendar is not offered: the event stays
+      filed where the church put it. */
+  editEvent,
   onClose,
   onAdd,
 }: {
@@ -840,6 +845,7 @@ function AddEventModal({
    * its own calendar, and the choice is not offered at all.
    */
   departments?: { code: string; label: string }[];
+  editEvent?: DeptEvent;
   onClose: () => void;
   onAdd: (event: {
     title: string;
@@ -854,15 +860,16 @@ function AddEventModal({
     department: string;
   }) => void;
 }) {
+  const editing = Boolean(editEvent);
   const [form, setForm] = useState({
-    title: "",
-    date: "",
-    time: "",
-    end_date: "",
-    end_time: "",
-    mode: "physical" as "physical" | "virtual",
-    location: defaultLocation,
-    meeting_link: "",
+    title: editEvent?.title ?? "",
+    date: editEvent?.date ?? "",
+    time: editEvent?.time ?? "",
+    end_date: editEvent?.end_date ?? "",
+    end_time: editEvent?.end_time ?? "",
+    mode: (editEvent?.mode ?? "physical") as "physical" | "virtual",
+    location: editEvent?.location ?? defaultLocation,
+    meeting_link: editEvent?.meeting_link ?? "",
     department: "",
   });
   // Which area's calendar will hold the event. The desk writing it is the
@@ -876,11 +883,11 @@ function AddEventModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Add event to ${targetLabel}`}
+        aria-label={editing ? "Edit event" : `Add event to ${targetLabel}`}
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
       >
         <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
-          <h3 className="text-lg font-bold text-bark">Add event for {targetLabel}</h3>
+          <h3 className="text-lg font-bold text-bark">{editing ? "Edit event" : `Add event for ${targetLabel}`}</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
@@ -911,7 +918,7 @@ function AddEventModal({
           {/* Whose calendar holds it — offered only to a desk that may write
               on another's (the church's week is filed into the ministry that
               will run it, rather than kept as a second list). */}
-          {departments.length > 0 && (
+          {!editing && departments.length > 0 && (
             <div>
               <label className="text-xs font-semibold text-bark">Department / ministry</label>
               <select
@@ -1047,7 +1054,7 @@ function AddEventModal({
             disabled={!valid}
             className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
           >
-            Add event
+            {editing ? "Save changes" : "Add event"}
           </button>
         </form>
       </div>
@@ -1076,12 +1083,15 @@ function eventTimeRange(event: DeptEvent) {
 function EventProgramMenu({
   event,
   onView,
+  onEdit,
   onCreate,
   onUpload,
   onRemove,
 }: {
   event: DeptEvent;
   onView: () => void;
+  /** Correct the event's details — the form, open on what it holds. */
+  onEdit: () => void;
   onCreate: () => void;
   onUpload: () => void;
   onRemove: () => void;
@@ -1090,6 +1100,9 @@ function EventProgramMenu({
   const hasProgram = eventHasProgram(event);
   return (
     <div>
+      <button type="button" onClick={onEdit} className={`${item} text-bark`}>
+        Edit event
+      </button>
       {hasProgram && (
         <button type="button" onClick={onView} className={`${item} font-semibold text-bark`}>
           View program
@@ -1144,7 +1157,13 @@ function ProgramEditorModal({
     setOpenSession((open) => (open === null ? null : open > index ? open - 1 : open === index ? null : open));
   };
   const emptySession = { start: "", end: "", title: "", participants: [], parts: [] };
-  const emptyPart = { start: "", end: "", title: "", participants: [] };
+  /** Where an added activity starts: immediately where the one before it
+      leaves off — its end hour (its own start, when it named no end) — so
+      the desk chains the day without re-typing a time it just wrote. */
+  const carryTime = (session: ProgramItem) => {
+    const last = session.parts[session.parts.length - 1];
+    return last?.end || last?.start || "";
+  };
   /** One change to one part of one session — the row every edit below makes. */
   const mapPart = (index: number, partIndex: number, edit: (part: ProgramItem["parts"][number]) => ProgramItem["parts"][number]) =>
     setItems((current) =>
@@ -1190,9 +1209,7 @@ function ProgramEditorModal({
           </button>
         </div>
         <p className="mt-2 text-xs text-moss">
-          Each session is one part of the day — its name. Open a session to add the activities
-          inside it: each carries its time, name and facilitator. Type an hour the way you would
-          say it — 8, 8:30, 2:30 pm — and the sheet reads it back.
+          Each session is one part of the day. Open a session to add the activities inside it.
         </p>
         <div className="mt-3 space-y-3">
           {items.map((session, index) => {
@@ -1318,6 +1335,13 @@ function ProgramEditorModal({
                                   type="text"
                                   value={person.name}
                                   onChange={(e) => setPartPerson(index, partIndex, personIndex, { name: e.target.value })}
+                                  // The row "Add facilitator" just made: focus
+                                  // lands on its name on mount, so the desk
+                                  // types without reaching for the mouse. The
+                                  // unnamed condition keeps it a mount-once
+                                  // effect of that click — a sheet opened on a
+                                  // fully named list takes no focus at all.
+                                  autoFocus={personIndex === part.participants.length - 1 && person.name === ""}
                                   aria-label={`Facilitator ${personIndex + 1} of activity ${partIndex + 1} in session ${index + 1}`}
                                   placeholder="Name"
                                   className="w-full min-w-0 flex-1 rounded-xl border border-sand-line bg-white px-2.5 py-1.5 text-xs focus:border-ember focus:outline-none"
@@ -1362,7 +1386,11 @@ function ProgramEditorModal({
                       ))}
                       <button
                         type="button"
-                        onClick={() => setSession(index, { parts: [...session.parts, emptyPart] })}
+                        onClick={() =>
+                          setSession(index, {
+                            parts: [...session.parts, { start: carryTime(session), end: "", title: "", participants: [] }],
+                          })
+                        }
                         className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:border-ember"
                       >
                         <Plus className="h-3 w-3" /> Add activity
@@ -1379,7 +1407,7 @@ function ProgramEditorModal({
               setItems((current) => [...current, emptySession]);
               setOpenSession(items.length);
             }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep"
           >
             <Plus className="h-3.5 w-3.5" /> Add session
           </button>
@@ -4322,6 +4350,9 @@ function DepartmentDetail({
   // is reached from it, so all three live with the calendar they serve.
   const [programFor, setProgramFor] = useState<DeptEvent | null>(null);
   const [programViewer, setProgramViewer] = useState<DeptEvent | null>(null);
+  // The event being corrected — the Actions menu's "Edit event" opens the
+  // same form the desk files events with, but shaped by what it already holds.
+  const [editEvent, setEditEvent] = useState<DeptEvent | null>(null);
   const [openEventMenuKey, setOpenEventMenuKey] = useState<string | null>(null);
   // Where the table row's Actions button sits in the viewport at the moment
   // it opens its menu. The menu is drawn in a document-level portal (a fixed
@@ -5044,6 +5075,50 @@ function DepartmentDetail({
     }
   };
 
+  /** The event's own details, corrected in place — the form's fields PATCHed
+      onto the row without touching the programme attached to it. */
+  const updateEvent = async (
+    event: DeptEvent,
+    values: {
+      title: string;
+      date: string;
+      time: string;
+      end_date: string;
+      end_time: string;
+      mode: string;
+      location: string;
+      meeting_link: string;
+    },
+  ) => {
+    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: values.title,
+        date: values.date,
+        time: values.time,
+        end_date: values.end_date,
+        end_time: values.end_time,
+        mode: values.mode,
+        location: values.location,
+        meeting_link: values.meeting_link,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      showAlert("Event updated", `"${event.title}" has been saved as it now stands.`, "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+      setEditEvent(null);
+      loadEvents();
+      onChanged();
+    } else {
+      showAlert("Could not save the event", data.detail || "The event could not be updated.", "error");
+    }
+  };
+
   const removeEvent = async (event: DeptEvent) => {
     const result = await showAlert("Remove event", `Take "${event.title}" off the calendar?`, "question", {
       showCancelButton: true,
@@ -5677,9 +5752,9 @@ function DepartmentDetail({
         // while the buttons at its foot stay pinned — so adding rows never
         // moves them. Print unrolls both (see .desk-calendar in the print
         // styles), so a printout still carries the whole calendar.
-        <div className="desk-calendar flex h-[calc(100dvh_-_18rem)] min-h-[16rem] flex-col rounded-2xl border border-sand-line bg-white p-5 pb-0 shadow-sm">
+        <div className="desk-calendar flex h-[calc(100dvh_-_18rem)] min-h-[16rem] flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div
-            className="desk-calendar-body custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            className="desk-calendar-body custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-3 pt-4"
             ref={calendarScrollRef}
           >
           {loadingEvents ? (
@@ -5718,6 +5793,7 @@ function DepartmentDetail({
                         <EventProgramMenu
                           event={event}
                           onView={() => { onClose(); setProgramViewer(event); }}
+                          onEdit={() => { setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
                           onUpload={() => { onClose(); chooseProgramFile(event); }}
                           onRemove={() => { onClose(); removeEvent(event); }}
@@ -5734,28 +5810,28 @@ function DepartmentDetail({
                   calendar draws — the day, the event, the hour, the actions —
                   and the cards a phone reads below it. */}
               <div className="mt-3 hidden overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line md:block">
-                <table className="w-full min-w-[680px] border-collapse text-left text-sm">
-                  <thead className="border-b border-sand-line bg-mist-select text-xs uppercase tracking-[0.12em] text-moss">
+                <table className="w-full min-w-[680px] border-collapse text-left text-xs">
+                  <thead className="border-b border-sand-line bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
                     <tr>
-                      <th className="px-5 py-4 font-semibold">Date</th>
-                      <th className="px-5 py-4 font-semibold">Event</th>
-                      <th className="px-5 py-4 font-semibold">Time</th>
-                      <th className="px-5 py-4 font-semibold">Action</th>
+                      <th className="px-4 pb-3 pt-3 font-bold">Date</th>
+                      <th className="px-4 pb-3 pt-3 font-bold">Event</th>
+                      <th className="px-4 pb-3 pt-3 font-bold">Time</th>
+                      <th className="px-4 pb-3 pt-3 text-right font-bold">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-sand-wash">
+                  <tbody className="divide-y divide-sand-soft">
                     {filteredEvents.map((event) => {
                       const actionKey = `event-${event.id}`;
                       return (
                         <tr key={event.id} className="hover:bg-sand-plate">
-                          <td className="whitespace-nowrap px-5 py-4 text-moss">{dayFirst(event.date)}</td>
-                          <td className="px-5 py-4 font-semibold">
+                          <td className={`whitespace-nowrap px-4 ${rowPad} align-middle text-moss`}>{dayFirst(event.date)}</td>
+                          <td className={`px-4 ${rowPad} align-middle font-semibold`}>
                             {event.title}
                             {event.lead && <span className="block text-xs font-normal text-moss">Led by {event.lead}</span>}
                             {event.location && <span className="block text-xs font-normal text-moss">{event.location}</span>}
                           </td>
-                          <td className="whitespace-nowrap px-5 py-4 text-moss">{eventTimeRange(event) || "-"}</td>
-                          <td className="relative px-5 py-4">
+                          <td className={`whitespace-nowrap px-4 ${rowPad} align-middle text-moss`}>{eventTimeRange(event) || "-"}</td>
+                          <td className={`relative px-4 ${rowPad} align-middle`}>
                             <button
                               type="button"
                               aria-expanded={openEventMenuKey === actionKey}
@@ -5780,7 +5856,7 @@ function DepartmentDetail({
                                 }
                                 setOpenEventMenuKey(opening ? actionKey : null);
                               }}
-                              className="rounded-lg border border-sand-mute px-3 py-2 text-sm font-semibold text-bark hover:border-ember"
+                              className="rounded-lg border border-sand-mute px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember"
                             >
                               Actions <span aria-hidden="true">▾</span>
                             </button>
@@ -5803,6 +5879,7 @@ function DepartmentDetail({
                                   <EventProgramMenu
                                     event={event}
                                     onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
+                                    onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                     onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                     onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
                                     onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
@@ -5874,6 +5951,7 @@ function DepartmentDetail({
                               <EventProgramMenu
                                 event={event}
                                 onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
+                                onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                 onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                 onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
                                 onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
@@ -5897,7 +5975,7 @@ function DepartmentDetail({
               sticking to a scroll: the count on the left, and the two things
               the desk does with a calendar on the right — file one, or print
               what is here. */}
-          <div className="-mx-5 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-5 pb-5 pt-3 print:hidden">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3 print:hidden">
             <p className="text-xs text-moss">
               {calendarView === "calendar"
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
@@ -6110,13 +6188,25 @@ function DepartmentDetail({
           }}
         />
       )}
-      {showAddEvent && (
+      {(showAddEvent || editEvent) && (
         <AddEventModal
+          editEvent={editEvent ?? undefined}
           departmentLabel={department.label}
           defaultLocation={churchName}
-          departments={eventDepartments}
-          onClose={() => setShowAddEvent(false)}
-          onAdd={addEvent}
+          // An edit does not re-file the event: held to this desk's own
+          // calendar, the choice of another is not even drawn.
+          departments={editEvent ? [] : eventDepartments}
+          onClose={() => {
+            setShowAddEvent(false);
+            setEditEvent(null);
+          }}
+          onAdd={async (values) => {
+            if (editEvent) {
+              await updateEvent(editEvent, values);
+            } else {
+              await addEvent(values);
+            }
+          }}
         />
       )}
     </div>
