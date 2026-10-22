@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePageHeader } from "@/components/app-frame";
 import {
@@ -31,6 +31,31 @@ import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/**
+ * The rota's own filters — the date range and the search — handed to whichever
+ * surface is hosting the rota. The deaconate's own rota draws them inside the
+ * shell's heading band; the pulpit team rides the Personal Ministries desk,
+ * whose heading the desk keeps, so that desk reads this context and renders the
+ * same filters at the right of the heading the way every other view there does.
+ * A surface that renders the filters itself (the pulpit panel, while the desk
+ * does not host them) reads `false` and draws its own inline band.
+ */
+export type RotaFilters = {
+  fromDate: string;
+  toDate: string;
+  searchQuery: string;
+  setFromDate: (value: string) => void;
+  setToDate: (value: string) => void;
+  setSearchQuery: (value: string) => void;
+};
+
+const RotaFiltersContext = createContext<{ filters: RotaFilters; hosted: boolean } | null>(null);
+
+/** The rota filters as the surface hosting them sees them; null when none. */
+export function useRotaFilters() {
+  return useContext(RotaFiltersContext);
+}
 
 /** Mirrors InventoryItem.CATEGORY_CHOICES on the backend. */
 const INVENTORY_CATEGORIES = [
@@ -293,9 +318,17 @@ interface DeaconateManagerProps {
    * rather than taking the shell's header band over.
    */
   desk?: "deaconate" | "pulpit";
+  /**
+   * Whether a surface above — the Personal Ministries desk, which keeps its
+   * own heading — is hosting this rota's date and search filters at the right
+   * of that heading. When set, the panel draws no filter band of its own; when
+   * unset (the panel opened on the Ministry map, with no desk above), it keeps
+   * carrying them itself so the filters are never unreachable.
+   */
+  filtersHosted?: boolean;
 }
 
-export function DeaconateManager({ initialTab = "inventory", embedded = false, desk = "deaconate", onBack }: DeaconateManagerProps) {
+export function DeaconateManager({ initialTab = "inventory", embedded = false, desk = "deaconate", onBack, filtersHosted = false }: DeaconateManagerProps) {
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const isPulpit = desk === "pulpit";
@@ -366,6 +399,22 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const [rotaFromDate, setRotaFromDate] = useState("");
   const [rotaToDate, setRotaToDate] = useState("");
   const [rotaSearchQuery, setRotaSearchQuery] = useState("");
+  // Whether a surface above is hosting this rota's filters — the Personal
+  // Ministries desk, for the pulpit team, which keeps its own heading. When it
+  // is, the filters belong at the right of that heading rather than in a band
+  // of the panel's own, and this panel draws none.
+  const rotaFilters = useMemo<RotaFilters>(
+    () => ({
+      fromDate: rotaFromDate,
+      toDate: rotaToDate,
+      searchQuery: rotaSearchQuery,
+      setFromDate: setRotaFromDate,
+      setToDate: setRotaToDate,
+      setSearchQuery: setRotaSearchQuery,
+    }),
+    [rotaFromDate, rotaToDate, rotaSearchQuery],
+  );
+  const rotaFiltersHosted = filtersHosted;
   const [downloadingRotaPdf, setDownloadingRotaPdf] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareTarget, setShareTarget] = useState<RotaEntry | null>(null);
@@ -1171,6 +1220,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
 
 
   return (
+    <RotaFiltersContext.Provider value={{ filters: rotaFilters, hosted: rotaFiltersHosted }}>
     <div className="flex h-full min-h-0 flex-col bg-white">
       {/* ── INVENTORY: fixed filters on top, scrolling rows, fixed actions below ── */}
       {activeTab === "inventory" && (
@@ -1311,9 +1361,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {activeTab === "rota" && (
         <>
           <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4">
-            {isPulpit && (
-              /* The pulpit view's filters: inside the panel rather than the
-                 shell's header band, which the Personal Ministries desk keeps. */
+            {isPulpit && !rotaFiltersHosted && (
+              /* The pulpit view's filters, when no surface above hosts them.
+                 The Personal Ministries desk keeps its own heading, so while it
+                 renders this panel it also reads the filters from context and
+                 draws them at the right of that heading — this inline band then
+                 steps aside. Where the panel is opened without such a desk (the
+                 Ministry map), it carries the filters itself. */
               <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-sand-line bg-white p-3 shadow-sm">
                 <div className="relative min-w-0 flex-1 sm:flex-none sm:w-56">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
@@ -2406,5 +2460,6 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         </div>
       )}
     </div>
+    </RotaFiltersContext.Provider>
   );
 }

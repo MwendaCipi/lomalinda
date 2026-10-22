@@ -89,7 +89,7 @@ import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
-import { DeaconateManager } from "@/components/deaconate-manager";
+import { DeaconateManager, useRotaFilters } from "@/components/deaconate-manager";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
@@ -4392,6 +4392,12 @@ function DepartmentDetail({
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
   const [meetingsSearch, setMeetingsSearch] = useState("");
+  // The pulpit team's rota filters — the date range and the search. The panel
+  // owns the rota itself and exposes these through context; the desk lifts the
+  // controls onto the right of its own heading, the place every other view
+  // here already keeps its controls, rather than leaving them in a band of the
+  // panel's own below.
+  const hostedRotaFilters = useRotaFilters();
 
   const rowPad = densityCellPad();
 
@@ -4511,6 +4517,42 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
+    } else if (subTab === "pulpit-team") {
+      // The pulpit team's date range and search ride the right of this desk's
+      // heading, the place every other view here keeps its controls, rather
+      // than a band of the panel's own below it. The values live in the panel,
+      // which owns the rota; it exposes them through context and reads them
+      // back the same way.
+      const filters = hostedRotaFilters?.filters;
+      setHeaderRightAction(
+        filters ? (
+          <div className="flex w-full items-center gap-1.5 sm:w-auto">
+            <input
+              type="text"
+              value={filters.searchQuery}
+              onChange={(e) => filters.setSearchQuery(e.target.value)}
+              placeholder="Search the pulpit team…"
+              className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
+            />
+            <input
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => filters.setFromDate(e.target.value)}
+              aria-label="From date"
+              title="From date"
+              className="h-[30px] shrink-0 rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+            />
+            <input
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => filters.setToDate(e.target.value)}
+              aria-label="To date"
+              title="To date"
+              className="h-[30px] shrink-0 rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+            />
+          </div>
+        ) : null
+      );
     } else {
       setHeaderRightAction(null);
     }
@@ -4527,6 +4569,7 @@ function DepartmentDetail({
     accountsSearch,
     accountsFilter,
     meetingsSearch,
+    hostedRotaFilters?.filters,
     setHeaderRightAction,
   ]);
 
@@ -5867,7 +5910,7 @@ function DepartmentDetail({
           desk hands the panel to it with its own desk's lines. */}
       {subTab === "pulpit-team" && keepsTheWeek && (
         <div className="h-full min-h-0">
-          <DeaconateManager initialTab="rota" desk="pulpit" embedded />
+          <DeaconateManager initialTab="rota" desk="pulpit" embedded filtersHosted />
         </div>
       )}
 
