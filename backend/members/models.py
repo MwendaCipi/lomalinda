@@ -2020,6 +2020,15 @@ class ChurchSettings(models.Model):
         ),
         blank=True,
     )
+    default_pulpit_assignment_message = models.TextField(
+        default=(
+            '{greeting}, {name}.\n\n'
+            'You have been rostered for {duty} on {day}, {date} at {shift}. '
+            'Your part: {role}.\n\n'
+            'If you cannot serve that day, please notify the PM desk. {church}'
+        ),
+        blank=True,
+    )
     # Per-role rights, as edited on the Church Roles Configuration screen:
     # {role_code: [right_code, ...]}. Missing roles fall back to the shipped
     # defaults in members.roles.DEFAULT_ROLE_RIGHTS.

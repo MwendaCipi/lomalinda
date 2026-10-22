@@ -153,18 +153,21 @@ def duty_template(kind: str, desk: str = '') -> str:
 
     ``kind`` is ``'assignment'`` (sent when the officer is rostered) or
     ``'reminder'`` (the day-before SMS).  ``desk`` is ``'pulpit'`` or
-    ``'deaconate'``; it selects the right default when the church has not
-    written its own wording.
+    ``'deaconate'``; it selects the right field and default when the church
+    has not written its own wording.
     """
     settings_obj = ChurchSettings.objects.first()
-    field = 'default_duty_reminder_message' if kind == 'reminder' else 'default_duty_assignment_message'
-    fallback = DEFAULT_REMINDER_MESSAGE if kind == 'reminder' else DEFAULT_ASSIGNMENT_MESSAGE
+    if kind == 'reminder':
+        field = 'default_duty_reminder_message'
+        fallback = DEFAULT_REMINDER_MESSAGE
+    elif desk == 'pulpit':
+        field = 'default_pulpit_assignment_message'
+        fallback = DEFAULT_PULPIT_ASSIGNMENT_MESSAGE
+    else:
+        field = 'default_duty_assignment_message'
+        fallback = DEFAULT_ASSIGNMENT_MESSAGE
     configured = getattr(settings_obj, field, '') if settings_obj else ''
-    if configured:
-        return configured
-    if kind == 'assignment' and desk == 'pulpit':
-        return DEFAULT_PULPIT_ASSIGNMENT_MESSAGE
-    return fallback
+    return configured or fallback
 
 
 def drop_part_sentence(template: str) -> str:
