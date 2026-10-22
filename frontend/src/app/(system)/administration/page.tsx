@@ -193,11 +193,16 @@ function AdministrationContent() {
         // department or ministry (or have asked to): the rail's area rows
         // open their desk here, read-mostly. The API still enforces every
         // write, so what they can change is decided server-side.
-        const inArea = (data?.my_departments ?? []).some((row: { code?: string }) => row.code);
+        const inArea =
+          (data?.my_departments ?? []).some((row: { code?: string }) => row.code) ||
+          (Array.isArray(data?.my_ties) && data.my_ties.length > 0);
         // Opening one area's page is everyone's door: the rail's area rows
         // land here read-mostly, whatever the viewer belongs to. The desks'
         // writes stay guarded server-side.
         const opensAnArea = Boolean(searchDept);
+        const onDeaconate =
+          (Array.isArray(data?.my_ties) && data.my_ties.includes("deaconate")) ||
+          userRoles.some((r) => ["deacon", "deaconess", "head_deacon", "head_deaconess"].includes(r));
         const isOfficial =
           data &&
           (userRoles.some((r) => officialRoles.includes(r as StaffRole)) ||
@@ -205,7 +210,8 @@ function AdministrationContent() {
             data.is_superuser ||
             rawRole === "admin" ||
             inArea ||
-            opensAnArea);
+            opensAnArea ||
+            onDeaconate);
 
         if (isOfficial) {
           setProfile(data);
@@ -681,7 +687,17 @@ function AdministrationContent() {
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} directoryHeading={ELDERSHIP_HEADING} />}
 
-            {activeTab === "leadership" && (isClerk || isElder || isAdmin) && <DepartmentHub key={`shared-${searchDept ?? "directory"}`} initialDept={searchDept} directoryHeading={{ label: "Administration", description: "The church's offices, ministries and departments, with each leader and assistant." }} />}
+            {activeTab === "leadership" && (isClerk || isElder || isAdmin) && (
+              <DepartmentHub
+                key={`shared-${searchDept ?? "directory"}`}
+                initialDept={searchDept}
+                // A duty notice links to the desk view that holds the line it
+                // is about — the pulpit team's own — while every other use of
+                // ?view= (the treasury's) leaves the hub on its roll.
+                initialTab={searchView === "pulpit-team" ? "pulpit-team" : undefined}
+                directoryHeading={{ label: "Administration", description: "The church's offices, ministries and departments, with each leader and assistant." }}
+              />
+            )}
 
             {/* Church Meetings — board and business meetings consolidated */}
             {meetingTab && (isClerk || isElder || isAdmin) && (

@@ -218,7 +218,7 @@ export function MyAreas() {
    * here; a member who is not of it keeps the read-mostly view every area
    * gets, roll and ask-to-join included.
    */
-  const holdsDeaconate = DEACONATE_ROLES.some((role) => roles.includes(role));
+  const holdsDeaconate = DEACONATE_ROLES.some((role) => roles.includes(role)) || ties.includes("deaconate");
   const opensDeaconateDesk = openArea?.code === "deaconate" && holdsDeaconate;
   const deaconateView = (deaconateViews.find((page) => page.view === openView)?.view ?? "members") as
     (typeof deaconateViews)[number]["view"];

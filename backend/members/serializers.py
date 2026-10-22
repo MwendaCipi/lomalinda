@@ -2229,11 +2229,22 @@ class DutyRotaSerializer(serializers.ModelSerializer):
         child=serializers.JSONField(),
         required=False,
     )
+    # Which desk keeps the line. Chosen when the line is written and never
+    # moved after: a line's desk decides who may edit it, so a PUT cannot
+    # carry a line from one desk's stewards to another's.
+    desk = serializers.ChoiceField(
+        choices=DutyRota.DESK_CHOICES, default=DutyRota.DESK_DEACONATE,
+    )
 
     class Meta:
         model = DutyRota
-        fields = ('id', 'title', 'date', 'shift', 'duty_type', 'assigned_team', 'created_at')
+        fields = ('id', 'desk', 'title', 'date', 'shift', 'duty_type', 'assigned_team', 'created_at')
         read_only_fields = ('id', 'created_at')
+
+    def update(self, instance, validated_data):
+        """Rewrite the line, but never move it between desks."""
+        validated_data.pop('desk', None)
+        return super().update(instance, validated_data)
 
     def validate_title(self, value):
         """The title is a courtesy line, not the duty itself: the desk rosters

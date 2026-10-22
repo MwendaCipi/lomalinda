@@ -35,6 +35,7 @@ import {
   Droplets,
   Megaphone,
   MessageSquare,
+  Mic,
   MicVocal,
   MoreVertical,
   Music,
@@ -87,6 +88,7 @@ import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
+import { DeaconateManager } from "@/components/deaconate-manager";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
@@ -4129,6 +4131,7 @@ type DeptSubTab =
   | "calendar"
   | "moments"
   | "meetings"
+  | "pulpit-team"
   | "singing_groups"
   | "choir"
   | "accounts"
@@ -4573,6 +4576,11 @@ function DepartmentDetail({
       { key: "accounts", label: "Account Status", short: "Account", icon: Wallet },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
+      // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
+      // is rostered by the same desk that keeps the church's week, on the same
+      // rota the deaconate keeps its duty on (see DeaconateManager's pulpit
+      // desk).
+      ...(keepsTheWeek ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
       // The eldership's own three, gated to the roles that hold them.
       ...(canOpenOfficeViews
         ? [
@@ -5841,6 +5849,15 @@ function DepartmentDetail({
           it. Church-wide, so it is its own view rather than a calendar entry. */}
       {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel search={meetingsSearch} />}
 
+      {/* The pulpit team — who preaches, plays, reads and leads on a Sabbath.
+          Rostered on the same rota the deaconate keeps its duty on, so the
+          desk hands the panel to it with its own desk's lines. */}
+      {subTab === "pulpit-team" && keepsTheWeek && (
+        <div className="h-full min-h-0">
+          <DeaconateManager initialTab="rota" desk="pulpit" embedded />
+        </div>
+      )}
+
       {/* Sabbath School Lesson Orders */}
       {subTab === "lesson-orders" && isSabbathSchool && <LessonOrdersPanel />}
 
@@ -6088,7 +6105,7 @@ export function DepartmentHub({
 }: {
   initialDept?: string | null;
   /** Which of the opened area's views to land on. */
-  initialTab?: "members" | "calendar";
+  initialTab?: "members" | "calendar" | "pulpit-team";
   /**
    * Where the way out of an opened area leads — the ministry map, or the
    * desk the hub sits inside. Left unset it is the hub's own directory: the
@@ -6106,7 +6123,7 @@ export function DepartmentHub({
   // Which department detail (and which of its tabs) is open; the row's
   // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
-  const [detailTab, setDetailTab] = useState<"members" | "calendar">(initialTab);
+  const [detailTab, setDetailTab] = useState<"members" | "calendar" | "pulpit-team">(initialTab);
   // Which department's budget modal is open.
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
   // Which department's leadership modal is open.

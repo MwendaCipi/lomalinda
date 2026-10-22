@@ -1127,7 +1127,7 @@ export const railEntries: RailEntry[] = [
   // The treasury's row names the desk; its pages are the desk's own strip (see
   // `ownStrip`), so the rail never draws a second, older list of them.
   { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, ownStrip: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
-  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.deaconate },
+  { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, railAreaCode: "deaconate", description: DEPARTMENT_BLURBS.deaconate },
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.
   // The choir keeps its own desk among the ministries, where its area code is
@@ -1278,6 +1278,9 @@ const RAIL_AREA_CODES_MOVED = new Set([
   // Clerkship is a ministry of the record now (0201), and the rail's
   // Clerkship section already names the desk.
   "clerkship",
+  // The Deaconate has its own rail entry and views (deaconateItems), so the
+  // department/ministry heading must not mint a second row beside it.
+  "deaconate",
   "beginners",
   "kindergarten",
   "primary",
@@ -1417,7 +1420,7 @@ export function railFor(
         ? true
         : canSee(entry, roles);
       const isOwned = entry.railAreaCode
-        ? tieCodes.includes(entry.railAreaCode)
+        ? tieCodes.includes(entry.railAreaCode) || (entry.roles ?? []).some((role) => roles.includes(role) && role !== "admin")
         : (entry.roles ?? []).some((role) => roles.includes(role) && role !== "admin");
       if (!isVisible) return [];
       return isOwned

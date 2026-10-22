@@ -183,6 +183,10 @@ const emptyRotaForm = {
   officers: [] as RotaOfficer[],
 };
 
+/** What a pulpit line is called when the desk names none: who preaches,
+ *  plays and reads, rather than a duty served. */
+const PULPIT_DEFAULT_TITLE = "Sabbath Pulpit Team";
+
 /** Authenticated JSON call against the members API. */
 async function apiFetch(path: string, init?: RequestInit) {
   const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
@@ -265,11 +269,29 @@ interface DeaconateManagerProps {
   embedded?: boolean;
   /** Where the Team view's way out leads; the console's overview by default. */
   onBack?: () => void;
+  /**
+   * Which desk's rota is on screen. The pulpit team rosters the Sabbath's
+   * preachers, players and readers the same way the deaconate rosters who
+   * serves the service, so it is this same panel with its own lines — the
+   * server keeps them apart by desk, and this prop is what asks for one.
+   *
+   * The pulpit view is a page of the Personal Ministries desk, which draws
+   * its own heading and search, so this variant keeps its filters inline
+   * rather than taking the shell's header band over.
+   */
+  desk?: "deaconate" | "pulpit";
 }
 
-export function DeaconateManager({ initialTab = "inventory", embedded = false, onBack }: DeaconateManagerProps) {
+export function DeaconateManager({ initialTab = "inventory", embedded = false, desk = "deaconate", onBack }: DeaconateManagerProps) {
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
+  const isPulpit = desk === "pulpit";
+  // What this desk's rota is called wherever the reader is told about it.
+  const rotaName = isPulpit ? "Pulpit Team" : "Duty Rota";
+  // What a line of it is called when the desk names none.
+  const defaultRotaTitle = isPulpit ? PULPIT_DEFAULT_TITLE : emptyRotaForm.title;
+  // The query that asks the server for this desk's lines only.
+  const deskParam = isPulpit ? "pulpit" : "deaconate";
   const activeTab = initialTab;
 
   // Inventory state (server-backed: this is the real property register)
@@ -361,8 +383,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
   };
 
   useEffect(() => {
+    // The pulpit view is the rota and nothing else: the property register is
+    // the deaconate's own desk, and it is not this panel's to read.
+    if (isPulpit) return;
     loadInventory();
-  }, []);
+  }, [isPulpit]);
 
   /**
    * The rota the church keeps, earliest duty first — or null when the desk
@@ -375,10 +400,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
   const fetchRota = async (from = rotaFromDate, to = rotaToDate, q = rotaSearchQuery): Promise<RotaEntry[] | null> => {
     try {
       const params = new URLSearchParams();
+      params.set("desk", deskParam);
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       if (q.trim()) params.set("q", q.trim());
-      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const queryStr = `?${params.toString()}`;
       const res = await apiFetch(`/duty-rota/${queryStr}`);
       if (!res.ok) return null;
       return (await res.json()) as RotaEntry[];
@@ -442,10 +468,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
     setDownloadingRotaPdf(true);
     try {
       const params = new URLSearchParams();
+      params.set("desk", deskParam);
       if (rotaFromDate) params.set("from", rotaFromDate);
       if (rotaToDate) params.set("to", rotaToDate);
       if (rotaSearchQuery.trim()) params.set("q", rotaSearchQuery.trim());
-      const queryStr = params.toString() ? `?${params.toString()}` : "";
+      const queryStr = `?${params.toString()}`;
       const res = await apiFetch(`/duty-rota/pdf/${queryStr}`);
       if (!res.ok) {
         throw new Error("Failed to download PDF");
@@ -455,7 +482,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       const a = document.createElement("a");
       a.href = blobUrl;
       const tag = rotaFromDate && rotaToDate ? `_${rotaFromDate}_to_${rotaToDate}` : rotaFromDate ? `_from_${rotaFromDate}` : "";
-      a.download = `Duty_Rota${tag}.pdf`;
+      a.download = `${rotaName.replace(/\s+/g, "_")}${tag}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -471,6 +498,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
   const printRotaPdf = async (item?: RotaEntry) => {
     try {
       const params = new URLSearchParams();
+      params.set("desk", deskParam);
       if (item) {
         params.set("from", item.date);
         params.set("to", item.date);
@@ -620,9 +648,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
 
   useEffect(() => {
     if (activeTab !== "rota") return;
+    // The pulpit view is a page of the Personal Ministries desk, which draws
+    // its own heading and its own search in the band above — so this variant
+    // takes neither over, and carries its filters inside the panel instead.
+    if (isPulpit) return;
     setHeadingFirst(true);
     setCustomHeader({
-      label: "Duty Rota",
+      label: rotaName,
       description: "Sabbath & midweek service duty rosters, communion preparation team assignments.",
     });
     setHeaderRightAction(
@@ -660,7 +692,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       setHeadingFirst(false);
       setHeaderRightAction(null);
     };
-  }, [activeTab, rotaFromDate, rotaToDate, rotaSearchQuery, setHeaderRightAction, setCustomHeader, setHeadingFirst]);
+  }, [activeTab, isPulpit, rotaName, rotaFromDate, rotaToDate, rotaSearchQuery, setHeaderRightAction, setCustomHeader, setHeadingFirst]);
 
   useEffect(() => {
     if (activeTab !== "inventory") return;
@@ -880,6 +912,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       const res = await apiFetch(editing ? `/duty-rota/${editingRotaId}/` : "/duty-rota/", {
         method: editing ? "PUT" : "POST",
         body: JSON.stringify({
+          desk: deskParam,
           title: newRota.title.trim(),
           date: newRota.date,
           shift: newRota.shift.trim(),
@@ -925,7 +958,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       // A line saved before the title came back reads as itself, but the
       // field is required on the way out — so it opens with the default
       // rather than with an empty box the desk must notice.
-      title: entry.title || "Sabbath Duty Rota",
+      title: entry.title || defaultRotaTitle,
       date: entry.date,
       shift: entry.shift,
       officers: entry.assigned_team.map(normalizeOfficer),
@@ -1257,13 +1290,50 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
       {activeTab === "rota" && (
         <>
           <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4">
+            {isPulpit && (
+              /* The pulpit view's filters: inside the panel rather than the
+                 shell's header band, which the Personal Ministries desk keeps. */
+              <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-sand-line bg-white p-3 shadow-sm">
+                <div className="relative min-w-0 flex-1 sm:flex-none sm:w-56">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
+                  <input
+                    type="text"
+                    placeholder="Search the pulpit team…"
+                    value={rotaSearchQuery}
+                    onChange={(e) => setRotaSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
+                  />
+                </div>
+                <input
+                  type="date"
+                  value={rotaFromDate}
+                  onChange={(e) => setRotaFromDate(e.target.value)}
+                  aria-label="From date"
+                  title="From date"
+                  className="h-[30px] rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+                />
+                <span className="text-xs text-moss">to</span>
+                <input
+                  type="date"
+                  value={rotaToDate}
+                  onChange={(e) => setRotaToDate(e.target.value)}
+                  aria-label="To date"
+                  title="To date"
+                  className="h-[30px] rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
+                />
+              </div>
+            )}
             {loadingRota ? (
               <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
-                Loading the duty rota…
+                Loading the {rotaName.toLowerCase()}…
               </div>
             ) : filteredRota.length === 0 ? (
               <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
-                {rota.length === 0 ? "No duty rota has been scheduled yet." : "No duty rota entries match your filters."}
+                {rota.length === 0
+                  ? isPulpit
+                    ? "No one is on the pulpit team yet. Schedule the Sabbath's preachers, players and readers."
+                    : "No duty rota has been scheduled yet."
+                  : "No entries match your filters."}
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1863,7 +1933,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
           <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 className="font-bold text-base text-bark">
-                {editingRotaId !== null ? "Edit Duty Rota" : "Schedule Duty Rota"}
+                {editingRotaId !== null ? `Edit ${rotaName}` : `Schedule ${rotaName}`}
               </h3>
               <button onClick={closeRotaModal} aria-label="Close" className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
@@ -1875,7 +1945,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                 <input
                   type="text"
                   required
-                  placeholder="Sabbath Duty Rota"
+                  placeholder={defaultRotaTitle}
                   value={newRota.title}
                   onChange={(e) => setNewRota({ ...newRota, title: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
@@ -1965,7 +2035,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                   disabled={savingRota}
                   className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
                 >
-                  {savingRota ? "Saving…" : editingRotaId !== null ? "Save Changes" : "Save Duty Rota"}
+                  {savingRota ? "Saving…" : editingRotaId !== null ? "Save Changes" : `Save ${rotaName}`}
                 </button>
               </div>
             </form>
@@ -1979,7 +2049,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
           <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-sand-line pb-3">
               <h3 className="font-bold text-base text-bark">
-                {shareTarget ? "Share Duty Details" : "Share Duty Rota"}
+                {shareTarget ? "Share Duty Details" : `Share ${rotaName}`}
               </h3>
               <button
                 onClick={() => setShowShareModal(false)}

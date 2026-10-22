@@ -16,7 +16,7 @@ ANNOUNCEMENT_WINDOW = {'starts_at': '2020-01-01', 'expires_at': '2099-12-31'}
 
 from .mailing import APPOINTMENT, IDENTITY, MONEY, purpose_for_sender, sender_for
 from .requests import send_membership_approval_email
-from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_appointment_emails, send_invitation_email, GivingAccountsView, _deliver_receipt_message, send_password_reset_email
+from .views import CHILDREN_LESSON_SOURCES, YA_LESSON_URL, _WeeklyLessonParser, current_ya_lesson_url, first_children_lesson_url, send_appointment_emails, send_invitation_email, GivingAccountsView, _deliver_receipt_message, send_password_reset_email, dispatch_duty_notices_safely
 from config.mail_settings import (
     PURPOSES,
     PURPOSE_APPOINTMENT,
@@ -5966,6 +5966,84 @@ class DutyRotaAPITests(APITestCase):
         self.assertEqual(texted.call_count, 0)
         self.assertEqual(len(mail.outbox), letters)
 
+    def test_a_line_with_no_part_does_not_say_your_part(self):
+        """The desk rosters the day and its officers long before it knows who
+        stands where: a line with no part is a normal line, and "Your part: ."
+        in an officer's text reads as a form nobody filled."""
+        from unittest import mock
+
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            created = self._schedule(date=str(tomorrow), assigned_team=[{
+                'name': 'David Kariuki', 'phone': '0712345678',
+                'email': 'david@example.com', 'role': '',
+                'member_id': officer.pk,
+            }])
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        notice = ChurchNotification.objects.get(user=officer)
+        self.assertNotIn('Your part', notice.message)
+        self.assertIn('Main Sanctuary Ushering Team A', notice.message)
+        self.assertNotIn('Your part', texted.call_args.args[1])
+        self.assertIn('Main Sanctuary Ushering Team A', texted.call_args.args[1])
+        for message in mail.outbox:
+            self.assertNotIn('Your part', message.body)
+
+    def test_a_part_that_is_set_still_reaches_the_officer(self):
+        """The other half of the same rule: a desk that did name the part
+        sees it in every channel."""
+        from unittest import mock
+
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            self._schedule(date=str(tomorrow), assigned_team=[{
+                'name': 'David Kariuki', 'phone': '0712345678',
+                'email': 'david@example.com', 'role': 'Ushering',
+                'member_id': officer.pk,
+            }])
+
+        notice = ChurchNotification.objects.get(user=officer)
+        self.assertIn('Your part: Ushering', notice.message)
+        self.assertIn('Your part: Ushering', texted.call_args.args[1])
+
+    def test_the_save_returns_before_the_notices_go_out(self):
+        """The desk must not wait on a mail host or the SMS gateway: the row is
+        written, the response returns, and the ringing happens behind it."""
+        from unittest import mock
+
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        letters_before = len(mail.outbox)
+        with mock.patch('members.views.duty_notices_run_inline', return_value=False):
+            with mock.patch('members.views.threading.Thread') as thread:
+                created = self._schedule(date=str(tomorrow), assigned_team=[{
+                    'name': 'David Kariuki', 'phone': '0712345678',
+                    'email': 'david@example.com', 'role': 'Ushering',
+                    'member_id': officer.pk,
+                }])
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        # The response came back with nothing sent inside the request...
+        self.assertEqual(thread.call_count, 1)
+        self.assertEqual(len(mail.outbox), letters_before)
+        self.assertEqual(ChurchNotification.objects.count(), 0)
+        # ...and the thread it started carries the line and its old team, so
+        # the run behind the response rings the same officers it would have.
+        kwargs = thread.call_args.kwargs
+        self.assertEqual(kwargs['target'], dispatch_duty_notices_safely)
+        self.assertEqual(kwargs['args'][0], created.data['id'])
+        self.assertEqual(kwargs['args'][1], [])
+        self.assertTrue(kwargs['daemon'])
+        with mock.patch('members.duty.sms.send', return_value=True):
+            kwargs['target'](*kwargs['args'])
+        self.assertEqual(ChurchNotification.objects.get(user=officer).user_id, officer.pk)
+        self.assertEqual(len(mail.outbox), letters_before + 1)
+
     def test_a_member_id_that_is_not_an_id_is_refused(self):
         self.client.force_authenticate(self.head_deaconess)
 
@@ -6059,6 +6137,29 @@ class DutyReminderCronTests(TestCase):
         self.assertEqual(ChurchNotification.objects.count(), 1)
         self.assertEqual(len(mail.outbox), letters)
 
+    def test_a_reminder_for_a_line_with_no_part_says_nothing_about_it(self):
+        """The day-before text reads as a sentence, not a form: an officer
+        rostered without a part is told the duty, the day and the shift, and
+        nothing about a part nobody filled in."""
+        from unittest import mock
+
+        line = self._line(team=[{
+            'name': 'David Kariuki', 'phone': '0712345678',
+            'email': 'cron.deacon@example.com', 'role': '',
+            'member_id': self.officer.pk,
+        }])
+
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            self._run()
+
+        notice = ChurchNotification.objects.get(user=self.officer)
+        self.assertNotIn('Your part', notice.message)
+        self.assertIn('Sanctuary care', notice.message)
+        self.assertIn('David', notice.message)
+        self.assertNotIn('Your part', texted.call_args.args[1])
+        line.refresh_from_db()
+        self.assertIsNotNone(line.reminder_sent_at)
+
     def test_force_rings_a_line_again(self):
         """The desk's own re-send: a deliberate second run, never the cron's."""
         self._line()
@@ -6119,6 +6220,193 @@ class DutyReminderCronTests(TestCase):
         self.assertEqual(ChurchNotification.objects.count(), 0)
         line.refresh_from_db()
         self.assertIsNotNone(line.reminder_sent_at)
+
+
+class PulpitTeamRotaTests(APITestCase):
+    """The pulpit team is rostered the way the deaconate rosters its duty.
+
+    Who preaches, plays, reads and leads on a Sabbath is a line on a rota
+    like any other, so it is kept in the same table with its own desk: the
+    Personal Ministries desk writes it, its officers are told when they are
+    rostered, and the same day-before cron reminds them. The desks do not
+    cross — the deaconate's steward edits no pulpit line, and the personal
+    ministries leader edits no deaconate one.
+    """
+
+    def setUp(self):
+        self.pm = Department.objects.get(code='personal_ministries')
+        pm_leader_role = DepartmentRole.objects.get(department=self.pm, name='Leader')
+        self.leader = User.objects.create_user(
+            'pulpit.lead', 'pulpit.lead@example.com', 'PulpitLead#2026',
+            first_name='Pat', last_name='Leader',
+        )
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        DepartmentAssignment.objects.create(
+            department=self.pm, role=pm_leader_role, member=self.leader, kind='leader',
+        )
+        # A deacon's keys are the deaconate's own: they do not open the pulpit.
+        self.deacon = User.objects.create_user(
+            'pulpit.deacon', 'pulpit.deacon@example.com', 'DeaconPass#2026',
+        )
+        MemberProfile.objects.create(user=self.deacon, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=self.deacon)
+        self.member = User.objects.create_user(
+            'pulpit.plain', 'pulpit.plain@example.com', 'MemberPass#2026',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.preacher = User.objects.create_user(
+            'pulpit.preacher', 'pulpit.preacher@example.com', 'PreacherPass#2026',
+            first_name='Peter', last_name='Kamau',
+        )
+        MemberProfile.objects.create(
+            user=self.preacher, role='member', roles='member',
+            phone_number='0722000111',
+        )
+        mail.outbox.clear()
+
+    def _schedule(self, **overrides):
+        payload = {
+            'desk': 'pulpit',
+            'title': 'Sabbath Pulpit Team',
+            'date': '2026-11-07',
+            'shift': '09:00 AM - 12:30 PM',
+            'duty_type': 'Divine Worship',
+            'assigned_team': [{
+                'name': 'Peter Kamau', 'phone': '0722000111',
+                'email': 'pulpit.preacher@example.com', 'role': 'Preacher',
+                'member_id': self.preacher.pk,
+            }],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/duty-rota/', payload, format='json')
+
+    def test_the_personal_ministries_leader_rosters_the_pulpit_team(self):
+        """The desk that keeps the church's week also staffs its pulpit."""
+        self.client.force_authenticate(self.leader)
+
+        created = self._schedule()
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['desk'], 'pulpit')
+        self.assertEqual(DutyRota.objects.filter(desk='pulpit').count(), 1)
+
+    def test_being_rostered_on_the_pulpit_tells_the_officer(self):
+        """The same notice the deaconate's duty earns: bell, letter, text —
+        and it lands on the pulpit team's own view, not the deaconate's."""
+        from unittest import mock
+
+        self.client.force_authenticate(self.leader)
+        with mock.patch('members.duty.sms.send', return_value=True):
+            created = self._schedule()
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        notice = ChurchNotification.objects.get(user=self.preacher)
+        self.assertIn('Sabbath Pulpit Team', notice.message)
+        self.assertIn('Preacher', notice.message)
+        self.assertEqual(
+            notice.link,
+            '/administration?dept=personal_ministries&view=pulpit-team',
+        )
+        self.assertEqual(
+            [address for message in mail.outbox for address in message.to],
+            ['pulpit.preacher@example.com'],
+        )
+
+    def test_the_day_before_cron_reminds_the_pulpit_team(self):
+        """One cron rings both desks' lines: tomorrow's Sabbath is tomorrow
+        whoever rostered it."""
+        from datetime import timedelta
+        from django.core.management import call_command
+        from unittest import mock
+
+        self.client.force_authenticate(self.leader)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        with mock.patch('members.duty.sms.send', return_value=True):
+            self._schedule(date=str(tomorrow))
+        mail.outbox.clear()
+
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            call_command('send_duty_reminders', stdout=StringIO())
+
+        notice = ChurchNotification.objects.filter(user=self.preacher).order_by('-id').first()
+        self.assertIn('Duty reminder', notice.title)
+        self.assertEqual(
+            notice.link,
+            '/administration?dept=personal_ministries&view=pulpit-team',
+        )
+        self.assertEqual(texted.call_count, 1)
+
+    def test_a_deacon_keeps_the_deaconates_rota_not_the_pulpits(self):
+        """A desk's rota is its own business: the deaconate's steward may
+        schedule its own duty, and no pulpit line at all."""
+        self.client.force_authenticate(self.deacon)
+
+        pulpit = self._schedule()
+        deaconate = self._schedule(desk='deaconate', assigned_team=['Deacon David'])
+
+        self.assertEqual(pulpit.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(deaconate.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(DutyRota.objects.filter(desk='pulpit').count(), 0)
+
+    def test_a_plain_member_reads_neither_rota(self):
+        self.client.force_authenticate(self.member)
+
+        pulpit = self.client.get('/api/members/duty-rota/?desk=pulpit')
+        deaconate = self.client.get('/api/members/duty-rota/')
+
+        self.assertEqual(pulpit.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(deaconate.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_each_desk_reads_only_its_own_lines(self):
+        """The deaconate's rota never shows a pulpit line, nor the reverse:
+        a desk sees the lines its own steward wrote."""
+        self.client.force_authenticate(self.leader)
+        self._schedule()
+        # The deaconate's own steward writes its line; neither desk's people
+        # can write the other's.
+        self.client.force_authenticate(self.deacon)
+        self._schedule(
+            desk='deaconate', title='Sanctuary care',
+            assigned_team=['Deacon David'],
+        )
+
+        self.client.force_authenticate(self.leader)
+        pulpit = self.client.get('/api/members/duty-rota/?desk=pulpit')
+        self.client.force_authenticate(self.deacon)
+        deaconate = self.client.get('/api/members/duty-rota/')
+
+        self.assertEqual(len(pulpit.data), 1)
+        self.assertEqual(pulpit.data[0]['desk'], 'pulpit')
+        self.assertEqual(len(deaconate.data), 1)
+        self.assertEqual(deaconate.data[0]['desk'], 'deaconate')
+
+    def test_a_line_never_changes_desk_once_written(self):
+        """Its desk is who may edit it, so a PUT cannot carry a line from one
+        desk's stewards to another's."""
+        self.client.force_authenticate(self.leader)
+        created = self._schedule()
+
+        edited = self.client.put(
+            f"/api/members/duty-rota/{created.data['id']}/",
+            {
+                'desk': 'deaconate', 'title': 'Sabbath Pulpit Team',
+                'date': '2026-11-07', 'assigned_team': [],
+            },
+            format='json',
+        )
+
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(DutyRota.objects.get(pk=created.data['id']).desk, 'pulpit')
+
+    def test_a_pulpit_line_cannot_be_taken_off_by_the_deaconate(self):
+        self.client.force_authenticate(self.leader)
+        created = self._schedule()
+
+        self.client.force_authenticate(self.deacon)
+        refused = self.client.delete(f"/api/members/duty-rota/{created.data['id']}/")
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(DutyRota.objects.filter(desk='pulpit').count(), 1)
 
 
 class MemberRosterSystemAccountTests(APITestCase):

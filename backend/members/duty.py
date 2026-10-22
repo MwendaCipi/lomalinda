@@ -13,6 +13,7 @@ second run of the cron, or one run by hand, never rings the same duty twice.
 """
 
 from datetime import timedelta
+import re
 
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
@@ -38,6 +39,17 @@ DEFAULT_REMINDER_MESSAGE = (
 
 #: Where a reminder's link lands: the deaconate's rota, where the duty is read.
 DUTY_ROTA_LINK = '/administration?tab=deaconate-rota'
+
+#: The pulpit team's roster is kept on the Personal Ministries desk, so its
+#: notices land there, on that desk's Pulpit Team view.
+PULPIT_ROTA_LINK = '/administration?dept=personal_ministries&view=pulpit-team'
+
+
+def rota_link(entry) -> str:
+    """Where this line is read: the deaconate's rota, or the pulpit's view."""
+    if getattr(entry, 'desk', '') == 'pulpit':
+        return PULPIT_ROTA_LINK
+    return DUTY_ROTA_LINK
 
 
 def duty_title(entry) -> str:
@@ -123,20 +135,62 @@ def duty_template(kind: str) -> str:
     return configured or fallback
 
 
+def drop_part_sentence(template: str) -> str:
+    """The template without any sentence that speaks of the officer's part.
+
+    The desk rosters the day and its officers long before it knows who will
+    stand where, and a line without a part is a normal line rather than a
+    half-written one. Rendered as written, it reads "Your part: ." — a form
+    nobody filled, sent to the officer's phone. So when the part is blank the
+    sentence carrying ``{role}`` goes, and the rest reads whole. A church
+    wording that ties the part to other facts in one sentence loses that
+    sentence here — keep the part in its own sentence, as the shipped defaults
+    do. A template that says nothing else is left as it is: an empty text
+    helps nobody more than a stray full stop.
+    """
+    if '{role}' not in (template or ''):
+        return template
+    # Sentences alternate with the whitespace between them; a dropped sentence
+    # takes its trailing separator with it, so paragraphs stay paragraphs.
+    parts = re.split(r'(?<=[.!?])(\s+)', template)
+    kept = []
+    skip_separator = False
+    for index, part in enumerate(parts):
+        if index % 2:
+            if not skip_separator:
+                kept.append(part)
+            skip_separator = False
+            continue
+        if '{role}' in part:
+            skip_separator = True
+            continue
+        kept.append(part)
+    remainder = ''.join(kept)
+    return remainder if remainder.strip() else template
+
+
+def render_duty_message(kind: str, entry, officer, user=None, church_name: str = '') -> str:
+    """One officer's notice, in the church's own words.
+
+    Every send — the rostering notice, the day-before text, the bell, the
+    letter — reads its wording through here, so a blank part is dropped the
+    same way wherever the message goes out.
+    """
+    template = duty_template(kind)
+    context = duty_context(entry, officer, user, church_name)
+    if not context['role']:
+        template = drop_part_sentence(template)
+    return render_message(template, context)
+
+
 def reminder_message(entry, officer, user=None, church_name: str = '') -> str:
     """What one officer is told the day before, in the church's own words."""
-    return render_message(
-        duty_template('reminder'),
-        duty_context(entry, officer, user, church_name),
-    )
+    return render_duty_message('reminder', entry, officer, user, church_name)
 
 
 def assignment_message(entry, officer, user, church_name: str = '') -> str:
     """What one officer is told when the desk rosters them on a duty."""
-    return render_message(
-        duty_template('assignment'),
-        duty_context(entry, officer, user, church_name),
-    )
+    return render_duty_message('assignment', entry, officer, user, church_name)
 
 
 def reminder_subject(entry) -> str:
@@ -167,8 +221,7 @@ def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'rem
     """
     report = {'bell': False, 'letter': False, 'sms': False, 'push': 0}
     subject = reminder_subject(entry) if kind == 'reminder' else assignment_subject(entry)
-    context = duty_context(entry, officer, user, church_name)
-    body = render_message(duty_template(kind), context)
+    body = render_duty_message(kind, entry, officer, user, church_name)
 
     phone = officer_phone(officer, user)
     if phone:
@@ -179,7 +232,7 @@ def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'rem
 
     try:
         ChurchNotification.objects.create(
-            user=user, title=subject, message=body, link=DUTY_ROTA_LINK,
+            user=user, title=subject, message=body, link=rota_link(entry),
         )
         report['bell'] = True
     except Exception:  # a notice never breaks the run that sends it
@@ -200,7 +253,7 @@ def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'rem
     # announcement switch, exactly as the other duty notices do.
     try:
         report['push'] = push_to_user(
-            user, title=subject, body=body.split('\n')[0], link=DUTY_ROTA_LINK,
+            user, title=subject, body=body.split('\n')[0], link=rota_link(entry),
         )
     except Exception:
         report['push'] = 0

@@ -1723,6 +1723,74 @@ def _dispatch_announcement_sms_impl(announcement_id):
         logger.exception('Announcement SMS broadcast for #%s failed', announcement_id)
 
 
+def duty_notices_run_inline():
+    """True while a rostering's notices are instant enough to send in the request.
+
+    Rostering an officer rings them by bell, letter, text and push, and the
+    desk must not wait on any of it — a slow mail host or gateway turns a
+    two-second save into a spinner. In production the whole bundle is handed
+    to a background thread. In development and the test suite mail is the
+    console/in-memory backend (instant, and the assertions read ``mail.outbox``
+    right after the POST, which a thread cannot reach in time), so there the
+    notices simply go out inside the request, exactly as before.
+    """
+    return not settings.EMAIL_BACKEND.endswith('smtp.EmailBackend')
+
+
+def dispatch_duty_notices_safely(entry_id, previous_officers, schema_name=None):
+    """Ring a line's newly rostered officers off the request cycle.
+
+    Threaded so the desk's save returns the moment the row is written; a
+    failure is a log line, never a broken rota. ``previous_officers`` is what
+    the line held before the save — who was already rostered decides who is
+    "newly" rostered, and that answer must be captured in the request, not
+    re-guessed in the thread. The thread reads with its own connection, so the
+    tenant schema is re-entered when there is one.
+    """
+    if schema_name:
+        try:
+            from django_tenants.utils import schema_context
+            with schema_context(schema_name):
+                _dispatch_duty_notices_impl(entry_id, previous_officers)
+            return
+        except ImportError:
+            pass
+    _dispatch_duty_notices_impl(entry_id, previous_officers)
+
+
+def _dispatch_duty_notices_impl(entry_id, previous_officers):
+    try:
+        entry = DutyRota.objects.get(pk=entry_id)
+    except DutyRota.DoesNotExist:
+        # Taken off the rota between the save and the thread's start.
+        return
+    try:
+        notify_new_duty_officers(entry, previous_officers)
+    except Exception:
+        logger.exception('Duty rostering notices for line #%s failed', entry_id)
+
+
+def send_rota_notices_after_save(entry, previous_officers, request=None):
+    """Save first, ring second: the notices leave once the row is written.
+
+    Inline where the sends are instant (development and the test suite), in a
+    background thread where they are not — so the desk's save is never held
+    open by a mail host or the SMS gateway.
+    """
+    if duty_notices_run_inline():
+        notify_new_duty_officers(entry, previous_officers)
+        return
+    schema_name = getattr(connection, 'schema_name', None)
+    if not schema_name and request is not None:
+        schema_name = getattr(getattr(request, 'tenant', None), 'schema_name', None)
+    threading.Thread(
+        target=dispatch_duty_notices_safely,
+        args=(entry.pk, previous_officers, schema_name),
+        name=f'duty-notices-{entry.pk}',
+        daemon=True,
+    ).start()
+
+
 def can_manage_announcements(user):
     """Leadership test shared by the announcement endpoints.
 
@@ -10331,30 +10399,34 @@ def notify_new_duty_officers(entry, previous_officers):
 
 
 class DutyRotaView(APIView):
-    """The deaconate's duty rota: read it, schedule a line, take one off.
+    """A desk's duty rota: read it, schedule a line, take one off.
 
     The rota was the one desk page still living in the browser: the deaconate
     kept its duties in an array, so a shift scheduled for next Sabbath was
-    gone on the next reload. These are the church's rows instead, read by the
-    same people who keep the property register (`can_manage_deaconate`).
+    gone on the next reload. These are the church's rows instead. Two desks
+    keep one here — the deaconate's stewards, and the Personal Ministries
+    desk for its pulpit team — and each reads and writes its own lines only
+    (``can_keep_rota``); ``?desk=pulpit`` asks for the pulpit's.
 
     ``GET`` hands the rota over in date order, the earliest duty first, and
     accepts ``from``/``to`` (YYYY-MM-DD) so a desk can read one month of it.
     ``POST`` schedules a line, ``PUT`` — on the detail path — rewrites one the
     desk has already scheduled (the duty itself, or the officers rostered on
     it), and ``DELETE`` takes one off, for the Sabbath whose rota was cancelled
-    or written twice.
+    or written twice. A line never changes desk once written: its desk is who
+    may touch it.
     """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can_manage_deaconate(request.user):
+        desk = rota_desk_from(request)
+        if not can_keep_rota(request.user, desk):
             return Response(
-                {'detail': 'Only church officers and the deaconate can read the duty rota.'},
+                {'detail': 'Only the officers who keep this desk can read its rota.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        rota = DutyRota.objects.select_related('created_by').all()
+        rota = DutyRota.objects.select_related('created_by').filter(desk=desk)
         start = str(request.query_params.get('from') or '').strip()
         end = str(request.query_params.get('to') or '').strip()
         q = str(request.query_params.get('q') or request.query_params.get('query') or '').strip()
@@ -10372,25 +10444,37 @@ class DutyRotaView(APIView):
         return Response(DutyRotaSerializer(rota, many=True).data)
 
     def post(self, request):
-        if not can_manage_deaconate(request.user):
+        # The desk is what the line says it is, and it must be a desk this
+        # user keeps: a deacon cannot write a pulpit line, nor the reverse.
+        desk = str(request.data.get('desk') or DutyRota.DESK_DEACONATE).strip().lower()
+        if desk not in dict(DutyRota.DESK_CHOICES):
+            desk = DutyRota.DESK_DEACONATE
+        if not can_keep_rota(request.user, desk):
             return Response(
-                {'detail': 'Only church officers and the deaconate can schedule a duty rota.'},
+                {'detail': 'Only the officers who keep this desk can schedule a line on it.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         serializer = DutyRotaSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         entry = serializer.save(created_by=request.user)
-        notify_new_duty_officers(entry, previous_officers=[])
+        # The row is written; the ringing happens behind the response so the
+        # desk is never held open by a mail host or the SMS gateway.
+        send_rota_notices_after_save(entry, previous_officers=[], request=request)
         return Response(DutyRotaSerializer(entry).data, status=status.HTTP_201_CREATED)
 
     def delete(self, request, pk=None):
-        if not can_manage_deaconate(request.user):
+        if not keeps_any_rota(request.user):
             return Response(
-                {'detail': 'Only church officers and the deaconate can remove a duty rota.'},
+                {'detail': 'Only the officers who keep a rota can remove its lines.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         entry = generics.get_object_or_404(DutyRota, pk=pk)
+        if not can_keep_rota(request.user, entry.desk):
+            return Response(
+                {'detail': 'Only the officers who keep this desk can remove a line from it.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         title = entry.title
         entry.delete()
         return Response({'detail': f'"{title}" is off the duty rota.'})
@@ -10403,29 +10487,35 @@ class DutyRotaView(APIView):
         The same validation runs as on scheduling, so an edited line is
         exactly as strict as a new one.
         """
-        if not can_manage_deaconate(request.user):
+        if not keeps_any_rota(request.user):
             return Response(
-                {'detail': 'Only church officers and the deaconate can edit a duty rota.'},
+                {'detail': 'Only the officers who keep a rota can edit its lines.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         entry = generics.get_object_or_404(DutyRota, pk=pk)
+        if not can_keep_rota(request.user, entry.desk):
+            return Response(
+                {'detail': 'Only the officers who keep this desk can edit a line on it.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         previous_officers = list(entry.assigned_team or [])
         serializer = DutyRotaSerializer(entry, data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         entry = serializer.save()
-        notify_new_duty_officers(entry, previous_officers=previous_officers)
+        send_rota_notices_after_save(entry, previous_officers=previous_officers, request=request)
         return Response(DutyRotaSerializer(entry).data, status=status.HTTP_200_OK)
 
 
 class DutyRotaPdfView(APIView):
-    """Generate and return an official aggregated PDF of the duty rota for a period."""
+    """Generate and return an official aggregated PDF of one desk's rota."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can_manage_deaconate(request.user):
+        desk = rota_desk_from(request)
+        if not can_keep_rota(request.user, desk):
             return Response(
-                {'detail': 'Only church officers and the deaconate can export the duty rota.'},
+                {'detail': 'Only the officers who keep this desk can export its rota.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         try:
@@ -10434,7 +10524,7 @@ class DutyRotaPdfView(APIView):
         except Exception:
             church_name = "SDA Church"
 
-        rota = DutyRota.objects.select_related('created_by').all()
+        rota = DutyRota.objects.select_related('created_by').filter(desk=desk)
         start = str(request.query_params.get('from') or '').strip()
         end = str(request.query_params.get('to') or '').strip()
         q = str(request.query_params.get('q') or request.query_params.get('query') or '').strip()
@@ -10490,9 +10580,12 @@ class DutyRotaPeopleView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if not can_manage_deaconate(request.user):
+        # The roll is the church's, not a desk's: either desk's stewards may
+        # look a member up, since both roster the same people.
+        if not (can_keep_rota(request.user, DutyRota.DESK_DEACONATE)
+                or can_keep_rota(request.user, DutyRota.DESK_PULPIT)):
             return Response(
-                {'detail': 'Only church officers and the deaconate can look up officers.'},
+                {'detail': 'Only the officers who keep a rota can look up officers.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         query = (request.query_params.get('q') or request.query_params.get('query') or '').strip()
@@ -10824,6 +10917,44 @@ def can_manage_department(user, department):
     return DepartmentAssignment.objects.filter(
         department__code=department, member=user, department__is_active=True,
     ).exists()
+
+
+def can_keep_rota(user, desk):
+    """Who keeps one desk's rota: the deaconate's stewards, or the pulpit's.
+
+    The pulpit team is rostered by the Personal Ministries desk — its leader
+    and assistant, plus the office as everywhere else — exactly as the
+    deaconate's duty rota is kept by the deaconate's own people. A desk's
+    rota is its own business: the deaconate's steward edits no pulpit line,
+    and the personal ministries leader edits no deaconate one.
+    """
+    if desk == DutyRota.DESK_PULPIT:
+        return can_manage_department(user, 'personal_ministries')
+    return can_manage_deaconate(user)
+
+
+def keeps_any_rota(user):
+    """Whether this user keeps a rota at all — either desk.
+
+    Asked before a line is fetched, so the congregation is refused the same
+    way it always was (403, whether or not the line exists) and a stranger
+    cannot learn a line's id from the difference between 403 and 404. The
+    line's own desk is checked after the fetch, by ``can_keep_rota``.
+    """
+    return can_keep_rota(user, DutyRota.DESK_DEACONATE) or can_keep_rota(user, DutyRota.DESK_PULPIT)
+
+
+def rota_desk_from(request, default=DutyRota.DESK_DEACONATE):
+    """The desk named in the query string, or the one the rota was born as.
+
+    Absent means the deaconate, so the duty rota's own screens read exactly
+    what they always read; the pulpit desk asks for its own with
+    ``?desk=pulpit``.
+    """
+    desk = str(request.query_params.get('desk') or '').strip().lower()
+    if desk == DutyRota.DESK_PULPIT:
+        return DutyRota.DESK_PULPIT
+    return default
 
 
 #: The desk that keeps the church's own week. The events it plans span every

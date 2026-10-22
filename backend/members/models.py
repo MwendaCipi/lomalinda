@@ -2569,11 +2569,15 @@ class InventoryMovement(models.Model):
 
 
 class DutyRota(models.Model):
-    """One line of the deacons' and deaconesses' duty rota.
+    """One line of a duty rota: the deaconate's, or the pulpit team's.
 
     The deaconate desk held its rota in a browser array, so a duty scheduled
     for next Sabbath was gone with the next reload: these rows are the
-    church's record of who serves when.
+    church's record of who serves when. The pulpit team keeps its roster the
+    same way — who preaches, plays, reads and leads on a Sabbath — so it is
+    the same table with a different desk, and inherits everything the deaconate
+    rota earned: the same forms, the same notices on assignment, and the same
+    day-before reminder from the daily cron.
 
     The officers on a line are names first rather than accounts: the desk
     rosters the team it actually has, and a deacon serving a shift need not
@@ -2583,6 +2587,19 @@ class DutyRota(models.Model):
     behind it (see ``members/duty.py``).
     """
 
+    #: The desks that keep a rota here. ``deaconate`` is what the table was
+    #: born as; ``pulpit`` is the Personal Ministries desk's Sabbath team.
+    DESK_DEACONATE = 'deaconate'
+    DESK_PULPIT = 'pulpit'
+    DESK_CHOICES = [
+        (DESK_DEACONATE, 'Deaconate duty rota'),
+        (DESK_PULPIT, 'Pulpit team'),
+    ]
+
+    desk = models.CharField(
+        max_length=20, choices=DESK_CHOICES, default=DESK_DEACONATE,
+        help_text='Which desk keeps this line: the deaconate duty rota, or the pulpit team',
+    )
     title = models.CharField(max_length=200)
     duty_date = models.DateField()
     shift = models.CharField(max_length=80, blank=True, default='')
