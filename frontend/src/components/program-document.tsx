@@ -225,7 +225,7 @@ function Facilitators({ people, className = "" }: { people: ProgramParticipant[]
     <ul className={`space-y-0.5 ${className}`}>
       {people.map((person, index) => (
         <li key={`${person.name}-${index}`} className="text-xs leading-5 text-moss">
-          <span className="font-semibold text-moss-dark">{person.name}</span>
+          <span className="text-moss-dark">{person.name}</span>
           {person.role && <span aria-hidden="true"> · </span>}
           {person.role && <span>{person.role}</span>}
         </li>
@@ -330,7 +330,7 @@ export function ProgramDocument({
                                   {partRange}
                                 </span>
                               )}
-                              <span className="text-xs leading-5 text-bark">{part.title || "—"}</span>
+                              <span className="text-xs font-semibold leading-5 text-bark">{part.title || "—"}</span>
                             </div>
                             <Facilitators
                               people={part.participants}

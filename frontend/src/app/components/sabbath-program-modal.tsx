@@ -19,14 +19,6 @@ export type SabbathProgramData = {
   isDesignated: boolean;
 };
 
-const genericProgram: ProgramItem[] = [
-  { start: "8:00", end: "", title: "Sabbath School", participants: [], parts: [] },
-  { start: "10:00", end: "", title: "Song service and announcements", participants: [], parts: [] },
-  { start: "11:00", end: "", title: "Divine service", participants: [], parts: [] },
-  { start: "12:30", end: "", title: "Fellowship lunch", participants: [], parts: [] },
-  { start: "14:00", end: "", title: "Afternoon program", participants: [], parts: [] },
-];
-
 function isImageFile(path: string) {
   return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(path);
 }
@@ -110,21 +102,19 @@ export default function SabbathProgramModal({
               />
             </div>
           )}
-          {/* An event with neither carries the church's standing order, on the
-              same sheet — a programme is read the same way whoever typed it. */}
+          {/* An event with neither carries nothing the church did not type:
+              the sheet reads only what a ministry fixed into it, so nothing
+              to read means a word to that effect — not a standing order
+              invented on the day. */}
           {!hasUploadedProgram && items.length === 0 && (
             <>
               {program.programText && (
                 <p className="mb-5 text-sm leading-6 text-moss">{program.programText}</p>
               )}
-              <div className="rounded-xl bg-sand p-4">
-                <ProgramDocument
-                  title={program.name}
-                  date={program.dateISO}
-                  department={program.department}
-                  lead={program.lead}
-                  items={genericProgram}
-                />
+              <div className="rounded-xl bg-sand p-6 text-center">
+                <p className="text-sm leading-6 text-moss">
+                  No program has been uploaded for this event yet.
+                </p>
               </div>
             </>
           )}

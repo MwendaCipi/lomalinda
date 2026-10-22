@@ -14,6 +14,7 @@
  */
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { brand } from "@/lib/brand";
 import {
   Accessibility,
@@ -1123,15 +1124,18 @@ function ProgramEditorModal({
   onClose: () => void;
   onSave: (items: ProgramItem[]) => void;
 }) {
-  // The programme as it stands — nothing is drawn until the desk asks for it,
-  // so a new programme begins with its heading and its paragraph and then the
-  // one button that adds the first session, rather than with a blank session
-  // already open.
-  const [items, setItems] = useState<ProgramItem[]>(() => parseProgramItems(event.program_items));
-  // Which session is unfolded — one at a time, so opening a session closes
-  // whichever other was open and the desk reads one part of the day rather
-  // than all of them at once.
-  const [openSession, setOpenSession] = useState<number | null>(items.length > 0 ? 0 : null);
+  // The programme as it stands. A programme that does not exist yet opens
+  // on one blank session waiting to be named — the desk goes straight to
+  // typing, and "Add session" is a click made only for a second part of the
+  // day; an existing programme opens as it stood.
+  const initialItems = parseProgramItems(event.program_items);
+  const [items, setItems] = useState<ProgramItem[]>(
+    initialItems.length > 0 ? initialItems : [{ start: "", end: "", title: "", participants: [], parts: [] }],
+  );
+  // Unfolded — the first session, whichever way the sheet opened — one at a
+  // time, so opening a session closes whichever other was open and the desk
+  // reads one part of the day rather than all of them at once.
+  const [openSession, setOpenSession] = useState<number | null>(0);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   /** Removing a session also settles which one is left open. */
@@ -1359,7 +1363,7 @@ function ProgramEditorModal({
                       <button
                         type="button"
                         onClick={() => setSession(index, { parts: [...session.parts, emptyPart] })}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:border-ember"
                       >
                         <Plus className="h-3 w-3" /> Add activity
                       </button>
@@ -4319,10 +4323,12 @@ function DepartmentDetail({
   const [programFor, setProgramFor] = useState<DeptEvent | null>(null);
   const [programViewer, setProgramViewer] = useState<DeptEvent | null>(null);
   const [openEventMenuKey, setOpenEventMenuKey] = useState<string | null>(null);
-  // Which way the open menu hangs. A row near the foot of the calendar's
-  // scroll box has no room below it, so its menu opens upwards rather than
-  // being clipped by the box's edge.
-  const [openEventMenuUp, setOpenEventMenuUp] = useState(false);
+  // Where the table row's Actions button sits in the viewport at the moment
+  // it opens its menu. The menu is drawn in a document-level portal (a fixed
+  // box above everything) anchored there, because the overflow wrappers that
+  // clip the table also clip any menu left inside them — one overflow rule
+  // in the wrapper is all it takes to cut the menu off at its edge.
+  const [eventMenuAnchor, setEventMenuAnchor] = useState<{ x: number; y: number; up: boolean } | null>(null);
   // One hidden file input, asked which event it is for at the moment a row
   // says "Upload program" — a picker per row would be a picker per event.
   const programUploadRef = useRef<HTMLInputElement>(null);
@@ -4337,8 +4343,21 @@ function DepartmentDetail({
         setOpenEventMenuKey(null);
       }
     }
-    if (openEventMenuKey) document.addEventListener("mousedown", handleDown);
-    return () => document.removeEventListener("mousedown", handleDown);
+    // The table's portal menu no longer rides the scroll box — it floats —
+    // so a scrolled table would leave it hanging in the wrong place.
+    // Closing on any scroll (captured, from any scrolling ancestor) keeps
+    // the menu always where its Actions button is.
+    function handleScroll() {
+      setOpenEventMenuKey(null);
+    }
+    if (openEventMenuKey) {
+      document.addEventListener("mousedown", handleDown);
+      document.addEventListener("scroll", handleScroll, true);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleDown);
+      document.removeEventListener("scroll", handleScroll, true);
+    };
   }, [openEventMenuKey]);
   // The list's rows honour the desk's search. The wall of months does not:
   // there the search finds a month to travel to (see `monthIndexForQuery`).
@@ -5736,20 +5755,28 @@ function DepartmentDetail({
                             {event.location && <span className="block text-xs font-normal text-moss">{event.location}</span>}
                           </td>
                           <td className="whitespace-nowrap px-5 py-4 text-moss">{eventTimeRange(event) || "-"}</td>
-                          <td data-calendar-action-menu className="relative px-5 py-4">
+                          <td className="relative px-5 py-4">
                             <button
                               type="button"
                               aria-expanded={openEventMenuKey === actionKey}
                               onClick={(clickEvent) => {
                                 const opening = openEventMenuKey !== actionKey;
                                 if (opening) {
-                                  // The menu is about 220px tall: where the row
-                                  // leaves less than that below it — the bottom
-                                  // rows — it opens upwards instead of being
-                                  // cut off by the scroll box's edge.
-                                  const button = clickEvent.currentTarget.getBoundingClientRect();
-                                  const box = calendarScrollRef.current?.getBoundingClientRect();
-                                  setOpenEventMenuUp(box ? button.bottom + 220 > box.bottom : false);
+                                  // The menu draws in a document-level portal
+                                  // anchored to this button, unhindered by the
+                                  // table's wrappers, so the choice of hanging
+                                  // below or above is made against the viewport:
+                                  // a row near the foot of the page opens its
+                                  // menu upwards, the rest open it downwards.
+                                  const rect = clickEvent.currentTarget.getBoundingClientRect();
+                                  const openingUp = rect.bottom + 240 > window.innerHeight;
+                                  setEventMenuAnchor({
+                                    x: rect.right,
+                                    y: openingUp ? rect.top : rect.bottom,
+                                    up: openingUp,
+                                  });
+                                } else {
+                                  setEventMenuAnchor(null);
                                 }
                                 setOpenEventMenuKey(opening ? actionKey : null);
                               }}
@@ -5757,20 +5784,32 @@ function DepartmentDetail({
                             >
                               Actions <span aria-hidden="true">▾</span>
                             </button>
-                            {openEventMenuKey === actionKey && (
-                              <div
-                                className={`absolute right-5 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
-                                  openEventMenuUp ? "bottom-full mb-2" : "top-14"
-                                }`}
-                              >
-                                <EventProgramMenu
-                                  event={event}
-                                  onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
-                                  onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
-                                  onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
-                                  onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
-                                />
-                              </div>
+                            {openEventMenuKey === actionKey && eventMenuAnchor && (
+                              // Portalled into the document, above the table
+                              // and everything set over it: the table's own
+                              // overflow wrappers clip an in-place menu at
+                              // their edges, which is how the actions lost
+                              // their top and bottom on a desk.
+                              createPortal(
+                                <div
+                                  data-calendar-action-menu
+                                  className="fixed z-50 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg"
+                                  style={
+                                    eventMenuAnchor.up
+                                      ? { right: window.innerWidth - eventMenuAnchor.x, bottom: window.innerHeight - eventMenuAnchor.y + 8 }
+                                      : { right: window.innerWidth - eventMenuAnchor.x, top: eventMenuAnchor.y + 8 }
+                                  }
+                                >
+                                  <EventProgramMenu
+                                    event={event}
+                                    onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
+                                    onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                    onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
+                                    onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
+                                  />
+                                </div>,
+                                document.body,
+                              )
                             )}
                           </td>
                         </tr>
