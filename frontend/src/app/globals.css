@@ -874,11 +874,12 @@ table {
     print-color-adjust: exact;
   }
 
-  /* The desk's calendar card is its own scroll box so the screen keeps its
+  /* The desk's calendar card scrolls its own body so the screen keeps its
      buttons within reach; on paper that box would print only the strip of
      rows the reader happened to be looking at. Unrolled here, a printout
      carries the whole calendar — every month of the wall, all the rows. */
-  .desk-calendar {
+  .desk-calendar,
+  .desk-calendar-body {
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;

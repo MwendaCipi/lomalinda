@@ -18,9 +18,23 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils import timezone
 
+from . import sms
 from .mailing import IDENTITY, connection_for, sender_for
-from .models import ChurchNotification, DutyRota
+from .meetings import eat_greeting, recipient_name, render_message
+from .models import ChurchNotification, ChurchSettings, DutyRota
 from .push import push_to_user
+
+#: The wording used when the church has not configured its own (see ChurchSettings).
+DEFAULT_ASSIGNMENT_MESSAGE = (
+    '{greeting}, {name}.\n\n'
+    'You have been rostered for {duty} on {day}, {date} at {shift}. '
+    'Your part: {role}.\n\n'
+    'If you cannot serve that day, tell the deaconate desk. {church}'
+)
+DEFAULT_REMINDER_MESSAGE = (
+    '{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for '
+    '{duty}. Your part: {role}. God bless you as you serve. {church}'
+)
 
 #: Where a reminder's link lands: the deaconate's rota, where the duty is read.
 DUTY_ROTA_LINK = '/administration?tab=deaconate-rota'
@@ -82,35 +96,86 @@ def reminder_recipients(entry):
     ]
 
 
-def reminder_message(entry, officer) -> str:
-    """What one officer is being told, in the words the desk would use."""
-    part = str(officer.get('role') or '').strip()
-    lines = [f'You are rostered on the deaconate rota for {duty_title(entry)}.']
-    lines.append(f'When: {duty_when(entry)}')
-    if part:
-        lines.append(f'Your part: {part}')
-    lines.append('')
-    lines.append('If you cannot serve that day, tell the deaconate desk so another officer can take it.')
-    lines.append('The rota is here: /administration?tab=deaconate-rota')
-    return '\n'.join(lines)
+def duty_context(entry, officer, user, church_name: str = '') -> dict:
+    """The placeholder values one officer's duty message is filled with."""
+    return {
+        'greeting': eat_greeting(),
+        'name': recipient_name(user) if user is not None else (str(officer.get('name') or '').split(' ')[0] or 'friend'),
+        'duty': duty_title(entry),
+        'day': entry.duty_date.strftime('%A'),
+        'date': entry.duty_date.strftime('%d %B %Y'),
+        'shift': (entry.shift or '').strip(),
+        'role': str(officer.get('role') or '').strip(),
+        'church': church_name,
+    }
+
+
+def duty_template(kind: str) -> str:
+    """The church's configured duty wording, else the shipped default.
+
+    ``kind`` is ``'assignment'`` (sent when the officer is rostered) or
+    ``'reminder'`` (the day-before SMS).
+    """
+    settings_obj = ChurchSettings.objects.first()
+    field = 'default_duty_reminder_message' if kind == 'reminder' else 'default_duty_assignment_message'
+    fallback = DEFAULT_REMINDER_MESSAGE if kind == 'reminder' else DEFAULT_ASSIGNMENT_MESSAGE
+    configured = getattr(settings_obj, field, '') if settings_obj else ''
+    return configured or fallback
+
+
+def reminder_message(entry, officer, user=None, church_name: str = '') -> str:
+    """What one officer is told the day before, in the church's own words."""
+    return render_message(
+        duty_template('reminder'),
+        duty_context(entry, officer, user, church_name),
+    )
+
+
+def assignment_message(entry, officer, user, church_name: str = '') -> str:
+    """What one officer is told when the desk rosters them on a duty."""
+    return render_message(
+        duty_template('assignment'),
+        duty_context(entry, officer, user, church_name),
+    )
 
 
 def reminder_subject(entry) -> str:
     return f'Duty reminder: {duty_title(entry)} — {entry.duty_date.strftime("%d %b")}'
 
 
-def notify_officer(entry, officer, user, church_name: str = '') -> dict:
-    """Ring one officer on one line: the bell, the letter, the phone.
+def assignment_subject(entry) -> str:
+    return f'You are rostered: {duty_title(entry)} — {entry.duty_date.strftime("%d %b")}'
 
-    Each notice is its own try: a mailbox that refuses the letter must not
-    stop the bell being written, and a phone with no subscription is the
-    normal state rather than a failure. Returns what actually went.
+
+def officer_phone(officer, user) -> str:
+    """The number to text: the one the desk wrote down, else the account's own."""
+    typed = str(officer.get('phone') or '').strip()
+    if typed:
+        return typed
+    profile = getattr(user, 'member_profile', None)
+    return (getattr(profile, 'phone_number', '') or '').strip() if profile else ''
+
+
+def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'reminder') -> dict:
+    """Ring one officer on one line: the bell, the letter, the text and the phone.
+
+    ``kind`` picks the church's wording: ``'assignment'`` when the desk rosters
+    them, ``'reminder'`` the day before. Each notice is its own try: a mailbox
+    that refuses the letter, or a gateway that is down, must not stop the bell
+    being written, and a phone with no subscription is the normal state rather
+    than a failure. Returns what actually went.
     """
-    report = {'bell': False, 'letter': False, 'push': 0}
-    subject = reminder_subject(entry)
-    body = reminder_message(entry, officer)
-    if church_name:
-        body = f'{body}\n\n{church_name}'
+    report = {'bell': False, 'letter': False, 'sms': False, 'push': 0}
+    subject = reminder_subject(entry) if kind == 'reminder' else assignment_subject(entry)
+    context = duty_context(entry, officer, user, church_name)
+    body = render_message(duty_template(kind), context)
+
+    phone = officer_phone(officer, user)
+    if phone:
+        try:
+            report['sms'] = sms.send(phone, body)
+        except Exception:
+            report['sms'] = False
 
     try:
         ChurchNotification.objects.create(
@@ -156,6 +221,7 @@ def send_duty_reminder(entry, church_name: str = '', force: bool = False) -> dic
         'recipients': 0,
         'bell': 0,
         'letters': 0,
+        'texts': 0,
         'pushes': 0,
         'stamped': False,
     }
@@ -167,8 +233,9 @@ def send_duty_reminder(entry, church_name: str = '', force: bool = False) -> dic
     # Two officers can share one mailbox; that inbox gets one letter.
     written = set()
     for officer, user in recipients:
-        sent = notify_officer(entry, officer, user, church_name)
+        sent = notify_officer(entry, officer, user, church_name, kind='reminder')
         report['bell'] += 1 if sent['bell'] else 0
+        report['texts'] += 1 if sent['sms'] else 0
         address = (getattr(user, 'email', '') or '').strip().lower()
         if sent['letter'] and address not in written:
             written.add(address)

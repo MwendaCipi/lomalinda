@@ -5906,14 +5906,65 @@ class DutyRotaAPITests(APITestCase):
         }])
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
 
+        # Rostering told the officer once already; the cron's reminder is the second.
+        self.assertEqual(ChurchNotification.objects.filter(user=officer).count(), 1)
+        self.assertEqual(len(mail.outbox), letters_before + 1)
+
         call_command('send_duty_reminders', stdout=StringIO())
 
-        notice = ChurchNotification.objects.get(user=officer)
-        self.assertIn('Main Sanctuary Ushering Team A', notice.title)
-        self.assertEqual(notice.link, '/administration?tab=deaconate-rota')
-        self.assertEqual(len(mail.outbox), letters_before + 1)
+        reminders = ChurchNotification.objects.filter(user=officer, title__startswith='Duty reminder')
+        self.assertEqual(reminders.count(), 1)
+        self.assertIn('Main Sanctuary Ushering Team A', reminders.get().title)
+        self.assertEqual(reminders.get().link, '/administration?tab=deaconate-rota')
+        self.assertEqual(len(mail.outbox), letters_before + 2)
         self.assertEqual(mail.outbox[-1].to, ['david@example.com'])
         self.assertIn('Ushering', mail.outbox[-1].body)
+
+    def test_rostering_tells_the_officer_by_bell_email_and_sms(self):
+        """Being rostered is news the officer must not miss: the bell, the letter
+        and a text go out at once, in the church's own rostering wording."""
+        from unittest import mock
+
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            created = self._schedule(date=str(tomorrow), assigned_team=[{
+                'name': 'David Kariuki', 'phone': '0712345678',
+                'email': 'david@example.com', 'role': 'Ushering',
+                'member_id': officer.pk,
+            }])
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        notice = ChurchNotification.objects.get(user=officer)
+        self.assertIn('rostered', notice.title)
+        self.assertIn('Ushering', notice.message)
+        self.assertEqual(texted.call_count, 1)
+        self.assertEqual(texted.call_args.args[0], '0712345678')
+        self.assertIn('Ushering', texted.call_args.args[1])
+        self.assertIn(
+            'david@example.com', [address for message in mail.outbox for address in message.to],
+        )
+
+    def test_editing_a_line_without_a_new_officer_sends_nothing(self):
+        from unittest import mock
+
+        officer = self._rostered_officer()
+        self.client.force_authenticate(self.head_deaconess)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        team = [{'name': 'David Kariuki', 'role': 'Ushering', 'member_id': officer.pk}]
+        created = self._schedule(date=str(tomorrow), assigned_team=team)
+        letters = len(mail.outbox)
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            edited = self.client.put(
+                f"/api/members/duty-rota/{created.data['id']}/",
+                {'title': 'Sanctuary care', 'date': str(tomorrow), 'assigned_team': team},
+                format='json',
+            )
+
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(texted.call_count, 0)
+        self.assertEqual(len(mail.outbox), letters)
 
     def test_a_member_id_that_is_not_an_id_is_refused(self):
         self.client.force_authenticate(self.head_deaconess)
@@ -10161,6 +10212,31 @@ class DepartmentApiTests(APITestCase):
             {'start': '14:00', 'end': '16:00', 'title': 'Afternoon program',
              'participants': [{'name': 'Peter Kimani', 'role': 'Pianist'}],
              'parts': []},
+        ])
+
+    def test_a_session_carries_no_hours_of_its_own(self):
+        """The time belongs to the activities: the editor no longer asks for
+        a session's hours, so a session is stored with the blank ones it was
+        given while each activity keeps the hour it runs."""
+        self._auth(self.leader)
+        event = DepartmentEvent.objects.create(
+            department='amm', title='Men Sabbath', event_date='2026-10-10',
+        )
+        saved = self.client.patch(
+            f'/api/members/departments/amm/events/{event.id}/',
+            {'program_items': [
+                {'start': '', 'end': '', 'title': 'Sabbath School',
+                 'participants': [], 'parts': [
+                     {'start': '8:00', 'end': '8:15', 'title': 'Opening song',
+                      'participants': [{'name': 'Grace Muthoni', 'role': 'Song Leader'}]},
+                 ]},
+            ]}, format='json',
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.data['program_items'], [
+            {'start': '', 'end': '', 'title': 'Sabbath School', 'participants': [],
+             'parts': [{'start': '08:00', 'end': '08:15', 'title': 'Opening song',
+                        'participants': [{'name': 'Grace Muthoni', 'role': 'Song Leader'}]}]},
         ])
 
     def test_only_the_desk_holding_the_calendar_gives_it_a_program(self):

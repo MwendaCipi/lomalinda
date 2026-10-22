@@ -1349,6 +1349,8 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'default_membership_approval_message',
             'default_appointment_message',
             'default_release_thank_you_message',
+            'default_duty_assignment_message',
+            'default_duty_reminder_message',
             'request_placeholders',
             'approval_placeholders',
             'appointment_placeholders',

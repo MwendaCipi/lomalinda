@@ -9,7 +9,18 @@ import { authInitScript, themeInitScript } from "@/lib/theme";
 import { CHURCH, churchSchema, defaultMetadata } from "@/config/seo";
 
 export const viewport: Viewport = {
-  themeColor: brand.bark,
+  // The bark toolbar everywhere, except the installed app on a phone whose
+  // system is light — there the manifest's cream theme colour is what reaches
+  // Android's three-button bar, and it must draw dark glyphs over Chrome's
+  // light bottom band rather than white ones (they were invisible). Chrome
+  // resolves the first meta whose media matches, so the order below is the
+  // precedence: installed + light → cream, anything dark → bark, plain
+  // browser + light → bark.
+  themeColor: [
+    { media: "(display-mode: standalone) and (prefers-color-scheme: light)", color: brand.sand },
+    { media: "(prefers-color-scheme: dark)", color: brand.bark },
+    { media: "(prefers-color-scheme: light)", color: brand.bark },
+  ],
   width: "device-width",
   initialScale: 1,
   // Pinch-zoom stays available (WCAG 1.4.4) — never lock maximumScale on an
@@ -24,12 +35,16 @@ export const metadata: Metadata = {
   // Token-bearing pages (accept-invite, enroll confirm, password reset) read
   // their secret from the query string; never name that URL in a Referer.
   referrer: "no-referrer",
-  // `public/manifest.json` is the manifest the installed app actually reads
-  // (`manifest.ts` next to this file only produces an unused copy). It starts
-  // at the dashboard, so the launch entry is the floor of the app's back
-  // stack. The query string is the only lever for making an install re-read
-  // it — bump it whenever the manifest changes.
-  manifest: "/manifest.json?v=5-app-name",
+  // `app/manifest.ts` is the manifest the browser actually links (Next serves
+  // it as /manifest.webmanifest and this `manifest` field is not emitted when
+  // the file route exists) — but an install minted from older HTML stored
+  // `public/manifest.json` with this query string, so the two manifests are
+  // kept identical and this URL is what makes that older install re-read it.
+  // It starts at the dashboard, so the launch entry is the floor of the app's
+  // back stack. Bump the query whenever the manifest changes — and only then:
+  // a new manifest URL makes Chrome re-mint the WebAPK, and its own icon
+  // shows for a moment while it does.
+  manifest: "/manifest.json?v=6-cream-system-bars",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

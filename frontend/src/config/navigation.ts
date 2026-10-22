@@ -1621,15 +1621,16 @@ export function railHere(pathname: string, query: RailQuery | null, entries: Rai
  * and departments as the member's own map of them, which every member may read
  * (the office console keeps the writing side). Home has no tab of its own: the
  * topbar's church mark is the way back to the dashboard, which is the floor of
- * the back stack. Materials rides between Stewardship and Chat: the study shelf
- * is read all week, beside the giving page and the rooms rather than inside a
- * section's strip. Staff still reach the console from the account menu.
+ * the back stack. Materials rides right after Fellowship — the study shelf is
+ * read all week, so it sits early on the bar — and the ministry map takes the
+ * place between Stewardship and Chat. Staff still reach the console from the
+ * account menu.
  */
 export const tabKeys: ({ key: DestinationKey } | "home" | "admin")[] = [
   { key: "fellowship" },
-  { key: "myAreas" },
-  { key: "give" },
   { key: "materials" },
+  { key: "give" },
+  { key: "myAreas" },
   { key: "chat" },
 ];
 

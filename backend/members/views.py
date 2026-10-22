@@ -10293,6 +10293,43 @@ class InventoryMovementCreateView(APIView):
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
+def _officer_key(item):
+    """Who an officer is on a line, for telling a newly rostered one apart."""
+    if isinstance(item, dict):
+        return str(item.get('member_id') or '') or str(item.get('name') or '').strip().lower()
+    return str(item or '').strip().lower()
+
+
+def notify_new_duty_officers(entry, previous_officers):
+    """Tell each officer newly rostered on ``entry`` (bell, email and SMS).
+
+    Only officers not already on the line before the save are told, so an edit
+    that leaves the team unchanged sends nothing. Officers with no account are
+    texted when a phone is on the line. Each notice is best-effort: nothing here
+    can fail the save that triggered it.
+    """
+    from .duty import assignment_message, notify_officer, officer_phone, reminder_recipients, rostered_officers
+
+    before = {_officer_key(item) for item in previous_officers}
+    newly = [o for o in rostered_officers(entry) if _officer_key(o) not in before]
+    if not newly:
+        return
+    church_name = current_church_name()
+    accounts = {user.pk: user for _officer, user in reminder_recipients(entry)}
+    for officer in newly:
+        user = accounts.get(officer.get('member_id'))
+        try:
+            if user is not None:
+                notify_officer(entry, officer, user, church_name, kind='assignment')
+            elif officer_phone(officer, None):
+                sms.send(
+                    officer_phone(officer, None),
+                    assignment_message(entry, officer, None, church_name),
+                )
+        except Exception:
+            logger.exception('Duty assignment notice failed for line %s', entry.pk)
+
+
 class DutyRotaView(APIView):
     """The deaconate's duty rota: read it, schedule a line, take one off.
 
@@ -10344,6 +10381,7 @@ class DutyRotaView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         entry = serializer.save(created_by=request.user)
+        notify_new_duty_officers(entry, previous_officers=[])
         return Response(DutyRotaSerializer(entry).data, status=status.HTTP_201_CREATED)
 
     def delete(self, request, pk=None):
@@ -10371,10 +10409,12 @@ class DutyRotaView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         entry = generics.get_object_or_404(DutyRota, pk=pk)
+        previous_officers = list(entry.assigned_team or [])
         serializer = DutyRotaSerializer(entry, data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         entry = serializer.save()
+        notify_new_duty_officers(entry, previous_officers=previous_officers)
         return Response(DutyRotaSerializer(entry).data, status=status.HTTP_200_OK)
 
 

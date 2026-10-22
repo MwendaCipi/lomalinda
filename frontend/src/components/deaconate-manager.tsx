@@ -2164,7 +2164,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                   />
                 </div>
 
-                <div className="col-span-2">
+                <div>
                   <label className="font-bold text-bark">Duty</label>
                   <input
                     type="text"
@@ -2173,17 +2173,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, o
                     onChange={(e) => setOfficerForm({ ...officerForm, duty: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                   />
-                  <p className="mt-1 text-[10px] text-moss">
-                    What this officer is doing on the day, in your own words.
-                  </p>
                 </div>
               </div>
-
-              <p className="mt-3 text-[11px] text-moss">
-                Pick a name to fill in who the person is — the roll answers with their number and
-                address — then write what they are doing this Sabbath. A deacon who keeps no
-                account in the app is still rostered by typing their name.
-              </p>
 
               <div className="mt-4 flex justify-end gap-2">
                 <button

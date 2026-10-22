@@ -24,9 +24,10 @@ type TabItem = {
  *
  * Every tab navigates: a section's tab opens the section's first page, and
  * the chip strip on that page carries its siblings (AppFrame). The bar carries
- * Fellowship, the member's ministry map, Stewardship, Materials and Chat —
- * Materials read between the giving page and the rooms, because the study shelf
- * is opened all week the way those two are. The office console has no tab any
+ * Fellowship, Materials, Stewardship, the member's ministry map and Chat —
+ * Materials sits right after Fellowship, because the study shelf is opened all
+ * week, and the ministry map reads between the giving page and the rooms. The
+ * office console has no tab any
  * more (the church's own areas matter more than the office's here); staff reach
  * it from the account menu.
  */

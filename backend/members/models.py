@@ -2001,6 +2001,25 @@ class ChurchSettings(models.Model):
         ),
         blank=True,
     )
+    # What an officer is told when the desk rosters them on a duty (sent at once,
+    # by bell, email and SMS), and the shorter note the day-before reminder sends
+    # by SMS. Placeholders are filled per recipient; see members/duty.py.
+    default_duty_assignment_message = models.TextField(
+        default=(
+            '{greeting}, {name}.\n\n'
+            'You have been rostered for {duty} on {day}, {date} at {shift}. '
+            'Your part: {role}.\n\n'
+            'If you cannot serve that day, tell the deaconate desk. {church}'
+        ),
+        blank=True,
+    )
+    default_duty_reminder_message = models.TextField(
+        default=(
+            '{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for '
+            '{duty}. Your part: {role}. God bless you as you serve. {church}'
+        ),
+        blank=True,
+    )
     # Per-role rights, as edited on the Church Roles Configuration screen:
     # {role_code: [right_code, ...]}. Missing roles fall back to the shipped
     # defaults in members.roles.DEFAULT_ROLE_RIGHTS.

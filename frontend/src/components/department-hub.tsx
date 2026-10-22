@@ -100,6 +100,7 @@ import {
 } from "@/components/calendar-views";
 import {
   ProgramDocument,
+  TimeField,
   parseProgramItems,
   programItemHasContent,
   serializeProgramItems,
@@ -1178,12 +1179,17 @@ function ProgramEditorModal({
           </button>
         </div>
         <p className="mt-2 text-xs text-moss">
-          Each session is one part of the day — the hours it runs and its name. Open a session to
-          add the activities inside it: each carries its time, name and facilitator.
+          Each session is one part of the day — its name. Open a session to add the activities
+          inside it: each carries its time, name and facilitator. Type an hour the way you would
+          say it — 8, 8:30, 2:30 pm — and the sheet reads it back.
         </p>
         <div className="mt-3 space-y-3">
           {items.map((session, index) => {
             const open = openSession === index;
+            // A session's own hours are no longer asked for — the time
+            // belongs to the activities — so only a session typed before
+            // that rule shows the hours it still carries.
+            const range = sessionRange(session);
             return (
               <div key={index} className="overflow-hidden rounded-2xl border border-sand-line bg-white">
                 {/* The session shut: its hours and its name on the outside.
@@ -1201,9 +1207,11 @@ function ProgramEditorModal({
                       className={`h-3.5 w-3.5 shrink-0 text-moss transition ${open ? "" : "-rotate-90"}`}
                       aria-hidden="true"
                     />
-                    <span className="w-28 shrink-0 text-xs font-semibold text-ember">
-                      {sessionRange(session)}
-                    </span>
+                    {range !== "—" && (
+                      <span className="w-28 shrink-0 text-xs font-semibold text-ember">
+                        {range}
+                      </span>
+                    )}
                     <span className="min-w-0 truncate text-xs font-semibold text-bark">
                       {session.title || "Untitled session"}
                     </span>
@@ -1223,39 +1231,17 @@ function ProgramEditorModal({
                     id={`session-${index}`}
                     className="space-y-3 border-t border-sand-line bg-sand-plate p-3"
                   >
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="block text-[11px] font-semibold text-moss">Time</span>
-                        <span className="mt-1 flex items-center gap-1.5">
-                          <input
-                            type="time"
-                            value={session.start}
-                            onChange={(e) => setSession(index, { start: e.target.value })}
-                            aria-label={`Start time for session ${index + 1}`}
-                            className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
-                          />
-                          <span className="text-[11px] text-moss">to</span>
-                          <input
-                            type="time"
-                            value={session.end}
-                            onChange={(e) => setSession(index, { end: e.target.value })}
-                            aria-label={`End time for session ${index + 1}`}
-                            className="w-28 shrink-0 rounded-xl border border-sand-line bg-white px-2 py-2 text-xs focus:border-ember focus:outline-none"
-                          />
-                        </span>
-                      </label>
-                      <label className="block">
-                        <span className="block text-[11px] font-semibold text-moss">Name</span>
-                        <input
-                          type="text"
-                          value={session.title}
-                          onChange={(e) => setSession(index, { title: e.target.value })}
-                          aria-label={`Name of session ${index + 1}`}
-                          placeholder="Sabbath School"
-                          className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
-                        />
-                      </label>
-                    </div>
+                    <label className="block">
+                      <span className="block text-[11px] font-semibold text-moss">Name</span>
+                      <input
+                        type="text"
+                        value={session.title}
+                        onChange={(e) => setSession(index, { title: e.target.value })}
+                        aria-label={`Name of session ${index + 1}`}
+                        placeholder="Sabbath School"
+                        className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                      />
+                    </label>
 
                     {/* The activities this session holds: each opened by its own
                         button, and each one entered under the time it runs,
@@ -1286,19 +1272,17 @@ function ProgramEditorModal({
                             <label className="block">
                               <span className="block text-[11px] font-semibold text-moss">Time</span>
                               <span className="mt-1 flex items-center gap-1.5">
-                                <input
-                                  type="time"
+                                <TimeField
                                   value={part.start}
-                                  onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, start: e.target.value }))}
-                                  aria-label={`Start time of activity ${partIndex + 1} in session ${index + 1}`}
+                                  onChange={(hour) => mapPart(index, partIndex, (p) => ({ ...p, start: hour }))}
+                                  label={`Start time of activity ${partIndex + 1} in session ${index + 1}`}
                                   className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
                                 />
                                 <span className="text-[11px] text-moss">to</span>
-                                <input
-                                  type="time"
+                                <TimeField
                                   value={part.end}
-                                  onChange={(e) => mapPart(index, partIndex, (p) => ({ ...p, end: e.target.value }))}
-                                  aria-label={`End time of activity ${partIndex + 1} in session ${index + 1}`}
+                                  onChange={(hour) => mapPart(index, partIndex, (p) => ({ ...p, end: hour }))}
+                                  label={`End time of activity ${partIndex + 1} in session ${index + 1}`}
                                   className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
                                 />
                               </span>
@@ -4249,6 +4233,8 @@ function DepartmentDetail({
   // A member reading the area who is not on its roll can ask to join from
   // right here — the request goes to the desk, not to the street.
   const [showJoin, setShowJoin] = useState(false);
+  // The "Contact leader" modal: chat here, WhatsApp or call.
+  const [showContactLeader, setShowContactLeader] = useState(false);
   // Who is reading: on the roll, or holding an office at the desk. A viewer
   // who is neither is a member looking in — the desk reads, and the ask to
   // join rides the strip.
@@ -4314,6 +4300,10 @@ function DepartmentDetail({
   const [programFor, setProgramFor] = useState<DeptEvent | null>(null);
   const [programViewer, setProgramViewer] = useState<DeptEvent | null>(null);
   const [openEventMenuKey, setOpenEventMenuKey] = useState<string | null>(null);
+  // Which way the open menu hangs. A row near the foot of the calendar's
+  // scroll box has no room below it, so its menu opens upwards rather than
+  // being clipped by the box's edge.
+  const [openEventMenuUp, setOpenEventMenuUp] = useState(false);
   // One hidden file input, asked which event it is for at the moment a row
   // says "Upload program" — a picker per row would be a picker per event.
   const programUploadRef = useRef<HTMLInputElement>(null);
@@ -5234,7 +5224,13 @@ function DepartmentDetail({
 
   return (
     <div
-      className={`mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col custom-hover-scrollbar ${
+      // The roll is the whole desk, and it reads the full width of the panel
+      // on a wide screen — the same band the heading and the view strip above
+      // it already span. Capping it at a reading width (max-w-6xl + mx-auto)
+      // left the members table stranded as a centred column with dead space on
+      // either side of the panel. Every other view keeps the reading measure,
+      // where a narrow column of prose reads comfortably.
+      className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
         deskFillsPhone
           ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
           : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
@@ -5493,17 +5489,32 @@ function DepartmentDetail({
               </table>
             )}
           </div>
-          {/* The bottom row: count on the left, Add Member on the right — and
-              the ask to join beneath the table, where a member reading an
-              area they are not on the roll of meets it at the end of the
-              list, not as chrome above it. */}
+          {/* The bottom row: count on the left, role-aware actions on the right.
+              Non-members: Request to join + Contact leader (same row on mobile).
+              Plain members: Chat (DM to leader) + Contact leader.
+              Leaders / managers: Chat (group) + Add Member. */}
           <div className="flex shrink-0 flex-col sm:flex-row items-center justify-between gap-2 border-t border-sand-line px-4 py-3 text-center sm:text-left">
             <p className="text-xs text-moss">
               {visibleMembers.length} {visibleMembers.length === 1 ? "person" : "people"}
               {rollQuery ? ` of ${memberRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             {canManageRoll ? (
+              /* Leader / assistant: Chat (group) + Add Member */
               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const conv = await openConversation({ kind: "group", department: department.code });
+                      router.push(`/chat?group=${conv.id}`);
+                    } catch (error) {
+                      showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" /> Chat
+                </button>
                 {department.code === "children" && (
                   <button
                     type="button"
@@ -5522,13 +5533,43 @@ function DepartmentDetail({
                 </button>
               </div>
             ) : !onRoll && !holdsOffice ? (
-              <button
-                type="button"
-                onClick={() => setShowJoin(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
-              >
-                <UserPlus className="h-3.5 w-3.5" /> Request to join
-              </button>
+              /* Non-member: Request to join + Contact leader, same row on mobile */
+              <div className="flex flex-row items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowJoin(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
+                >
+                  <UserPlus className="h-3.5 w-3.5" /> Request to join
+                </button>
+                {department.leader && (
+                  <button
+                    type="button"
+                    onClick={() => setShowContactLeader(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  >
+                    <Phone className="h-3.5 w-3.5" /> Contact leader
+                  </button>
+                )}
+              </div>
+            ) : (onRoll || holdsOffice) && department.leader ? (
+              /* Member (not leader): Chat + Contact leader */
+              <div className="flex flex-row items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void chatWith(department.leader!.id)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" /> Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowContactLeader(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  <Phone className="h-3.5 w-3.5" /> Contact leader
+                </button>
+              </div>
             ) : null}
           </div>
         </div>
@@ -5544,14 +5585,16 @@ function DepartmentDetail({
         />
       )}
       {subTab === "calendar" && (
-        // The card is the calendar's own window: the rows and months travel
-        // inside it, while the buttons at its foot stay in reach — the desk
-        // reads a year without hunting for its own controls again.
-        <div
-          className="desk-calendar custom-table-scrollbar max-h-[calc(100dvh_-_18rem)] min-h-[16rem] overflow-y-auto overscroll-contain rounded-2xl border border-sand-line bg-white p-5 pb-0 shadow-sm"
-          ref={calendarScrollRef}
-        >
-          <h3 className="text-sm font-bold text-bark">Department calendar</h3>
+        // The card is the calendar's own window, and it is always one
+        // height: the rows and months travel inside its body, which scrolls,
+        // while the buttons at its foot stay pinned — so adding rows never
+        // moves them. Print unrolls both (see .desk-calendar in the print
+        // styles), so a printout still carries the whole calendar.
+        <div className="desk-calendar flex h-[calc(100dvh_-_18rem)] min-h-[16rem] flex-col rounded-2xl border border-sand-line bg-white p-5 pb-0 shadow-sm">
+          <div
+            className="desk-calendar-body custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            ref={calendarScrollRef}
+          >
           {loadingEvents ? (
             <p className="py-8 text-center text-xs text-moss">Loading the calendar…</p>
           ) : events.length === 0 ? (
@@ -5629,13 +5672,29 @@ function DepartmentDetail({
                             <button
                               type="button"
                               aria-expanded={openEventMenuKey === actionKey}
-                              onClick={() => setOpenEventMenuKey(openEventMenuKey === actionKey ? null : actionKey)}
+                              onClick={(clickEvent) => {
+                                const opening = openEventMenuKey !== actionKey;
+                                if (opening) {
+                                  // The menu is about 220px tall: where the row
+                                  // leaves less than that below it — the bottom
+                                  // rows — it opens upwards instead of being
+                                  // cut off by the scroll box's edge.
+                                  const button = clickEvent.currentTarget.getBoundingClientRect();
+                                  const box = calendarScrollRef.current?.getBoundingClientRect();
+                                  setOpenEventMenuUp(box ? button.bottom + 220 > box.bottom : false);
+                                }
+                                setOpenEventMenuKey(opening ? actionKey : null);
+                              }}
                               className="rounded-lg border border-sand-mute px-3 py-2 text-sm font-semibold text-bark hover:border-ember"
                             >
                               Actions <span aria-hidden="true">▾</span>
                             </button>
                             {openEventMenuKey === actionKey && (
-                              <div className="absolute right-5 top-14 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
+                              <div
+                                className={`absolute right-5 z-20 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
+                                  openEventMenuUp ? "bottom-full mb-2" : "top-14"
+                                }`}
+                              >
                                 <EventProgramMenu
                                   event={event}
                                   onView={() => { setOpenEventMenuKey(null); setProgramViewer(event); }}
@@ -5726,10 +5785,12 @@ function DepartmentDetail({
               )}
             </>
           )}
-          {/* The foot keeps still while the calendar moves behind it: the count
-              on the left, and the two things the desk does with a calendar on
-              the right — file one, or print what is here. */}
-          <div className="sticky bottom-0 z-10 -mx-5 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-5 pb-5 pt-3 print:hidden">
+          </div>
+          {/* The foot holds its place by the card's own height rather than by
+              sticking to a scroll: the count on the left, and the two things
+              the desk does with a calendar on the right — file one, or print
+              what is here. */}
+          <div className="-mx-5 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-5 pb-5 pt-3 print:hidden">
             <p className="text-xs text-moss">
               {calendarView === "calendar"
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
@@ -5914,6 +5975,13 @@ function DepartmentDetail({
           }}
         />
       )}
+      {showContactLeader && department.leader && (
+        <ContactLeaderModal
+          leader={department.leader}
+          onClose={() => setShowContactLeader(false)}
+          onChat={() => void chatWith(department.leader!.id)}
+        />
+      )}
       {showLeadership && (
         <LeadershipEditModal
           department={department}
@@ -5935,6 +6003,78 @@ function DepartmentDetail({
           onAdd={addEvent}
         />
       )}
+    </div>
+  );
+}
+
+
+/**
+ * A small sheet the "Contact leader" button opens: three doors to the
+ * department's leader — chat here, WhatsApp, or call.
+ */
+function ContactLeaderModal({
+  leader,
+  onClose,
+  onChat,
+}: {
+  leader: Holder;
+  onClose: () => void;
+  onChat: () => void;
+}) {
+  const waRaw = (leader.phone_number || "").replace(/\D/g, "");
+  const waNumber = waRaw ? (waRaw.startsWith("0") ? `254${waRaw.slice(1)}` : waRaw) : "";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      role="presentation"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Contact leader"
+        className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-bark">Contact leader</h3>
+            <p className="text-[11px] text-moss">{leader.name}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-3 space-y-1">
+          <button
+            type="button"
+            onClick={() => { onClose(); onChat(); }}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-bark transition hover:bg-sand"
+          >
+            <MessageSquare className="h-4 w-4 text-sage-strong shrink-0" /> Chat here
+          </button>
+          {waNumber && (
+            <a
+              href={`https://wa.me/${waNumber}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={onClose}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-bark transition hover:bg-sand"
+            >
+              <WhatsAppIcon className="h-4 w-4 shrink-0" /> WhatsApp
+            </a>
+          )}
+          {leader.phone_number && (
+            <a
+              href={`tel:${leader.phone_number.replace(/\s+/g, "")}`}
+              onClick={onClose}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-bark transition hover:bg-sand"
+            >
+              <Phone className="h-4 w-4 text-sage-strong shrink-0" /> Call
+            </a>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

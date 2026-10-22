@@ -49,6 +49,13 @@ export function ChurchSettingsManager() {
   const [releaseThankYouMessage, setReleaseThankYouMessage] = useState(
     "{greeting}, {name}.\n\nThank you for serving as {position} of {area} at {church}. Your service has been a blessing, and the church is grateful. {successor} now takes up the role.\n\n{church}"
   );
+  // The rostering notice an officer gets (bell, email, SMS) and the SMS sent the day before.
+  const [dutyAssignmentMessage, setDutyAssignmentMessage] = useState(
+    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot serve that day, tell the deaconate desk. {church}"
+  );
+  const [dutyReminderMessage, setDutyReminderMessage] = useState(
+    "{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for {duty}. Your part: {role}. God bless you as you serve. {church}"
+  );
   const [appointmentPlaceholders, setAppointmentPlaceholders] = useState<{ token: string; description: string }[]>([]);
   // The line the dashboard greeting ends with. Short by design; the API caps it
   const [bankName, setBankName] = useState("KCB Bank Kenya");
@@ -96,6 +103,12 @@ export function ChurchSettingsManager() {
           }
           if (data.default_release_thank_you_message) {
             setReleaseThankYouMessage(data.default_release_thank_you_message);
+          }
+          if (data.default_duty_assignment_message) {
+            setDutyAssignmentMessage(data.default_duty_assignment_message);
+          }
+          if (data.default_duty_reminder_message) {
+            setDutyReminderMessage(data.default_duty_reminder_message);
           }
           if (data.default_request_notification_message) {
             setRequestNotificationMessage(data.default_request_notification_message);
@@ -146,6 +159,8 @@ export function ChurchSettingsManager() {
         default_membership_approval_message: membershipApprovalMessage,
         default_appointment_message: appointmentMessage,
         default_release_thank_you_message: releaseThankYouMessage,
+        default_duty_assignment_message: dutyAssignmentMessage,
+        default_duty_reminder_message: dutyReminderMessage,
         bank_name: bankName,
         bank_account_name: bankAccountName,
         bank_account_number: bankAccountNumber,
@@ -529,6 +544,34 @@ export function ChurchSettingsManager() {
               value={releaseThankYouMessage}
               onChange={(e) => setReleaseThankYouMessage(e.target.value)}
               placeholder="Sent when a leadership appointment replaces a holder..."
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-bark">Duty Rostering Notice</label>
+            <p className="mt-1 text-[11px] text-moss">
+              Sent to an officer the moment the desk rosters them on a duty — by bell, email and SMS. Placeholders: {"{greeting}"}, {"{name}"}, {"{duty}"}, {"{day}"}, {"{date}"}, {"{shift}"}, {"{role}"}, {"{church}"}.
+            </p>
+            <textarea
+              rows={4}
+              value={dutyAssignmentMessage}
+              onChange={(e) => setDutyAssignmentMessage(e.target.value)}
+              placeholder="Sent when an officer is rostered on a duty..."
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-bark">Duty Reminder SMS (4:00 pm, the day before)</label>
+            <p className="mt-1 text-[11px] text-moss">
+              Texted to each officer at 4:00 pm East Africa Time the day before their duty. Uses the same placeholders as the rostering notice.
+            </p>
+            <textarea
+              rows={3}
+              value={dutyReminderMessage}
+              onChange={(e) => setDutyReminderMessage(e.target.value)}
+              placeholder="Sent the day before a duty..."
               className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
             />
           </div>

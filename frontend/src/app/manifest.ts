@@ -12,7 +12,11 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/dashboard",
     display: "standalone",
     background_color: brand.sand,
-    theme_color: brand.bark,
+    // Cream, not bark: the installed app's system bars read this, and a dark
+    // theme colour made Chrome draw white glyphs over Android's light
+    // three-button band — invisible on a light-mode phone. Cream keeps the
+    // glyphs dark where the band is light.
+    theme_color: brand.sand,
     icons: [
       {
         src: "/icons/meru/church-icon-192.png",
