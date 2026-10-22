@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
                     '{greeting}, {name}.\n\n'
                     'You have been rostered for {duty} on {day}, {date} at {shift}. '
                     'Your part: {role}.\n\n'
-                    'If you cannot serve that day, tell the deaconate desk. {church}'
+                    'If you cannot serve that day, notify the duty desk. {church}'
                 ),
             ),
         ),

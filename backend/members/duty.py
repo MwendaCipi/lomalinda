@@ -30,11 +30,17 @@ DEFAULT_ASSIGNMENT_MESSAGE = (
     '{greeting}, {name}.\n\n'
     'You have been rostered for {duty} on {day}, {date} at {shift}. '
     'Your part: {role}.\n\n'
-    'If you cannot serve that day, tell the deaconate desk. {church}'
+    'If you cannot serve that day, notify the duty desk. {church}'
 )
 DEFAULT_REMINDER_MESSAGE = (
     '{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for '
     '{duty}. Your part: {role}. God bless you as you serve. {church}'
+)
+DEFAULT_PULPIT_ASSIGNMENT_MESSAGE = (
+    '{greeting}, {name}.\n\n'
+    'You have been rostered for {duty} on {day}, {date} at {shift}. '
+    'Your part: {role}.\n\n'
+    'If you cannot serve that day, please notify the PM desk. {church}'
 )
 
 #: Where a reminder's link lands: the deaconate's rota, where the duty is read.
@@ -142,17 +148,23 @@ def duty_context(entry, officer, user, church_name: str = '') -> dict:
     }
 
 
-def duty_template(kind: str) -> str:
+def duty_template(kind: str, desk: str = '') -> str:
     """The church's configured duty wording, else the shipped default.
 
     ``kind`` is ``'assignment'`` (sent when the officer is rostered) or
-    ``'reminder'`` (the day-before SMS).
+    ``'reminder'`` (the day-before SMS).  ``desk`` is ``'pulpit'`` or
+    ``'deaconate'``; it selects the right default when the church has not
+    written its own wording.
     """
     settings_obj = ChurchSettings.objects.first()
     field = 'default_duty_reminder_message' if kind == 'reminder' else 'default_duty_assignment_message'
     fallback = DEFAULT_REMINDER_MESSAGE if kind == 'reminder' else DEFAULT_ASSIGNMENT_MESSAGE
     configured = getattr(settings_obj, field, '') if settings_obj else ''
-    return configured or fallback
+    if configured:
+        return configured
+    if kind == 'assignment' and desk == 'pulpit':
+        return DEFAULT_PULPIT_ASSIGNMENT_MESSAGE
+    return fallback
 
 
 def drop_part_sentence(template: str) -> str:
@@ -196,7 +208,7 @@ def render_duty_message(kind: str, entry, officer, user=None, church_name: str =
     letter — reads its wording through here, so a blank part is dropped the
     same way wherever the message goes out.
     """
-    template = duty_template(kind)
+    template = duty_template(kind, desk=getattr(entry, 'desk', ''))
     context = duty_context(entry, officer, user, church_name)
     if not context['role']:
         template = drop_part_sentence(template)

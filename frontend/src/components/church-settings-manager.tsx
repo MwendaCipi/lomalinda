@@ -51,7 +51,7 @@ export function ChurchSettingsManager() {
   );
   // The rostering notice an officer gets (bell, email, SMS) and the SMS sent the day before.
   const [dutyAssignmentMessage, setDutyAssignmentMessage] = useState(
-    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot serve that day, tell the deaconate desk. {church}"
+    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot serve that day, notify the duty desk. {church}"
   );
   const [dutyReminderMessage, setDutyReminderMessage] = useState(
     "{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for {duty}. Your part: {role}. God bless you as you serve. {church}"
