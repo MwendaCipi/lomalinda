@@ -184,6 +184,7 @@ export function ChatPanel() {
   const active = activeId !== null ? rooms.find((room) => room.id === activeId) ?? null : null;
   const searchParams = useSearchParams();
   const openDmId = searchParams.get("dm");
+  const openGroupId = searchParams.get("group");
 
   /** Put a freshly opened room at the top of the list and step into it. */
   const enterRoom = (room: ChatConversation) => {
@@ -220,6 +221,23 @@ export function ChatPanel() {
       alive = false;
     };
   }, [openDmId]);
+
+  // When the URL carries ?group=<conversation_id> (e.g. from a department's
+  // Chat button), step straight into that room once the room list has loaded,
+  // so the officer lands inside the ministry's chat rather than the inbox.
+  useEffect(() => {
+    if (!openGroupId) return;
+    const groupId = Number(openGroupId);
+    if (!Number.isFinite(groupId)) return;
+    const room = rooms.find((entry) => entry.id === groupId);
+    if (!room) return;
+    // The state write rides a microtask, the same shape the panel's other
+    // effects use, so the effect body itself does not set state.
+    void Promise.resolve().then(() => {
+      setActiveId(room.id);
+      setMessages([]);
+    });
+  }, [openGroupId, rooms]);
 
   const loadRooms = useCallback(async () => {
     try {

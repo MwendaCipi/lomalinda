@@ -4682,7 +4682,7 @@ function DepartmentDetail({
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [department.code, department.label, department.description, setCustomHeader, setHeadingFirst]);
+  }, [department.code, department.label, department.description, setCustomHeader, setHeadingFirst, onADeaconatePage, consoleTab]);
 
   useEffect(() => {
     // A desk that is one view of a larger one leaves the strip to it entirely
