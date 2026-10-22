@@ -187,6 +187,19 @@ const emptyRotaForm = {
  *  plays and reads, rather than a duty served. */
 const PULPIT_DEFAULT_TITLE = "Sabbath Pulpit Team";
 
+/**
+ * The title a line reads by.
+ *
+ * The desk saves its default as the field's real value, but a line written
+ * before the title came back — or through the API, where the field is
+ * optional — can still arrive blank. Every place that names a line falls
+ * back to the desk's own default rather than to a bare "Duty", which says
+ * nothing about which rota the line is on.
+ */
+function rotaTitleOf(entry: { title?: string | null }, fallback: string): string {
+  return (entry.title ?? "").trim() || fallback;
+}
+
 /** Authenticated JSON call against the members API. */
 async function apiFetch(path: string, init?: RequestInit) {
   const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
@@ -290,6 +303,12 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const rotaName = isPulpit ? "Pulpit Team" : "Duty Rota";
   // What a line of it is called when the desk names none.
   const defaultRotaTitle = isPulpit ? PULPIT_DEFAULT_TITLE : emptyRotaForm.title;
+  // The save form as the desk opens it. The default title is written into
+  // the field as its value, not left as a hint in an empty box, so what the
+  // desk sees is what is saved when it changes nothing else.
+  const blankRota = () => ({ ...emptyRotaForm, title: defaultRotaTitle });
+  // What a line of this desk's rota is called wherever it is named.
+  const titleOf = (entry: { title?: string | null }) => rotaTitleOf(entry, defaultRotaTitle);
   // The query that asks the server for this desk's lines only.
   const deskParam = isPulpit ? "pulpit" : "deaconate";
   const activeTab = initialTab;
@@ -326,7 +345,9 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const [rota, setRota] = useState<RotaEntry[]>([]);
   const [loadingRota, setLoadingRota] = useState(true);
   const [showAddRotaModal, setShowAddRotaModal] = useState(false);
-  const [newRota, setNewRota] = useState(emptyRotaForm);
+  // The form starts on the desk's own default, so the pulpit desk never
+  // opens holding the deaconate's title.
+  const [newRota, setNewRota] = useState(blankRota);
   const [savingRota, setSavingRota] = useState(false);
   const [removingRotaId, setRemovingRotaId] = useState<number | null>(null);
   // Non-null while the schedule modal is rewriting a line that already exists.
@@ -533,7 +554,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     if (shareTarget) {
       const lines = [
         `📋 *SDA Church - Duty Rota*`,
-        `*Duty:* ${shareTarget.title || "Duty"}`,
+        `*Duty:* ${titleOf(shareTarget)}`,
         `*Date:* ${dayFirst(shareTarget.date)}`,
         shareTarget.shift ? `*Shift/Time:* ${shareTarget.shift}` : "",
         shareTarget.duty_type ? `*Type:* ${shareTarget.duty_type}` : "",
@@ -546,7 +567,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         }),
       ].filter(Boolean);
       return {
-        subject: `Duty Rota: ${shareTarget.title || "Duty"} (${dayFirst(shareTarget.date)})`,
+        subject: `Duty Rota: ${titleOf(shareTarget)} (${dayFirst(shareTarget.date)})`,
         text: lines.join("\n"),
       };
     } else {
@@ -557,7 +578,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         "",
         ...filteredRota.slice(0, 15).map((item) => {
           const teamNames = item.assigned_team.map((e) => normalizeOfficer(e).name).join(", ");
-          return `• ${dayFirst(item.date)} - ${item.title}${item.shift ? ` (${item.shift})` : ""}: ${teamNames || "Unassigned"}`;
+          return `• ${dayFirst(item.date)} - ${titleOf(item)}${item.shift ? ` (${item.shift})` : ""}: ${teamNames || "Unassigned"}`;
         }),
         filteredRota.length > 15 ? `...and ${filteredRota.length - 15} more duties.` : "",
       ].filter(Boolean);
@@ -933,7 +954,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         return;
       }
       setShowAddRotaModal(false);
-      setNewRota(emptyRotaForm);
+      setNewRota(blankRota());
       setEditingRotaId(null);
       setShowOfficerModal(false);
       setOfficerMatches([]);
@@ -958,7 +979,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       // A line saved before the title came back reads as itself, but the
       // field is required on the way out — so it opens with the default
       // rather than with an empty box the desk must notice.
-      title: entry.title || defaultRotaTitle,
+      title: titleOf(entry),
       date: entry.date,
       shift: entry.shift,
       officers: entry.assigned_team.map(normalizeOfficer),
@@ -970,7 +991,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   /** Leaving the save form forgets the line being written and anyone staged. */
   const closeRotaModal = () => {
     setShowAddRotaModal(false);
-    setNewRota(emptyRotaForm);
+    setNewRota(blankRota());
     setEditingRotaId(null);
     setShowOfficerModal(false);
     setOfficerMatches([]);
@@ -1100,7 +1121,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const removeRota = async (entry: RotaEntry) => {
     const result = await showAlert(
       "Remove this duty?",
-      `"${entry.title}" on ${dayFirst(entry.date)} leaves the rota for good.`,
+      `"${titleOf(entry)}" on ${dayFirst(entry.date)} leaves the rota for good.`,
       "warning",
       {
         showCancelButton: true,
@@ -1349,7 +1370,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       )}
                       <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
                     </div>
-                    <h3 className="font-bold text-sm text-bark">{item.title || "Duty"}</h3>
+                    <h3 className="font-bold text-sm text-bark">{titleOf(item)}</h3>
                     <p className="text-xs text-moss flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-ember" />
                       {item.shift || "Time not set"}
@@ -1395,7 +1416,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       <button
                         type="button"
                         onClick={() => openShareModal(item)}
-                        aria-label={`Share ${item.title}`}
+                        aria-label={`Share ${titleOf(item)}`}
                         title="Share this duty via WhatsApp, SMS, or Email"
                         className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                       >
@@ -1405,7 +1426,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       <button
                         type="button"
                         onClick={() => void printRotaPdf(item)}
-                        aria-label={`Print ${item.title}`}
+                        aria-label={`Print ${titleOf(item)}`}
                         title="Print this duty entry"
                         className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                       >
@@ -1415,7 +1436,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       <button
                         type="button"
                         onClick={() => openRota(item)}
-                        aria-label={`Edit the duty \"${item.title}\"`}
+                        aria-label={`Edit the duty \"${titleOf(item)}\"`}
                         title="Edit this duty and its officers"
                         className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                       >
@@ -1426,7 +1447,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                         type="button"
                         onClick={() => removeRota(item)}
                         disabled={removingRotaId === item.id}
-                        aria-label={`Remove the duty "${item.title}"`}
+                        aria-label={`Remove the duty "${titleOf(item)}"`}
                         title="Remove this duty from the rota"
                         className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
                       >
@@ -1475,7 +1496,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 type="button"
                 onClick={() => {
                   setEditingRotaId(null);
-                  setNewRota(emptyRotaForm);
+                  setNewRota(blankRota());
                   setShowAddRotaModal(true);
                 }}
                 className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
@@ -1945,7 +1966,6 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 <input
                   type="text"
                   required
-                  placeholder={defaultRotaTitle}
                   value={newRota.title}
                   onChange={(e) => setNewRota({ ...newRota, title: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
