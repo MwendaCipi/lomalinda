@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  FileDown,
   Images,
   Pencil,
   Plus,
@@ -415,7 +414,6 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     [rotaFromDate, rotaToDate, rotaSearchQuery],
   );
   const rotaFiltersHosted = filtersHosted;
-  const [downloadingRotaPdf, setDownloadingRotaPdf] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareTarget, setShareTarget] = useState<RotaEntry | null>(null);
   const [shareChannels, setShareChannels] = useState({ whatsapp: true, sms: true, email: true });
@@ -533,37 +531,6 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       return matchTitle || matchType || matchShift || matchTeam;
     });
   }, [rota, rotaSearchQuery]);
-
-  const downloadRotaPdf = async () => {
-    setDownloadingRotaPdf(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("desk", deskParam);
-      if (rotaFromDate) params.set("from", rotaFromDate);
-      if (rotaToDate) params.set("to", rotaToDate);
-      if (rotaSearchQuery.trim()) params.set("q", rotaSearchQuery.trim());
-      const queryStr = `?${params.toString()}`;
-      const res = await apiFetch(`/duty-rota/pdf/${queryStr}`);
-      if (!res.ok) {
-        throw new Error("Failed to download PDF");
-      }
-      const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      const tag = rotaFromDate && rotaToDate ? `_${rotaFromDate}_to_${rotaToDate}` : rotaFromDate ? `_from_${rotaFromDate}` : "";
-      a.download = `${rotaName.replace(/\s+/g, "_")}${tag}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-      showAlert("Rota PDF Downloaded", "The duty rota document has been saved to your downloads.", "success");
-    } catch {
-      showAlert("Download Failed", "Could not generate or download the rota PDF.", "error");
-    } finally {
-      setDownloadingRotaPdf(false);
-    }
-  };
 
   const printRotaPdf = async (item?: RotaEntry) => {
     try {
@@ -1524,7 +1491,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               <button
                 type="button"
                 onClick={() => openShareModal(null)}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
               >
                 <Share2 className="h-3.5 w-3.5 text-ember" />
                 Share
@@ -1532,19 +1499,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               <button
                 type="button"
                 onClick={() => void printRotaPdf()}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
               >
                 <Printer className="h-3.5 w-3.5 text-ember" />
                 Print
-              </button>
-              <button
-                type="button"
-                disabled={downloadingRotaPdf}
-                onClick={() => void downloadRotaPdf()}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand disabled:opacity-50"
-              >
-                <FileDown className="h-3.5 w-3.5 text-ember" />
-                {downloadingRotaPdf ? "Downloading…" : "Download"}
               </button>
               <button
                 type="button"
@@ -1553,7 +1511,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   setNewRota(blankRota());
                   setShowAddRotaModal(true);
                 }}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
               >
                 <Plus className="h-4 w-4" />
                 <span className="sm:hidden">Schedule</span>
