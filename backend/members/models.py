@@ -1048,6 +1048,14 @@ class Announcement(models.Model):
     # treasury account it invites giving to — the same wording the giving form
     # shows. Empty means the post asks for nothing.
     support_account = models.CharField(max_length=80, blank=True, default='', help_text='Treasury account this post invites support for')
+    # Which giving buttons the post itself carries. A support call can ride
+    # with all of them — give money now, pledge an amount, give goods — or a
+    # subset the officer names, so the card shows only the actions the call
+    # actually wants. Codes are the buttons: ``give_now``, ``pledge``,
+    # ``in_kind``, ``comment``. Empty or absent means the long-standing
+    # default trio every surface rendered before the choice existed.
+    GIVING_ACTION_CHOICES = [('give_now', 'Give now'), ('pledge', 'Pledge'), ('in_kind', 'Support (in-kind)'), ('comment', 'Comment')]
+    giving_actions = models.JSONField(default=list, blank=True, help_text='Giving buttons this promotion card carries; empty means the default trio (pledge, give now, comment)')
     attachment = models.FileField(upload_to='announcement-attachments/', blank=True, null=True)
     sharing_option = models.CharField(max_length=100, default='site', blank=True)
     is_popup = models.BooleanField(default=False, help_text="Pop up automatically to users requiring action")

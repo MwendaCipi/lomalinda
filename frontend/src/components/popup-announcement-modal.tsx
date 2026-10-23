@@ -42,6 +42,8 @@ type Announcement = {
   response_options?: string;
   action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   support_account_display?: string | null;
+  /** The giving buttons this post carries; empty = the default trio. */
+  giving_actions?: string[];
   event_date_from?: string | null;
   event_date_to?: string | null;
   is_popup: boolean;
@@ -207,6 +209,13 @@ export function PopupAnnouncementModal() {
 
   const actionType = current.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
+  // The row the popup carries: only the buttons the officer chose for the
+  // post. An old post that predates the choice keeps the familiar trio.
+  const popupActions = current && current.giving_actions?.length
+    ? current.giving_actions.filter((code) => code !== "comment")
+    : ["give_now", "pledge", "in_kind"];
+  const popupOrder = ["pledge", "in_kind", "give_now"];
+  popupActions.sort((a, b) => popupOrder.indexOf(a) - popupOrder.indexOf(b));
   const isOpinion = current.announcement_type === "opinion";
   const opinionIsClosed = isOpinion && current.response_mode === "closed";
   const opinionOptions = (current.response_options || "").split("\n").map((line) => line.trim()).filter(Boolean);
@@ -393,35 +402,54 @@ export function PopupAnnouncementModal() {
                 {/* The giving actions, one row, left to right: Pledge,
                     In-kind, Give Money. Pledge and In-kind open over this
                     popup; Give Money leaves for the giving page. */}
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPledgeTarget({
-                      id: current.id,
-                      title: current.title,
-                      action_type: actionType,
-                      support_account_display: current.support_account_display ?? null,
-                      event_date_from: current.event_date_from ?? null,
-                      event_date_to: current.event_date_to ?? null,
-                    })}
-                    className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
-                  >
-                    Pledge
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInKindOpen(true)}
-                    className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
-                  >
-                    In-kind
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => leaveFor(`/give?purpose=${encodeURIComponent(current.title)}`)}
-                    className="rounded-full bg-sage-strong px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
-                  >
-                    Give Money
-                  </button>
+                {/* Left to right: Pledge, In-kind, Give Money — but only the
+                    buttons the officer chose for this post. Pledge and
+                    In-kind open over this popup; Give Money leaves for the
+                    giving page. */}
+                <div className={`grid gap-2 ${popupActions.length === 3 ? "grid-cols-3" : popupActions.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {popupActions.map((code) => {
+                    if (code === "pledge") {
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => setPledgeTarget({
+                            id: current.id,
+                            title: current.title,
+                            action_type: actionType,
+                            support_account_display: current.support_account_display ?? null,
+                            event_date_from: current.event_date_from ?? null,
+                            event_date_to: current.event_date_to ?? null,
+                          })}
+                          className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
+                        >
+                          Pledge
+                        </button>
+                      );
+                    }
+                    if (code === "in_kind") {
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => setInKindOpen(true)}
+                          className="rounded-full border border-sand-mute bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
+                        >
+                          In-kind
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => leaveFor(`/give?purpose=${encodeURIComponent(current.title)}`)}
+                        className="rounded-full bg-sage-strong px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
+                      >
+                        Give Money
+                      </button>
+                    );
+                  })}
                 </div>
                 {statusMessage && (
                   <p className="mt-2 text-xs font-semibold text-sage-strong">{statusMessage}</p>

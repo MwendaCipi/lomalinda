@@ -15,6 +15,8 @@ type Announcement = {
   detail?: string;
   href?: string;
   action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
+  /** The giving buttons this post carries; empty = the default trio. */
+  giving_actions?: string[];
   action_prompt?: string;
 };
 
@@ -97,6 +99,13 @@ export function NextGatheringCard() {
   const mapsUrl = churchMapHref(settings);
   const actionType = current?.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
+  // The row the visitor reads: only the buttons the officer chose for the
+  // post. An old post predating the choice keeps the familiar trio.
+  const cardActions = current && current.giving_actions?.length
+    ? current.giving_actions.filter((code) => code !== "comment")
+    : ["give_now", "pledge", "in_kind"];
+  const cardOrder = ["pledge", "in_kind", "give_now"];
+  if (cardActions.length !== 1) cardActions.sort((a, b) => cardOrder.indexOf(a) - cardOrder.indexOf(b));
 
   // A new slide starts with its pledge field closed.
   useEffect(() => {
@@ -233,36 +242,49 @@ export function NextGatheringCard() {
           </div>
         ) : current && isContributionAction ? (
           <div className="border-t border-sage-line pt-6">
-            {/* The giving actions, always one row, left to right: Pledge,
-                In-kind, Give Money. The order is a commitment: deliberate
-                giving first, then goods, then money. */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {pledgeOpen ? (
-                <span aria-hidden className="rounded-full border border-dashed border-sage-line px-2 py-2.5 text-center text-xs text-sage-fog sm:text-sm" />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { setPledgeOpen(true); setIsInteracting(true); }}
-                  className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
-                >
-                  Pledge
-                </button>
-              )}
-              {/* The goods form lives on the public giving page: this card is
-                  a visitor's, and the member in-kind desk (/support/in-kind)
-                  sits behind the sign-in wall. */}
-              <Link
-                href="/give?give=in-kind"
-                className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
-              >
-                In-kind
-              </Link>
-              <Link
-                href={`/give?purpose=${encodeURIComponent(current.title)}`}
-                className="rounded-full bg-sage-strong px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
-              >
-                Give Money
-              </Link>
+            {/* The giving actions, one row: only the buttons the officer
+                chose for this post, left to right — deliberate giving first,
+                then goods, then money. */}
+            <div className={`grid gap-2 sm:gap-3 ${cardActions.length === 3 ? "grid-cols-3" : cardActions.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {cardActions.map((code) => {
+                if (code === "pledge") {
+                  return pledgeOpen ? (
+                    <span key={code} aria-hidden className="rounded-full border border-dashed border-sage-line px-2 py-2.5 text-center text-xs text-sage-fog sm:text-sm" />
+                  ) : (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => { setPledgeOpen(true); setIsInteracting(true); }}
+                      className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
+                    >
+                      Pledge
+                    </button>
+                  );
+                }
+                {/* The goods form lives on the public giving page: this card
+                    is a visitor's, and the member in-kind desk
+                    (/support/in-kind) sits behind the sign-in wall. */}
+                if (code === "in_kind") {
+                  return (
+                    <Link
+                      key={code}
+                      href="/give?give=in-kind"
+                      className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
+                    >
+                      In-kind
+                    </Link>
+                  );
+                }
+                return (
+                  <Link
+                    key={code}
+                    href={`/give?purpose=${encodeURIComponent(current.title)}`}
+                    className="rounded-full bg-sage-strong px-2 py-2.5 text-center text-xs font-bold text-white transition hover:bg-sage-shade sm:text-sm"
+                  >
+                    Give Money
+                  </Link>
+                );
+              })}
             </div>
             <p className="mt-2 text-center text-xs text-moss">towards {current.title}</p>
 

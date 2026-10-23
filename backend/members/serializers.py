@@ -588,6 +588,18 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
     support_account_display = serializers.SerializerMethodField()
 
+    # The giving buttons a promotion card carries, as codes the feed reads.
+    # Sent repeated in the composer's multipart form; blank means none were
+    # touched — the row keeps the long-standing default trio then.
+    giving_actions = serializers.ListField(
+        child=serializers.ChoiceField(choices=Announcement.GIVING_ACTION_CHOICES),
+        required=False,
+    )
+
+    def validate_giving_actions(self, value):
+        # Duplicates would render one button twice; a list of codes is a set.
+        return list(dict.fromkeys(value))
+
     def get_support_account_display(self, obj):
         """The account label the feed's Give now button names.
 
@@ -692,6 +704,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             attrs['response_mode'] = ''
             attrs['response_options'] = ''
             attrs['action_type'] = 'none'
+            attrs['giving_actions'] = []
         elif announcement_type == 'promotion':
             attrs['href'] = ''
             support_account = attrs.get('support_account') if 'support_account' in attrs else (instance.support_account if instance else '')
@@ -707,10 +720,16 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             attrs['response_mode'] = ''
             attrs['response_options'] = ''
             attrs['action_type'] = 'none'
+            # The buttons must amount to an action: an untouched picker keeps
+            # the default trio, but a call whose officer emptied the whole
+            # row would leave members a card with nothing to do.
+            if 'giving_actions' in attrs and not attrs['giving_actions']:
+                raise serializers.ValidationError('Choose at least one giving action.')
         elif announcement_type == 'opinion':
             attrs['href'] = ''
             attrs['support_account'] = ''
             attrs['action_type'] = 'respond'
+            attrs['giving_actions'] = []
             mode = attrs.get('response_mode') or 'open'
             if mode not in ('open', 'closed'):
                 raise serializers.ValidationError('An opinion post answers openly or among fixed options.')
@@ -730,17 +749,19 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             attrs['response_mode'] = ''
             attrs['response_options'] = ''
             attrs['action_type'] = 'none'
+            attrs['giving_actions'] = []
         else:  # awareness: a plain notice carries no link, no account, no question
             attrs['href'] = ''
             attrs['support_account'] = ''
             attrs['response_mode'] = ''
             attrs['response_options'] = ''
             attrs['action_type'] = 'none'
+            attrs['giving_actions'] = []
         return attrs
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'giving_actions', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id')
 
 

@@ -11567,6 +11567,26 @@ class AnnouncementTypeTests(APITestCase):
         # A promotion carries no meeting link, whatever the client sent.
         self.assertEqual(res.data['href'], '')
 
+    def test_giving_actions_are_stored_and_scoped_to_promotion(self):
+        # The officer picks which buttons a support call carries; the stored
+        # row keeps exactly those codes, and nothing leaks back as e.g. a
+        # duplicate.
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget',
+                          giving_actions=['give_now', 'pledge', 'pledge'])
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data['giving_actions'], ['give_now', 'pledge'])
+        # Unt ticks everything: the call that invites no act at all is refused.
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget', giving_actions=[])
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('giving action', str(res.data))
+        # An unrecognised button name is refused at the door.
+        res = self._post(announcement_type='promotion', support_account='Local Church Budget', giving_actions=['shout'])
+        self.assertEqual(res.status_code, 400)
+        # The other types carry no buttons, whatever the client sent.
+        res = self._post(announcement_type='awareness', giving_actions=['give_now'])
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data['giving_actions'], [])
+
     def test_a_promotion_may_post_without_a_target(self):
         # The goal is the officer's choice: a support call can go out with its
         # account named and no drive behind it, so the feed never shows a

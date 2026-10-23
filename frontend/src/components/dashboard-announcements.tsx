@@ -14,6 +14,18 @@ import { isImageAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** The giving buttons the officer chose for the post. A post saved before
+ *  the choice existed shows the row every card used to carry. Give now's
+ *  own modal already offers goods, so Support only stands alone where Give
+ *  now was left off. */
+function chosenActions(item: Announcement): string[] {
+  const chosen = item.giving_actions?.length ? item.giving_actions : ["give_now", "pledge", "comment"];
+  const order = ["give_now", "pledge", "in_kind", "comment"];
+  return chosen
+    .filter((code) => code !== "in_kind" || !chosen.includes("give_now"))
+    .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+}
+
 type Announcement = {
   id: number;
   title: string;
@@ -24,6 +36,8 @@ type Announcement = {
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   support_account?: string | null;
   support_account_display?: string | null;
+  /** The giving buttons this post carries; empty = the default trio. */
+  giving_actions?: string[];
   /** The clock the pledge's own date is capped by. */
   event_date_from?: string | null;
   event_date_to?: string | null;
@@ -256,28 +270,61 @@ export function DashboardAnnouncements() {
           {isAwareness && showSeeMore && seeMore}
           {isGiving && (
             <div className="flex-1">
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => { if (current) setMethodFor(current); }}
-                  className="pointer-events-auto rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
-                >
-                  Give Now
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { if (current) setPledgeTarget(pledgeTargetFor(current)); }}
-                  className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  Pledge
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { if (current) setCommentFor(current); }}
-                  className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  Comment
-                </button>
+              {/* Only the buttons the officer chose for this post; Give now's
+                  modal already offers goods, so Support stands alone only
+                  where Give now was left off. */}
+              <div className={`grid gap-2 ${(() => {
+                const count = current ? chosenActions(current).length : 0;
+                return count >= 4 ? "grid-cols-2 sm:grid-cols-4" : count === 3 ? "grid-cols-3" : count === 2 ? "grid-cols-2" : "grid-cols-1";
+              })()}`}>
+                {(current ? chosenActions(current) : []).map((code) => {
+                  if (code === "give_now") {
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => { if (current) setMethodFor(current); }}
+                        className="pointer-events-auto rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
+                      >
+                        Give Now
+                      </button>
+                    );
+                  }
+                  if (code === "pledge") {
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => { if (current) setPledgeTarget(pledgeTargetFor(current)); }}
+                        className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                      >
+                        Pledge
+                      </button>
+                    );
+                  }
+                  if (code === "in_kind") {
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => setInKindOpen(true)}
+                        className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                      >
+                        Support
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => { if (current) setCommentFor(current); }}
+                      className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                    >
+                      Comment
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

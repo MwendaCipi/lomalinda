@@ -75,6 +75,9 @@ type Announcement = {
   response_options?: string;
   responses?: { id: number; action_type: string; response_text?: string; response_choice?: string; respondent_name?: string; created_at: string }[];
   support_account?: string | null;
+  // The giving buttons this promotion card carries — codes from
+  // GIVING_ACTION_OPTIONS. Empty means the long-standing default trio.
+  giving_actions?: string[];
   sharing_option?: string;
   action_prompt?: string;
   starts_at?: string | null;
@@ -82,6 +85,18 @@ type Announcement = {
   created_at: string;
   published?: boolean;
 };
+
+/** The giving buttons a promotion card can carry, and what an untouched
+ *  picker means. All four are the full row; an old post that was saved
+ *  before the choice existed reads the same as the empty list, so nothing
+ *  changes for what is already on the board. */
+const GIVING_ACTION_OPTIONS = [
+  { value: "give_now", label: "Give now" },
+  { value: "pledge", label: "Pledge" },
+  { value: "in_kind", label: "Support (in-kind)" },
+  { value: "comment", label: "Comment" },
+] as const;
+const GIVING_ACTIONS_ALL: string[] = GIVING_ACTION_OPTIONS.map((option) => option.value);
 
 /** A date-only string from the API, rendered without shifting a day. */
 function dayLabel(iso?: string | null): string {
@@ -327,6 +342,9 @@ export function AnnouncementManager({
     support_account: "",
     // Promotion posts only: the goal the post's fund drive opens with.
     promotion_target: "",
+    // Promotion posts only: which giving buttons the card carries. All four
+    // to begin with — the officer unticks what the call does not want.
+    giving_actions: [...GIVING_ACTIONS_ALL],
     // Opinion posts only: how members answer, and the fixed options for a
     // closed question (one per line).
     response_mode: "open" as "open" | "closed",
@@ -480,6 +498,8 @@ export function AnnouncementManager({
       action_type: item.action_type ?? "none",
       support_account: item.support_account ?? "",
       promotion_target: "",
+      // A post saved before the choice existed reads the default row.
+      giving_actions: item.giving_actions?.length ? item.giving_actions : [...GIVING_ACTIONS_ALL],
       response_mode: item.response_mode === "closed" ? "closed" : "open",
       response_options: item.response_options ?? "",
       sharing_option: item.sharing_option || "site,email",
@@ -502,6 +522,8 @@ export function AnnouncementManager({
       action_type: "none",
       support_account: "",
       promotion_target: "",
+      // All four to begin with — the officer unticks what the call does not want.
+      giving_actions: [...GIVING_ACTIONS_ALL],
       response_mode: "open",
       response_options: "",
       sharing_option: "site,email",
@@ -589,6 +611,14 @@ export function AnnouncementManager({
       showAlert("Response Options Missing", err, "error");
       return;
     }
+    // The row of buttons must amount to something: a call with no giving
+    // action carries a card members cannot act on.
+    if (form.announcement_type === "promotion" && form.giving_actions.length === 0) {
+      const err = "Choose at least one giving action.";
+      setMessage(err);
+      showAlert("Giving Actions Missing", err, "error");
+      return;
+    }
     setSubmitting(true);
     setMessage("");
     try {
@@ -618,6 +648,11 @@ export function AnnouncementManager({
       });
       if (attachment) payload.append("attachment", attachment);
       if (editingId && removeAttachment) payload.append("remove_attachment", "true");
+      // Support posts send their chosen buttons as repeated values; other
+      // types send nothing — the API clears the field for them.
+      if (form.announcement_type === "promotion") {
+        form.giving_actions.forEach((code) => payload.append("giving_actions", code));
+      }
       const response = await fetch(
         editingId ? `${API_URL}/api/members/announcements/${editingId}/` : `${API_URL}/api/members/announcements/`,
         {
@@ -914,6 +949,50 @@ export function AnnouncementManager({
                       support call with no drive goal; the giving buttons still name this account.
                     </span>
                   </label>
+
+                  {/* The giving actions: which buttons the card actually
+                      carries. Ticked to begin with — untick what the call
+                      does not want, and that button never shows on the
+                      card members read. */}
+                  <div className="md:col-span-2 block text-xs font-semibold text-bark">
+                    <span>Giving actions *</span>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {GIVING_ACTION_OPTIONS.map((option) => {
+                        const selected = form.giving_actions.includes(option.value);
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                giving_actions: selected
+                                  ? f.giving_actions.filter((code) => code !== option.value)
+                                  : [...f.giving_actions, option.value],
+                              }))
+                            }
+                            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                              selected
+                                ? "border-ember bg-ember text-white"
+                                : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
+                            }`}
+                          >
+                            <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${selected ? "border-white/70 bg-white/20" : "border-sand-mute bg-white"}`}>
+                              {selected && (
+                                <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                              )}
+                            </span>
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="mt-1 block text-[10px] font-normal text-moss">
+                      Which buttons this post&apos;s card carries. On the feed, Give now opens the
+                      money-or-goods choice — untick Support (in-kind) as well when the call wants money first.
+                    </span>
+                  </div>
                 </>
               )}
 

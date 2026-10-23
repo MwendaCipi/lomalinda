@@ -58,7 +58,23 @@ type FeedItem = {
   expires_at?: string | null;
   created_at: string;
   fund_drive?: FundDrive | null;
+  /** The giving buttons this post carries; empty = the default trio. */
+  giving_actions?: string[];
 };
+
+/** The giving buttons an announcement's card actually shows, resolved from
+ *  the officer's pick. An old post that predates the choice reads the list
+ *  every card used to carry. Give now opens the money-or-goods choice — it
+ *  already offers the in-kind form — so Support only gains its own button
+ *  where Give now was left off; otherwise the two would be two doors to the
+ *  same goods form on one card. */
+function chosenActions(item: FeedItem): string[] {
+  const chosen = item.giving_actions?.length ? item.giving_actions : ["give_now", "pledge", "comment"];
+  const order = ["give_now", "pledge", "in_kind", "comment"];
+  return chosen
+    .filter((code) => code !== "in_kind" || !chosen.includes("give_now"))
+    .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+}
 
 /** The drive's own giving link, opened straight into the giving modal. */
 function driveGiveHref(drive: FundDrive) {
@@ -192,6 +208,13 @@ export default function AnnouncementsPage() {
                   // A support-account post carries its own giving actions —
                   // the same Pledge / In-kind / Give Money row a drive gets.
                   const supportGives = !isDrive && Boolean(item.support_account_display);
+                  // The buttons the officer chose for this post, in the
+                  // card's reading order.
+                  const feedActions = chosenActions(item);
+                  const actionGrid =
+                    feedActions.length >= 4 ? "grid-cols-2 sm:grid-cols-4" :
+                    feedActions.length === 3 ? "grid-cols-3" :
+                    feedActions.length === 2 ? "grid-cols-2" : "grid-cols-1";
                   // The area a post is addressed to, by name: the first of
                   // this account's areas whose audience code the post carries.
                   const itemBadge = (item.audience ?? [])
@@ -329,62 +352,62 @@ export default function AnnouncementsPage() {
                         </div>
                       )}
 
-                      {/* The giving actions, one row: Give Now, Pledge,
-                          Comment. The money-or-goods choice lives inside
-                          Give Now's own modal, so three buttons still carry
-                          everything the old four-wide combo said. */}
-                      {supportGives && (
+                      {/* The giving actions, one row: only the buttons the
+                          officer chose for this post. The money-or-goods
+                          choice lives inside Give Now's own modal, so a full
+                          row still carries everything; a Support button only
+                          stands alone where Give now was left off. */}
+                      {(supportGives || (isDrive && drive)) && feedActions.length > 0 && (
                         <div className="mt-3 border-t border-sand-line pt-3">
-                          <div className="grid grid-cols-3 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setMethodFor(item)}
-                              className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
-                            >
-                              Give Now
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPledgeTarget(pledgeTargetFor(item))}
-                              className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                            >
-                              Pledge
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCommentFor(item)}
-                              className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                            >
-                              Comment
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {isDrive && drive && (
-                        <div className="mt-3 border-t border-sand-line pt-3">
-                          <div className="grid grid-cols-3 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setMethodFor(item)}
-                              className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
-                            >
-                              Give Now
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPledgeTarget(pledgeTargetFor(item))}
-                              className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                            >
-                              Pledge
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCommentFor(item)}
-                              className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                            >
-                              Comment
-                            </button>
+                          <div className={`grid gap-2 ${actionGrid}`}>
+                            {feedActions.map((code) => {
+                              if (code === "give_now") {
+                                return (
+                                  <button
+                                    key="give_now"
+                                    type="button"
+                                    onClick={() => setMethodFor(item)}
+                                    className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
+                                  >
+                                    Give Now
+                                  </button>
+                                );
+                              }
+                              if (code === "pledge") {
+                                return (
+                                  <button
+                                    key="pledge"
+                                    type="button"
+                                    onClick={() => setPledgeTarget(pledgeTargetFor(item))}
+                                    className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                  >
+                                    Pledge
+                                  </button>
+                                );
+                              }
+                              if (code === "in_kind") {
+                                return (
+                                  <button
+                                    key="in_kind"
+                                    type="button"
+                                    onClick={() => setInKindFor(item)}
+                                    className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                  >
+                                    Support
+                                  </button>
+                                );
+                              }
+                              return (
+                                <button
+                                  key="comment"
+                                  type="button"
+                                  onClick={() => setCommentFor(item)}
+                                  className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                >
+                                  Comment
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

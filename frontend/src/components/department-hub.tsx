@@ -1120,7 +1120,7 @@ function EventProgramMenu({
         </button>
       )}
       <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
-        Remove
+        Remove event
       </button>
     </div>
   );
@@ -1177,11 +1177,11 @@ function ProgramEditorModal({
   const [items, setItems] = useState<ProgramItem[]>(
     initialItems.length > 0 ? initialItems : [{ start: "", end: "", title: "", participants: [], parts: [] }],
   );
-  // Nothing unfolded when the sheet opens; the desk opens the session it
-  // is working on. One at a time, so opening a session closes whichever
-  // other was open and the desk reads one part of the day rather than all
-  // of them at once.
-  const [openSession, setOpenSession] = useState<number | null>(null);
+  // The first session starts unfolded, so the sheet opens on typing rather
+  // than on a row of closed headings. One at a time, so opening a session
+  // closes whichever other was open and the desk reads one part of the day
+  // rather than all of them at once.
+  const [openSession, setOpenSession] = useState<number | null>(0);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   /** Removing a session also settles which one is left open. */
@@ -1294,9 +1294,13 @@ function ProgramEditorModal({
     <div
       className={
         isPage
-          // The page takes the viewport: one solid sheet-worth of scroll,
-          // no dimming — the way back is at its top, its actions at its foot.
-          ? "fixed inset-0 z-40 overflow-y-auto bg-sand print:hidden"
+          // The page takes the viewport without scrolling itself: on a desk
+          // the two columns — building the programme on the left, reading how
+          // it looks on the right — each scroll on their own, so the desk can
+          // sit on one part of the sheet and watch the other part at the
+          // same time. On a phone the columns stack and the page scrolls as
+          // one sheet.
+          ? "fixed inset-0 z-40 flex flex-col overflow-y-auto bg-sand print:hidden md:overflow-hidden"
           : "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
       }
       role="presentation"
@@ -1321,12 +1325,12 @@ function ProgramEditorModal({
         aria-label={`Program for ${event.title}`}
         className={
           isPage
-            ? "mx-auto w-full max-w-6xl bg-white px-4 pb-5 pt-4 shadow-sm sm:px-6"
+            ? "mx-auto w-full max-w-6xl bg-white px-4 pb-5 pt-4 shadow-sm sm:px-6 md:flex md:min-h-0 md:flex-1 md:flex-col"
             : "my-6 w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
         }
       >
         {isPage ? (
-          <div className="border-b border-sand-line pb-2.5">
+          <div className="border-b border-sand-line pb-2.5 md:shrink-0">
             <h3 className="text-lg font-bold text-bark">{event.title}</h3>
             <p className="text-xs text-moss">
               {uploadedFile
@@ -1345,9 +1349,10 @@ function ProgramEditorModal({
             </button>
           </div>
         )}
-        <div className="mt-4 md:grid md:grid-cols-2 md:items-start md:gap-6">
-          {/* The typing, on the left. */}
-          <div className="min-w-0">
+        <div className="mt-4 md:grid md:min-h-0 md:flex-1 md:grid-cols-2 md:grid-rows-1 md:gap-6">
+          {/* The typing, on the left — its own scroll on a desk, so the day
+              being built travels apart from the sheet beside it. */}
+          <div className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             <p className="text-xs text-moss">
               Each session is one part of the day. Open a session to add the activities inside it.
             </p>
@@ -1557,7 +1562,7 @@ function ProgramEditorModal({
           {/* The sheet as it will be read, live, beside the typing: what is
               typed is what is seen — with the uploaded file above it when the
               event carries one. On a phone this stacks under the form. */}
-          <aside className="min-w-0 md:sticky md:top-16">
+          <aside className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             {uploadedProgramBlock && (
               <div className="mb-4">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
@@ -1593,7 +1598,7 @@ function ProgramEditorModal({
           // editable in place, so there is no separate "Edit program"),
           // and on its left the things a finished programme is done with —
           // taken off the event, printed to paper, a file sent in, handed on.
-          <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3 sm:-mx-6 sm:px-6">
+          <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3 md:shrink-0 sm:-mx-6 sm:px-6">
             <div className="flex flex-wrap items-center gap-2">{programBarButtons}</div>
             <button
               type="button"

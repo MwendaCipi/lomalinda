@@ -2183,10 +2183,18 @@ def generate_event_program_pdf(event, department_name: str = '') -> bytes:
             if indent:
                 # An activity hangs under its session the sheet indents it:
                 # pushed right, so the day reads inside-out from the session
-                # down to what runs through it.
-                table_style.append(('LEFTPADDING', (0, row_index), (0, row_index), int(2.2 * cm)))
+                # down to what runs through it. The padding goes on the
+                # content column only — the hours are right-aligned and stay
+                # anchored at the same right edge as their session's hours;
+                # indenting this cell instead squeezed them narrow enough
+                # that ranges like "9:30 – 10:30 AM" wrapped, dropping the
+                # meridiem onto a row of its own.
                 table_style.append(('LEFTPADDING', (1, row_index), (1, row_index), int(2.2 * cm)))
-        table = Table(table_data, colWidths=[3.0 * cm, 15.0 * cm])
+        # The hour column is wide enough that the longest spoken range —
+        # "11:30 AM – 12:45 PM", both halves of the day named — stays on the
+        # one row it belongs to, beside the entry it runs; a narrow column
+        # wrapped the meridiem onto its own line and read as a broken cell.
+        table = Table(table_data, colWidths=[4.6 * cm, 13.4 * cm])
         table.setStyle(TableStyle(table_style))
         story.append(table)
 

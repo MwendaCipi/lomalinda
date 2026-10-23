@@ -457,17 +457,8 @@ export function MyAreas() {
     // carries its own inset on the wider widths, where this wrapper's padding
     // is what frames it.
     return (
-      <div className="flex h-full min-w-0 w-full flex-col sm:px-8 sm:py-8 lg:px-10 lg:py-10">
+      <div className="flex h-full min-w-0 w-full flex-col sm:px-8 sm:py-4 lg:px-10 lg:py-5">
         <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
-          {/* The way back out of the area, on a wide screen; on a phone it
-              rides above the name in the shell's heading band. */}
-          <button
-            type="button"
-            onClick={showMap}
-            className="mb-3 hidden w-fit items-center gap-1.5 text-xs font-semibold text-moss transition hover:text-bark lg:inline-flex"
-          >
-            <MoveLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
           <div className="min-h-0 w-full flex-1">
             {opensDeaconateDesk ? (
               deaconateUsesHub ? (
