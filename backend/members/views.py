@@ -12022,6 +12022,20 @@ def clean_program_items(raw):
     return shaped_items
 
 
+def _calendar_time_from_string(value):
+    """``HH:MM`` as the desks' time inputs send it — a ``time``, or None for an
+    hour the desk left blank. One parser for the desk's calendar views."""
+    value = (value or '').strip()
+    if not value:
+        return None
+    try:
+        from datetime import time as dt_time
+        parts = value.split(':')
+        return dt_time(int(parts[0]), int(parts[1]))
+    except Exception:
+        return None
+
+
 class DepartmentEventsView(APIView):
     """A department's calendar: the stored events behind the ministry pages."""
 
@@ -12072,12 +12086,22 @@ class DepartmentEventsView(APIView):
     def post(self, request, department):
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department):
-            return Response({'detail': 'Only church officers or this department\'s leader can add events.'}, status=status.HTTP_403_FORBIDDEN)
         # An event is written on the calendar that will hold it — usually the
         # desk writing it, but the desk that plans the church's week (personal
-        # ministries) files into the ministry that will run the event.
+        # ministries) files into the ministry that will run the event, and
+        # opens that ministry's own calendar to do it. So the write is judged
+        # against the calendar named, not the one the URL was opened on: its
+        # own desk files its own, church officers file anywhere, and the
+        # personal ministries desk keeps every ministry's week.
         target_code = str(request.data.get('department') or department).strip() or department
+        if (
+            not can_manage_department(request.user, target_code)
+            and not can_schedule_across_departments(request.user)
+        ):
+            return Response(
+                {'detail': 'Only church officers, this department\'s leader, or the personal ministries desk can add events.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if target_code != department and not can_schedule_across_departments(request.user):
             return Response(
                 {'detail': 'Only church officers or the personal ministries desk can add events to another department.'},
@@ -12096,25 +12120,14 @@ class DepartmentEventsView(APIView):
         mode = (request.data.get('mode') or 'physical').strip()
         if mode not in ('physical', 'virtual'):
             mode = 'physical'
-        # Parse time fields — accept HH:MM strings from the frontend time inputs
-        def _parse_time(val):
-            val = (val or '').strip()
-            if not val:
-                return None
-            try:
-                from datetime import time as dt_time
-                parts = val.split(':')
-                return dt_time(int(parts[0]), int(parts[1]))
-            except Exception:
-                return None
         event = DepartmentEvent.objects.create(
             department=target_code,
             title=title,
             unit=unit,
             event_date=event_date,
-            event_time=_parse_time(request.data.get('time')),
+            event_time=_calendar_time_from_string(request.data.get('time')),
             end_date=request.data.get('end_date') or None,
-            end_time=_parse_time(request.data.get('end_time')),
+            end_time=_calendar_time_from_string(request.data.get('end_time')),
             mode=mode,
             location=(request.data.get('location') or '').strip(),
             meeting_link=(request.data.get('meeting_link') or '').strip(),
@@ -12130,18 +12143,25 @@ class DepartmentEventsView(APIView):
 
 
     def patch(self, request, department, event_id=None):
-        """An event's programme, once the event is on the calendar.
-
-        The desk adds an event in a line and gives it its programme later —
-        typing its sessions into ``program_items`` (an empty list clearing
-        it) or attaching ``program_file`` as a file. Either is the same
-        programme the congregation reads from the church calendar, so the
-        write is held to the same officers the add and the remove are.
+        """An event, once it is on the calendar, corrected — its details typed
+        back (title, day, hours, place, meeting link) and its programme given
+        after the fact: sessions typed into ``program_items`` (an empty list
+        clearing it) or ``program_file`` attached as a file. Either is the
+        same programme the congregation reads from the church calendar, so
+        the write is held to the same officers the add and the remove are —
+        this desk's own leadership, church officers, and the desk that keeps
+        the church's week, which edits every ministry's calendar.
         """
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department):
-            return Response({'detail': 'Only church officers or this department\'s leader can edit events.'}, status=status.HTTP_403_FORBIDDEN)
+        if not (
+            can_manage_department(request.user, department)
+            or can_schedule_across_departments(request.user)
+        ):
+            return Response(
+                {'detail': 'Only church officers, this department\'s leader, or the personal ministries desk can edit events.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()
         if event is None:
             return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -12149,14 +12169,50 @@ class DepartmentEventsView(APIView):
             event.program_file = request.FILES['program_file']
         if 'program_items' in request.data:
             event.program_items = clean_program_items(request.data.get('program_items'))
+        # The details the desk typed back: each field it sent is taken, each
+        # it left out keeps its stored value — so a programme correction alone
+        # does not blank an event's place or its hours.
+        if 'title' in request.data:
+            title = (request.data.get('title') or '').strip()
+            if not title:
+                return Response({'detail': 'A title is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            event.title = title
+        if 'date' in request.data:
+            date_value = (request.data.get('date') or '').strip()
+            if not date_value:
+                return Response({'detail': 'A date is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            event.event_date = date_value
+        if 'end_date' in request.data:
+            event.end_date = (request.data.get('end_date') or '').strip() or None
+        if 'time' in request.data:
+            event.event_time = _calendar_time_from_string(request.data.get('time'))
+        if 'end_time' in request.data:
+            event.end_time = _calendar_time_from_string(request.data.get('end_time'))
+        if 'mode' in request.data:
+            mode = (request.data.get('mode') or 'physical').strip()
+            event.mode = mode if mode in ('physical', 'virtual') else 'physical'
+        if 'location' in request.data:
+            event.location = (request.data.get('location') or '').strip()
+        if 'meeting_link' in request.data:
+            event.meeting_link = (request.data.get('meeting_link') or '').strip()
+        if 'lead' in request.data:
+            event.lead = (request.data.get('lead') or '').strip()
+        if 'notes' in request.data:
+            event.notes = (request.data.get('notes') or '').strip()
         event.save()
-        return Response({'detail': 'Programme saved.', 'id': event.id, 'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None, 'program_items': event.program_items})
+        return Response({'detail': 'Event saved.', 'id': event.id, 'department': event.department, 'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None, 'program_items': event.program_items})
 
     def delete(self, request, department, event_id=None):
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department):
-            return Response({'detail': 'Only church officers or this department\'s leader can remove events.'}, status=status.HTTP_403_FORBIDDEN)
+        if not (
+            can_manage_department(request.user, department)
+            or can_schedule_across_departments(request.user)
+        ):
+            return Response(
+                {'detail': 'Only church officers, this department\'s leader, or the personal ministries desk can remove events.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         target_id = event_id or request.data.get('id')
         deleted, _ = DepartmentEvent.objects.filter(department=department, pk=target_id).delete()
         if not deleted:
@@ -12255,9 +12311,12 @@ class DepartmentEventProgramView(APIView):
     def delete(self, request, department, event_id):
         if not Department.objects.filter(code=department, is_active=True).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        if not can_manage_department(request.user, department):
+        if not (
+            can_manage_department(request.user, department)
+            or can_schedule_across_departments(request.user)
+        ):
             return Response(
-                {'detail': "Only church officers or this department's leader can remove a program."},
+                {'detail': "Only church officers, this department's leader, or the personal ministries desk can remove a program."},
                 status=status.HTTP_403_FORBIDDEN,
             )
         event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()

@@ -10799,6 +10799,59 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(res.status_code, 403)
         self.assertFalse(DepartmentEvent.objects.filter(department='awm').exists())
 
+    def test_the_personal_ministries_desk_edits_any_calendar(self):
+        """Writing is only half of keeping the church's week: the desk that
+        plans it also corrects and withdraws what sits on any ministry's
+        calendar. A PM leader patches an event filed on AYM — its details
+        round-trip through the desk's calendar and the listing — changes a
+        moment the desk left blank, and can take the event off again."""
+        pm = Department.objects.get(code='personal_ministries')
+        pm_leader_role = DepartmentRole.objects.get(department=pm, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=pm, role=pm_leader_role, member=self.plain, kind='leader',
+        )
+        self._auth(self.plain)
+        filed = self.client.post('/api/members/departments/aym/events/', {
+            'title': 'Youth Sabbath', 'date': '2026-11-07', 'time': '09:00',
+        }, format='json')
+        self.assertEqual(filed.status_code, 201)
+        event_id = filed.data['id']
+
+        # A PM leader may open AYM's calendar, read the event, and type its
+        # details back — the patch needs no AYM seat.
+        listed = self.client.get('/api/members/departments/aym/events/')
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.data['events'][0]['title'], 'Youth Sabbath')
+        saved = self.client.patch(
+            f'/api/members/departments/aym/events/{event_id}/',
+            {
+                'title': 'Youth Sabbath and Dedication',
+                'time': '10:30', 'end_time': '12:00',
+                'mode': 'virtual', 'location': '', 'meeting_link': 'https://meet.example.com/aym',
+                'lead': 'Sam Okello', 'notes': 'Dress uniformly.',
+            }, format='json',
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.data['department'], 'aym')
+
+        # The corrections persist: the desk's next read of that calendar
+        # carries every field it typed, in the shape the page shows.
+        listed = self.client.get('/api/members/departments/aym/events/')
+        row = listed.data['events'][0]
+        self.assertEqual(row['title'], 'Youth Sabbath and Dedication')
+        self.assertEqual(row['time'], '10:30')
+        self.assertEqual(row['end_time'], '12:00')
+        self.assertEqual(row['mode'], 'virtual')
+        self.assertEqual(row['location'], '')
+        self.assertEqual(row['meeting_link'], 'https://meet.example.com/aym')
+        self.assertEqual(row['lead'], 'Sam Okello')
+        self.assertEqual(row['notes'], 'Dress uniformly.')
+
+        # And the withdrawal is the desk's own write too — no AYM seat asked.
+        removed = self.client.delete(f'/api/members/departments/aym/events/{event_id}/')
+        self.assertEqual(removed.status_code, 200)
+        self.assertFalse(DepartmentEvent.objects.filter(department='aym').exists())
+
     def test_a_program_is_given_to_an_event_after_it_is_filed(self):
         """An event is filed in a line and given its programme later: the
         sessions the desk types are saved on the event, read back by the desk,

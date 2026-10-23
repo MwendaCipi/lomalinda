@@ -1337,7 +1337,9 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   choir: "Church Choir",
   chaplaincy: "Chaplaincy",
   children: "Children",
-  personal_ministries: "PM",
+  // The rail reads the desk in full, as the user asked: the row has room for
+  // the words, and "PM" is an abbreviation only its AMM/AWM neighbours know.
+  personal_ministries: "Personal Ministries",
   health: "Health",
   welfare: "Welfare",
   education: "Education",

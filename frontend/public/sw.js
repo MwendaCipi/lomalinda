@@ -446,9 +446,13 @@
    account behind a name taken from the roll so the evening reminder can reach
    that officer, an album carries links to the day's footage where video cannot
    be stored, and the treasury's Failed tab reads the desk's own date window
-   rather than every attempt ever recorded. Chrome changed, so installed apps
-   must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v84";
+   rather than every attempt ever recorded.
+
+   v85 — the rail names the Personal Ministries desk in full rather than its
+   initials, and the desk's calendar opens every other ministry's calendar for
+   its keeper to read and keep. Chrome changed, so installed apps must take
+   the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v85";
 const STATIC_ASSETS = [
   "/",
   "/about/",

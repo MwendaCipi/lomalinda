@@ -375,6 +375,11 @@ type DeptEvent = {
   lead: string;
   notes: string;
   unit?: string;
+  /** Whose calendar the row sits on — named only when the desk reads
+      every ministry's events at once, so a row from another's shows its
+      ministry beside the search that files it. */
+  department?: string;
+  department_name?: string;
 };
 
 /**
@@ -4459,6 +4464,11 @@ function DepartmentDetail({
   const [unitBoard, setUnitBoard] = useState<{ leader: Holder | null; assistants: Holder[] } | null>(null);
   const [roll, setRoll] = useState<RollMember[]>([]);
   const [events, setEvents] = useState<DeptEvent[]>([]);
+  // Every calendar, read as one: a keeper who may file beyond their own
+  // calendar — the personal ministries desk and the officers — is shown the
+  // whole church's events here, and narrows them by searching a ministry's
+  // name in the search bar above. The server decides who reads it whole.
+  const [showsAllCalendars, setShowsAllCalendars] = useState(false);
   // The areas this desk may file an event into, when it may file beyond its
   // own calendar — the personal ministries desk keeps the church's week, so
   // its events land on the ministry that will run them. The server decides:
@@ -4583,12 +4593,17 @@ function DepartmentDetail({
       document.removeEventListener("scroll", handleScroll, true);
     };
   }, [openEventMenuKey]);
-  // The list's rows honour the desk's search. The wall of months does not:
-  // there the search finds a month to travel to (see `monthIndexForQuery`).
+  // The list's rows honour the desk's search — an event's own words, and
+  // the ministry whose calendar it sits on, since the keeper reading the
+  // whole church's week narrows it by naming a ministry. The wall of
+  // months does not: there the search finds a month to travel to (see
+  // `monthIndexForQuery`).
   const filteredEvents = useMemo(() => {
     const needle = eventSearch.trim().toLowerCase();
     return events.filter((event) =>
-      `${event.title} ${event.date} ${event.location || ""} ${event.notes || ""}`.toLowerCase().includes(needle),
+      `${event.title} ${event.date} ${event.location || ""} ${event.notes || ""} ${event.department_name || ""}`
+        .toLowerCase()
+        .includes(needle),
     );
   }, [events, eventSearch]);
 
@@ -4703,16 +4718,27 @@ function DepartmentDetail({
       setHeaderRightAction(
         <div className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
           <CalendarViewToggle view={calendarView} onChange={setCalendarView} />
-          <input
-            type="text"
-            value={eventSearch}
-            onChange={(e) => setEventSearch(e.target.value)}
-            placeholder={calendarView === "calendar" ? "Search a month…" : "Search the calendar…"}
-            aria-label={
-              calendarView === "calendar" ? "Search the calendar for a month" : "Search the calendar"
-            }
-            className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
-          />
+          {/* A keeper reading every desk's events narrows them by naming a
+              ministry here — the search bar answers a ministry's name beside
+              an event's own words. */}
+          {showsAllCalendars && (
+            <input
+              type="text"
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              placeholder={
+                showsAllCalendars
+                  ? "Search a ministry or month…"
+                  : calendarView === "calendar"
+                  ? "Search a month…"
+                  : "Search the calendar…"
+              }
+              aria-label={
+                calendarView === "calendar" ? "Search the calendar for a month" : "Search the calendar"
+              }
+              className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
+            />
+          )}
         </div>
       );
     } else if (subTab === "choir") {
@@ -4810,6 +4836,7 @@ function DepartmentDetail({
     rollSearch,
     eventSearch,
     calendarView,
+    showsAllCalendars,
     memberFilter,
     joinRequests,
     choirSearch,
@@ -4818,6 +4845,7 @@ function DepartmentDetail({
     accountsFilter,
     meetingsSearch,
     hostedRotaFilters?.filters,
+    department.label,
     setHeaderRightAction,
   ]);
 
@@ -5087,9 +5115,33 @@ function DepartmentDetail({
     fetch(`${API_URL}/api/members/departments/${department.code}/events/${unitQuery(unit)}`, { headers: authHeaders() })
       .then((res) => (res.ok ? res.json() : { events: [] }))
       .then((data) => {
-        setEvents(data.events || []);
-        if (data.church_name) setChurchName(data.church_name);
         setEventDepartments(Array.isArray(data.departments) ? data.departments : []);
+        setShowsAllCalendars(Boolean(data.can_schedule_across));
+        if (data.church_name) setChurchName(data.church_name);
+        const own = data.events || [];
+        // A keeper reads the whole church's calendar here — every ministry's
+        // events beside their desk's own — rather than opening calendar after
+        // calendar; naming a ministry in the search bar narrows to it. The
+        // church feed carries each row wearing its ministry's name.
+        if (!data.can_schedule_across) {
+          setEvents(own);
+          return;
+        }
+        fetch(`${API_URL}/api/members/church-calendar/`, { headers: authHeaders() })
+          .then((allRes) => (allRes.ok ? allRes.json() : { events: [] }))
+          .then((all) => {
+            const others = (all.events || [])
+              .filter((row: DeptEvent) => row.department && row.department !== department.code)
+              .map((row: DeptEvent) => ({ ...row, notes: "" }));
+            const merged = [...own, ...others].sort(
+              (a: DeptEvent, b: DeptEvent) =>
+                (a.date || "").localeCompare(b.date || "") ||
+                (a.time || "").localeCompare(b.time || "") ||
+                (a.title || "").localeCompare(b.title || ""),
+            );
+            setEvents(merged);
+          })
+          .catch(() => setEvents(own));
       })
       .catch(() => setEvents([]))
       .finally(() => setLoadingEvents(false));
@@ -5254,10 +5306,9 @@ function DepartmentDetail({
     body.append("location", event.location);
     body.append("meeting_link", event.meeting_link);
     body.append("unit", unit ?? "");
-    // Which area's calendar holds it. Left off, the server files it with the
-    // desk that wrote it; the personal ministries desk may name another and
-    // the server refuses anyone else who tries.
-    body.append("department", event.department);
+    // Which area's calendar holds it. An empty answer is this desk's own —
+    // the church's week is filed into the ministry chosen in the form.
+    body.append("department", event.department || "");
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/`, {
       method: "POST",
       headers: authHeaders(),
@@ -5290,7 +5341,9 @@ function DepartmentDetail({
       meeting_link: string;
     },
   ) => {
-    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/`, {
+    // The event is saved where it was filed — its own ministry's calendar —
+    // which is this desk's unless the row came from another's.
+    const res = await fetch(`${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -5327,7 +5380,7 @@ function DepartmentDetail({
       confirmButtonColor: brand.ember,
     });
     if (!result.isConfirmed) return;
-    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/`, {
+    const res = await fetch(`${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -5349,7 +5402,7 @@ function DepartmentDetail({
     init: { headers: HeadersInit; body: BodyInit },
     done: () => void,
   ) => {
-    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/`, {
+    const res = await fetch(`${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/`, {
       method: "PATCH",
       ...init,
     });
@@ -5422,10 +5475,10 @@ function DepartmentDetail({
       },
       () => {
         if (reading) {
-          reading.location.href = `${API_URL}/api/members/departments/${department.code}/events/${event.id}/program/`;
+          reading.location.href = `${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/`;
         } else {
           window.open(
-            `${API_URL}/api/members/departments/${department.code}/events/${event.id}/program/`,
+            `${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/`,
             "_blank",
             "noopener",
           );
@@ -5449,7 +5502,7 @@ function DepartmentDetail({
       },
     );
     if (!result.isConfirmed) return;
-    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/events/${event.id}/program/`, {
+    const res = await fetch(`${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -5471,7 +5524,7 @@ function DepartmentDetail({
    */
   const programDownloadHref = (event: DeptEvent) => {
     if (parseProgramItems(event.program_items).length > 0) {
-      return `${API_URL}/api/members/departments/${department.code}/events/${event.id}/program/`;
+      return `${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/`;
     }
     if (event.program_file) {
       return event.program_file.startsWith("http") ? event.program_file : `${API_URL}${event.program_file}`;
@@ -6113,7 +6166,14 @@ function DepartmentDetail({
                           {dayFirst(event.date)}
                           {event.time ? ` · ${clockTime(event.time)}` : ""}
                           {event.location ? ` · ${event.location}` : ""}
-                        </p>                        <EventProgramMenu
+                        </p>
+                        {/* A row from another ministry's calendar names it, so
+                            the keeper reading the whole week still knows whose
+                            event is whose — and whose desk to search for. */}
+                        {event.department && (
+                          <p className="px-3 pb-2 text-xs font-bold text-ember">{event.department_name}</p>
+                        )}
+                        <EventProgramMenu
                           event={event}
                           onEdit={() => { onClose(); setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
@@ -6149,6 +6209,9 @@ function DepartmentDetail({
                           <td className={`whitespace-nowrap px-4 ${rowPad} align-middle text-moss`}>{dayFirst(event.date)}</td>
                           <td className={`px-4 ${rowPad} align-middle font-semibold`}>
                             {event.title}
+                            {event.department && (
+                              <span className="block text-xs font-normal text-moss">{event.department_name}</span>
+                            )}
                             {event.lead && <span className="block text-xs font-normal text-moss">Led by {event.lead}</span>}
                             {event.location && <span className="block text-xs font-normal text-moss">{event.location}</span>}
                           </td>
@@ -6229,6 +6292,9 @@ function DepartmentDetail({
                         <div>
                           <span className="text-xs font-semibold text-ember">{dayFirst(event.date)}</span>
                           <h3 className="mt-0.5 text-base font-bold text-bark">{event.title}</h3>
+                          {event.department && (
+                            <p className="text-xs font-normal text-moss">{event.department_name}</p>
+                          )}
                         </div>
                         {event.unit && (
                           <span className="shrink-0 rounded-full bg-mist-select px-2.5 py-1 text-[10px] font-bold text-moss-dark">
