@@ -15,6 +15,7 @@ second run of the cron, or one run by hand, never rings the same duty twice.
 from datetime import timedelta
 import re
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -22,7 +23,7 @@ from django.utils import timezone
 from . import sms
 from .mailing import IDENTITY, connection_for, sender_for
 from .meetings import eat_greeting, recipient_name, render_message
-from .models import ChurchNotification, ChurchSettings, DutyRota
+from .models import ChurchNotification, ChurchSettings, Department, DepartmentAssignment, DutyRota
 from .push import push_to_user
 
 #: The wording used when the church has not configured its own (see ChurchSettings).
@@ -30,24 +31,18 @@ DEFAULT_ASSIGNMENT_MESSAGE = (
     '{greeting}, {name}.\n\n'
     'You have been rostered for {duty} on {day}, {date} at {shift}. '
     'Your part: {role}.\n\n'
-    'If you cannot serve that day, notify the duty desk. {church}'
+    'If you cannot serve that day, please notify the {desk} by sending a '
+    'message through here {leader_chat_link} or contact the leader on '
+    '{leader_phone}. {church}'
 )
 DEFAULT_REMINDER_MESSAGE = (
     '{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for '
-    '{duty}. Your part: {role}. God bless you as you serve. {church}'
+    '{duty}. Your part: {role}. If you cannot serve that day, notify the '
+    '{desk} on {leader_chat_link} or call the leader on {leader_phone}. '
+    'God bless you as you serve. {church}'
 )
-DEFAULT_PULPIT_ASSIGNMENT_MESSAGE = (
-    '{greeting}, {name}.\n\n'
-    'You have been rostered for {duty} on {day}, {date} at {shift}. '
-    'Your part: {role}.\n\n'
-    'If you cannot serve that day, please notify the PM desk. {church}'
-)
-DEFAULT_MUSIC_ASSIGNMENT_MESSAGE = (
-    '{greeting}, {name}.\n\n'
-    'You have been rostered for {duty} on {day}, {date} at {shift}. '
-    'Your part: {role}.\n\n'
-    'If you cannot make it for that day, please contact the music desk. {church}'
-)
+DEFAULT_PULPIT_ASSIGNMENT_MESSAGE = DEFAULT_ASSIGNMENT_MESSAGE
+DEFAULT_MUSIC_ASSIGNMENT_MESSAGE = DEFAULT_ASSIGNMENT_MESSAGE
 
 #: Where a reminder's link lands: the deaconate's rota, where the duty is read.
 DUTY_ROTA_LINK = '/administration?tab=deaconate-rota'
@@ -67,6 +62,63 @@ def rota_link(entry) -> str:
     if desk == 'music':
         return MUSIC_ROTA_LINK
     return DUTY_ROTA_LINK
+
+
+#: Each desk keeps its rota on behalf of a real department — the one whose
+#: leader the notices point to when an officer cannot serve.
+DESK_DEPARTMENT_CODES = {
+    DutyRota.DESK_DEACONATE: 'deaconate',
+    DutyRota.DESK_PULPIT: 'personal_ministries',
+    DutyRota.DESK_MUSIC: 'music',
+}
+
+
+def desk_name(desk: str) -> str:
+    """The department a duty line speaks for, by name.
+
+    The {desk} placeholder in the church's wording fills with this, so an
+    officer is told to notify the actual ministry — "Music", "Personal
+    Ministries", "Deaconate" — rather than whichever generic "duty desk"
+    the template writer could not name. A desk whose department row is gone
+    falls back to the generic name: a half-name beats none.
+    """
+    code = DESK_DEPARTMENT_CODES.get(desk or '')
+    if not code:
+        return ''
+    row = Department.objects.filter(code=code, is_active=True).first()
+    return row.name if row else ''
+
+
+def desk_leader(desk: str):
+    """The desk department's leader, with the two ways an officer reaches them.
+
+    The leaders table (``DepartmentAssignment``) carries the desk's leader,
+    whoever the church seated last. From them the notice takes a chat link
+    (``/chat?dm=`` — a click opens the direct message with the leader in the
+    church's own chat) and the leader's phone number for the days chat does
+    not reach. Either may be missing — a leader without an account phone —
+    and the caller drops whichever sentence stood on the missing pair.
+    """
+    code = DESK_DEPARTMENT_CODES.get(desk or '')
+    if not code:
+        return None
+    assignment = (
+        DepartmentAssignment.objects
+        .filter(department__code=code, department__is_active=True, kind='leader')
+        .select_related('member', 'member__member_profile')
+        .order_by('id')
+        .first()
+    )
+    if not assignment:
+        return None
+    leader = assignment.member
+    profile = getattr(leader, 'member_profile', None)
+    phone = (getattr(profile, 'phone_number', '') or '').strip()
+    return {
+        'name': recipient_name(leader),
+        'phone': phone,
+        'chat_link': f"{settings.FRONTEND_URL}/chat?dm={leader.pk}",
+    }
 
 
 #: What a line of each desk's rota is called when the desk names none — the
@@ -164,6 +216,8 @@ def church_name_full(church_name: str = '') -> str:
 
 def duty_context(entry, officer, user, church_name: str = '') -> dict:
     """The placeholder values one officer's duty message is filled with."""
+    desk = getattr(entry, 'desk', '')
+    leader = desk_leader(desk)
     return {
         'greeting': eat_greeting(),
         'name': recipient_name(user) if user is not None else (str(officer.get('name') or '').split(' ')[0] or 'friend'),
@@ -172,6 +226,10 @@ def duty_context(entry, officer, user, church_name: str = '') -> dict:
         'date': entry.duty_date.strftime('%d %B %Y'),
         'shift': (entry.shift or '').strip(),
         'role': str(officer.get('role') or '').strip(),
+        'desk': desk_name(desk) or 'church duty desk',
+        'leader_name': leader['name'] if leader else '',
+        'leader_chat_link': leader['chat_link'] if leader else '',
+        'leader_phone': leader['phone'] if leader else '',
         'church': church_name,
     }
 
@@ -202,38 +260,41 @@ def duty_template(kind: str, desk: str = '') -> str:
     return configured or fallback
 
 
-def drop_part_sentence(template: str) -> str:
-    """The template without any sentence that speaks of the officer's part.
+def drop_part_sentence(template: str, wanted: tuple = ('{role}',)) -> str:
+    """The template without the sentences that name what has not been filled.
 
     The desk rosters the day and its officers long before it knows who will
     stand where, and a line without a part is a normal line rather than a
     half-written one. Rendered as written, it reads "Your part: ." — a form
     nobody filled, sent to the officer's phone. So when the part is blank the
-    sentence carrying ``{role}`` goes, and the rest reads whole. A church
-    wording that ties the part to other facts in one sentence loses that
-    sentence here — keep the part in its own sentence, as the shipped defaults
-    do. A template that says nothing else is left as it is: an empty text
-    helps nobody more than a stray full stop.
+    sentence carrying ``{role}`` goes, and the rest reads whole. The same
+    drop serves the leader's reach: a desk whose leader (or the leader's
+    phone) is not on record loses the sentence that would have read "send a
+    message through here  or contact the leader on ".
+
+    Sentences alternate with the whitespace between them; a dropped sentence
+    takes its trailing separator with it, so paragraphs stay paragraphs. A
+    template that says nothing else is left as it is: an empty text helps
+    nobody more than a stray full stop.
     """
-    if '{role}' not in (template or ''):
-        return template
-    # Sentences alternate with the whitespace between them; a dropped sentence
-    # takes its trailing separator with it, so paragraphs stay paragraphs.
-    parts = re.split(r'(?<=[.!?])(\s+)', template)
-    kept = []
-    skip_separator = False
-    for index, part in enumerate(parts):
-        if index % 2:
-            if not skip_separator:
-                kept.append(part)
-            skip_separator = False
+    for placeholder in wanted:
+        if placeholder not in (template or ''):
             continue
-        if '{role}' in part:
-            skip_separator = True
-            continue
-        kept.append(part)
-    remainder = ''.join(kept)
-    return remainder if remainder.strip() else template
+        parts = re.split(r'(?<=[.!?])(\s+)', template)
+        kept = []
+        skip_separator = False
+        for index, part in enumerate(parts):
+            if index % 2:
+                if not skip_separator:
+                    kept.append(part)
+                skip_separator = False
+                continue
+            if placeholder in part:
+                skip_separator = True
+                continue
+            kept.append(part)
+        template = ''.join(kept) or template
+    return template
 
 
 def render_duty_message(kind: str, entry, officer, user=None, church_name: str = '') -> str:
@@ -247,6 +308,10 @@ def render_duty_message(kind: str, entry, officer, user=None, church_name: str =
     context = duty_context(entry, officer, user, church_name_full(church_name))
     if not context['role']:
         template = drop_part_sentence(template)
+    if not (context['leader_chat_link'] and context['leader_phone']):
+        # A desk with no reachable leader loses the sentence that names one,
+        # rather than sending a half-dressed "contact ... on ."
+        template = drop_part_sentence(template, ('{leader_chat_link}', '{leader_phone}'))
     return render_message(template, context)
 
 

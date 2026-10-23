@@ -6700,7 +6700,7 @@ class MusicRotaTests(APITestCase):
             'music.lead', 'music.lead@example.com', 'MusicLead#2026',
             first_name='Mira', last_name='Leader',
         )
-        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member', phone_number='0733000333')
         DepartmentAssignment.objects.create(
             department=self.music, role=music_leader_role, member=self.leader, kind='leader',
         )
@@ -6763,14 +6763,34 @@ class MusicRotaTests(APITestCase):
         notice = ChurchNotification.objects.get(user=self.organist)
         self.assertIn('Sabbath Music Duties', notice.message)
         self.assertIn('Organist', notice.message)
-        # Music speaks its own wording: the desk a singer reaches, not the
-        # deaconate's generic duty desk.
-        self.assertIn('please contact the music desk', notice.message)
+        # The leader's reach rides in the wording itself: the desk's name,
+        # the leader's chat link and the leader's phone.
+        self.assertIn('If you cannot serve that day', notice.message)
+        self.assertIn('the Music', notice.message)
+        self.assertIn(f'/chat?dm={self.leader.pk}', notice.message)
+        self.assertIn('0733000333', notice.message)
         self.assertEqual(notice.link, '/administration?dept=music&view=duties')
         self.assertEqual(
             [address for message in mail.outbox for address in message.to],
             ['music.organist@example.com'],
         )
+
+    def test_a_leader_without_reach_loses_the_sentence_not_the_notice(self):
+        """A leader seat with no chat-link account to point at (or no phone
+        behind it) must not send a half-dressed "contact the leader on ."
+        — the sentence drops and the notice still reads whole."""
+        from unittest import mock
+
+        MemberProfile.objects.filter(user=self.leader).update(phone_number='')
+        self.client.force_authenticate(self.leader)
+        with mock.patch('members.duty.sms.send', return_value=True):
+            self._schedule()
+
+        notice = ChurchNotification.objects.get(user=self.organist)
+        self.assertNotIn('leader_chat_link', notice.message)
+        self.assertNotIn('{', notice.message)  # nothing unfilled hangs about
+        self.assertIn('You have been rostered for', notice.message)
+        self.assertEqual(notice.link, '/administration?dept=music&view=duties')
 
     def test_the_church_words_musics_notice_itself(self):
         """A rostering wording written on the church settings is the notice

@@ -219,7 +219,7 @@ const emptyRotaForm = {
   // so a communion or a special Sabbath can be named as itself.
   title: "Sabbath Duty Rota",
   date: "",
-  shift: "08:30 AM - 01:00 PM",
+  shift: "08:30 AM - 04:00 PM",
   officers: [] as RotaOfficer[],
 };
 
@@ -2238,7 +2238,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   <label className="font-bold text-bark">Shift / Time</label>
                   <input
                     type="text"
-                    placeholder="08:30 AM - 01:00 PM"
+                    placeholder="08:30 AM - 04:00 PM"
                     value={newRota.shift}
                     onChange={(e) => setNewRota({ ...newRota, shift: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"

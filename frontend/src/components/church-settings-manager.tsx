@@ -51,15 +51,16 @@ export function ChurchSettingsManager() {
   );
   // The rostering notice an officer gets (bell, email, SMS) and the SMS sent the day before.
   const [dutyAssignmentMessage, setDutyAssignmentMessage] = useState(
-    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot serve that day, notify the duty desk. {church}"
+    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot serve that day, please notify the {desk} by sending a message through here {leader_chat_link} or contact the leader on {leader_phone}. {church}"
   );
   const [dutyReminderMessage, setDutyReminderMessage] = useState(
-    "{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for {duty}. Your part: {role}. God bless you as you serve. {church}"
+    "{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for {duty}. Your part: {role}. If you cannot serve that day, notify the {desk} on {leader_chat_link} or call the leader on {leader_phone}. God bless you as you serve. {church}"
   );
-  // Music's rostering notice speaks its own wording: a singer who cannot make
-  // the day is told to reach the music desk, not a general duty desk.
+  // Music's rostering notice speaks the same leader-reach sentence the other
+  // desks read: {desk} fills with the department itself, and the leader's
+  // chat link and phone come from the leaders table, per desk.
   const [musicAssignmentMessage, setMusicAssignmentMessage] = useState(
-    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot make it for that day, please contact the music desk. {church}"
+    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot serve that day, please notify the {desk} by sending a message through here {leader_chat_link} or contact the leader on {leader_phone}. {church}"
   );
   const [appointmentPlaceholders, setAppointmentPlaceholders] = useState<{ token: string; description: string }[]>([]);
   // The line the dashboard greeting ends with. Short by design; the API caps it
@@ -560,7 +561,7 @@ export function ChurchSettingsManager() {
           <div className="mt-4">
             <label className="block text-xs font-semibold text-bark">Duty Rostering Notice</label>
             <p className="mt-1 text-[11px] text-moss">
-              Sent to an officer the moment the desk rosters them on a duty — by bell, email and SMS. Placeholders: {"{greeting}"}, {"{name}"}, {"{duty}"}, {"{day}"}, {"{date}"}, {"{shift}"}, {"{role}"}, {"{church}"}.
+              Sent to an officer the moment the desk rosters them on a duty — by bell, email and SMS. Placeholders: {"{greeting}"}, {"{name}"}, {"{duty}"}, {"{day}"}, {"{date}"}, {"{shift}"}, {"{role}"}, {"{desk}"}, {"{leader_name}"}, {"{leader_chat_link}"}, {"{leader_phone}"}, {"{church}"}. A sentence naming the leader&apos;s chat link or phone drops when the desk has no leader (or no phone) on record.
             </p>
             <textarea
               rows={4}
@@ -574,7 +575,7 @@ export function ChurchSettingsManager() {
           <div className="mt-4">
             <label className="block text-xs font-semibold text-bark">Music Rostering Notice</label>
             <p className="mt-1 text-[11px] text-moss">
-              Sent to a choir member or player the music desk rosters — by bell, email and SMS. Same placeholders, and this one tells them to contact the music desk if they cannot make the day.
+              Sent to a choir member or player the music desk rosters — by bell, email and SMS. Same placeholders, with {"{desk}"} filled as Music and the music leader&apos;s chat link and phone in the sentence.
             </p>
             <textarea
               rows={4}

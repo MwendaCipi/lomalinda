@@ -2012,19 +2012,27 @@ class ChurchSettings(models.Model):
     # What an officer is told when the desk rosters them on a duty (sent at once,
     # by bell, email and SMS), and the shorter note the day-before reminder sends
     # by SMS. Placeholders are filled per recipient; see members/duty.py.
+    # The shared "cannot serve" tail points the officer at the desk's own
+    # leader: a chat link (their DM in the church's chat) and a phone number,
+    # both resolved per desk from the leaders table — see members/duty.py.
+    # A chair the desk has not appointed drops the sentence rather than hang.
     default_duty_assignment_message = models.TextField(
         default=(
             '{greeting}, {name}.\n\n'
             'You have been rostered for {duty} on {day}, {date} at {shift}. '
             'Your part: {role}.\n\n'
-            'If you cannot serve that day, notify the duty desk. {church}'
+            'If you cannot serve that day, please notify the {desk} by sending a '
+            'message through here {leader_chat_link} or contact the leader on '
+            '{leader_phone}. {church}'
         ),
         blank=True,
     )
     default_duty_reminder_message = models.TextField(
         default=(
             '{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for '
-            '{duty}. Your part: {role}. God bless you as you serve. {church}'
+            '{duty}. Your part: {role}. If you cannot serve that day, notify the '
+            '{desk} on {leader_chat_link} or call the leader on {leader_phone}. '
+            'God bless you as you serve. {church}'
         ),
         blank=True,
     )
@@ -2033,7 +2041,9 @@ class ChurchSettings(models.Model):
             '{greeting}, {name}.\n\n'
             'You have been rostered for {duty} on {day}, {date} at {shift}. '
             'Your part: {role}.\n\n'
-            'If you cannot serve that day, please notify the PM desk. {church}'
+            'If you cannot serve that day, please notify the {desk} by sending a '
+            'message through here {leader_chat_link} or contact the leader on '
+            '{leader_phone}. {church}'
         ),
         blank=True,
     )
@@ -2042,7 +2052,9 @@ class ChurchSettings(models.Model):
             '{greeting}, {name}.\n\n'
             'You have been rostered for {duty} on {day}, {date} at {shift}. '
             'Your part: {role}.\n\n'
-            'If you cannot make it for that day, please contact the music desk. {church}'
+            'If you cannot serve that day, please notify the {desk} by sending a '
+            'message through here {leader_chat_link} or contact the leader on '
+            '{leader_phone}. {church}'
         ),
         blank=True,
     )
