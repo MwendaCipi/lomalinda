@@ -6410,8 +6410,8 @@ function DepartmentDetail({
         </div>
       )}
       {subTab === "announcements" && canOpenOfficeViews && (
-        <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
-          <div className="mb-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
+          <div className="mb-4 shrink-0">
             <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
               <Megaphone className="h-4 w-4 text-ember" aria-hidden="true" /> Announcements
             </h3>
@@ -6419,7 +6419,13 @@ function DepartmentDetail({
               The notices published to the church family, the same board the announcements desk keeps.
             </p>
           </div>
-          <AnnouncementManager embedded />
+          {/* The desk page holds still at every width, so the board needs a
+              height of its own to scroll within — the card fills what the
+              heading leaves and the board's list scrolls inside it, instead
+              of its posts being cut off at the card's foot. */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <AnnouncementManager embedded />
+          </div>
         </div>
       )}
 
