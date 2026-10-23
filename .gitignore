@@ -25,6 +25,10 @@ frontend/tsconfig.tsbuildinfo
 frontend/.eslintcache
 .npm/
 
+# Local design sources kept out of the repo: the poster spreads behind the
+# brochure cover's building image, downloaded before cropping.
+source-images/
+
 # Environment variables & secrets
 .env
 .env.local
