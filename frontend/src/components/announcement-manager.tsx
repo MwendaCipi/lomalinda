@@ -121,6 +121,13 @@ function firstErrorMessage(data: unknown): string | null {
   for (const value of Object.values(record)) {
     if (typeof value === "string") return value;
     if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+    // A list field reports per index (`{ giving_actions: { 0: ["…"] } }`),
+    // so dig one level deep — otherwise the officer sees the generic
+    // "Unable to save" fallback and never the reason the API refused.
+    if (value && typeof value === "object") {
+      const nested = firstErrorMessage(value);
+      if (nested) return nested;
+    }
   }
   return null;
 }
@@ -629,6 +636,10 @@ export function AnnouncementManager({
           (value as string[]).forEach((code) => payload.append("audience", code));
           return;
         }
+        // The promotion's giving buttons are sent as repeated values further
+        // down; String()-ing the array here would post one comma-joined code
+        // the API reads as a single invalid choice and refuses the save.
+        if (key === "giving_actions") return;
         // Optional fields are omitted when blank so the row keeps a real null
         // (an empty string would fail date parsing server-side). The drive
         // goal rides along only when written — the API mints a drive for a

@@ -3986,6 +3986,59 @@ class AnnouncementPublishingTests(APITestCase):
         self.assertTrue(announcement.published)
 
 
+class ComposerPayloadAnnouncementTests(APITestCase):
+    """The composer's exact multipart payload must save.
+
+    Every post an officer files goes through announcement-manager.tsx, which
+    builds its form data field by field: a plain notice carries no giving
+    buttons at all, and a promotion sends each chosen button as its own
+    repeated value. This pins that shape — an earlier loop String()-ed the
+    buttons into one comma-joined value, and every post the desk tried came
+    back as a 400 the officer could only read as "Unable to save".
+    """
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('composer.clerk', 'composer.clerk@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk,member')
+        self.client.force_authenticate(self.clerk)
+
+    def _composer_fields(self):
+        """The composer's constant form fields, as it posts them."""
+        return {
+            'visibility': 'all',
+            'action_type': 'none',
+            'support_account': '',
+            'response_mode': 'open',
+            'response_options': '',
+            'sharing_option': 'site,email',
+            # Blank clocks ride as empty strings, never omitted: the form
+            # sends the fields on every post.
+            'event_time_from': '',
+            'event_time_to': '',
+        }
+
+    def test_a_plain_notice_carries_no_giving_buttons(self):
+        response = self.client.post('/api/members/announcements/', {
+            **self._composer_fields(),
+            'title': 'Sabbath reminder',
+            'text': 'Come as you are this Sabbath.',
+            'announcement_type': 'awareness',
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+    def test_a_promotion_sends_each_giving_button_as_its_own_value(self):
+        response = self.client.post('/api/members/announcements/', {
+            **self._composer_fields(),
+            'title': 'Building fund',
+            'text': 'Give towards the new sanctuary.',
+            'announcement_type': 'promotion',
+            'support_account': 'Building Fund',
+            'promotion_target': '1500000',
+            'giving_actions': ['give_now', 'pledge', 'in_kind', 'comment'],
+        }, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+
 class JoinRequestApprovalTests(APITestCase):
     """Friends (and other joiners) land in the leadership queue until approved."""
 
