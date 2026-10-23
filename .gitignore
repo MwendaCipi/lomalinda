@@ -67,3 +67,4 @@ backend/vfy_settings.py
 # verification runs) — not repo content, and they must not block deploys.
 /intermediate_discrepancy_report.txt
 /review/
+verification/

@@ -12228,7 +12228,12 @@ class DepartmentEventProgramView(APIView):
             'services': services,
             'giving': giving,
         }
-        pdf_bytes = generate_event_program_pdf(event, department_row.name, contact=contact)
+        # The brochure wears the department's own accent — the colour its
+        # desk already shows on the site — so the printed sheet and the hub
+        # say the same thing about who is running the day.
+        pdf_bytes = generate_event_program_pdf(
+            event, department_row.name, contact=contact, department_code=department,
+        )
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         # Served inline: the desk's "View program" opens the sheet in its own
         # tab to be read. The Download button carries its own `download`

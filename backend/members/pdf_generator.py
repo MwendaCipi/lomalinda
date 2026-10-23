@@ -31,6 +31,29 @@ from svglib.svglib import svg2rlg
 # that makes a printout an official record.
 _SYMBOL_DRAWING = svg2rlg(str(Path(__file__).resolve().parent / "sda_symbol.svg"))
 _SYMBOL_RATIO = _SYMBOL_DRAWING.width / _SYMBOL_DRAWING.height
+
+
+def _light_symbol_drawing():
+    """The symbol again, painted in the paper's own sand.
+
+    A photocopy would be heavy and a stock photo is not ours to print; the
+    church's own mark, drawn large and faint, is the image a typed sheet can
+    carry. The colours are walked rather than alpha-faded, so what a printer
+    sees is exactly one pale tint — no transparency to misrender.
+    """
+    import copy
+
+    drawing = copy.deepcopy(_SYMBOL_DRAWING)
+
+    def recolor(shape):
+        if hasattr(shape, 'contents'):
+            for child in shape.contents:
+                recolor(child)
+        if getattr(shape, 'fillColor', None):
+            shape.fillColor = colors.HexColor('#ece7db')
+
+    recolor(drawing)
+    return drawing
 # The footer every paper prints page-numbered — the church's own name and
 # what the sheet is: an official financial & administrative record. Papers
 # that are not records of money hand a wording of their own, so the order
@@ -2072,7 +2095,82 @@ def _spoken_range(start, end):
     return first or second
 
 
-def generate_event_program_pdf(event, department_name: str = '', contact=None) -> bytes:
+#: The church's mission and its vision — the two statements the About page
+#: and the landing page already speak, so the brochure says it with them and
+#: the whole site speaks with one voice.
+PROGRAM_MISSION_STATEMENT = (
+    'Make disciples of Jesus Christ who live as His loving witnesses and '
+    'proclaim to all people the everlasting gospel of the Three Angels\u2019 '
+    'Messages in preparation for His soon return.'
+)
+PROGRAM_MISSION_REF = 'Matthew 28:18\u201320 · Acts 1:8 · Revelation 14:6\u201312'
+PROGRAM_VISION_STATEMENT = (
+    'In harmony with Bible revelation, Seventh-day Adventists see as the '
+    'climax of God\u2019s plan the restoration of all His creation to full '
+    'harmony with His perfect will and righteousness.'
+)
+PROGRAM_VISION_REF = 'Revelation 21:1\u20135 · 2 Peter 3:13'
+
+
+def _hsl_to_rgb(h, s, l):
+    """Hue 0–1, saturation, lightness → the (r, g, b) 0–1 triple."""
+    def channel(p, q, t):
+        t = t % 1.0
+        if t < 1 / 6:
+            return p + (q - p) * 6 * t
+        if t < 1 / 2:
+            return q
+        if t < 2 / 3:
+            return p + (q - p) * (2 / 3 - t) * 6
+        return p
+
+    if s == 0:
+        return l, l, l
+    q = l * (1 + s) if l < 1 / 2 else l + s - l * s
+    p = 2 * l - q
+    return channel(p, q, h + 1 / 3), channel(p, q, h), channel(p, q, h - 1 / 3)
+
+
+#: The accent each department already owns on the website — the desk hub's
+#: DEPARTMENT_STYLES hues, sampled once here so the paper and the screen say
+#: the same thing about who is running the day.
+_DEPARTMENT_ACCENTS = {
+    'amm': '#1e40af',          # blue
+    'awm': '#9f1239',          # rose
+    'aym': '#b45309',          # amber
+    'children': '#86198f',     # fuchsia
+    'ambassadors': '#9a3412',  # orange
+    'apm': '#0f766e',          # teal
+    'chaplaincy': '#312e81',   # indigo
+    'eldership': '#6d28d9',    # violet
+    'clerkship': '#0e7490',    # cyan
+    'deaconate': '#065f46',    # emerald
+    'health': '#166534',       # green
+    'welfare': '#92400e',      # dark amber
+    'dorcas': '#9f1239',       # rose
+    'development': '#065f46',  # emerald
+}
+
+
+def _department_accent(code, name=''):
+    """The department's own accent colour, in the palette's weight.
+
+    A department the desk added after this list was written still gets a
+    colour, drawn from its own name by a golden-angle spread of hues —
+    deterministic, so the same area always prints the same colour, and
+    weighted dark-saturated rather than bright, so print keeps its dignity.
+    """
+    key = str(code or '').strip().lower()
+    known = _DEPARTMENT_ACCENTS.get(key)
+    if known:
+        return colors.HexColor(known)
+    seed = sum(ord(ch) * (i + 1) for i, ch in enumerate((key or str(name or '').strip().lower()) or 'department'))
+    hue = (seed * 0.61803) % 1.0
+    r, g, b = _hsl_to_rgb(hue, 0.55, 0.34)
+    return colors.HexColor('#%02x%02x%02x' % (round(r * 255), round(g * 255), round(b * 255)))
+
+
+def generate_event_program_pdf(event, department_name: str = '', contact=None, department_code: str = '') -> bytes:
     """One calendar event's programme as a bifold — a sheet that folds.
 
     The desk's typed day — the sessions, the activities inside each one, and
@@ -2082,12 +2180,12 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
     (flip on the short edge), pages pair as outsides and insides.
 
     A sheet's outside carries the cover on its right panel — the church's
-    mark, the day, the ministry — and the back panel on its left, which
-    speaks for the church: where to find it, its week of worship, and how to
-    give towards the day. Faced with the fold, the panel opens into the
-    inside spread: the order of service running down both panels, its hours
-    spoken the sheet's way, its facilitators named under what they carry, an
-    activity hanging under its session.
+    mark standing over a watermark of its own symbol, the day, the ministry
+    — and the back panel on its left, which opens with the church's mission
+    and its vision (the same statements the About page speaks) and keeps its
+    welcome — where to find it, its week of worship, and how to give — at the
+    fold's foot. Gradients stay inside the palette's own sand and ember, the
+    washes printing as flat light rather than loud colour.
 
     A day too long for one spread flows onto another sheet — the same bifold
     whose cover says continued, its back panel repeating the welcome so the
@@ -2116,9 +2214,35 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
     GREY = colors.HexColor('#617068')
     EMBER = colors.HexColor('#b36b3c')
     RULE = colors.HexColor('#dfdbd1')
+    GOLD = colors.HexColor('#f1c89e')       # the highlight gold on a dark card
+    LINEN = colors.HexColor('#faf7f2')      # the wash's head
+    PLATE = colors.HexColor('#fcfbf9')      # the wash's foot
+    # The day belongs to a department, so the accents that speak of the day
+    # — its hours, the cover's stroke and foot band — wear its own colour.
+    # EMBER stays where the panel speaks for the church itself.
+    ACCENT = _department_accent(department_code, department_name)
 
     def wrap(text, font, size, width):
         return simpleSplit(text, font, size, width)
+
+    def wash(x, y, w, h, cols, radius=0, horizontal=False):
+        """A rect — optionally rounded — filled with a linear gradient of
+        `cols`, the first at the gradient's head (the top, or the left when
+        horizontal). The colour rides clipped inside the shape, so it never
+        bleeds past a card's corners or off the cover's edges."""
+        steps = [i / (len(cols) - 1) for i in range(len(cols))]
+        c.saveState()
+        p = c.beginPath()
+        if radius:
+            p.roundRect(x, y, w, h, radius)
+        else:
+            p.rect(x, y, w, h)
+        c.clipPath(p, stroke=0, fill=0)
+        if horizontal:
+            c.linearGradient(x, y, x + w, y, cols, positions=steps, extend=True)
+        else:
+            c.linearGradient(x, y + h, x, y, cols, positions=steps, extend=True)
+        c.restoreState()
 
     # ── The typed rows, as the panels will flow them ──────────────────────
 
@@ -2173,7 +2297,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
         width = panel_w - 2 * side - row['indent']
         lines = []
         if row['hours']:
-            lines.append((row['hours'], 'Helvetica-Bold', 9, EMBER, 4))
+            lines.append((row['hours'], 'Helvetica-Bold', 9, ACCENT, 4))
         size = 11 if row['indent'] else 12.5
         for piece in wrap(row['title'] or '\u2014', 'Helvetica-Bold', size, width):
             lines.append((piece, 'Helvetica-Bold', size, DARK, 2.5))
@@ -2268,6 +2392,16 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
         cx = x0 + panel_w / 2
         content_w = panel_w - 2 * side
         if sheet_i == 0:
+            # The church's symbol, drawn large and faint, stands behind the
+            # day: the image the cover wears — the church's own mark, not an
+            # outsider's photograph, so it prints soft and stays ours.
+            symbol_h = 170
+            scale = symbol_h / _SYMBOL_DRAWING.height
+            c.saveState()
+            c.translate(cx - symbol_h * _SYMBOL_RATIO / 2, 200 - symbol_h)
+            c.scale(scale, scale)
+            _light_symbol_drawing().drawOn(c, 0, 0)
+            c.restoreState()
             # The church's mark at the cover's head — the letterhead's own
             # lockup, drawn larger on a cover than the office sheets use.
             _draw_logo(c, cx, page_h - 38, 16 * mm)
@@ -2283,10 +2417,10 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
             for piece in pieces[:4]:
                 c.drawCentredString(cx, y, piece)
                 y -= size * 1.22
-            # A short ember stroke ties the name to its day — the same
+            # A short gradient stroke ties the name to its day — the
+            # department's own colour easing into the lockup's gold, the
             # accent the inside spread gives the hours.
-            c.setFillColor(EMBER)
-            c.rect(cx - 22, y + 8, 44, 2, fill=1, stroke=0)
+            wash(cx - 22, y + 8, 44, 2, [ACCENT, GOLD], horizontal=True)
             y -= 22
             c.setStrokeColor(RULE)
             c.setLineWidth(1)
@@ -2297,13 +2431,18 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
                 c.setFillColor(GREY)
                 c.drawCentredString(cx, y, bit)
                 y -= 15
+            # A band of colour closes the cover at its foot: dark easing into
+            # the department's colour easing into the lockup's gold — the
+            # church's paper, the day's identity, standing where a fold meets
+            # a reader's thumb.
+            wash(x0, 16, panel_w, 5, [DARK, ACCENT, GOLD], horizontal=True)
         else:
             # A continuation sheet folds up complete on its own: its own
             # mark, and a cover that says so.
             _draw_logo(c, cx, page_h - 38, 12 * mm)
             y = page_h - 38 - 12 * mm - 26
             c.setFont('Helvetica-Bold', 8)
-            c.setFillColor(EMBER)
+            c.setFillColor(ACCENT)
             c.drawCentredString(cx, y, 'ORDER OF SERVICE')
             y -= 12
             c.setFont('Helvetica', 9)
@@ -2319,49 +2458,139 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
     def draw_back(c, x0):
         x = x0 + side
         w = panel_w - 2 * side
-        y = page_h - headroom
 
-        def kicker(y, label):
-            c.setFont('Helvetica-Bold', 8)
-            c.setFillColor(EMBER)
-            c.drawString(x, y, label.upper())
-            c.setStrokeColor(RULE)
-            c.setLineWidth(0.8)
-            c.line(x, y - 4, x + w, y - 4)
-            return y - 20
+        # ── Who we are: the mission and the vision open the panel — the two
+        # statements the congregation should meet before anything else of the
+        # church's business. The mission sits on dark paper, the vision on
+        # white, as the landing page does. ──
+        inner_pad = 16
 
-        def body(y, text, gap=4):
-            for piece in wrap(text, 'Helvetica', 9, w):
-                c.setFont('Helvetica', 9)
-                c.setFillColor(DARK)
-                c.drawString(x, y, piece)
-                y -= 12
-            return y - gap
+        def card_h(text, size, lead):
+            inner = w - 2 * inner_pad
+            return inner_pad + 10 + 16 + len(wrap(text, 'Helvetica', size, inner)) * lead + 4 + 10 + inner_pad
 
-        # The welcome face. Whatever the church has not written — an address,
-        # a gathering, a giving line — is left off; a blank is never made up.
+        # Contacts wrap at the sizes below; both passes are measured the same
+        # way they will be drawn, so the pinned foot never drifts.
+        blocks = []
         if contact.get('address'):
-            y = kicker(y, 'Find us')
-            y = body(y, str(contact['address']).strip())
+            blocks.append(('Find us', [str(contact['address']).strip()]))
         if contact.get('services'):
-            y = kicker(y, 'When we gather')
+            svc_lines = []
             for svc in contact['services']:
                 line = ' \u00b7 '.join(part for part in (
                     str(svc.get('weekday') or '').strip(),
                     str(svc.get('text') or '').strip(),
                 ) if part)
                 if line:
-                    y = body(y, line, gap=3)
-            y -= 6
+                    svc_lines.append(line)
+            if svc_lines:
+                blocks.append(('When we gather', svc_lines))
         if contact.get('giving'):
-            y = kicker(y, 'Give towards the day')
-            for line in contact['giving']:
-                line = str(line or '').strip()
-                if line:
-                    y = body(y, line, gap=3)
+            give_lines = [str(line or '').strip() for line in contact['giving']]
+            give_lines = [line for line in give_lines if line]
+            if give_lines:
+                blocks.append(('Give towards the day', give_lines))
+        if not blocks:
+            blocks.append(('', ['Ask any of the officers at the door \u2014 they will help you find your way.']))
+
+        def block_lines(size):
+            out = []
+            for label, texts in blocks:
+                lines = []
+                for text in texts:
+                    lines.extend(wrap(text, 'Helvetica', size, w))
+                out.append((label, lines))
+            return out
+
+        def contact_total(size, lead):
+            return sum(16 + len(lines) * lead + 6 for _label, lines in block_lines(size))
+
+        # The panel's shapes are chosen to fit: the largest text that keeps
+        # the mission, the vision and the welcome from touching. Measured, not
+        # hoped for — so a long week of gatherings shrinks the foot gracefully
+        # instead of running it off the paper.
+        chosen = (9, 11.5, 8.5, 10.5)
+        for maybe in ((9, 11.5, 8.5, 10.5), (9, 11.5, 8, 9.5), (8.5, 10.5, 8, 9.5)):
+            t_size, t_lead, c_size, c_lead = maybe
+            mission_h = card_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
+            vision_h = card_h(PROGRAM_VISION_STATEMENT, t_size, t_lead)
+            cards_end = page_h - headroom - 26 - mission_h - 10 - vision_h
+            budget = cards_end - footroom
+            if contact_total(c_size, c_lead) <= budget:
+                chosen = maybe
+                break
+        t_size, t_lead, c_size, c_lead = chosen
+        mission_h = card_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
+        vision_h = card_h(PROGRAM_VISION_STATEMENT, t_size, t_lead)
+
+        kicker_y = page_h - headroom - 8
+        c.setFont('Helvetica-Bold', 7)
+        c.setFillColor(EMBER)
+        c.drawString(x, kicker_y, 'WHO WE ARE')
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.7)
+        c.line(x, kicker_y - 4, x + w, kicker_y - 4)
+
+        card_top = page_h - headroom - 26
+        # The mission card: dark ground with sand rising through it.
+        mission_h = card_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
+        wash(x, card_top - mission_h, w, mission_h, [colors.HexColor('#33493d'), DARK], radius=10)
+        body_x = x + inner_pad
+        inner_w = w - 2 * inner_pad
+        ty = card_top - inner_pad - 8
+        c.setFont('Helvetica-Bold', 8)
+        c.setFillColor(GOLD)
+        c.drawString(body_x, ty, 'OUR MISSION')
+        ty -= 16
+        c.setFont('Helvetica', t_size)
+        c.setFillColor(colors.Color(0.97, 0.98, 0.97))
+        for piece in wrap(PROGRAM_MISSION_STATEMENT, 'Helvetica', t_size, inner_w):
+            c.drawString(body_x, ty, piece)
+            ty -= t_lead
+        ty -= 2
+        c.setFont('Helvetica', 7.5)
+        c.setFillColor(colors.HexColor('#aebfb5'))
+        c.drawString(body_x, ty, PROGRAM_MISSION_REF)
+
+        # The vision card: white ground against the wash, ringed.
+        card_top = card_top - mission_h - 10
+        c.setFillColor(colors.white)
+        c.roundRect(x, card_top - vision_h, w, vision_h, 10, fill=1, stroke=0)
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.9)
+        c.roundRect(x, card_top - vision_h, w, vision_h, 10, fill=0, stroke=1)
+        ty = card_top - inner_pad - 8
+        c.setFont('Helvetica-Bold', 8)
+        c.setFillColor(EMBER)
+        c.drawString(body_x, ty, 'OUR VISION')
+        ty -= 16
+        c.setFont('Helvetica', t_size)
+        c.setFillColor(colors.HexColor('#3c4b44'))
+        for piece in wrap(PROGRAM_VISION_STATEMENT, 'Helvetica', t_size, inner_w):
+            c.drawString(body_x, ty, piece)
+            ty -= t_lead
+        ty -= 2
+        c.setFont('Helvetica', 7.5)
+        c.setFillColor(GREY)
+        c.drawString(body_x, ty, PROGRAM_VISION_REF)
+
+        # ── The welcome face, pinned to the fold's foot: where the church
+        # stands, its week of worship, and how to give towards the day. A
+        # blank is never made up; whatever the office has not written is left
+        # off the paper. ──
+        y = footroom + contact_total(c_size, c_lead) - 6
+        for label, lines in block_lines(c_size):
+            if label:
+                c.setFont('Helvetica-Bold', 8)
+                c.setFillColor(EMBER)
+                c.drawString(x, y, label.upper())
+            y -= 16
+            c.setFont('Helvetica', c_size)
+            c.setFillColor(DARK)
+            for piece in lines:
+                c.drawString(x, y, piece)
+                y -= c_lead
             y -= 6
-        if not (contact.get('address') or contact.get('services') or contact.get('giving')):
-            y = body(y, 'Ask any of the officers at the door — they will help you find your way.')
 
     def draw_row(c, x, y, row, lines):
         """Draw one row's lines, rule under it, and step to the next."""
@@ -2378,6 +2607,9 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None) -
 
     c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
     for sheet_i, spread in enumerate(spreads):
+        # The outside wears the paper's light: linen easing to white from
+        # head to foot, one wash across the whole sheet.
+        wash(0, 0, page_w, page_h, [LINEN, PLATE])
         # ── The sheet's outside: the church's welcome left, the cover right ──
         draw_back(c, 0)
         draw_cover(c, panel_w, sheet_i)
