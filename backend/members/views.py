@@ -12332,6 +12332,7 @@ class DepartmentEventProgramView(APIView):
 
         from .pdf_generator import (
             generate_event_program_pdf,
+            generate_event_program_plain_pdf,
             _spoken_hour,
             _spoken_range,
         )
@@ -12380,18 +12381,34 @@ class DepartmentEventProgramView(APIView):
             'services': services,
             'giving': giving,
         }
-        # The brochure wears the department's own accent — the colour its
-        # desk already shows on the site — so the printed sheet and the hub
-        # say the same thing about who is running the day.
-        pdf_bytes = generate_event_program_pdf(
-            event, department_row.name, contact=contact, department_code=department,
-        )
+        # Two papers for one programme, chosen by the reader's purpose. The
+        # plain sheet (`style=plain`) is the single letterhead page the desk
+        # shares — a link sent on, read whole on a phone. The brochure is the
+        # bifold — the sheet that folds, printed as the hard copy handed at
+        # the door. The brochure stays the default, so a link already handed
+        # on before this choice existed still folds into the same paper it
+        # always did.
+        style = str(request.query_params.get('style') or 'brochure').strip().lower()
+        if style == 'plain':
+            pdf_bytes = generate_event_program_plain_pdf(
+                event, department_row.name, contact=contact, department_code=department,
+                church_name=church_row.church_name if church_row else '',
+            )
+            filename = f'Event_Program_{event.event_date}.pdf'
+        else:
+            # The brochure wears the department's own accent — the colour its
+            # desk already shows on the site — so the printed sheet and the
+            # hub say the same thing about who is running the day.
+            pdf_bytes = generate_event_program_pdf(
+                event, department_row.name, contact=contact, department_code=department,
+            )
+            filename = f'Event_Brochure_{event.event_date}.pdf'
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         # Served inline: the desk's "View program" opens the sheet in its own
         # tab to be read. The Download button carries its own `download`
         # attribute, which still decides the filename when this same link is
         # used to keep a copy.
-        response['Content-Disposition'] = f'inline; filename="Event_Program_{event.event_date}.pdf"'
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
 
     def delete(self, request, department, event_id):

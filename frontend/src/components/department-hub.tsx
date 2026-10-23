@@ -1111,9 +1111,11 @@ function EventProgramMenu({
   event: DeptEvent;
   /** Correct the event's details — the form, open on what it holds. */
   onEdit: () => void;
-  /** The programme, one action: opens the inline page — the bifold where
-      the sheet is typed beside how it prints, and whose own "View PDF"
-      opens the letterhead file. Reads "Add program" while none exists. */
+  /** The programme, one action: opens the inline page — the sheet where the
+      desk types beside how the day reads, whose own buttons open the two
+      papers the programme prints as: the plain sheet the link hands on, and
+      the brochure that folds for the printed copy. Reads "Add program"
+      while none exists. */
   onCreate: () => void;
   /** Send a programme in as a file, replacing what the event carries. */
   onUpload: () => void;
@@ -1162,6 +1164,7 @@ function ProgramEditorModal({
   onSave,
   onRemoveProgram,
   programDownloadHref,
+  programBrochureHref,
   onSaveAndViewPdf,
   onShare,
 }: {
@@ -1173,9 +1176,12 @@ function ProgramEditorModal({
   /** Take the whole programme off the event — the page's bar, and on a
       phone the modal's own bar, serve it. */
   onRemoveProgram?: () => void;
-  /** What "Download program" hands out — the letterhead PDF of the typed
-      rows, or the file the desk uploaded. Blank hides it. */
+  /** What "View PDF" hands out — the plain letterhead sheet of the typed
+      rows for sharing, or the file the desk uploaded. Blank hides it. */
   programDownloadHref?: string;
+  /** What "View Brochure" opens — the bifold the typed rows print as,
+      set when a saved programme carries typed rows. Blank hides it. */
+  programBrochureHref?: string;
   /** Save the typed rows and open their letterhead PDF. What an unsaved
       programme's "View PDF" does: the server prints what the event carries,
       so the rows must be fixed on it before they can be read as paper. */
@@ -1244,11 +1250,14 @@ function ProgramEditorModal({
       participants: part.participants.map((person, p) => (p === personIndex ? { ...person, ...patch } : person)),
     }));
   const valid = items.some(programItemHasContent);
-  // The reading side's "View PDF": a saved programme opens the letterhead
-  // sheet straight away; an unsaved one can't be printed until it is on the
-  // event, so the click saves the typed rows first and then opens their PDF
-  // — the same sheet the desk was typing, now fixed on the event. Both
-  // render at the foot of the reading column, after what it shows.
+  // The reading side's two papers: "View PDF" opens the plain letterhead
+  // sheet for sharing; "View Brochure" opens the bifold for print. A saved
+  // programme opens either straight away; an unsaved one can't be printed
+  // until it is on the event, so the View PDF click saves the typed rows
+  // first and then opens their sheet — the same sheet the desk was typing,
+  // now fixed on the event. The brochure stays with the saved rows: its
+  // control shows only while a saved programme exists. Both render at the
+  // foot of the reading column, after what it shows.
   const openPdf =
     programDownloadHref
       ? undefined
@@ -1263,6 +1272,10 @@ function ProgramEditorModal({
   // foot, under the sheet it reads.
   const viewPdfClasses =
     "inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember";
+  // The two papers, side by side: the plain sheet to hand on, the bifold to
+  // print. The brochure belongs to a saved typed programme — before the rows
+  // exist on the event there is nothing for it to fold — so it shows when
+  // the printed sheet is askable and stays off a fresh one.
   const viewPdfControl = programDownloadHref ? (
     <a href={programDownloadHref} target="_blank" rel="noopener noreferrer" className={viewPdfClasses}>
       View PDF
@@ -1271,6 +1284,11 @@ function ProgramEditorModal({
     <button type="button" onClick={openPdf} className={viewPdfClasses}>
       View PDF
     </button>
+  ) : null;
+  const viewBrochureControl = programBrochureHref ? (
+    <a href={programBrochureHref} target="_blank" rel="noopener noreferrer" className={viewPdfClasses}>
+      View Brochure
+    </a>
   ) : null;
   // The uploaded half of the programme, shown as itself on the page so the
   // desk reads and prints both halves where the desk reads them. The modal
@@ -1642,6 +1660,7 @@ function ProgramEditorModal({
                   Save program
                 </button>
                 {viewPdfControl}
+                {viewBrochureControl}
               </div>
             )}
           </div>
@@ -1687,7 +1706,8 @@ function ProgramEditorModal({
                 the page variant rides the typing row above. */}
             {!isPage && (
               programDownloadHref ? (
-                <div className="mt-auto flex justify-end pt-2">
+                <div className="mt-auto flex items-center justify-end gap-2 pt-2">
+                  {viewBrochureControl}
                   <a
                     href={programDownloadHref}
                     target="_blank"
@@ -4490,10 +4510,13 @@ function DepartmentDetail({
   const [unitBoard, setUnitBoard] = useState<{ leader: Holder | null; assistants: Holder[] } | null>(null);
   const [roll, setRoll] = useState<RollMember[]>([]);
   const [events, setEvents] = useState<DeptEvent[]>([]);
-  // Every calendar, read as one: a keeper who may file beyond their own
-  // calendar — the personal ministries desk and the officers — is shown the
-  // whole church's events here, and narrows them by searching a ministry's
-  // name in the search bar above. The server decides who reads it whole.
+  // Every calendar, read as one — but only on the desk that keeps the
+  // church's week: the whole church's events are merged here on the
+  // personal ministries page alone, narrowed by searching a ministry's
+  // name in the search bar above. On any other desk the view holds its own
+  // events, and the fellowship's church calendar is the one place that
+  // reads every ministry for everyone. The server decides who may; the
+  // page decides where they see it whole.
   const [showsAllCalendars, setShowsAllCalendars] = useState(false);
   // The areas this desk may file an event into, when it may file beyond its
   // own calendar — the personal ministries desk keeps the church's week, so
@@ -5142,14 +5165,17 @@ function DepartmentDetail({
       .then((res) => (res.ok ? res.json() : { events: [] }))
       .then((data) => {
         setEventDepartments(Array.isArray(data.departments) ? data.departments : []);
-        setShowsAllCalendars(Boolean(data.can_schedule_across));
+        // The whole-church read belongs to the desk that keeps the week, and
+        // only on its own page: a keeper standing in another ministry's area
+        // reads that ministry's calendar as the ministry does. Naming a
+        // ministry in the search bar remains how the merged list is narrowed
+        // where the merge is shown. The church feed carries each row wearing
+        // its ministry's name.
+        const wholeWeek = Boolean(data.can_schedule_across) && department.code === "personal_ministries";
+        setShowsAllCalendars(wholeWeek);
         if (data.church_name) setChurchName(data.church_name);
         const own = data.events || [];
-        // A keeper reads the whole church's calendar here — every ministry's
-        // events beside their desk's own — rather than opening calendar after
-        // calendar; naming a ministry in the search bar narrows to it. The
-        // church feed carries each row wearing its ministry's name.
-        if (!data.can_schedule_across) {
+        if (!wholeWeek) {
           setEvents(own);
           return;
         }
@@ -5550,12 +5576,25 @@ function DepartmentDetail({
    */
   const programDownloadHref = (event: DeptEvent) => {
     if (parseProgramItems(event.program_items).length > 0) {
-      return `${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/`;
+      // The typed programme shares as the plain letterhead sheet: one page,
+      // read whole on a phone, the link handed on as it stands. The brochure
+      // — the sheet that folds — is the printed copy's own link, one
+      // parameter away, and stays where the desk holds it in hand.
+      return `${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/?style=plain`;
     }
     if (event.program_file) {
       return event.program_file.startsWith("http") ? event.program_file : `${API_URL}${event.program_file}`;
     }
     return "";
+  };
+
+  /** The programme's printed copy: the bifold — the sheet that folds and is
+      handed at the door — offered beside "View PDF" wherever the desk keeps
+      the programme in hand. A programme whose rows hold nothing typed yet
+      has no sheet to fold, so the choice stays off the bar. */
+  const programBrochureHref = (event: DeptEvent) => {
+    if (parseProgramItems(event.program_items).length === 0) return "";
+    return `${API_URL}/api/members/departments/${event.department || department.code}/events/${event.id}/program/?style=brochure`;
   };
 
   /** The programme handed on: its link, by the phone's own share sheet when
@@ -6534,6 +6573,7 @@ function DepartmentDetail({
               onSave={(items) => saveProgram(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
+              programBrochureHref={programBrochureHref(programFor)}
               onSaveAndViewPdf={(items) => saveProgramAndViewPdf(programFor, items)}
               onShare={() => void shareProgram(programFor)}
             />
@@ -6551,6 +6591,7 @@ function DepartmentDetail({
               onSave={(items) => saveProgramInline(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
+              programBrochureHref={programBrochureHref(programFor)}
               onSaveAndViewPdf={(items) => saveProgramAndViewPdf(programFor, items)}
               onShare={() => void shareProgram(programFor)}
             />

@@ -11033,6 +11033,21 @@ class DepartmentApiTests(APITestCase):
         # in its own tab to be read; keeping a copy is the Download button's
         # own work, whose `download` attribute fixes the filename.
         self.assertIn('inline', printed['Content-Disposition'])
+        self.assertIn('Event_Brochure_', printed['Content-Disposition'])
+
+        # Two papers for one programme: the plain letterhead sheet is what a
+        # link shares — one page, read whole — and the brochure is the bifold
+        # that folds. The brochure stays the default, so a link handed on
+        # before this choice existed still opens the sheet it always opened.
+        shared = self.client.get(f'/api/members/departments/amm/events/{event.id}/program/?style=plain')
+        self.assertEqual(shared.status_code, 200)
+        self.assertEqual(shared['Content-Type'], 'application/pdf')
+        self.assertTrue(shared.content[:5] in (b'%PDF-', b'%PDF\n'))
+        self.assertIn("filename=\"Event_Program_", shared['Content-Disposition'])
+        unknown = self.client.get(f'/api/members/departments/amm/events/{event.id}/program/?style=nonsense')
+        self.assertEqual(unknown.status_code, 200)
+        self.assertEqual(unknown['Content-Type'], 'application/pdf')
+        self.assertIn('Event_Brochure_', unknown['Content-Disposition'])
 
         # Taking the programme off is the desk's own write.
         self._auth(self.leader)

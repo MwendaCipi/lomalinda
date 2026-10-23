@@ -2178,6 +2178,293 @@ def _department_accent(code, name=''):
     return colors.HexColor('#%02x%02x%02x' % (round(r * 255), round(g * 255), round(b * 255)))
 
 
+#: How far an activity sits under the session that opens it — the indent
+#: both of a programme's papers read with the same measure.
+PROGRAM_ROW_INDENT = 14
+
+
+def _program_rows(event):
+    """The typed order of service, spoken the way every paper reads it.
+
+    Both of a programme's papers — the plain sheet the desk shares, and the
+    bifold it prints into hard copy — lay the same rows down, so their
+    reading is built once here: a session's hours, its name and its
+    facilitators, and beneath them each activity the session holds, with
+    its own hours and its own people. A day with nothing typed yet still
+    reads as paper, saying so in one row.
+    """
+    INDENT = PROGRAM_ROW_INDENT
+    sessions = event.program_items if isinstance(event.program_items, list) else []
+
+    def people_of(entry):
+        out = []
+        for person in (entry or [])[:20]:
+            if isinstance(person, dict):
+                name = str(person.get('name') or '').strip()
+                if name:
+                    out.append((name, str(person.get('role') or '').strip()))
+        return out
+
+    rows = []
+    for session in sessions[:60]:
+        if not isinstance(session, dict):
+            continue
+        title = str(session.get('title') or '').strip()
+        session_people = people_of(session.get('participants'))
+        children = []
+        for part in (session.get('parts') or [])[:40]:
+            if not isinstance(part, dict):
+                continue
+            part_title = str(part.get('title') or '').strip()
+            part_people = people_of(part.get('participants'))
+            if not part_title and not part_people:
+                continue
+            children.append({
+                'hours': _spoken_range(part.get('start'), part.get('end')),
+                'title': part_title,
+                'people': part_people,
+                'indent': INDENT,
+            })
+        if not title and not session_people and not children:
+            continue
+        rows.append({
+            'hours': _spoken_range(session.get('start'), session.get('end')),
+            'title': title,
+            'people': session_people,
+            'indent': 0,
+        })
+        rows.extend(children)
+
+    if not rows:
+        rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',
+                     'people': [], 'indent': 0})
+    return rows
+
+
+def generate_event_program_plain_pdf(
+    event, department_name: str = '', contact=None, department_code: str = '',
+    church_name: str = '',
+) -> bytes:
+    """One calendar event's plain sheet — the programme as one letterhead page.
+
+    Where the bifold answers print — a sheet that folds and is handed at the
+    door — this answers sharing: a single column on portrait A4 that a phone
+    reads comfortably and a link hands on whole. It keeps what the printed
+    sheet's inside spread says — the church's mark at the head, the day as
+    the letterhead names it, and the typed order of service beneath — and
+    leaves the fold's paper to the brochure. A day too long for one page
+    runs onto the next with the same compact head, so nothing about the
+    page changes mid-stream; no fold guides, no washes, only ink the way a
+    plain document speaks it.
+
+    `contact` trims the page's foot, spoken small under a rule: where the
+    church stands and one line on how to give towards the day. Whatever is
+    absent is left off the paper, never guessed at — the printed brochure
+    carries the full welcome; this sheet keeps only what it was handed.
+    """
+    contact = contact or {}
+    buffer = io.BytesIO()
+
+    page_w, page_h = A4                     # portrait — a page, not a fold
+    side = 16 * mm
+    bottom = 18 * mm
+    foot_h = 34                             # room the page's foot keeps
+
+    DARK = colors.HexColor('#26352f')
+    GREY = colors.HexColor('#617068')
+    RULE = colors.HexColor('#dfdbd1')
+    ACCENT = _department_accent(department_code, department_name)
+
+    def wrap(text, font, size, width):
+        return simpleSplit(text, font, size, width)
+
+    c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
+
+    def head(page_i, pages, title_pieces, title_size, meta_lines):
+        """Draw the page's letterhead — mark, kicker, the day, its meta — and
+        return the `y` the first row line sits at."""
+        cx = page_w / 2
+        logo_h = 15 * mm if page_i == 0 else 10 * mm
+        _draw_logo(c, cx, page_h - 30, logo_h)
+        y = page_h - 30 - logo_h - 22
+        if page_i > 0:
+            c.setFont('Helvetica', 8.5)
+            c.setFillColor(GREY)
+            c.drawCentredString(cx, y - 2, f'continued \u00b7 page {page_i + 1} of {pages}')
+            y -= 14
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.9)
+        c.line(side, y, page_w - side, y)
+        y -= 26
+        # The day, spoken first: kicker wide in the ministry's own accent —
+        # the same sentence the brochure's cover says of the day.
+        c.setFont('Helvetica-Bold', 9)
+        c.setFillColor(ACCENT)
+        c.drawCentredString(cx, y, 'ORDER OF SERVICE')
+        y -= 26
+        c.setFillColor(DARK)
+        c.setFont('Helvetica-Bold', title_size)
+        for piece in title_pieces:
+            c.drawCentredString(cx, y, piece)
+            y -= title_size * 1.22
+        y += (title_size * 0.35)          # the meta's breath, not the line's
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.7)
+        c.line(side + 24, y - 4, page_w - side - 24, y - 4)
+        y -= 6
+        for bit in meta_lines:
+            c.setFont('Helvetica', 9.5)
+            c.setFillColor(GREY)
+            c.drawCentredString(cx, y, bit)
+            y -= 14
+        y -= 16                           # the rows' air below the head
+        return y
+
+    def foot(page_i, pages):
+        """The page's foot: a rule and, when the church handed one, its name
+        and where it stands — small, grey, and never mistaken for the day."""
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.6)
+        c.line(side, bottom - 6, page_w - side, bottom - 6)
+        y = bottom - 20
+        name = pdf_church_name(church_name)
+        lines = []
+        if name:
+            lines.append((name, 'Helvetica-Bold'))
+        address = str(contact.get('address') or '').strip()
+        if address:
+            address_lines = wrap(address, 'Helvetica', 7.5, page_w - 2 * side)
+            lines.extend((piece, 'Helvetica') for piece in address_lines[:2])
+        giving = contact.get('giving') or []
+        giving_line = ', '.join(str(part or '').strip() for part in giving[:2] if str(part or '').strip())
+        if giving_line:
+            for piece in wrap('\u2192 ' + giving_line, 'Helvetica', 7.5, page_w - 2 * side)[:1]:
+                lines.append((piece, 'Helvetica'))
+        if page_i + 1 < pages:
+            lines.append((f'Page {page_i + 1} of {pages}', 'Helvetica'))
+        for text, font in lines:
+            c.setFont(font, 7.5)
+            c.setFillColor(GREY)
+            c.drawString(side, y, text)
+            y -= 10
+
+    # ── The day as the letterhead names it ────────────────────────────────
+    title = str(event.title or 'Program').strip() or 'Program'
+    content_w = page_w - 2 * side
+    title_size = 20
+    title_pieces = wrap(title, 'Helvetica-Bold', title_size, content_w)
+    if len(title_pieces) > 3:
+        title_size = 16
+        title_pieces = wrap(title, 'Helvetica-Bold', title_size, content_w)
+
+    meta = []
+    date_text = str(event.event_date)[:10]
+    try:
+        parsed_day = datetime.strptime(date_text, '%Y-%m-%d')
+        meta.append(parsed_day.strftime('%A, %d %B %Y'))
+    except ValueError:
+        if date_text:
+            meta.append(date_text)
+    hours = _spoken_range(event.event_time.strftime('%H:%M') if event.event_time else '',
+                          event.end_time.strftime('%H:%M') if event.end_time else '')
+    if hours:
+        meta.append(hours)
+    if department_name:
+        meta.append(department_name)
+    if event.unit:
+        meta.append(f'Unit: {event.unit}')
+    if event.lead:
+        meta.append(f'Led by {event.lead}')
+    if event.mode == 'virtual':
+        meta.append('Virtual')
+    elif str(event.location or '').strip():
+        meta.append(str(event.location).strip())
+
+    # ── Flow the rows down the pages, then ink them ──────────────────────
+    rows = _program_rows(event)
+
+    def row_lines(row):
+        width = content_w - row['indent']
+        lines = []
+        if row['hours']:
+            lines.append((row['hours'], 'Helvetica-Bold', 9, ACCENT, 4, side + row['indent']))
+        size = 10.5 if row['indent'] else 12
+        for piece in wrap(row['title'] or '\u2014', 'Helvetica-Bold', size, width):
+            lines.append((piece, 'Helvetica-Bold', size, DARK, 2.5, side + row['indent']))
+        for name, role in row['people']:
+            text = f'\u2022 {name}' + (f' \u00b7 {role}' if role else '')
+            for piece in wrap(text, 'Helvetica', 8.5, width):
+                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5, side + row['indent']))
+        return lines
+
+    # The rows are fitted before the paper is drawn: the page count the
+    # foot speaks must be known before a foot exists. The head that stands
+    # over the first page is measured by the same arithmetic the head draws
+    # with — the mark, the shout, the day, its meta — so ink and budget
+    # never drift apart. Continuation pages keep the same budget: their
+    # smaller mark gives back about the room their 'continued' line takes.
+    logo_h = 15 * mm
+    head_bottom = (
+        (page_h - 30)                                   # the mark's top
+        - (logo_h + 22)                                 # the mark and its breath
+        - 26                                            # the rule's step
+        - 26                                            # the kicker's line
+        - 26                                            # the air before the name
+        - title_size * 1.22 * len(title_pieces)         # the name's lines
+        + title_size * 0.35                             # the name's breath back
+        - 6                                             # the meta rule's step
+        - 14 * len(meta)                                # the meta's spoken lines
+        - 16                                            # the air below the head
+    )
+    usable = head_bottom - (bottom + foot_h)
+    if usable < 120:
+        usable = 120
+
+    pages_rows = [[]]
+    running = usable
+    for position, row in enumerate(rows):
+        lines = row_lines(row)
+        height = sum(size + space for (_t, _f, size, _c, space, _x) in lines) + 8
+        # A session head never ends a page while the activity it opens
+        # follows: both travel to the next page together.
+        stranded = (
+            row['indent'] == 0
+            and len(pages_rows[-1]) > 0
+            and position + 1 < len(rows)
+            and rows[position + 1]['indent'] > 0
+        )
+        need = height
+        if stranded:
+            next_height = sum(size + space for (_t, _f, size, _c, space, _x) in row_lines(rows[position + 1])) + 8
+            need += next_height
+        if pages_rows[-1] and need > running:
+            pages_rows.append([])
+            running = usable
+        pages_rows[-1].append((row, lines))
+        running -= height
+
+    # ── The ink ───────────────────────────────────────────────────────────
+    for page_i, page_rows_list in enumerate(pages_rows):
+        y = head(page_i, len(pages_rows), title_pieces, title_size, meta)
+        for row, lines in page_rows_list:
+            x = side + row['indent']
+            for text, font, size, colour, space, lx in lines:
+                c.setFont(font, size)
+                c.setFillColor(colour)
+                y -= size
+                c.drawString(lx, y, text)
+                y -= space
+            c.setStrokeColor(RULE)
+            c.setLineWidth(0.4)
+            c.line(x, y - 2, x + (content_w - row['indent']), y - 2)
+            y -= 8
+        foot(page_i, len(pages_rows))
+        c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def generate_event_program_pdf(event, department_name: str = '', contact=None, department_code: str = '') -> bytes:
     """One calendar event's bifold — the order of service on a sheet that folds.
 
@@ -2252,53 +2539,10 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
             c.linearGradient(x, y + h, x, y, cols, positions=steps, extend=True)
         c.restoreState()
 
-    # ── The typed rows, as the panels will flow them ──────────────────────
-
-    sessions = event.program_items if isinstance(event.program_items, list) else []
-    INDENT = 14
-
-    def people_of(entry):
-        out = []
-        for person in (entry or [])[:20]:
-            if isinstance(person, dict):
-                name = str(person.get('name') or '').strip()
-                if name:
-                    out.append((name, str(person.get('role') or '').strip()))
-        return out
-
-    rows = []
-    for session in sessions[:60]:
-        if not isinstance(session, dict):
-            continue
-        title = str(session.get('title') or '').strip()
-        session_people = people_of(session.get('participants'))
-        children = []
-        for part in (session.get('parts') or [])[:40]:
-            if not isinstance(part, dict):
-                continue
-            part_title = str(part.get('title') or '').strip()
-            part_people = people_of(part.get('participants'))
-            if not part_title and not part_people:
-                continue
-            children.append({
-                'hours': _spoken_range(part.get('start'), part.get('end')),
-                'title': part_title,
-                'people': part_people,
-                'indent': INDENT,
-            })
-        if not title and not session_people and not children:
-            continue
-        rows.append({
-            'hours': _spoken_range(session.get('start'), session.get('end')),
-            'title': title,
-            'people': session_people,
-            'indent': 0,
-        })
-        rows.extend(children)
-
-    if not rows:
-        rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',
-                     'people': [], 'indent': 0})
+    # ── The typed rows, as the panels will flow them — built once, the same
+    # reading the plain sheet lays down, so what the desk shares and what it
+    # prints say the day with one voice. ──
+    rows = _program_rows(event)
 
     def row_lines(row):
         """One row's spoken pieces: its hours, its name, its facilitators."""
