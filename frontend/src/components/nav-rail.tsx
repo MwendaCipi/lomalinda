@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Mail, Menu, Search, UserPlus } from "lucide-react";
 
-import { entryHref, railFor, railSectionsFor } from "@/config/navigation";
+import { entryHref, railFor, railSectionsFor, type RailRow } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -67,24 +67,58 @@ export function NavRail() {
   };
 
   // The rail's own search — it holds the slot the Dashboard row gave up, since
-  // the logo above already is the way home. It narrows the rows below, and only
-  // the rows: the rail lists *places*, so a desk's pages are never minted into
-  // rows of their own. A row is matched on the words it shows, never on its
-  // description — searching "Treasury" names the Treasury row, not the clerks'
-  // and elders' "Funding & Accounts" page whose description happens to say
-  // treasury. Nor does the search unfold a desk into its pages: three desks
-  // keep a Funding page, and listing them would put three identical "Funding"
-  // rows in the rail, two of them under My Ministry.
+  // the logo above already is the way home. A needle reaches further than the
+  // rail itself does, for the member who does not know where a thing lives:
+  // the rail's rows, by the words they show; the directory's desks (the
+  // ministries and departments of the church's own record), by their blurb as
+  // well — knowing the work ("baptism", "youth") but not the desk's name still
+  // reaches it; and the pages the desks' strips carry (the top-toggle lists
+  // these desks draw), minted as result rows named beside the desk that keeps
+  // them — the page's name is what the member typed, and the parent suffix
+  // tells three desks sharing "Funding" apart. Without a needle the rail
+  // stays its own list of places, as it always reads.
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
-  const matches = (row: { label: string; short?: string }) =>
-    `${row.label} ${row.short ?? ""}`.toLowerCase().includes(needle);
+  const matches = (row: { label: string; short?: string; description?: string; dept?: string }) => {
+    const hay = `${row.label}${row.short ? ` ${row.short}` : ""}`.toLowerCase();
+    if (hay.includes(needle)) return true;
+    // Only a directory desk matches on its blurb: a desk *page*'s description
+    // may name another desk, and searching "Treasury" would otherwise mint
+    // the elders' Funding page whose description happens to say treasury.
+    return Boolean(row.dept && row.description) && row.description!.toLowerCase().includes(needle);
+  };
   const sections = railSectionsFor(entries)
     .map((section) => ({
       ...section,
       entries: needle ? section.entries.filter(matches) : section.entries,
     }))
     .filter((section) => section.entries.length > 0);
+  // The strip pages a needle mints into rows of their own, matched on name.
+  // Two rows may keep the same page (a section's alias), so the address
+  // declares one from another — the dedupe here keeps one of each, and the
+  // rendering keys on the address for the same reason.
+  const pageRows = needle
+    ? entries
+        .flatMap((entry) =>
+          "items" in entry && entry.items
+            ? entry.items
+            // A row keeps every page behind an address — with none, it is
+            // not a place and not a search hit either.
+            .filter(
+              (item): item is RailRow & { href: string } =>
+                Boolean(item.href) && matches(item)
+            )
+            .map((item) => ({
+                href: item.href,
+                label: item.short ?? item.label,
+                full: item.label,
+                icon: item.icon,
+                parent: entry.label,
+              }))
+            : []
+        )
+        .filter((page, index, all) => all.findIndex((other) => other.href === page.href) === index)
+    : [];
 
   return (
     <aside
@@ -165,7 +199,7 @@ export function NavRail() {
       {/* The rail items */}
       <div className={`min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar ${collapsed ? "px-2 py-2" : "px-3 py-3"}`}>
         <nav>
-          {sections.length === 0 && (
+          {sections.length === 0 && pageRows.length === 0 && (
             <p className="px-3 py-6 text-center text-xs text-moss">
               {collapsed ? "—" : `Nothing in the rail matches “${query.trim()}”.`}
             </p>
@@ -237,6 +271,46 @@ export function NavRail() {
               </div>
             </div>
           ))}
+          {/* A search's page hits, minted from the desks' strips: the row that
+              keeps the page is named beside it, so three desks carrying the
+              same page read apart. */}
+          {pageRows.length > 0 && (
+            <div className={collapsed ? "mt-3 pt-2 border-t border-sand-line/60" : "mt-4"}>
+              {!collapsed && (
+                <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-moss">
+                  Pages
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {pageRows.map((page) => {
+                  const PageIcon = page.icon;
+                  const active = here.href === page.href;
+                  return (
+                    <Link
+                      key={`page-${page.href}`}
+                      href={page.href}
+                      aria-current={active ? "page" : undefined}
+                      title={`${page.full} — under ${page.parent}`}
+                      className={`flex items-center rounded-xl transition ${
+                        collapsed
+                          ? "h-10 w-10 mx-auto justify-center"
+                          : "gap-3 px-3 py-2.5 text-sm font-semibold"
+                      } ${
+                        active ? "bg-bark text-white shadow-sm" : "text-bark hover:bg-sand"
+                      }`}
+                    >
+                      <PageIcon className="h-4 w-4 shrink-0" />
+                      {!collapsed && (
+                        <span className="min-w-0 truncate">
+                          {page.label} <span className="text-[11px] font-normal text-moss">· {page.parent}</span>
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </nav>
       </div>
 

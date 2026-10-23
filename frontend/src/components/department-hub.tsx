@@ -1082,16 +1082,17 @@ function eventTimeRange(event: DeptEvent) {
  */
 function EventProgramMenu({
   event,
-  onView,
   onEdit,
   onCreate,
   onUpload,
   onRemove,
 }: {
   event: DeptEvent;
-  onView: () => void;
   /** Correct the event's details — the form, open on what it holds. */
   onEdit: () => void;
+  /** The programme, one action: opens the inline page — the bifold where
+      the sheet is typed beside how it prints, and whose own "View PDF"
+      opens the letterhead file. Reads "Add program" while none exists. */
   onCreate: () => void;
   /** Send a programme in as a file, replacing what the event carries. */
   onUpload: () => void;
@@ -1099,29 +1100,14 @@ function EventProgramMenu({
 }) {
   const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
   const hasProgram = eventHasProgram(event);
-  // Two programme actions, one job each: "View program" opens the programme
-  // itself — the letterhead PDF where typed rows exist, otherwise the file
-  // the desk uploaded; "Edit program" opens the inline page, where the sheet
-  // is typed, uploaded to, printed and taken off.
   return (
     <div>
       <button type="button" onClick={onEdit} className={`${item} text-bark`}>
         Edit event
       </button>
-      {hasProgram ? (
-        <>
-          <button type="button" onClick={onView} className={`${item} text-bark`}>
-            View program
-          </button>
-          <button type="button" onClick={onCreate} className={`${item} text-bark`}>
-            Edit program
-          </button>
-        </>
-      ) : (
-        <button type="button" onClick={onCreate} className={`${item} text-bark`}>
-          Add program
-        </button>
-      )}
+      <button type="button" onClick={onCreate} className={`${item} text-bark`}>
+        {hasProgram ? "View program" : "Add program"}
+      </button>
       <button type="button" onClick={onUpload} className={`${item} text-bark`}>
         Upload program
       </button>
@@ -5362,13 +5348,6 @@ function DepartmentDetail({
     return "";
   };
 
-  /** The menu's "View program": the programme itself in its own tab — the
-      letterhead PDF where typed rows are, otherwise the uploaded file. */
-  const viewProgram = (event: DeptEvent) => {
-    const url = programDownloadHref(event);
-    if (url) window.open(url, "_blank", "noopener");
-  };
-
   /** The programme handed on: its link, by the phone's own share sheet when
       one exists and to the clipboard where one does not. */
   const shareProgram = async (event: DeptEvent) => {
@@ -6005,7 +5984,6 @@ function DepartmentDetail({
                           {event.location ? ` · ${event.location}` : ""}
                         </p>                        <EventProgramMenu
                           event={event}
-                          onView={() => { onClose(); viewProgram(event); }}
                           onEdit={() => { onClose(); setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
                           onUpload={() => { onClose(); chooseProgramFile(event); }}
@@ -6091,7 +6069,6 @@ function DepartmentDetail({
                                 >
                                       <EventProgramMenu
                                         event={event}
-                                        onView={() => { setOpenEventMenuKey(null); viewProgram(event); }}
                                         onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                         onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                         onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
@@ -6142,7 +6119,7 @@ function DepartmentDetail({
                         {hasProgram ? (
                           <button
                             type="button"
-                            onClick={() => viewProgram(event)}
+                            onClick={() => setProgramFor(event)}
                             className="text-xs font-bold text-ember hover:underline"
                           >
                             View program &rarr;
@@ -6163,7 +6140,6 @@ function DepartmentDetail({
                             <div className="absolute bottom-full right-0 z-20 mb-1.5 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg">
                               <EventProgramMenu
                                     event={event}
-                                    onView={() => { setOpenEventMenuKey(null); viewProgram(event); }}
                                     onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                     onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                     onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}

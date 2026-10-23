@@ -994,16 +994,6 @@ export function CampaignManagement({
       <div className="flex h-full md:overflow-hidden">
 
         <div className="flex-1 min-w-0 w-full h-full bg-white p-5 sm:p-8 lg:p-10 border-b border-sand-line space-y-8 overflow-y-auto overscroll-contain custom-hover-scrollbar">
-          {/* Phones carry no admin sidebar, so this page gives its own way back. */}
-          {isAdminMode && (
-            <Link
-              href="/administration"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-ember transition hover:text-bark lg:hidden"
-            >
-              &larr; Back to administration
-            </Link>
-          )}
-
           {/* New Fund Drive Modal — the same hoisted form the treasury desk
               renders in place; see `createFormModal` above. */}
           {createFormModal}
