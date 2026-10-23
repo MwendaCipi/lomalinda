@@ -6177,6 +6177,91 @@ class DutyRotaAPITests(APITestCase):
         self.assertEqual(DutyRota.objects.count(), 0)
 
 
+class DutyRemindViewTests(APITestCase):
+    """The desk's own reminder send: the whole team, or one officer.
+
+    The cron reminds tomorrow's duties once and stamps them; the desk's own
+    send may ring a line at any time (force) or ring one officer by account.
+    """
+
+    def setUp(self):
+        self.head_deaconess = User.objects.create_user('head.deaconess', 'head.deaconess@example.com', 'DeaconPass#2026')
+        MemberProfile.objects.create(user=self.head_deaconess, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=self.head_deaconess)
+        self.member = User.objects.create_user('plain.rota.member', 'plain.rota.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.officer = User.objects.create_user('rostered.officer', 'rostered.officer@example.com', 'OfficerPass#2026')
+        MemberProfile.objects.create(user=self.officer, role='member', roles='member')
+
+    def _schedule(self, **overrides):
+        payload = {
+            'title': 'Main Sanctuary Ushering Team A',
+            'date': '2026-11-07',
+            'shift': '08:30 AM - 01:00 PM',
+            'duty_type': 'Ushering',
+            'assigned_team': [
+                {'name': 'Deacon David', 'member_id': self.officer.pk, 'role': 'Head usher'},
+                {'name': 'Deacon Hand-Typed', 'phone': '+254700000001'},
+            ],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/duty-rota/', payload, format='json')
+
+    def test_the_desk_rings_the_whole_team_again_and_re_stamps_the_line(self):
+        self.client.force_authenticate(self.head_deaconess)
+        entry_id = self._schedule().data['id']
+
+        sent = self.client.post(f'/api/members/duty-rota/{entry_id}/remind/', {}, format='json')
+
+        self.assertEqual(sent.status_code, status.HTTP_200_OK)
+        self.assertEqual(sent.data['sent']['recipients'], 1)  # only the account officer
+        self.assertEqual(sent.data['sent']['bells'], 1)
+        entry = DutyRota.objects.get(pk=entry_id)
+        self.assertIsNotNone(entry.reminder_sent_at)
+        self.assertEqual(ChurchNotification.objects.filter(user=self.officer, title__startswith='Duty reminder').count(), 1)
+
+    def test_one_officer_may_be_reminded_alone_without_re_stamping_the_line(self):
+        self.client.force_authenticate(self.head_deaconess)
+        entry_id = self._schedule().data['id']
+        DutyRota.objects.filter(pk=entry_id).update(reminder_sent_at=timezone.now() - timedelta(days=2))
+        stamped = DutyRota.objects.get(pk=entry_id).reminder_sent_at
+
+        sent = self.client.post(
+            f'/api/members/duty-rota/{entry_id}/remind/',
+            {'member_id': self.officer.pk}, format='json',
+        )
+
+        self.assertEqual(sent.status_code, status.HTTP_200_OK)
+        self.assertIn('Deacon David', sent.data['detail'])
+        self.assertEqual(ChurchNotification.objects.filter(user=self.officer, title__startswith='Duty reminder').count(), 1)
+        # The rest of the team keeps the stamp, so the day-before text still reaches them once.
+        self.assertEqual(DutyRota.objects.get(pk=entry_id).reminder_sent_at, stamped)
+
+    def test_an_officer_without_an_account_cannot_be_reminded_by_id(self):
+        self.client.force_authenticate(self.head_deaconess)
+        entry_id = self._schedule().data['id']
+
+        refused = self.client.post(f'/api/members/duty-rota/{entry_id}/remind/', {'member_id': self.officer.pk + 999}, format='json')
+
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('not rostered', refused.data['detail'])
+
+    def test_the_congregation_cannot_ring_a_duty(self):
+        self.client.force_authenticate(self.head_deaconess)
+        entry_id = self._schedule().data['id']
+
+        refused = self.client.force_authenticate(self.member) or self.client.post(
+            f'/api/members/duty-rota/{entry_id}/remind/', {}, format='json',
+        )
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        # The rostering notice the schedule itself wrote is the only bell —
+        # the member's refusal sent no reminder of any kind.
+        self.assertEqual(
+            ChurchNotification.objects.filter(title__startswith='Duty reminder').count(), 0,
+        )
+
+
 class DutyReminderCronTests(TestCase):
     """The daily reminder for the deaconate's rota.
 

@@ -7,12 +7,15 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Bell,
+  BellRing,
   Boxes,
   CheckCircle2,
   Clock,
   ExternalLink,
+  Eye,
   Images,
-  Pencil,
+  MessageCircle,
+  Phone,
   Plus,
   Printer,
   Search,
@@ -175,6 +178,19 @@ const normalizeOfficer = (entry: string | RotaOfficer): RotaOfficer =>
         duty: String(entry?.duty ?? ""),
         member_id: typeof entry?.member_id === "number" ? entry.member_id : null,
       };
+
+/**
+ * The wa.me number a phone as taken down becomes: Kenyan local (07… or
+ * 01…) is completed to its international form, a number already written
+ * with its country code rides as-is, and anything else is sent digit by
+ * digit as typed — WhatsApp did not serve the church a fuller parse.
+ */
+function whatsappNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return "";
+  const withCountry = digits.startsWith("0") ? `254${digits.slice(1)}` : digits;
+  return withCountry.startsWith("254") ? withCountry : digits;
+}
 
 
 
@@ -389,6 +405,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const [newRota, setNewRota] = useState(blankRota);
   const [savingRota, setSavingRota] = useState(false);
   const [removingRotaId, setRemovingRotaId] = useState<number | null>(null);
+  // The officer chip's action menu: which chip is open, which officer a
+  // remind is in flight for, and whether the view sheet's remind-all is.
+  const [officerMenuKey, setOfficerMenuKey] = useState<string | null>(null);
+  const [remindingOfficerKey, setRemindingOfficerKey] = useState<string | null>(null);
+  const [remindingAll, setRemindingAll] = useState(false);
   // Non-null while the schedule modal is rewriting a line that already exists.
   const [editingRotaId, setEditingRotaId] = useState<number | null>(null);
   // The Add Officer modal, stacked over the schedule modal: one officer at a
@@ -539,6 +560,73 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       return matchTitle || matchType || matchShift || matchTeam;
     });
   }, [rota, rotaSearchQuery]);
+
+  /** One officer's reminder, rung from the card: the chip's Remind action.
+   *  Reminders ride the officer's church account — the bell, the letter,
+   *  the text and the push — so a name typed by hand has nothing to ring
+   *  and its menu simply leaves the action out. */
+  const remindOfficer = async (item: RotaEntry, officer: RotaOfficer) => {
+    if (!officer.member_id || remindingOfficerKey) return;
+    const key = `${item.id}-${officer.member_id}`;
+    setRemindingOfficerKey(key);
+    try {
+      const res = await apiFetch(`/duty-rota/${item.id}/remind/`, {
+        method: "POST",
+        body: JSON.stringify({ member_id: officer.member_id }),
+      });
+      const payload = (await res.json().catch(() => null)) as { detail?: string } | null;
+      if (!res.ok) {
+        showAlert("Reminder not sent", firstErrorMessage(payload) || "Check your connection and try again.", "error");
+        return;
+      }
+      setOfficerMenuKey(null);
+      showAlert("Reminder sent", payload?.detail ?? `A duty reminder was sent to ${officer.name}.`, "success");
+    } catch {
+      showAlert("Reminder not sent", "Check your connection and try again.", "error");
+    } finally {
+      setRemindingOfficerKey(null);
+    }
+  };
+
+  /** The whole team's reminder, rung from the view sheet's foot: the same
+   *  full notice the day-before cron sends, sent again by the desk's own
+   *  request — the line is re-stamped so the cron will not ring it twice
+   *  on top of this. */
+  const remindAll = async (): Promise<void> => {
+    if (editingRotaId === null || remindingAll) return;
+    if (newRota.officers.every((officer) => !officer.member_id)) {
+      showAlert(
+        "Nobody to remind",
+        "Reminders reach officers through their church account, and this team has none on file.",
+        "info",
+      );
+      return;
+    }
+    setRemindingAll(true);
+    try {
+      const res = await apiFetch(`/duty-rota/${editingRotaId}/remind/`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const payload = (await res.json().catch(() => null)) as { detail?: string; sent?: { recipients?: number } } | null;
+      if (!res.ok) {
+        showAlert("Reminder not sent", firstErrorMessage(payload) || "Check your connection and try again.", "error");
+        return;
+      }
+      const count = payload?.sent?.recipients ?? 0;
+      showAlert(
+        count > 0 ? "Reminder sent" : "Nothing sent",
+        count > 0
+          ? payload?.detail ?? `A full duty reminder went to ${count} officer${count === 1 ? "" : "s"}.`
+          : "Nobody rostered on this duty holds a church account, so there was nobody to remind.",
+        count > 0 ? "success" : "info",
+      );
+    } catch {
+      showAlert("Reminder not sent", "Check your connection and try again.", "error");
+    } finally {
+      setRemindingAll(false);
+    }
+  };
 
   const printRotaPdf = async (item?: RotaEntry) => {
     try {
@@ -1467,26 +1555,100 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                         <div className="flex flex-wrap gap-1">
                           {item.assigned_team.map((entry, idx) => {
                             const officer = normalizeOfficer(entry);
-                            const details = [officer.duty, officer.role, officer.phone].filter(Boolean).join(" · ");
+                            const menuKey = `${item.id}-${idx}`;
+                            const menuOpen = officerMenuKey === menuKey;
+                            const reminding = officer.member_id !== null && remindingOfficerKey === `${item.id}-${officer.member_id}`;
+                            const whatsapp = whatsappNumber(officer.phone);
+                            const partName = [officer.duty, officer.role].filter(Boolean).join(" · ");
                             return (
-                              <span
-                                key={`${officer.name}-${idx}`}
-                                title={
-                                  officer.member_id
-                                    ? `${details || officer.name} · reminded on their account`
-                                    : details || officer.name
-                                }
-                                className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark"
-                              >
-                                {officer.member_id && (
-                                  <Bell
-                                    className="h-3 w-3 shrink-0 text-ember"
-                                    aria-label="Reminders go to this officer's account"
+                              <span key={menuKey} className="relative inline-flex">
+                                {menuOpen && (
+                                  /* The sheet that closes the menu when a click falls
+                                     anywhere off it — one fixed lens under the menu. */
+                                  <span
+                                    className="fixed inset-0 z-10 cursor-default"
+                                    onClick={() => setOfficerMenuKey(null)}
+                                    aria-hidden="true"
                                   />
                                 )}
-                                {officer.name}
-                                {officer.phone && (
-                                  <span className="ml-1 font-normal text-moss">{officer.phone}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setOfficerMenuKey(menuOpen ? null : menuKey)}
+                                  title={officer.name}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-sand-card px-2 py-0.5 text-[10px] font-semibold text-bark transition hover:border-ember"
+                                >
+                                  {officer.member_id && (
+                                    <Bell
+                                      className="h-3 w-3 shrink-0 text-ember"
+                                      aria-label="Reminders go to this officer's account"
+                                    />
+                                  )}
+                                  {officer.name}
+                                </button>
+                                {menuOpen && (
+                                  <span className="absolute bottom-full left-0 z-20 mb-1 flex w-44 flex-col overflow-hidden rounded-xl border border-sand-line bg-white p-1 shadow-lg">
+                                    <span className="px-2 py-1 text-[10px] font-bold text-moss">{officer.name}</span>
+                                    {officer.phone ? (
+                                      <a
+                                        href={`tel:${officer.phone}`}
+                                        onClick={() => setOfficerMenuKey(null)}
+                                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
+                                      >
+                                        <Phone className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                        Call
+                                      </a>
+                                    ) : (
+                                      <span
+                                        title="The line carries no phone for this officer"
+                                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-moss opacity-50"
+                                      >
+                                        <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                                        Call
+                                      </span>
+                                    )}
+                                    {whatsapp ? (
+                                      <a
+                                        href={`https://wa.me/${whatsapp}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => setOfficerMenuKey(null)}
+                                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
+                                      >
+                                        <MessageCircle className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                        WhatsApp
+                                      </a>
+                                    ) : (
+                                      <span
+                                        title="The line carries no phone for this officer"
+                                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-moss opacity-50"
+                                      >
+                                        <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                                        WhatsApp
+                                      </span>
+                                    )}
+                                    {officer.member_id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void remindOfficer(item, officer)}
+                                        disabled={reminding}
+                                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold text-bark transition hover:bg-sand disabled:opacity-50"
+                                      >
+                                        <BellRing className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                        {reminding ? "Reminding…" : "Remind"}
+                                      </button>
+                                    ) : (
+                                      <span
+                                        title="Reminders ride the officer's church account — this name has none on file"
+                                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-moss opacity-50"
+                                      >
+                                        <BellRing className="h-3.5 w-3.5" aria-hidden="true" />
+                                        Remind
+                                      </span>
+                                    )}
+                                    {partName && (
+                                      <span className="border-t border-sand-line px-2 py-1.5 text-[10px] text-moss">{partName}</span>
+                                    )}
+                                  </span>
                                 )}
                               </span>
                             );
@@ -1521,12 +1683,12 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       <button
                         type="button"
                         onClick={() => openRota(item)}
-                        aria-label={`Edit the duty \"${titleOf(item)}\"`}
-                        title="Edit this duty and its officers"
+                        aria-label={`View the duty \"${titleOf(item)}\"`}
+                        title="View this duty — change the day, the time or the team, or remind the officers"
                         className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
                       >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                        Edit
+                        <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                        View
                       </button>
                       <button
                         type="button"
@@ -2042,7 +2204,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
           <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
             <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="font-bold text-base text-bark">
-                {editingRotaId !== null ? `Edit ${rotaName}` : `Schedule ${rotaName}`}
+                {editingRotaId !== null ? `View ${rotaName}` : `Schedule ${rotaName}`}
               </h3>
               <button onClick={closeRotaModal} aria-label="Close" className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
@@ -2133,8 +2295,24 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
 
               </div>
 
-              {/* The always-visible save row at the foot — the requests modals' pattern. */}
+              {/* The always-visible save row at the foot — the requests modals' pattern.
+                  On a saved line the desk's own remind rides beside it: the whole team
+                  is rung again, on the desk's say-so rather than the cron's. */}
               <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
+                {editingRotaId !== null && (
+                  <button
+                    type="button"
+                    onClick={() => void remindAll()}
+                    disabled={remindingAll}
+                    title="Send the duty reminder to the whole team now"
+                    className="mr-auto rounded-xl border border-ember px-4 py-2 text-xs font-bold text-ember transition hover:bg-sand disabled:opacity-60"
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <BellRing className="h-3.5 w-3.5" aria-hidden="true" />
+                      {remindingAll ? "Reminding…" : "Remind all"}
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={closeRotaModal}

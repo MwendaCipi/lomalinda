@@ -10534,6 +10534,92 @@ class DutyRotaView(APIView):
         return Response(DutyRotaSerializer(entry).data, status=status.HTTP_200_OK)
 
 
+class DutyRotaRemindView(APIView):
+    """The duty's reminder run again, on the desk's own say-so — the whole
+    team, or one officer by account id.
+
+    The daily cron (``manage.py send_duty_reminders``) rings each line the
+    day before its duty and stamps it ``reminder_sent_at`` so it is never
+    rung twice. But the desk rings duties on its own schedule too: a rota
+    written late on Friday is reminded by the desk itself, and a Sabbath
+    morning phone call wants the whole team reached at once. ``force`` is
+    what makes that honest — the cron's "never twice" stamp is for the cron;
+    the desk ringing a line again is the desk's decision, not an accident.
+
+    ``POST duty-rota/<pk>/remind/`` with no body reminds everyone on the
+    line who holds a church account (bell, letter, text and push), exactly
+    as the cron's run does, and re-stamps the line. With ``member_id`` it
+    rings that one officer only — the card's per-officer Remind — and leaves
+    the stamp as it is, so the day-before text still reaches the rest.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk=None):
+        if not keeps_any_rota(request.user):
+            return Response(
+                {'detail': 'Only the officers who keep a rota can send its reminders.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        entry = generics.get_object_or_404(DutyRota, pk=pk)
+        if not can_keep_rota(request.user, entry.desk):
+            return Response(
+                {'detail': 'Only the officers who keep this desk can remind its team.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from .duty import (
+            notify_officer, reminder_recipients, rostered_officers, send_duty_reminder,
+        )
+
+        church_name = current_church_name()
+
+        member_id = request.data.get('member_id')
+        if member_id not in (None, ''):
+            try:
+                member_id = int(member_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': 'member_id should be the officer\'s account id.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            officer = next(
+                (o for o in rostered_officers(entry) if o.get('member_id') == member_id),
+                None,
+            )
+            if officer is None:
+                return Response(
+                    {'detail': 'That officer is not rostered on this duty.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            accounts = {user.pk: user for _officer, user in reminder_recipients(entry)}
+            user = accounts.get(member_id)
+            if user is None:
+                return Response(
+                    {'detail': f'"{officer["name"]}" holds no church account to ring for reminders.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            sent = notify_officer(entry, officer, user, church_name, kind='reminder')
+            return Response(
+                {'detail': f'Reminder sent to {officer["name"]}.', 'sent': {'recipients': 1, **sent}}
+            )
+
+        report = send_duty_reminder(entry, church_name=church_name, force=True)
+        recipients = report['recipients']
+        detail = (
+            f'Reminder sent to {recipients} officer{"" if recipients == 1 else "s"}.'
+            if recipients
+            else 'The line is stamped so the daily run cannot ring it twice, but nobody rostered on it holds a church account to send to.'
+        )
+        return Response({'detail': detail, 'sent': {
+            'recipients': recipients,
+            'bells': report['bell'],
+            'letters': report['letters'],
+            'texts': report['texts'],
+            'pushes': report['pushes'],
+        }})
+
+
 class DutyRotaPdfView(APIView):
     """Generate and return an official aggregated PDF of one desk's rota."""
     permission_classes = [IsAuthenticated]
