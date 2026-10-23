@@ -405,12 +405,28 @@ def send_password_reset_email(user, uid, token):
     )
 
 
-def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, attachments=None):
+def wants_both_receipt_channels(member):
+    """Whether the member asked for a receipt's SMS to ride beside its email.
+
+    A member's own preference (Preferences → receiving) decides this; the
+    office's choices on a desk entry are written on the slip, not asked of
+    the member, so cash receipts keep the explicit toggles.
+    """
+    profile = getattr(member, 'member_profile', None)
+    return bool(profile and profile.receipt_delivery == 'both')
+
+
+def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, attachments=None, both=False):
     """Attempt every available receipt channel and report whether one succeeded.
 
     ``attachments`` ride the email only — SMS cannot carry files — but the
     letter itself is the same on both channels: it no longer names the paper
     in words, so there is nothing to say on one channel and not the other.
+
+    The email goes first, and where ``both`` is not asked for the SMS stands
+    behind it: it goes out only when the email did not (a giver with no
+    address, or an email that failed), so no member is handed the same
+    receipt twice unless their preference says to.
     """
     email_sent = False
     sms_sent = False
@@ -438,11 +454,12 @@ def _deliver_receipt_message(*, subject, body, email='', phone='', mark_sent, at
             logger.exception('Receipt email to %s failed to send.', email)
 
     if phone and sms_configured:
-        # The gateway normalises the number (+254…) and logs the provider's own
-        # reason for a refusal; nothing here may raise into the giving flow.
-        sms_sent = sms.send(phone, body)
-        if not sms_sent:
-            logger.warning('Receipt SMS to %s was not delivered.', phone)
+        if both or not email_sent:
+            # The gateway normalises the number (+254…) and logs the provider's own
+            # reason for a refusal; nothing here may raise into the giving flow.
+            sms_sent = sms.send(phone, body)
+            if not sms_sent:
+                logger.warning('Receipt SMS to %s was not delivered.', phone)
 
     sent = email_sent or sms_sent
     if sent:
@@ -501,6 +518,9 @@ def send_contribution_receipt(contribution, receipt_email=''):
         body=body,
         email=email,
         phone=contribution.phone_number,
+        # The giver's own preference, not the church's habit, decides whether
+        # their phone rings beside their inbox.
+        both=wants_both_receipt_channels(contribution.member),
         mark_sent=lambda: None,
         attachments=[attachment] if attachment else None,
     )
@@ -568,6 +588,7 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
         body=body,
         email=email,
         phone=first.phone_number,
+        both=wants_both_receipt_channels(first.member),
         mark_sent=lambda: None,
         attachments=[attachment] if attachment else None,
     )
@@ -644,11 +665,15 @@ def send_cash_receipt(cash, *, send_sms=True, send_email=True):
         f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel=cash.get_payment_method_display(), receipt_ref=cash.receipt_number or f'CASH-{cash.id}', date_display=cash.received_on)}\n\n"
         f"{receipt_email_signature()}"
     )
+    # A desk entry's channels are the office's own choice, ticked on the slip:
+    # unlike a digital receipt they are not governed by the giver's preference,
+    # because the office may be receipting a giver with no account at all.
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {cash.purpose}",
         body=body,
         email=usable_email(cash.giver_email) if send_email else '',
         phone=cash.giver_phone if send_sms else '',
+        both=send_email and send_sms,
         mark_sent=lambda: None,
     )
     if delivery['email_sent'] or delivery['sms_sent']:
@@ -692,11 +717,14 @@ def send_grouped_cash_receipt(rows, *, send_sms=True, send_email=True):
         f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=first.receipt_number or f'CASH-{first.id}', date_display=first.received_on)}\n\n"
         f"{receipt_email_signature()}"
     )
+    # As above: the desk's own channel tick governs a split receipt, not the
+    # giver's preference.
     delivery = _deliver_receipt_message(
         subject=f"Giving receipt — {account_list}",
         body=body,
         email=usable_email(first.giver_email) if send_email else '',
         phone=first.giver_phone if send_sms else '',
+        both=send_email and send_sms,
         mark_sent=lambda: None,
     )
     if delivery['email_sent'] or delivery['sms_sent']:
@@ -3004,6 +3032,11 @@ class MeView(APIView):
             'declared_relationships': profile.declared_relationships if profile else [],
             'announce_email': profile.announce_email if profile else True,
             'announce_push': profile.announce_push if profile else True,
+            # How a giving receipt reaches this member: the email goes out
+            # first, and the SMS follows only when the email could not be
+            # sent — unless the member asked for both channels on their
+            # giving.
+            'receipt_delivery': profile.receipt_delivery if profile else 'email',
             # The departments this account belongs to — its roll memberships
             # plus any department it leads or assists — so the feed can offer
             # a My departments tab that shows only the posts addressed to
@@ -3048,6 +3081,11 @@ class MeView(APIView):
         withholds announcement broadcasts, ``announce_push`` announcement
         notifications. Duty notices — a request waiting for your office —
         always arrive regardless of both.
+
+        A giving receipt's channels are the member's own choice too: the
+        default delivers the email first and hands the SMS only the slips
+        the email could not carry; ``receipt_delivery='both'`` plants the
+        text message beside every receipt.
         """
         serializer = MemberEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -3134,6 +3172,19 @@ class MeView(APIView):
                     if getattr(profile, field) != new_value:
                         setattr(profile, field, new_value)
                         changed.append(field)
+
+        if 'receipt_delivery' in request.data:
+            new_value = str(request.data.get('receipt_delivery') or '').strip()
+            valid = {code for code, _label in MemberProfile._meta.get_field('receipt_delivery').choices}
+            if new_value not in valid:
+                return Response(
+                    {'receipt_delivery': 'Choose how receipts reach you: email first, or both channels.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if profile.receipt_delivery != new_value:
+                profile.receipt_delivery = new_value
+                changed.append('receipt_delivery')
+
         if changed:
             profile.save(update_fields=changed)
         return self.get(request)

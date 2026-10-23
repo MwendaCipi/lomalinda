@@ -28,6 +28,9 @@ export default function MemberPreferencesPage() {
 
   const [token] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("access_token") : null));
   const [announcePrefs, setAnnouncePrefs] = useState<{ email: boolean; push: boolean } | null>(null);
+  // Receipts default to the email carrying the receipt alone, with the SMS
+  // standing behind it; "both" texts every receipt beside the email.
+  const [receiptBoth, setReceiptBoth] = useState<boolean | null>(null);
   const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
   const [savingPref, setSavingPref] = useState(false);
   const [prefMessage, setPrefMessage] = useState("");
@@ -49,12 +52,36 @@ export default function MemberPreferencesPage() {
           email: !!data.announce_email,
           push: !!data.announce_push,
         });
+        setReceiptBoth(data.receipt_delivery === "both");
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [token]);
+
+  async function saveReceiptPreference(value: boolean) {
+    if (!token || receiptBoth === null) return;
+    const previous = receiptBoth;
+    setReceiptBoth(value);
+    setPrefMessage("");
+    setSavingPref(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ receipt_delivery: value ? "both" : "email" }),
+      });
+      if (!response.ok) throw new Error();
+      setPrefMessage("Giving receipt preference saved.");
+      showAlert("Saved", "Your giving receipt delivery has been updated.", "success");
+    } catch {
+      setReceiptBoth(previous);
+      showAlert("Not saved", "Your preference could not be saved. Try again.", "error");
+    } finally {
+      setSavingPref(false);
+    }
+  }
 
   async function saveAnnouncePref(field: "email" | "push", value: boolean) {
     if (!announcePrefs) return;
@@ -304,6 +331,29 @@ export default function MemberPreferencesPage() {
             </div>
           ) : (
             <p className="text-xs text-moss">Loading notification settings…</p>
+          )}
+
+          {/* A giving receipt's own channels: the email goes first, and the
+              SMS only follows when the email cannot go out — unless asked
+              for here. */}
+          {receiptBoth !== null && (
+            <div className="mt-4 border-t border-sand-line pt-4">
+              <label className="flex items-center justify-between gap-4 rounded-2xl bg-sand p-3.5 text-xs font-medium cursor-pointer">
+                <span>
+                  <strong className="block text-bark">Gift receipts by SMS too</strong>
+                  <span className="text-moss">
+                    Receipts are delivered by email first; turning this on also texts you a copy. Without it, the SMS only goes out when the email cannot be sent.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  disabled={savingPref}
+                  checked={receiptBoth}
+                  onChange={(e) => saveReceiptPreference(e.target.checked)}
+                  className="h-4 w-4 rounded accent-bark"
+                />
+              </label>
+            </div>
           )}
 
           {prefMessage && <p className="text-xs font-medium text-ember">{prefMessage}</p>}

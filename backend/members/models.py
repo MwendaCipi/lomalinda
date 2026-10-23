@@ -184,6 +184,18 @@ class MemberProfile(models.Model):
     # these; duty notices (a request waiting for the office) always arrive.
     announce_email = models.BooleanField(default=True, help_text="Receive announcement broadcasts by email")
     announce_push = models.BooleanField(default=True, help_text="Receive announcements as phone/browser notifications")
+    # How a completed gift's receipt reaches the member. The email goes out
+    # first; the SMS follows only when the email could not be sent (no
+    # address, or the send failed) — unless the member asked for both.
+    receipt_delivery = models.CharField(
+        max_length=10,
+        choices=[
+            ('email', 'Email first — SMS only when the email cannot be sent'),
+            ('both', 'Both email and SMS'),
+        ],
+        default='email',
+        help_text="Whether a receipt's SMS accompanies its email or merely stands in when the email cannot go out",
+    )
     must_change_password = models.BooleanField(default=False, help_text="Require a password change at the next login")
     profile_update_pending = models.BooleanField(
         default=False,

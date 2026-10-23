@@ -4762,6 +4762,133 @@ class ReceiptGreetingNameTests(TestCase):
         self.assertTrue(body.startswith('Dear friend,'), body)
 
 
+class ReceiptDeliveryPreferenceTests(APITestCase):
+    """A digital receipt texts nobody whose email went out.
+
+    A member chooses how their receipt reaches them on the preferences page.
+    The default delivers the email alone: the SMS is its fallback, sent only
+    when there is no address to write to or the send itself failed. A member
+    who asks for both receives both.
+    """
+
+    def _member(self, username, **profile_kwargs):
+        member = User.objects.create_user(username, f'{username}@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=member, **profile_kwargs)
+        return member
+
+    def _contribution(self, member, **overrides):
+        base = dict(
+            member=member, amount=Decimal('500.00'), purpose='Tithe',
+            status='completed', donor_name='', phone_number='0712345678',
+        )
+        base.update(overrides)
+        contribution = Contribution.objects.create(**base)
+        contribution.refresh_from_db()
+        return contribution
+
+    def _send(self, contribution):
+        from .views import send_contribution_receipt
+
+        with patch('members.views.sms.configured', return_value=True), \
+                patch('members.views.sms.send', return_value=True) as texted:
+            with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+                send_contribution_receipt(contribution)
+        return texted
+
+    def test_the_default_delivers_the_email_and_holds_the_text(self):
+        from django.core import mail
+
+        member = self._member('receipt.email.only', phone_number='0712345678')
+        contribution = self._contribution(member)
+        texted = self._send(contribution)
+
+        self.assertEqual(len(mail.outbox), 1)
+        texted.assert_not_called()
+
+    def test_an_unsendable_email_hands_the_receipt_to_the_text(self):
+        from django.core import mail
+        from .views import send_contribution_receipt
+
+        member = self._member('receipt.email.dead', phone_number='0712345678')
+        contribution = self._contribution(member)
+        # Both letter carriers are stopped: a receipt with an attachment rides
+        # EmailMessage, one without it rides send_mail.
+        with patch('members.views.sms.configured', return_value=True), \
+                patch('members.views.sms.send', return_value=True) as texted, \
+                patch('members.views.send_mail', side_effect=Exception('smtp down')), \
+                patch('members.views.EmailMessage', side_effect=Exception('smtp down')):
+            send_contribution_receipt(contribution)
+
+        self.assertEqual(len(mail.outbox), 0)
+        texted.assert_called_once()
+
+    def test_a_member_who_asked_for_both_receives_both(self):
+        from django.core import mail
+
+        member = self._member('receipt.both.channels', phone_number='0712345678', receipt_delivery='both')
+        contribution = self._contribution(member)
+        texted = self._send(contribution)
+
+        self.assertEqual(len(mail.outbox), 1)
+        texted.assert_called_once()
+
+    def test_the_grouped_split_receipt_honours_the_preference(self):
+        from django.core import mail
+        from .views import send_grouped_contribution_receipts
+
+        member = self._member('receipt.splits.email', phone_number='0712345678')
+        group = uuid.uuid4()
+        Contribution.objects.create(
+            member=member, amount=Decimal('300.00'), purpose='Tithe',
+            status='completed', donor_name='', phone_number='0712345678',
+            payment_group=group,
+        )
+        Contribution.objects.create(
+            member=member, amount=Decimal('200.00'), purpose='Building Fund',
+            status='completed', donor_name='', phone_number='0712345678',
+            payment_group=group,
+        )
+        with patch('members.views.sms.configured', return_value=True), \
+                patch('members.views.sms.send', return_value=True) as texted:
+            with self.settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
+                send_grouped_contribution_receipts(group)
+
+        self.assertEqual(len(mail.outbox), 1)
+        texted.assert_not_called()
+
+    def test_a_giver_without_a_profile_still_gets_the_fallback_channel(self):
+        from django.core import mail
+        from .views import send_contribution_receipt
+
+        member = User.objects.create_user('receipt.no.profile', 'np@example.com', 'ChurchPass#2026')
+        # No member profile at all: the address is there but fails, so the
+        # phone on the payment still carries the receipt.
+        contribution = self._contribution(member)
+        with patch('members.views.sms.configured', return_value=True), \
+                patch('members.views.sms.send', return_value=True) as texted, \
+                patch('members.views.send_mail', side_effect=Exception('smtp down')), \
+                patch('members.views.EmailMessage', side_effect=Exception('smtp down')):
+            send_contribution_receipt(contribution)
+
+        self.assertEqual(len(mail.outbox), 0)
+        texted.assert_called_once()
+
+    def test_me_exposes_and_updates_the_receipt_preference(self):
+        member = self._member('receipt.preferences.page', phone_number='0712345678')
+        self.client.force_authenticate(member)
+
+        res = self.client.get('/api/members/me/')
+        self.assertEqual(res.data['receipt_delivery'], 'email')
+
+        res = self.client.patch('/api/members/me/', {'receipt_delivery': 'both'}, format='json')
+        self.assertEqual(res.data['receipt_delivery'], 'both')
+        member.member_profile.refresh_from_db()
+        self.assertEqual(member.member_profile.receipt_delivery, 'both')
+
+        res = self.client.patch('/api/members/me/', {'receipt_delivery': 'fax'}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class GiverIdentityOnTheLedgerTests(APITestCase):
     """Ledgers name givers from real identity (email/phone), not 'Anonymous Giver'."""
 
