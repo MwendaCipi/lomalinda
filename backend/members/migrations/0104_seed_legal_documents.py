@@ -13,7 +13,7 @@ from django.db import migrations
 
 PRIVACY_POLICY = """Who we are
 
-This website is operated by SDA Loma Linda, Meru, Kenya. The church is responsible for the personal information submitted through its website, forms, member accounts and church services.
+This website is operated by SDA Church Loma Linda, Meru, Kenya. The church is responsible for the personal information submitted through its website, forms, member accounts and church services.
 
 Information we collect
 
@@ -69,7 +69,7 @@ Giving instructions and payment confirmations are provided for convenience. A pa
 
 Church content
 
-Church names, logos, original text, graphics and other materials belong to SDA Loma Linda or their respective rights holders. You may use content for personal, non-commercial church participation, but may not copy, alter, redistribute or commercially exploit it without permission. External resources remain subject to their own terms.
+Church names, logos, original text, graphics and other materials belong to SDA Church Loma Linda or their respective rights holders. You may use content for personal, non-commercial church participation, but may not copy, alter, redistribute or commercially exploit it without permission. External resources remain subject to their own terms.
 
 Availability and liability
 

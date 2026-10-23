@@ -169,7 +169,7 @@ def push_to_user(user, *, title: str, body: str, link: str = "", respect_prefs: 
     return sent
 
 
-def send_test_push(user, *, title: str = "SDA Loma Linda", body: str | None = None, link: str = "") -> dict:
+def send_test_push(user, *, title: str = "SDA Church Loma Linda", body: str | None = None, link: str = "") -> dict:
     """Push one test notice to `user`'s devices and report what each answered.
 
     The enable button proves a browser accepted a subscription; it cannot prove

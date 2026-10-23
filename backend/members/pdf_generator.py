@@ -390,7 +390,7 @@ def format_money(val):
 def pdf_church_name(church_name):
     """The name as it must read on paper: with the word "Church" in it.
 
-    The app stores the short form ("SDA Loma Linda, Meru") for screens,
+    The app stores the short form ("SDA Church Loma Linda, Meru") for screens,
     emails and SMS, but printed documents carry the full name —
     "SDA Church Loma Linda, Meru". Names that already say "Church" and
     names without the SDA prefix pass through untouched, so an admin who

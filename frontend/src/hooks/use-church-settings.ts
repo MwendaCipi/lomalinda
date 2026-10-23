@@ -85,7 +85,7 @@ export function churchWhere(settings: ChurchSettings | null): string | null {
  *
  * A pin opens the exact point the church placed. Without one, the address —
  * and only the address — is what a search may use. The church's *name* never
- * is: a search for "SDA Loma Linda" answers to the listing Google already
+ * is: a search for "SDA Church Loma Linda" answers to the listing Google already
  * has, which is the plot the church used to meet at, and that link was
  * sending visitors to the wrong building. With neither pin nor address there
  * is no link, because a map that opens somewhere else is worse than no map.

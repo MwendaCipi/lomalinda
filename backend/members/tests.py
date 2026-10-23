@@ -2074,7 +2074,7 @@ class MpesaPullTransactionsAPITests(APITestCase):
                 'transactiontype': 'c2b-pay-bill-debit',
                 'billreference': 'Tithe',
                 'amount': '1250.00',
-                'organizationname': 'SDA Loma Linda',
+                'organizationname': 'SDA Church Loma Linda',
             }]],
         }
 
@@ -3659,15 +3659,15 @@ class PasswordPolicyTests(APITestCase):
 
 
 class EmailBrandingTests(APITestCase):
-    """Every email names the church the same way: SDA Loma Linda, Meru.
+    """Every email names the church the same way: SDA Church Loma Linda, Meru.
 
-    Bodies, sentences and signatures carry the comma — 'SDA Loma Linda, Meru has
+    Bodies, sentences and signatures carry the comma — 'SDA Church Loma Linda, Meru has
     invited you…' — while email headers (From and Subject) use the comma-free
     name, since a bare comma in a display name is an address separator.
     """
 
-    CHURCH = 'SDA Loma Linda, Meru'
-    HEADER_NAME = 'SDA Loma Linda Meru'
+    CHURCH = 'SDA Church Loma Linda, Meru'
+    HEADER_NAME = 'SDA Church Loma Linda Meru'
 
     def setUp(self):
         self.admin_user = User.objects.create_user('mailer.admin', 'mailer.admin@example.com', 'ChurchAdmin#2026')
@@ -3709,7 +3709,7 @@ class EmailBrandingTests(APITestCase):
         self.assertEqual(subject, f'Verify your {self.HEADER_NAME} account')
         # The joining sentence ends at the short name: no town suffix, no
         # account-type clause.
-        self.assertIn('Thank you for choosing to join SDA Loma Linda.', body)
+        self.assertIn('Thank you for choosing to join SDA Church Loma Linda.', body)
         self.assertNotIn('as a church account', body)
         self.assertIn(f'Warm regards,\n{self.CHURCH}', body)
         self.assertNotIn('Loma Linda SDA Church', body)
@@ -3757,7 +3757,7 @@ class EmailBrandingTests(APITestCase):
         first_sentence = body.split('\n\n')[1]
         self.assertEqual(
             first_sentence,
-            f'{self.CHURCH}, has invited you to create your own account as a Friend of SDA Loma Linda.',
+            f'{self.CHURCH}, has invited you to create your own account as a Friend of SDA Church Loma Linda.',
         )
         self.assertNotIn('access', body)
 
@@ -3804,10 +3804,10 @@ class EmailBrandingTests(APITestCase):
 
 
 class BrandNamingTests(TestCase):
-    """The church is branded 'SDA Loma Linda' — that word order, not 'Loma Linda SDA'.
+    """The church is branded 'SDA Church Loma Linda' — that word order, not 'Loma Linda SDA'.
 
-    'Meru' belongs to the church's email identity ('SDA Loma Linda, Meru' in a
-    sentence, 'SDA Loma Linda Meru' in a header) and stays out of the site's own
+    'Meru' belongs to the church's email identity ('SDA Church Loma Linda, Meru' in a
+    sentence, 'SDA Church Loma Linda Meru' in a header) and stays out of the site's own
     name, so the copy reads as a church rather than as a branch.
     """
 
@@ -3815,23 +3815,23 @@ class BrandNamingTests(TestCase):
         from .models import ChurchSettings
 
         subtext = ChurchSettings._meta.get_field('clarion_call_subtext').get_default()
-        self.assertTrue(subtext.startswith('Join SDA Loma Linda '), subtext)
+        self.assertTrue(subtext.startswith('Join SDA Church Loma Linda '), subtext)
         self.assertNotIn('Meru', subtext)
 
     def test_the_church_name_default_keeps_meru_for_email(self):
         from .models import ChurchSettings
         from .views import CHURCH_DEFAULT_NAME, church_name_plain
 
-        self.assertEqual(ChurchSettings._meta.get_field('church_name').get_default(), 'SDA Loma Linda, Meru')
-        self.assertEqual(CHURCH_DEFAULT_NAME, 'SDA Loma Linda, Meru')
-        self.assertEqual(church_name_plain('SDA Loma Linda, Meru'), 'SDA Loma Linda Meru')
+        self.assertEqual(ChurchSettings._meta.get_field('church_name').get_default(), 'SDA Church Loma Linda, Meru')
+        self.assertEqual(CHURCH_DEFAULT_NAME, 'SDA Church Loma Linda, Meru')
+        self.assertEqual(church_name_plain('SDA Church Loma Linda, Meru'), 'SDA Church Loma Linda Meru')
 
     def test_the_friend_label_reads_sda_loma_linda(self):
         from .models import EnrollmentRequest, Invitation, MemberProfile
 
-        self.assertEqual(dict(MemberProfile.ACCOUNT_TYPE_CHOICES)['friend'], 'Friend of SDA Loma Linda')
-        self.assertEqual(dict(EnrollmentRequest.JOINING_MODE_CHOICES)['friend'], 'Friend of SDA Loma Linda')
-        self.assertEqual(dict(Invitation._meta.get_field('account_type').choices)['friend'], 'Friend of SDA Loma Linda')
+        self.assertEqual(dict(MemberProfile.ACCOUNT_TYPE_CHOICES)['friend'], 'Friend of SDA Church Loma Linda')
+        self.assertEqual(dict(EnrollmentRequest.JOINING_MODE_CHOICES)['friend'], 'Friend of SDA Church Loma Linda')
+        self.assertEqual(dict(Invitation._meta.get_field('account_type').choices)['friend'], 'Friend of SDA Church Loma Linda')
 
 
 class AnnouncementPermissionTests(APITestCase):
@@ -6393,7 +6393,7 @@ class DutyReminderCronTests(TestCase):
 
     def test_a_reminder_signs_itself_with_the_church_in_full(self):
         """The name at the end of the text is the full one. The app stores the
-        short "SDA Loma Linda, Meru" for screens, but an officer reading a
+        short "SDA Church Loma Linda, Meru" for screens, but an officer reading a
         duty notice is left with the church's name, and that closing wants
         "Church" in it — the same split the printed documents already make.
         """
@@ -6432,7 +6432,7 @@ class DutyReminderCronTests(TestCase):
         self.assertEqual(church_name_full('SDA Church Loma Linda, Meru'), 'SDA Church Loma Linda, Meru')
         self.assertEqual(church_name_full('Loma Linda SDA Church'), 'Loma Linda SDA Church')
         # The short form the app stores is what gets the word added.
-        self.assertEqual(church_name_full('SDA Loma Linda, Meru'), 'SDA Church Loma Linda, Meru')
+        self.assertEqual(church_name_full('SDA Church Loma Linda, Meru'), 'SDA Church Loma Linda, Meru')
 
     def test_force_rings_a_line_again(self):
         """The desk's own re-send: a deliberate second run, never the cron's."""
@@ -7531,7 +7531,7 @@ class MeetingInvitationTests(APITestCase):
         MemberProfile.objects.create(user=self.board_b, role='elder', roles='elder')
 
         self.settings_row = ChurchSettings.objects.create(
-            church_name='SDA Loma Linda, Meru',
+            church_name='SDA Church Loma Linda, Meru',
         )
         self.client.force_authenticate(self.clerk)
 
@@ -7590,7 +7590,7 @@ class MeetingInvitationTests(APITestCase):
         self.assertIn('19 September 2026', esther)
         self.assertIn('9:00 AM', esther)
         self.assertIn('11:30 AM', esther)
-        self.assertIn('SDA Loma Linda, Meru', esther)
+        self.assertIn('SDA Church Loma Linda, Meru', esther)
         self.assertNotIn('{', esther)
         # The clerk who scheduled the meeting sits on the board too.
         self.assertEqual(response.data['invitations'], {'invited': 3, 'emailed': 3})
@@ -8229,7 +8229,7 @@ class ChurchLegalDocumentsTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user('legal.admin', 'legal.admin@example.com', 'AdminPass#2026')
         MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
-        ChurchSettings.objects.create(church_name='SDA Loma Linda, Meru')
+        ChurchSettings.objects.create(church_name='SDA Church Loma Linda, Meru')
 
     def test_the_documents_start_empty_and_are_readable_anonymously(self):
         response = self.client.get(self.URL)
@@ -14837,7 +14837,7 @@ class AnnouncementEmailTransportTests(TestCase):
         'user': 'info@sdalomalinda.or.ke',
         'password': 'mailbox-password',
         'use_tls': True,
-        'from_email': 'SDA Loma Linda Meru <info@sdalomalinda.or.ke>',
+        'from_email': 'SDA Church Loma Linda Meru <info@sdalomalinda.or.ke>',
     }
 
     def test_without_a_token_or_override_the_broadcast_uses_the_main_mailbox(self):
@@ -14867,11 +14867,11 @@ class AnnouncementEmailTransportTests(TestCase):
         resolved = resolve_announcement_email(
             {
                 'ZEPTOMAIL_SEND_TOKEN': 'tok-123',
-                'ZEPTOMAIL_FROM_EMAIL': 'SDA Loma Linda <noreply@sdalomalinda.or.ke>',
+                'ZEPTOMAIL_FROM_EMAIL': 'SDA Church Loma Linda <noreply@sdalomalinda.or.ke>',
             },
             self.MAIN,
         )
-        self.assertEqual(resolved['from_email'], 'SDA Loma Linda <noreply@sdalomalinda.or.ke>')
+        self.assertEqual(resolved['from_email'], 'SDA Church Loma Linda <noreply@sdalomalinda.or.ke>')
 
     def test_an_explicit_override_wins_over_the_token(self):
         from config.mail_settings import resolve_announcement_email
@@ -16698,7 +16698,7 @@ class MailSenderSplitTests(TestCase):
         'user': 'info@sdalomalinda.or.ke',
         'password': 'secret',
         'use_tls': True,
-        'from_email': 'SDA Loma Linda Meru <info@sdalomalinda.or.ke>',
+        'from_email': 'SDA Church Loma Linda Meru <info@sdalomalinda.or.ke>',
     }
 
     def resolve(self, **env):
@@ -16762,7 +16762,7 @@ class MailSenderSplitTests(TestCase):
 
     def test_the_domain_follows_the_main_mailbox(self):
         """A church that renames its domain moves every sender with it."""
-        main = dict(self.MAIN, from_email='SDA Loma Linda Meru <info@anotherchurch.org>')
+        main = dict(self.MAIN, from_email='SDA Church Loma Linda Meru <info@anotherchurch.org>')
         senders = resolve_senders({}, main)
         self.assertIn('<treasury@anotherchurch.org>', senders[PURPOSE_TREASURY]['from_email'])
         self.assertIn('<verify@anotherchurch.org>', senders[PURPOSE_VERIFY]['from_email'])
@@ -16798,7 +16798,7 @@ class MailSenderDeliveryTests(TestCase):
 
     def test_a_join_approval_answers_from_verify(self):
         user = User.objects.create_user(username='joiner', email='join@example.com', password='secure-password')
-        self.assertTrue(send_membership_approval_email(user, church_name='SDA Loma Linda', name='Ann'))
+        self.assertTrue(send_membership_approval_email(user, church_name='SDA Church Loma Linda', name='Ann'))
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('verify@', mail.outbox[0].from_email)
 

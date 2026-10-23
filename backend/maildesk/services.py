@@ -403,7 +403,7 @@ def send_letter(*, to, subject, body_text, body_html='', cc=None, parent=None, t
 
 def _desk_name():
     """The name the church signs its own letters with."""
-    return 'SDA Loma Linda Meru'
+    return 'SDA Church Loma Linda Meru'
 
 
 def connections_report():

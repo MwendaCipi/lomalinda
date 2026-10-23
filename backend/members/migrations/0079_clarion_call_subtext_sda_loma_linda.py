@@ -7,7 +7,7 @@ OLD_DEFAULT = (
     "and reach out to our community with faith and compassion."
 )
 NEW_DEFAULT = (
-    "Join SDA Loma Linda, Meru as we study God's Word, support one another, "
+    "Join SDA Church Loma Linda, Meru as we study God's Word, support one another, "
     "and reach out to our community with faith and compassion."
 )
 

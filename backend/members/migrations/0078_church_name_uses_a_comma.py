@@ -2,12 +2,12 @@
 
 from django.db import migrations, models
 
-OLD_DEFAULT = 'SDA Loma Linda Meru'
-NEW_NAME = 'SDA Loma Linda, Meru'
+OLD_DEFAULT = 'SDA Church Loma Linda Meru'
+NEW_NAME = 'SDA Church Loma Linda, Meru'
 
 
 def add_the_comma(apps, schema_editor):
-    """Give the church its comma: 'SDA Loma Linda, Meru'.
+    """Give the church its comma: 'SDA Church Loma Linda, Meru'.
 
     Only churches still sitting on the previous default are rewritten — a name
     the office typed itself keeps its own punctuation.

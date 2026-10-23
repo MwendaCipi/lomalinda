@@ -215,7 +215,7 @@ def contribution_receipt_attachment(contribution):
 
 def send_enrollment_email(enrollment):
     church_name = current_church_name()
-    # The sentence reads best with the short name: "join SDA Loma Linda" —
+    # The sentence reads best with the short name: "join SDA Church Loma Linda" —
     # the town suffix and the account-type clause are dropped here.
     short_name = church_name.split(',')[0].strip()
     send_mail(
@@ -239,7 +239,7 @@ def send_enrollment_email(enrollment):
 # How the church is named in every email: subject, body and signature. Church
 # Settings wins (so the office can rename the church without a code change);
 # this is the fallback used when no ChurchSettings row exists yet.
-CHURCH_DEFAULT_NAME = 'SDA Loma Linda, Meru'
+CHURCH_DEFAULT_NAME = 'SDA Church Loma Linda, Meru'
 
 # Fallback for churches with no ChurchSettings row: invitations last a week.
 DEFAULT_INVITATION_LIFETIME = timedelta(days=7)
@@ -270,7 +270,7 @@ def current_church_name():
 def church_name_short(name=None):
     """The church's name without its town — the receipt letterhead form.
 
-    The thermal receipt reads 'SDA Loma Linda' (no 'Meru'); a name the office
+    The thermal receipt reads 'SDA Church Loma Linda' (no 'Meru'); a name the office
     wrote without a comma is returned as is.
     """
     return church_name_plain(name)
@@ -279,7 +279,7 @@ def church_name_short(name=None):
 def church_name_plain(name=None):
     """Church name where it modifies what follows, or where it sits in a header.
 
-    'your SDA Loma Linda, Meru account' reads wrong — the comma there would
+    'your SDA Church Loma Linda, Meru account' reads wrong — the comma there would
     separate the name from the noun it owns — and a bare comma inside a From or
     Subject header is an address-list separator, so the comma is dropped there.
     A name the office wrote without a comma ('SDA Milimani') is returned as is.
@@ -290,7 +290,7 @@ def church_name_plain(name=None):
 def church_name_clause(name=None):
     """Church name where it opens a clause and a verb follows it.
 
-    Reads 'SDA Loma Linda, Meru, has invited you…' — the apposition opened by
+    Reads 'SDA Church Loma Linda, Meru, has invited you…' — the apposition opened by
     the name's own comma is closed here. A name without a comma ('SDA Milimani')
     simply reads as the subject of the sentence.
     """
@@ -3774,7 +3774,7 @@ class MemberThermalReceiptView(APIView):
 
         donor = row.member or request.user
         donor_name = f"{donor.first_name} {donor.last_name}".strip() or row.donor_name or donor.username
-        # The receipt letterhead is the short form: SDA Loma Linda, no town.
+        # The receipt letterhead is the short form: SDA Church Loma Linda, no town.
         church_name = church_name_short()
 
         pdf_bytes = generate_contribution_thermal_receipt_pdf(
@@ -6951,7 +6951,7 @@ class InKindThermalReceiptView(APIView):
             return Response({'detail': 'This receipt belongs to another giver.'}, status=status.HTTP_404_NOT_FOUND)
 
         items = [line.strip() for line in (gift.items or '').splitlines() if line.strip()] or ['In-kind gift']
-        # The receipt letterhead is the short form: SDA Loma Linda, no town.
+        # The receipt letterhead is the short form: SDA Church Loma Linda, no town.
         church_name = church_name_short()
 
         pdf_bytes = generate_in_kind_thermal_receipt_pdf(

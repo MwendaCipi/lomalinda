@@ -77,7 +77,7 @@ def format_invitation_code(raw_code):
 
 
 class MemberProfile(models.Model):
-    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')]
+    ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of SDA Church Loma Linda'), ('sabbath_school', 'Sabbath School')]
     # Hard-coded church roles; see members/roles.py for the full definitions.
     ROLE_CHOICES = list(ROLE_CHOICES)
     BAPTISMAL_STATUS_CHOICES = [
@@ -824,7 +824,7 @@ class EnrollmentRequest(models.Model):
         ('baptism', 'Baptism'),
         ('membership_transfer', 'A church member'),
         ('transfer_in', 'Membership transfer'),
-        ('friend', 'Friend of SDA Loma Linda'),
+        ('friend', 'Friend of SDA Church Loma Linda'),
         ('sabbath_school', 'Sabbath School'),
     ]
     email = models.EmailField(unique=True)
@@ -1922,7 +1922,7 @@ def format_clock(value):
 
 
 class ChurchSettings(models.Model):
-    church_name = models.CharField(max_length=160, default='SDA Loma Linda, Meru')
+    church_name = models.CharField(max_length=160, default='SDA Church Loma Linda, Meru')
     district = models.CharField(max_length=160, blank=True, help_text='NEKF district name, e.g. "Meru Central"')
     field = models.CharField(max_length=160, blank=True, default='North East Kenya Field', help_text='SDA Field name, e.g. "North East Kenya Field"')
     conference = models.CharField(max_length=160, blank=True, default='East Africa Division', help_text='SDA Conference/Division name')
@@ -1933,7 +1933,7 @@ class ChurchSettings(models.Model):
     # WeeklyMeeting. What a settings page cannot hold: where a meeting is,
     # whether it is online, and the link to join it.
     clarion_call_heading = models.TextField(default='A place to belong.\nA faith to share.\nA hope that transforms lives.')
-    clarion_call_subtext = models.TextField(default="Join SDA Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.")
+    clarion_call_subtext = models.TextField(default="Join SDA Church Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.")
     RECEIPT_DELIVERY_CHOICES = [('email', 'Email'), ('sms', 'SMS')]
     default_receipt_message = models.TextField(default="Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly", blank=True)
     # One gift spread over several accounts earns one receipt, not one per

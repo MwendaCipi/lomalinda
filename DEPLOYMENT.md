@@ -80,7 +80,7 @@ ZEPTOMAIL_SEND_TOKEN=<the Send Mail Token from the ZeptoMail agent>
 With the token set, `treasury`, `verify`, `announcement` and `appointments` ride `smtp.zeptomail.com:587` (STARTTLS) as `emailapikey`, while `info` keeps the main mailbox. Any purpose can be re-pointed without touching code — the address, or the whole transport:
 
 ```text
-TREASURY_FROM_EMAIL=SDA Loma Linda Meru <treasurer@sdalomalinda.or.ke>
+TREASURY_FROM_EMAIL=SDA Church Loma Linda Meru <treasurer@sdalomalinda.or.ke>
 VERIFY_EMAIL_HOST=...      # any <PURPOSE>_EMAIL_HOST / _PORT / _HOST_USER / _HOST_PASSWORD / _FROM_EMAIL
 ```
 

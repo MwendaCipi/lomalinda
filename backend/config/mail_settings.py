@@ -55,9 +55,9 @@ PURPOSES = (PURPOSE_INFO, PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_ANNOUNCEMENT
 TRANSACTIONAL_PURPOSES = (PURPOSE_TREASURY, PURPOSE_VERIFY, PURPOSE_ANNOUNCEMENT, PURPOSE_APPOINTMENT)
 
 #: The name every message is sent under. Spelled without the comma
-#: ('SDA Loma Linda Meru'): a bare comma inside a From display name is an
+#: ('SDA Church Loma Linda Meru'): a bare comma inside a From display name is an
 #: address-list separator, and the header would be read as two addresses.
-DISPLAY_NAME = 'SDA Loma Linda Meru'
+DISPLAY_NAME = 'SDA Church Loma Linda Meru'
 
 #: The address each purpose sends as when nothing overrides it. The domain is
 #: the church's own, so a rebranding is one edit here rather than a hunt

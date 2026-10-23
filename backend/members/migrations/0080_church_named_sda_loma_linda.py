@@ -3,11 +3,11 @@
 from django.db import migrations, models
 
 OLD_SUBTEXT = (
-    "Join SDA Loma Linda, Meru as we study God's Word, support one another, "
+    "Join SDA Church Loma Linda, Meru as we study God's Word, support one another, "
     "and reach out to our community with faith and compassion."
 )
 NEW_SUBTEXT = (
-    "Join SDA Loma Linda as we study God's Word, support one another, "
+    "Join SDA Church Loma Linda as we study God's Word, support one another, "
     "and reach out to our community with faith and compassion."
 )
 
@@ -15,8 +15,8 @@ NEW_SUBTEXT = (
 def drop_meru_from_the_welcome_line(apps, schema_editor):
     """The website's welcome line names the church, not the town.
 
-    'Meru' belongs in email, where the church signs itself 'SDA Loma Linda,
-    Meru'; the site copy says 'SDA Loma Linda'. Only churches still on the old
+    'Meru' belongs in email, where the church signs itself 'SDA Church Loma Linda,
+    Meru'; the site copy says 'SDA Church Loma Linda'. Only churches still on the old
     wording are rewritten — text the office has edited itself is left alone.
     """
     ChurchSettings = apps.get_model('members', 'ChurchSettings')
@@ -43,17 +43,17 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollmentrequest',
             name='joining_mode',
-            field=models.CharField(choices=[('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Loma Linda')], default='baptism', max_length=30),
+            field=models.CharField(choices=[('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Church Loma Linda')], default='baptism', max_length=30),
         ),
         migrations.AlterField(
             model_name='invitation',
             name='account_type',
-            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Loma Linda')], default='member', max_length=20),
+            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Church Loma Linda')], default='member', max_length=20),
         ),
         migrations.AlterField(
             model_name='memberprofile',
             name='account_type',
-            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Loma Linda')], default='member', max_length=20),
+            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Church Loma Linda')], default='member', max_length=20),
         ),
         migrations.RunPython(drop_meru_from_the_welcome_line, restore_the_old_welcome_line),
     ]

@@ -24,7 +24,7 @@ class Migration(migrations.Migration):
                     ('baptism', 'Baptism'),
                     ('membership_transfer', 'A church member'),
                     ('transfer_in', 'Membership transfer'),
-                    ('friend', 'Friend of SDA Loma Linda'),
+                    ('friend', 'Friend of SDA Church Loma Linda'),
                     ('sabbath_school', 'Sabbath School'),
                 ],
                 default='baptism',

@@ -3,7 +3,7 @@
 from django.db import migrations
 
 OLD_NAME = 'Loma Linda SDA Church, Meru'
-NEW_NAME = 'SDA Loma Linda, Meru'
+NEW_NAME = 'SDA Church Loma Linda, Meru'
 
 
 def rename_the_church_tenant(apps, schema_editor):

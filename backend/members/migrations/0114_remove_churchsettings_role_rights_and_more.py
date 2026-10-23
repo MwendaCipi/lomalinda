@@ -13,16 +13,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollmentrequest',
             name='joining_mode',
-            field=models.CharField(choices=[('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')], default='baptism', max_length=30),
+            field=models.CharField(choices=[('baptism', 'Baptism'), ('membership_transfer', 'Membership transfer'), ('friend', 'Friend of SDA Church Loma Linda'), ('sabbath_school', 'Sabbath School')], default='baptism', max_length=30),
         ),
         migrations.AlterField(
             model_name='invitation',
             name='account_type',
-            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')], default='member', max_length=20),
+            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Church Loma Linda'), ('sabbath_school', 'Sabbath School')], default='member', max_length=20),
         ),
         migrations.AlterField(
             model_name='memberprofile',
             name='account_type',
-            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Loma Linda'), ('sabbath_school', 'Sabbath School')], default='member', max_length=20),
+            field=models.CharField(choices=[('member', 'Member'), ('friend', 'Friend of SDA Church Loma Linda'), ('sabbath_school', 'Sabbath School')], default='member', max_length=20),
         ),
     ]
