@@ -382,8 +382,8 @@ export function ExpenditureManager({
       {/* Record Expenditure Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="text-xl font-bold text-bark">Record Expenditure</h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -393,7 +393,8 @@ export function ExpenditureManager({
               </button>
             </div>
 
-            <form onSubmit={handleCreateExpenditure} className="space-y-4 text-sm">
+            <form onSubmit={handleCreateExpenditure} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-sm">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">Title / Description</label>
                 <input
@@ -510,7 +511,10 @@ export function ExpenditureManager({
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
+              </div>
+
+              {/* The always-visible record row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 py-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}

@@ -2037,6 +2037,15 @@ class ChurchSettings(models.Model):
         ),
         blank=True,
     )
+    default_music_assignment_message = models.TextField(
+        default=(
+            '{greeting}, {name}.\n\n'
+            'You have been rostered for {duty} on {day}, {date} at {shift}. '
+            'Your part: {role}.\n\n'
+            'If you cannot make it for that day, please contact the music desk. {church}'
+        ),
+        blank=True,
+    )
     # Per-role rights, as edited on the Church Roles Configuration screen:
     # {role_code: [right_code, ...]}. Missing roles fall back to the shipped
     # defaults in members.roles.DEFAULT_ROLE_RIGHTS.
@@ -2605,17 +2614,21 @@ class DutyRota(models.Model):
     """
 
     #: The desks that keep a rota here. ``deaconate`` is what the table was
-    #: born as; ``pulpit`` is the Personal Ministries desk's Sabbath team.
+    #: born as; ``pulpit`` is the Personal Ministries desk's Sabbath team;
+    #: ``music`` is the music desk's own line of who plays, sings and leads
+    #: on a day.
     DESK_DEACONATE = 'deaconate'
     DESK_PULPIT = 'pulpit'
+    DESK_MUSIC = 'music'
     DESK_CHOICES = [
         (DESK_DEACONATE, 'Deaconate duty rota'),
         (DESK_PULPIT, 'Pulpit team'),
+        (DESK_MUSIC, 'Music duties'),
     ]
 
     desk = models.CharField(
         max_length=20, choices=DESK_CHOICES, default=DESK_DEACONATE,
-        help_text='Which desk keeps this line: the deaconate duty rota, or the pulpit team',
+        help_text='Which desk keeps this line: the deaconate duty rota, the pulpit team, or music duties',
     )
     title = models.CharField(max_length=200)
     duty_date = models.DateField()

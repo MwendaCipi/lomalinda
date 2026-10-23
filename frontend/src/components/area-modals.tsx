@@ -125,9 +125,9 @@ export function AreaJoinModal({ open, area, initialCode, exclude = [], onClose }
         role="dialog"
         aria-modal="true"
         aria-labelledby="area-join-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6 sm:px-8 sm:pt-8">
           <h3 id="area-join-title" className="text-lg font-bold text-bark">
             Request to join {area?.toLowerCase() ?? "a ministry or department"}
           </h3>
@@ -135,7 +135,8 @@ export function AreaJoinModal({ open, area, initialCode, exclude = [], onClose }
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <form onSubmit={submit} className="mt-5 space-y-4">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-5 sm:px-8">
           {error && <p className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
           <div>
             <label className="block text-xs font-semibold text-bark" htmlFor="area-join-select">
@@ -227,13 +228,17 @@ export function AreaJoinModal({ open, area, initialCode, exclude = [], onClose }
               ? "Your proposal goes to the music desk's leadership and the elders' desk. If it is approved, the group is registered and you are its first singer."
               : "Your request goes to the ministry or department&apos;s leader and assistants, and to the elders&apos; desk. When it is answered in church, the reply appears on your rail."}
           </p>
-          <button
-            type="submit"
-            disabled={submitting || !chosen || (chosen === "music" && askKind === "singing_group" && groupName.trim().length < 3)}
-            className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
-          >
-            {submitting ? "Sending…" : chosen === "music" && askKind === "singing_group" ? "Send proposal" : "Send request"}
-          </button>
+          </div>
+          {/* The always-visible send row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3 sm:px-8">
+            <button
+              type="submit"
+              disabled={submitting || !chosen || (chosen === "music" && askKind === "singing_group" && groupName.trim().length < 3)}
+              className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+            >
+              {submitting ? "Sending…" : chosen === "music" && askKind === "singing_group" ? "Send proposal" : "Send request"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

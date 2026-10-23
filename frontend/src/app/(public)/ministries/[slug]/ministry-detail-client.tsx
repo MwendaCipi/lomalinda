@@ -48,6 +48,8 @@ export default function MinistryDetailClient() {
             title: string;
             department_name?: string;
             giving_purpose?: string;
+            program_file?: string | null;
+            program_items?: { [key: string]: unknown }[];
           }) => ({
             date: event.date,
             name: event.title,
@@ -55,6 +57,10 @@ export default function MinistryDetailClient() {
             // The fund this ministry gives into, as the server names it, so
             // the row's giving link opens that ministry's own account.
             purpose: event.giving_purpose,
+            // Whether the event carries a programme: rows reading truthfully
+            // let the row decide whether it offers "View program" at all.
+            program_file: event.program_file,
+            program_items: event.program_items,
           })
         );
         setEvents(rows);

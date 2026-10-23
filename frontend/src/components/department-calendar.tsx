@@ -16,6 +16,14 @@ type DepartmentEvent = CalendarEvent;
  */
 const departmentStem = (value: string) => value.toLowerCase().replace(/ies\b/g, "y");
 
+/** Whether an event has a programme to view: the desk's file, or typed rows. */
+function eventHasProgram(event: { program_file?: string | null; program_items?: { [key: string]: unknown }[] | null }) {
+  return Boolean(
+    event.program_file ||
+      (Array.isArray(event.program_items) && event.program_items.length > 0),
+  );
+}
+
 export function DepartmentCalendar({ department, events, loaded }: { department: string; events: DepartmentEvent[]; loaded: boolean }) {
   const year = new Date().getFullYear();
   const [open, setOpen] = useState(false);
@@ -96,13 +104,21 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                       {dayFirst(event.date)}
                     </span>
                   </div>
+                  {/* The programme link opens the event's sheet, so it is
+                      offered on a row that carries one — typed rows or an
+                      uploaded file — and stays off a row that carries
+                      none. */}
                   <div className="flex items-center justify-between gap-3 pt-1 text-xs">
-                    <Link
-                      href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(event.name)}`}
-                      className="font-semibold text-ember hover:underline"
-                    >
-                      View program &rarr;
-                    </Link>
+                    {eventHasProgram(event) ? (
+                      <Link
+                        href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(event.name)}`}
+                        className="font-semibold text-ember hover:underline"
+                      >
+                        View program &rarr;
+                      </Link>
+                    ) : (
+                      <span />
+                    )}
                     <Link
                       href={`/give?purpose=${encodeURIComponent(event.purpose || getMinistryGivingPurpose(event.department || department))}`}
                       className="font-semibold text-sage hover:underline"
@@ -120,15 +136,19 @@ export function DepartmentCalendar({ department, events, loaded }: { department:
                     <td className="px-4 py-3 font-medium">{event.name}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <Link
-                          href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(
-                            event.name
-                          )}`}
-                          className="font-semibold text-ember hover:underline"
-                        >
-                          View program
-                        </Link>
-                        <span className="text-sand-mute">|</span>
+                        {eventHasProgram(event) && (
+                          <>
+                            <Link
+                              href={`/calendar?year=${selectedYear}&month=all&search=${encodeURIComponent(
+                                event.name
+                              )}`}
+                              className="font-semibold text-ember hover:underline"
+                            >
+                              View program
+                            </Link>
+                            <span className="text-sand-mute">|</span>
+                          </>
+                        )}
                         <Link
                           href={`/give?purpose=${encodeURIComponent(
                             event.purpose ||

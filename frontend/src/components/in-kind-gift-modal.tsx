@@ -185,9 +185,9 @@ export function InKindGiftModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="in-kind-gift-title"
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6 sm:px-8 sm:pt-8">
           <div>
             <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">
               In-Kind Giving
@@ -205,7 +205,8 @@ export function InKindGiftModal({
           </button>
         </div>
 
-        <form onSubmit={submit} className="mt-5 space-y-4">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-5 sm:px-8">
           {message && (
             <p className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{message}</p>
           )}
@@ -284,13 +285,18 @@ export function InKindGiftModal({
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting || itemCount === 0}
-            className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
-          >
-            {submitting ? "Recording…" : "Record In-Kind Gift"}
-          </button>
+          </div>
+
+          {/* The always-visible record row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3 sm:px-8">
+            <button
+              type="submit"
+              disabled={submitting || itemCount === 0}
+              className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+            >
+              {submitting ? "Recording…" : "Record In-Kind Gift"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

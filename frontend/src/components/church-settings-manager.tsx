@@ -56,6 +56,11 @@ export function ChurchSettingsManager() {
   const [dutyReminderMessage, setDutyReminderMessage] = useState(
     "{greeting}, {name}. Tomorrow, {date}, at {shift} you are rostered for {duty}. Your part: {role}. God bless you as you serve. {church}"
   );
+  // Music's rostering notice speaks its own wording: a singer who cannot make
+  // the day is told to reach the music desk, not a general duty desk.
+  const [musicAssignmentMessage, setMusicAssignmentMessage] = useState(
+    "{greeting}, {name}.\n\nYou have been rostered for {duty} on {day}, {date} at {shift}. Your part: {role}.\n\nIf you cannot make it for that day, please contact the music desk. {church}"
+  );
   const [appointmentPlaceholders, setAppointmentPlaceholders] = useState<{ token: string; description: string }[]>([]);
   // The line the dashboard greeting ends with. Short by design; the API caps it
   const [bankName, setBankName] = useState("KCB Bank Kenya");
@@ -110,6 +115,9 @@ export function ChurchSettingsManager() {
           if (data.default_duty_reminder_message) {
             setDutyReminderMessage(data.default_duty_reminder_message);
           }
+          if (data.default_music_assignment_message) {
+            setMusicAssignmentMessage(data.default_music_assignment_message);
+          }
           if (data.default_request_notification_message) {
             setRequestNotificationMessage(data.default_request_notification_message);
           }
@@ -161,6 +169,7 @@ export function ChurchSettingsManager() {
         default_release_thank_you_message: releaseThankYouMessage,
         default_duty_assignment_message: dutyAssignmentMessage,
         default_duty_reminder_message: dutyReminderMessage,
+        default_music_assignment_message: musicAssignmentMessage,
         bank_name: bankName,
         bank_account_name: bankAccountName,
         bank_account_number: bankAccountNumber,
@@ -558,6 +567,20 @@ export function ChurchSettingsManager() {
               value={dutyAssignmentMessage}
               onChange={(e) => setDutyAssignmentMessage(e.target.value)}
               placeholder="Sent when an officer is rostered on a duty..."
+              className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-bark">Music Rostering Notice</label>
+            <p className="mt-1 text-[11px] text-moss">
+              Sent to a choir member or player the music desk rosters — by bell, email and SMS. Same placeholders, and this one tells them to contact the music desk if they cannot make the day.
+            </p>
+            <textarea
+              rows={4}
+              value={musicAssignmentMessage}
+              onChange={(e) => setMusicAssignmentMessage(e.target.value)}
+              placeholder="Sent when the music desk rosters a player or singer..."
               className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-bark"
             />
           </div>

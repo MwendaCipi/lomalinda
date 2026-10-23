@@ -10429,10 +10429,11 @@ class DutyRotaView(APIView):
 
     The rota was the one desk page still living in the browser: the deaconate
     kept its duties in an array, so a shift scheduled for next Sabbath was
-    gone on the next reload. These are the church's rows instead. Two desks
-    keep one here — the deaconate's stewards, and the Personal Ministries
-    desk for its pulpit team — and each reads and writes its own lines only
-    (``can_keep_rota``); ``?desk=pulpit`` asks for the pulpit's.
+    gone on the next reload. These are the church's rows instead.    Two desks keep one here — the deaconate's stewards, the Personal Ministries
+    desk for its pulpit team, and the music department for its own players and
+    singers — and each reads and writes its own lines only
+    (``can_keep_rota``); ``?desk=pulpit`` asks for the pulpit's, ``?desk=music``
+    for music's.
 
     ``GET`` hands the rota over in date order, the earliest duty first, and
     accepts ``from``/``to`` (YYYY-MM-DD) so a desk can read one month of it.
@@ -10606,10 +10607,11 @@ class DutyRotaPeopleView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # The roll is the church's, not a desk's: either desk's stewards may
-        # look a member up, since both roster the same people.
+        # The roll is the church's, not a desk's: any rota's stewards may look
+        # a member up, since every desk rosters the same people.
         if not (can_keep_rota(request.user, DutyRota.DESK_DEACONATE)
-                or can_keep_rota(request.user, DutyRota.DESK_PULPIT)):
+                or can_keep_rota(request.user, DutyRota.DESK_PULPIT)
+                or can_keep_rota(request.user, DutyRota.DESK_MUSIC)):
             return Response(
                 {'detail': 'Only the officers who keep a rota can look up officers.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -10946,16 +10948,18 @@ def can_manage_department(user, department):
 
 
 def can_keep_rota(user, desk):
-    """Who keeps one desk's rota: the deaconate's stewards, or the pulpit's.
+    """Who keeps one desk's rota: the deaconate's, the pulpit's, or music's.
 
     The pulpit team is rostered by the Personal Ministries desk — its leader
-    and assistant, plus the office as everywhere else — exactly as the
-    deaconate's duty rota is kept by the deaconate's own people. A desk's
-    rota is its own business: the deaconate's steward edits no pulpit line,
-    and the personal ministries leader edits no deaconate one.
+    and assistant, plus the office as everywhere else — and the music department
+    rosters who plays, sings and leads on a day, by its own leadership, the
+    same way. A desk's rota is its own business: the deaconate's steward edits
+    no pulpit line, and the personal ministries leader edits no deaconate one.
     """
     if desk == DutyRota.DESK_PULPIT:
         return can_manage_department(user, 'personal_ministries')
+    if desk == DutyRota.DESK_MUSIC:
+        return can_manage_department(user, 'music')
     return can_manage_deaconate(user)
 
 
@@ -10967,7 +10971,11 @@ def keeps_any_rota(user):
     cannot learn a line's id from the difference between 403 and 404. The
     line's own desk is checked after the fetch, by ``can_keep_rota``.
     """
-    return can_keep_rota(user, DutyRota.DESK_DEACONATE) or can_keep_rota(user, DutyRota.DESK_PULPIT)
+    return (
+        can_keep_rota(user, DutyRota.DESK_DEACONATE)
+        or can_keep_rota(user, DutyRota.DESK_PULPIT)
+        or can_keep_rota(user, DutyRota.DESK_MUSIC)
+    )
 
 
 def rota_desk_from(request, default=DutyRota.DESK_DEACONATE):
@@ -10975,11 +10983,13 @@ def rota_desk_from(request, default=DutyRota.DESK_DEACONATE):
 
     Absent means the deaconate, so the duty rota's own screens read exactly
     what they always read; the pulpit desk asks for its own with
-    ``?desk=pulpit``.
+    ``?desk=pulpit``, the music desk with ``?desk=music``.
     """
     desk = str(request.query_params.get('desk') or '').strip().lower()
     if desk == DutyRota.DESK_PULPIT:
         return DutyRota.DESK_PULPIT
+    if desk == DutyRota.DESK_MUSIC:
+        return DutyRota.DESK_MUSIC
     return default
 
 

@@ -1372,6 +1372,7 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             'default_release_thank_you_message',
             'default_duty_assignment_message',
             'default_duty_reminder_message',
+            'default_music_assignment_message',
             'request_placeholders',
             'approval_placeholders',
             'appointment_placeholders',

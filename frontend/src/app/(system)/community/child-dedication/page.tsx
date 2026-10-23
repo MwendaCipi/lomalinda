@@ -287,8 +287,8 @@ export default function ChildDedicationPage() {
 
           {showForm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
-              <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl sm:p-8">
-                <div className="flex items-center justify-between border-b border-sand-line pb-4 mb-6">
+              <div className="flex w-full max-w-2xl max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-sand-line bg-white shadow-2xl">
+                <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
                   <h2 className="text-xl font-semibold text-bark">Child Dedication Form</h2>
                   <button
                     type="button"
@@ -299,7 +299,8 @@ export default function ChildDedicationPage() {
                   </button>
                 </div>
 
-                <form onSubmit={submit} className="space-y-4">
+                <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 sm:px-8">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="block text-sm font-medium">
                       Child&apos;s First Name
@@ -418,7 +419,10 @@ export default function ChildDedicationPage() {
                     </label>
                   </div>
 
-                  <div className="flex items-center gap-3 pt-2">
+                  </div>
+
+                  {/* The always-visible submit row at the foot — the requests modals' pattern. */}
+                  <div className="flex shrink-0 items-center gap-3 border-t border-sand-line px-6 py-3 sm:px-8">
                     <button
                       disabled={loading}
                       type="submit"

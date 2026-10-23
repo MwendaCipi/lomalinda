@@ -6545,6 +6545,205 @@ class PulpitTeamRotaTests(APITestCase):
         self.assertEqual(DutyRota.objects.filter(desk='pulpit').count(), 1)
 
 
+class MusicRotaTests(APITestCase):
+    """Music's duties are rostered the way the deaconate and pulpit keep theirs.
+
+    Who sings and plays on a Sabbath is a line on the same rota table with
+    the music desk's own mark: the music department's leader and assistant
+    write it, its members are told when they are rostered, and the same
+    day-before cron reminds them. The desks stay apart — the deaconate's
+    steward edits no music line, and the music desk edits no deaconate one.
+    """
+
+    def setUp(self):
+        self.music = Department.objects.get(code='music')
+        music_leader_role = DepartmentRole.objects.get(department=self.music, name='Leader')
+        self.leader = User.objects.create_user(
+            'music.lead', 'music.lead@example.com', 'MusicLead#2026',
+            first_name='Mira', last_name='Leader',
+        )
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        DepartmentAssignment.objects.create(
+            department=self.music, role=music_leader_role, member=self.leader, kind='leader',
+        )
+        # A deacon's keys are the deaconate's own: they do not open music.
+        self.deacon = User.objects.create_user(
+            'music.deacon', 'music.deacon@example.com', 'DeaconPass#2026',
+        )
+        MemberProfile.objects.create(user=self.deacon, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=self.deacon)
+        self.member = User.objects.create_user(
+            'music.plain', 'music.plain@example.com', 'MemberPass#2026',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.organist = User.objects.create_user(
+            'music.organist', 'music.organist@example.com', 'OrganistPass#2026',
+            first_name='Joy', last_name='Mwangi',
+        )
+        MemberProfile.objects.create(
+            user=self.organist, role='member', roles='member',
+            phone_number='0722000222',
+        )
+        mail.outbox.clear()
+
+    def _schedule(self, **overrides):
+        payload = {
+            'desk': 'music',
+            'title': 'Sabbath Music Duties',
+            'date': '2026-11-07',
+            'shift': '08:30 AM - 01:00 PM',
+            'duty_type': 'Divine Worship',
+            'assigned_team': [{
+                'name': 'Joy Mwangi', 'phone': '0722000222',
+                'email': 'music.organist@example.com', 'role': 'Organist',
+                'member_id': self.organist.pk,
+            }],
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/duty-rota/', payload, format='json')
+
+    def test_the_music_leader_rosters_the_music_duties(self):
+        """Who sings and plays on a Sabbath is the music desk's own line."""
+        self.client.force_authenticate(self.leader)
+
+        created = self._schedule()
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['desk'], 'music')
+        self.assertEqual(DutyRota.objects.filter(desk='music').count(), 1)
+
+    def test_being_rostered_on_music_tells_the_player(self):
+        """The same notice the other desks' lines earn: bell, letter, text —
+        and it lands on the music desk's own Duties view."""
+        from unittest import mock
+
+        self.client.force_authenticate(self.leader)
+        with mock.patch('members.duty.sms.send', return_value=True):
+            created = self._schedule()
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        notice = ChurchNotification.objects.get(user=self.organist)
+        self.assertIn('Sabbath Music Duties', notice.message)
+        self.assertIn('Organist', notice.message)
+        # Music speaks its own wording: the desk a singer reaches, not the
+        # deaconate's generic duty desk.
+        self.assertIn('please contact the music desk', notice.message)
+        self.assertEqual(notice.link, '/administration?dept=music&view=duties')
+        self.assertEqual(
+            [address for message in mail.outbox for address in message.to],
+            ['music.organist@example.com'],
+        )
+
+    def test_the_church_words_musics_notice_itself(self):
+        """A rostering wording written on the church settings is the notice
+        music sends — the same right the receipts and invitations have."""
+        from unittest import mock
+
+        ChurchSettings.objects.create(
+            default_music_assignment_message=(
+                'Music duty: {name} serves on {date} at {shift}. '
+                'Reach the music desk if you cannot make it. {church}'
+            ),
+        )
+        self.client.force_authenticate(self.leader)
+        with mock.patch('members.duty.sms.send', return_value=True):
+            self._schedule()
+
+        notice = ChurchNotification.objects.get(user=self.organist)
+        self.assertIn('Music duty: Joy serves on 07 November 2026', notice.message)
+        self.assertNotIn('You have been rostered for', notice.message)
+
+    def test_the_day_before_cron_reminds_the_music_desk(self):
+        """One cron rings every desk's lines: tomorrow's Sabbath is tomorrow
+        whoever rostered it."""
+        from datetime import timedelta
+        from django.core.management import call_command
+        from unittest import mock
+
+        self.client.force_authenticate(self.leader)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        with mock.patch('members.duty.sms.send', return_value=True):
+            self._schedule(date=str(tomorrow))
+        mail.outbox.clear()
+
+        with mock.patch('members.duty.sms.send', return_value=True) as texted:
+            call_command('send_duty_reminders', stdout=StringIO())
+
+        notice = ChurchNotification.objects.filter(user=self.organist).order_by('-id').first()
+        self.assertIn('Duty reminder', notice.title)
+        self.assertEqual(notice.link, '/administration?dept=music&view=duties')
+        self.assertEqual(texted.call_count, 1)
+
+    def test_a_deacon_keeps_the_deaconates_rota_not_musics(self):
+        """The deaconate's steward may schedule its own duty, and no music
+        line at all."""
+        self.client.force_authenticate(self.deacon)
+
+        music = self._schedule()
+        deaconate = self._schedule(desk='deaconate', assigned_team=['Deacon David'])
+
+        self.assertEqual(music.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(deaconate.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(DutyRota.objects.filter(desk='music').count(), 0)
+
+    def test_a_plain_member_reads_neither_rota(self):
+        self.client.force_authenticate(self.member)
+
+        music = self.client.get('/api/members/duty-rota/?desk=music')
+        deaconate = self.client.get('/api/members/duty-rota/')
+
+        self.assertEqual(music.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(deaconate.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_each_desk_reads_only_its_own_lines(self):
+        """The music desk never shows a deaconate line, nor the reverse."""
+        self.client.force_authenticate(self.leader)
+        self._schedule()
+        self.client.force_authenticate(self.deacon)
+        self._schedule(
+            desk='deaconate', title='Sanctuary care',
+            assigned_team=['Deacon David'],
+        )
+
+        self.client.force_authenticate(self.leader)
+        music = self.client.get('/api/members/duty-rota/?desk=music')
+        self.client.force_authenticate(self.deacon)
+        deaconate = self.client.get('/api/members/duty-rota/')
+
+        self.assertEqual(len(music.data), 1)
+        self.assertEqual(music.data[0]['desk'], 'music')
+        self.assertEqual(len(deaconate.data), 1)
+        self.assertEqual(deaconate.data[0]['desk'], 'deaconate')
+
+    def test_a_line_never_changes_desk_once_written(self):
+        """Its desk is who may edit it, so a PUT cannot carry a line from one
+        desk's stewards to another's."""
+        self.client.force_authenticate(self.leader)
+        created = self._schedule()
+
+        edited = self.client.put(
+            f"/api/members/duty-rota/{created.data['id']}/",
+            {
+                'desk': 'deaconate', 'title': 'Sabbath Music Duties',
+                'date': '2026-11-07', 'assigned_team': [],
+            },
+            format='json',
+        )
+
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(DutyRota.objects.get(pk=created.data['id']).desk, 'music')
+
+    def test_a_music_line_cannot_be_taken_off_by_the_deaconate(self):
+        self.client.force_authenticate(self.leader)
+        created = self._schedule()
+
+        self.client.force_authenticate(self.deacon)
+        refused = self.client.delete(f"/api/members/duty-rota/{created.data['id']}/")
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(DutyRota.objects.filter(desk='music').count(), 1)
+
+
 class MemberRosterSystemAccountTests(APITestCase):
     """The member roster lists the congregation, not the deployment's owner."""
 

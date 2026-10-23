@@ -446,9 +446,9 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
         role="dialog"
         aria-modal="true"
         aria-labelledby="give-modal-title"
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6 sm:px-8 sm:pt-8">
           <div>
             {/* Phones open this modal short of room, so the eyebrow stays on wider screens. */}
             <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">Giving</p>
@@ -467,8 +467,9 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
         <form
           id="give-form"
           onSubmit={submitGiving}
-          className="mt-5 space-y-5"
+          className="flex min-h-0 flex-1 flex-col"
         >
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-4 pt-5 sm:px-8">
           {message && (
             <div className="rounded-2xl bg-sand border border-sand-line p-4 text-xs font-semibold text-bark">
               {message}
@@ -726,10 +727,11 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
               </div>
             </div>
           )}
-          {/* Sticky on phones: with several accounts the rows push the button
-              down, so it stays reachable at the foot of the modal instead of
-              scrolling out of sight. */}
-          <div className="sticky bottom-0 -mx-6 mt-6 border-t border-sand-line bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+          {/* Pinned at the foot of the modal: with several accounts the rows
+              can run long, so the submit row stays reachable without
+              scrolling — the requests modals' pattern. */}
+          </div>
+          <div className="shrink-0 border-t border-sand-line px-6 py-3 sm:px-8">
             <button
               disabled={loading}
               className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"

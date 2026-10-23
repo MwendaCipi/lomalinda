@@ -381,8 +381,8 @@ export function MpesaRefundManager() {
       {/* Refund Confirmation Modal */}
       {refundTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="animate-in fade-in zoom-in duration-150 w-full max-w-md space-y-5 rounded-3xl bg-white p-6 shadow-xl">
-            <div>
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white p-0 shadow-xl animate-in fade-in zoom-in duration-150">
+            <div className="shrink-0 px-6 pt-6">
               <h3 className="text-xl font-bold text-bark">Confirm M-Pesa Refund</h3>
               <p className="mt-1 text-xs text-moss">
                 This pays the full contribution amount back to the member&apos;s phone via B2C. It cannot be undone once Safaricom accepts it.
@@ -412,7 +412,8 @@ export function MpesaRefundManager() {
               </div>
             </div>
 
-            <form onSubmit={handleRefundSubmit} className="space-y-4 text-sm">
+            <form onSubmit={handleRefundSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-1 pt-2 text-sm">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">Reason (required)</label>
                 <textarea
@@ -431,7 +432,10 @@ export function MpesaRefundManager() {
                 </p>
               )}
 
-              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-3">
+              </div>
+
+              {/* The always-visible answer row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setRefundTarget(null)}

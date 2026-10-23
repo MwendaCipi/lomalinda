@@ -49,9 +49,9 @@ export default function SabbathProgramModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="program-title"
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
       >
-        <div className="flex items-start justify-between border-b border-sand-line px-6 py-5 sm:px-8">
+        <div className="flex shrink-0 items-start justify-between border-b border-sand-line px-6 py-5 sm:px-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ember">{program.date}</p>
             <h2 id="program-title" className="mt-2 text-2xl font-semibold text-bark">
@@ -68,7 +68,7 @@ export default function SabbathProgramModal({
             <X size={20} aria-hidden="true" />
           </button>
         </div>
-        <div className="px-6 py-6 sm:px-8">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8">
           {hasUploadedProgram && program.programFile && isImageFile(program.programFile) ? (
             // eslint-disable-next-line @next/next/no-img-element -- the church's own upload, of any origin: optimizing it would mean proxying member files through the app
             <img
@@ -119,7 +119,7 @@ export default function SabbathProgramModal({
             </>
           )}
         </div>
-        <div className="border-t border-sand-line px-6 py-4 text-right sm:px-8">
+        <div className="shrink-0 border-t border-sand-line px-6 py-4 text-right sm:px-8">
           <button
             type="button"
             onClick={onClose}

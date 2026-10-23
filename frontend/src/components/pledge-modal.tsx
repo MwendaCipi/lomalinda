@@ -182,9 +182,9 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
         role="dialog"
         aria-modal="true"
         aria-labelledby="pledge-modal-title"
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-7"
+        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6 sm:px-7 sm:pt-7">
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-ember">Pledge</p>
             <h3 id="pledge-modal-title" className="truncate text-lg font-bold text-bark">{target.title}</h3>
@@ -204,7 +204,8 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
         {loadingPledge ? (
           <p className="py-6 text-center text-sm text-moss">Checking your pledge…</p>
         ) : pledge ? (
-          <div className="mt-5 space-y-4">
+          <>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-5 sm:px-7">
             <div className="rounded-2xl border border-sand-deep bg-sand-veil p-4">
               <p className="text-sm font-semibold text-bark">
                 You pledged {pledge.amount ? money(pledge.amount) : "—"}
@@ -244,18 +245,23 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
                 >
                   {busy ? "Saving…" : "I have given this"}
                 </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="text-sm font-semibold text-moss hover:underline"
-                >
-                  Close
-                </button>
               </div>
             )}
           </div>
+          {/* The always-visible answer row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line px-6 py-3 sm:px-7">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-sm font-semibold text-moss hover:underline"
+            >
+              Close
+            </button>
+          </div>
+          </>
         ) : (
-          <form onSubmit={submit} className="mt-5 space-y-4">
+          <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-5 sm:px-7">
             <div>
               <label className="block text-xs font-semibold text-bark">Pledge amount (KES) *</label>
               <input
@@ -290,8 +296,10 @@ export function PledgeModal({ open, onClose, target, onPledged }: PledgeModalPro
             {message && (
               <p className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{message}</p>
             )}
+            </div>
 
-            <div className="flex items-center gap-3">
+            {/* The always-visible pledge row at the foot — the requests modals' pattern. */}
+            <div className="flex shrink-0 items-center gap-3 border-t border-sand-line px-6 py-3 sm:px-7">
               <button
                 type="submit"
                 disabled={busy || !amount}

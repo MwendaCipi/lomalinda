@@ -739,9 +739,9 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
             role="dialog"
             aria-modal="true"
             aria-labelledby="support-modal-title"
-            className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+            className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
           >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 id="support-modal-title" className="text-lg font-bold text-bark">
                 Support {campaign.title || campaign.name}
               </h3>
@@ -761,7 +761,8 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
               </p>
             )}
 
-            <form onSubmit={handleDonate} className="mt-4 space-y-4">
+            <form onSubmit={handleDonate} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4">
               {/* Name: typed freely; signed-in givers arrive pre-filled. No
                   email is collected from visitors — receipts go by SMS. */}
               <label className="block text-sm font-medium text-bark">
@@ -825,12 +826,17 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
                 </p>
               )}
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-sage px-8 font-medium text-white transition hover:bg-sage-deep disabled:opacity-60 text-sm"
-              >                {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
-              </button>
+              </div>
+
+              {/* The always-visible send row at the foot — the requests modals' pattern. */}
+              <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-sage px-8 font-medium text-white transition hover:bg-sage-deep disabled:opacity-60 text-sm"
+                >                {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
+                </button>
+              </div>
             </form>
           </div>
         </div>

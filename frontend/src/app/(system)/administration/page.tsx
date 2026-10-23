@@ -687,9 +687,12 @@ function AdministrationContent() {
                 key={`shared-${searchDept ?? "directory"}`}
                 initialDept={searchDept}
                 // A duty notice links to the desk view that holds the line it
-                // is about — the pulpit team's own — while every other use of
-                // ?view= (the treasury's) leaves the hub on its roll.
-                initialTab={searchView === "pulpit-team" ? "pulpit-team" : undefined}
+                // is about — the pulpit team's own, or Music's duties — while
+                // every other use of ?view= (the treasury's) leaves the hub
+                // on its roll.
+                initialTab={
+                  searchView === "pulpit-team" ? "pulpit-team" : searchView === "duties" ? "duties" : undefined
+                }
                 directoryHeading={{ label: "Administration", description: "The church's offices, ministries and departments, with each leader and assistant." }}
               />
             )}

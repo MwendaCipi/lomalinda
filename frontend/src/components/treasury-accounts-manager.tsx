@@ -1731,7 +1731,8 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       {/* Modal: the support link for one account, ready to send on */}
       {supportAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md space-y-4 rounded-3xl bg-white p-6 shadow-xl">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-6">
             <div>
               <h3 className="text-lg font-bold text-bark">Support {supportAccount.name}</h3>
               <p className="mt-1 text-xs leading-relaxed text-moss">
@@ -1769,7 +1770,9 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 Share on WhatsApp
               </a>
             </div>
-            <div className="flex justify-end border-t border-sand-line pt-3">
+            </div>
+            {/* The always-visible close row at the foot — the requests modals' pattern. */}
+            <div className="flex shrink-0 justify-end border-t border-sand-line px-6 pb-4 pt-3">
               <button
                 type="button"
                 onClick={() => setSupportAccount(null)}
@@ -1804,9 +1807,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       {/* Modal 1: Add Account */}
       {showAddAccountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-bark">Add Treasury Account</h3>
-            <form onSubmit={handleAddAccount} className="space-y-4 text-sm">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <h3 className="shrink-0 px-6 pt-6 text-xl font-bold text-bark">Add Treasury Account</h3>
+            <form onSubmit={handleAddAccount} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-sm">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account Name</label>
                 <input
@@ -1887,7 +1891,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
+              </div>
+
+              {/* The always-visible action row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddAccountModal(false)}
@@ -1911,9 +1918,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       {/* Modal 2: Edit Account */}
       {editAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-bark">Edit Treasury Account</h3>
-            <form onSubmit={handleEditAccount} className="space-y-4 text-sm">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <h3 className="shrink-0 px-6 pt-6 text-xl font-bold text-bark">Edit Treasury Account</h3>
+            <form onSubmit={handleEditAccount} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-sm">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">Account Name</label>
                 <input
@@ -1990,7 +1998,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
+              </div>
+
+              {/* The always-visible action row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setEditAccount(null)}
@@ -2014,9 +2025,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       {/* Modal 3: Credit / Debit Account */}
       {showCreditDebitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-bark">Credit or Debit Account</h3>
-            <form onSubmit={handleCreditDebit} className="space-y-4 text-sm">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <h3 className="shrink-0 px-6 pt-6 text-xl font-bold text-bark">Credit or Debit Account</h3>
+            <form onSubmit={handleCreditDebit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-sm">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">Select Account</label>
                 <select
@@ -2083,7 +2095,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
+              </div>
+
+              {/* The always-visible action row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowCreditDebitModal(false)}
@@ -2109,9 +2124,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       {/* Modal 4: Transfer Funds */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
-            <h3 className="text-xl font-bold text-bark">Transfer Funds Between Accounts</h3>
-            <form onSubmit={handleTransfer} className="space-y-4 text-sm">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-xl animate-in fade-in zoom-in duration-150">
+            <h3 className="shrink-0 px-6 pt-6 text-xl font-bold text-bark">Transfer Funds Between Accounts</h3>
+            <form onSubmit={handleTransfer} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-sm">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-moss">From Source Account (Debit)</label>
                 <select
@@ -2184,7 +2200,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-sand-line">
+              </div>
+
+              {/* The always-visible action row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowTransferModal(false)}

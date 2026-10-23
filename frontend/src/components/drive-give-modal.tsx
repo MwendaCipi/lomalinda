@@ -116,9 +116,9 @@ export function DriveGiveModal({ onClose, drive, onSent }: DriveGiveModalProps) 
         role="dialog"
         aria-modal="true"
         aria-labelledby="drive-give-title"
-        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-7"
+        className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6 sm:px-7 sm:pt-7">
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-ember">Give money</p>
             <h3 id="drive-give-title" className="truncate text-lg font-bold text-bark">{drive.title}</h3>
@@ -135,7 +135,8 @@ export function DriveGiveModal({ onClose, drive, onSent }: DriveGiveModalProps) 
           </button>
         </div>
 
-        <form onSubmit={handleDonate} className="mt-4 space-y-4">
+        <form onSubmit={handleDonate} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 sm:px-7">
           <label className="block text-sm font-medium text-bark">
             Name
             <input
@@ -176,13 +177,18 @@ export function DriveGiveModal({ onClose, drive, onSent }: DriveGiveModalProps) 
             />
           </label>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex h-12 w-full items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep disabled:opacity-60"
-          >
-            {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
-          </button>
+          </div>
+
+          {/* The always-visible send row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3 sm:px-7">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex h-12 w-full items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep disabled:opacity-60"
+            >
+              {isSubmitting ? "Processing..." : "Send M-Pesa Prompt"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

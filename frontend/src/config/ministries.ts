@@ -171,6 +171,13 @@ export type CalendarEvent = {
    * ministry's linked account rather than guessing from its name.
    */
   purpose?: string;
+  /**
+   * What the event carries as its programme: the uploaded file's URL, or the
+   * typed sheet rows the desk wrote. A row carrying either offers its
+   * "View program"; a row carrying neither offers nothing to open.
+   */
+  program_file?: string | null;
+  program_items?: { [key: string]: unknown }[] | null;
 };
 
 export function getMinistryBySlug(slug: string): Ministry | undefined {

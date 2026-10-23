@@ -820,9 +820,9 @@ export function CampaignManagement({
           role="dialog"
           aria-modal="true"
           aria-labelledby="create-campaign-title"
-          className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+          className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
         >
-          <div className="flex items-center justify-between border-b border-sand-line pb-4">
+          <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
             <div>
               <h2 id="create-campaign-title" className="text-xl font-bold text-bark">
                 {editingCampaign ? "Edit Fund Drive" : "New Fund Drive"}
@@ -846,7 +846,8 @@ export function CampaignManagement({
             </button>
           </div>
 
-          <form onSubmit={editingCampaign ? handleUpdateCampaign : handleCreateCampaign} className="mt-6 space-y-4">
+          <form onSubmit={editingCampaign ? handleUpdateCampaign : handleCreateCampaign} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-6 sm:px-8">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-xs font-semibold text-bark">
                 Fund Drive Name *
@@ -963,7 +964,10 @@ export function CampaignManagement({
             {/* No broadcast block: the description above is what the drive
                 broadcasts, when the office asks it to. */}
 
-            <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
+            </div>
+
+            {/* The always-visible answer row at the foot — the requests modals' pattern. */}
+            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-4 pt-3 sm:px-8">
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -1089,9 +1093,9 @@ export function CampaignManagement({
               <div
                 role="dialog"
                 aria-modal="true"
-                className="max-h-[90vh] w-full max-w-xl overflow-visible rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+                className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
               >
-                <div className="flex items-center justify-between border-b border-sand-line pb-4">
+                <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
                   <div>
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-ember">
                       Issue Personal Invites
@@ -1111,7 +1115,8 @@ export function CampaignManagement({
                   </button>
                 </div>
 
-                <form onSubmit={handleIssueCardsSubmit} className="mt-6 space-y-6">
+                <form onSubmit={handleIssueCardsSubmit} className="flex min-h-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-4 pt-6 sm:px-8">
                   {/* Combobox Recipient Selector */}
                   <div className="relative space-y-2">
                     <label className="block text-xs font-bold text-bark">
@@ -1282,7 +1287,10 @@ export function CampaignManagement({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
+                  </div>
+
+                  {/* The always-visible issue row at the foot — the requests modals' pattern. */}
+                  <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-4 pt-3 sm:px-8">
                     <button
                       type="button"
                       disabled={issuingCards}

@@ -208,9 +208,9 @@ export function AssignPaymentModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="assign-payment-title"
-        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6 sm:px-8 sm:pt-8">
           <div>
             <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">
               Unassigned payment
@@ -233,7 +233,7 @@ export function AssignPaymentModal({
           </button>
         </div>
 
-        <div className="mt-5 space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-5 sm:px-8">
           {/* The account combo — the same ticking popover, now inside the
               modal so the row itself stays one line of text. */}
           <div>
@@ -313,6 +313,9 @@ export function AssignPaymentModal({
             </span>
           </div>
 
+        </div>
+        {/* The always-visible assign row at the foot — the requests modals' pattern. */}
+        <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3 sm:px-8">
           <button
             type="button"
             onClick={assign}

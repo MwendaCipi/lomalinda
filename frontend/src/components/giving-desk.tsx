@@ -866,9 +866,9 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="give-modal-title"
-            className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line sm:p-8"
+            className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
           >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6 sm:px-8 sm:pt-8">
               <div>
                 <h3 id="give-modal-title" className="text-lg font-bold text-bark">
                   {isRequestMode
@@ -882,10 +882,12 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
                 disabled={loading}
                 className="text-xl leading-none text-moss hover:text-bark"
               >
-                <X size={20} aria-hidden="true" />
-              </button>
+                <X size={20} aria-hidden="true" />              </button>
             </div>
 
+            {/* Everything between the header and the pinned submit row is one
+                scroll channel — the requests modals' pattern. */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4 sm:px-8">
             {/* ── The two switches that frame every gift ──
                 Whose name it carries (the toggle) and who it is for (the
                 combo), both at the top: nothing else on the form turns on
@@ -1269,18 +1271,21 @@ export function GivingDesk({ mode }: { mode: "member" | "visitor" }) {
                   </div>
                 </div>
               )}
-              {/* Sticky on phones: with several accounts the rows push the button
-                  down, so it stays reachable at the foot of the modal instead of
-                  scrolling out of sight. */}
-              <div className="sticky bottom-0 -mx-6 mt-6 border-t border-sand-line bg-white/95 px-6 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
-                <button
-                  disabled={loading}
-                  className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
-                >
-                  {submitButtonText}
-                </button>
-              </div>
+              {/* submit button lives in the pinned row below */}
             </form>
+            </div>
+
+            {/* Pinned at the foot of the modal — the requests modals' pattern. */}
+            <div className="shrink-0 border-t border-sand-line px-6 py-3 sm:px-8">
+              <button
+                type="submit"
+                form="give-form"
+                disabled={loading}
+                className="w-full rounded-full bg-sage-strong px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-sage-deep2 disabled:opacity-60 sm:text-base"
+              >
+                {submitButtonText}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -385,9 +385,9 @@ export default function MomentsPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="moments-compose-title"
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+            className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
           >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 id="moments-compose-title" className="text-lg font-bold text-bark">Post an event album</h3>
               <button
                 type="button"
@@ -400,7 +400,7 @@ export default function MomentsPage() {
               </button>
             </div>
 
-            <div className="mt-4 space-y-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4">
               <label className="block text-sm font-medium text-bark">
                 Event title *
                 <input
@@ -472,6 +472,10 @@ export default function MomentsPage() {
                 )}
               </div>
 
+            </div>
+
+            {/* The always-visible post row at the foot — the requests modals' pattern. */}
+            <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3">
               <button
                 type="button"
                 onClick={postAlbum}

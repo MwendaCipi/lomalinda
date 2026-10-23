@@ -211,6 +211,10 @@ const emptyRotaForm = {
  *  plays and reads, rather than a duty served. */
 const PULPIT_DEFAULT_TITLE = "Sabbath Pulpit Team";
 
+/** What a music line is called when the desk names none: who sings and
+ *  plays on the day, rather than a duty served. */
+const MUSIC_DEFAULT_TITLE = "Sabbath Music Duties";
+
 /**
  * The title a line reads by.
  *
@@ -309,14 +313,16 @@ interface DeaconateManagerProps {
   /**
    * Which desk's rota is on screen. The pulpit team rosters the Sabbath's
    * preachers, players and readers the same way the deaconate rosters who
-   * serves the service, so it is this same panel with its own lines — the
-   * server keeps them apart by desk, and this prop is what asks for one.
+   * serves the service, and music rosters who sings and plays on a day, so
+   * these are this same panel with their own lines — the server keeps them
+   * apart by desk, and this prop is what asks for one.
    *
-   * The pulpit view is a page of the Personal Ministries desk, which draws
-   * its own heading and search, so this variant keeps its filters inline
-   * rather than taking the shell's header band over.
+   * The pulpit view is a page of the Personal Ministries desk, and the music
+   * view a page of the music desk's Duties; each draws its own heading and
+   * search, so these variants keep their filters inline rather than taking
+   * the shell's header band over.
    */
-  desk?: "deaconate" | "pulpit";
+  desk?: "deaconate" | "pulpit" | "music";
   /**
    * Whether a surface above — the Personal Ministries desk, which keeps its
    * own heading — is hosting this rota's date and search filters at the right
@@ -332,9 +338,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const isPulpit = desk === "pulpit";
   // What this desk's rota is called wherever the reader is told about it.
-  const rotaName = isPulpit ? "Pulpit Team" : "Duty Rota";
+  const rotaName = desk === "music" ? "Music Duties" : isPulpit ? "Pulpit Team" : "Duty Rota";
   // What a line of it is called when the desk names none.
-  const defaultRotaTitle = isPulpit ? PULPIT_DEFAULT_TITLE : emptyRotaForm.title;
+  const defaultRotaTitle =
+    desk === "music" ? MUSIC_DEFAULT_TITLE : isPulpit ? PULPIT_DEFAULT_TITLE : emptyRotaForm.title;
   // The save form as the desk opens it. The default title is written into
   // the field as its value, not left as a hint in an empty box, so what the
   // desk sees is what is saved when it changes nothing else.
@@ -342,7 +349,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // What a line of this desk's rota is called wherever it is named.
   const titleOf = (entry: { title?: string | null }) => rotaTitleOf(entry, defaultRotaTitle);
   // The query that asks the server for this desk's lines only.
-  const deskParam = isPulpit ? "pulpit" : "deaconate";
+  const deskParam = desk === "music" ? "music" : isPulpit ? "pulpit" : "deaconate";
   const activeTab = initialTab;
 
   // Inventory state (server-backed: this is the real property register)
@@ -377,8 +384,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const [rota, setRota] = useState<RotaEntry[]>([]);
   const [loadingRota, setLoadingRota] = useState(true);
   const [showAddRotaModal, setShowAddRotaModal] = useState(false);
-  // The form starts on the desk's own default, so the pulpit desk never
-  // opens holding the deaconate's title.
+  // The form starts on the desk's own default, so the pulpit and music
+  // desks never open holding the deaconate's title.
   const [newRota, setNewRota] = useState(blankRota);
   const [savingRota, setSavingRota] = useState(false);
   const [removingRotaId, setRemovingRotaId] = useState<number | null>(null);
@@ -451,11 +458,12 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   };
 
   useEffect(() => {
-    // The pulpit view is the rota and nothing else: the property register is
-    // the deaconate's own desk, and it is not this panel's to read.
-    if (isPulpit) return;
+    // The pulpit and music views are the rota and nothing else: the property
+    // register is the deaconate's own desk, and it is not these panels' to
+    // read.
+    if (desk !== "deaconate") return;
     loadInventory();
-  }, [isPulpit]);
+  }, [desk]);
 
   /**
    * The rota the church keeps, earliest duty first — or null when the desk
@@ -569,7 +577,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const shareContent = useMemo(() => {
     if (shareTarget) {
       const lines = [
-        `📋 *SDA Church - Duty Rota*`,
+        `📋 *SDA Church - ${rotaName}*`,
         `*Duty:* ${titleOf(shareTarget)}`,
         `*Date:* ${dayFirst(shareTarget.date)}`,
         shareTarget.shift ? `*Shift/Time:* ${shareTarget.shift}` : "",
@@ -583,13 +591,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         }),
       ].filter(Boolean);
       return {
-        subject: `Duty Rota: ${titleOf(shareTarget)} (${dayFirst(shareTarget.date)})`,
+        subject: `${rotaName}: ${titleOf(shareTarget)} (${dayFirst(shareTarget.date)})`,
         text: lines.join("\n"),
       };
     } else {
       const periodLabel = rotaFromDate && rotaToDate ? ` (${dayFirst(rotaFromDate)} to ${dayFirst(rotaToDate)})` : "";
       const lines = [
-        `📋 *SDA Church - Duty Rota Schedule${periodLabel}*`,
+        `📋 *SDA Church - ${rotaName} Schedule${periodLabel}*`,
         `Total Duties: ${filteredRota.length}`,
         "",
         ...filteredRota.slice(0, 15).map((item) => {
@@ -599,11 +607,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         filteredRota.length > 15 ? `...and ${filteredRota.length - 15} more duties.` : "",
       ].filter(Boolean);
       return {
-        subject: `Duty Rota Schedule${periodLabel}`,
+        subject: `${rotaName} Schedule${periodLabel}`,
         text: lines.join("\n"),
       };
     }
-  }, [shareTarget, filteredRota, rotaFromDate, rotaToDate]);
+  }, [rotaName, shareTarget, filteredRota, rotaFromDate, rotaToDate]);
 
   const executeShare = () => {
     const { subject, text } = shareContent;
@@ -685,10 +693,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
 
   useEffect(() => {
     if (activeTab !== "rota") return;
-    // The pulpit view is a page of the Personal Ministries desk, which draws
-    // its own heading and its own search in the band above — so this variant
-    // takes neither over, and carries its filters inside the panel instead.
-    if (isPulpit) return;
+    // The pulpit and music views are pages of desks that draw their own
+    // heading and their own search in the band above — so these variants
+    // take neither over, and carry their filters inside the panel instead.
+    if (desk !== "deaconate") return;
     setHeadingFirst(true);
     setCustomHeader({
       label: rotaName,
@@ -729,7 +737,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       setHeadingFirst(false);
       setHeaderRightAction(null);
     };
-  }, [activeTab, isPulpit, rotaName, rotaFromDate, rotaToDate, rotaSearchQuery, setHeaderRightAction, setCustomHeader, setHeadingFirst]);
+  }, [activeTab, desk, rotaName, rotaFromDate, rotaToDate, rotaSearchQuery, setHeaderRightAction, setCustomHeader, setHeadingFirst]);
 
   useEffect(() => {
     if (activeTab !== "inventory") return;
@@ -1382,8 +1390,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {activeTab === "rota" && (
         <>
           <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4">
-            {isPulpit && !rotaFiltersHosted && (
-              /* The pulpit view's filters, when no surface above hosts them.
+            {(isPulpit || desk === "music") && !rotaFiltersHosted && (
+              /* The rota views' filters, when no surface above hosts them.
                  The Personal Ministries desk keeps its own heading, so while it
                  renders this panel it also reads the filters from context and
                  draws them at the right of that heading — this inline band then
@@ -1394,7 +1402,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
                   <input
                     type="text"
-                    placeholder="Search the pulpit team…"
+                    placeholder={desk === "music" ? "Search music duties…" : "Search the pulpit team…"}
                     value={rotaSearchQuery}
                     onChange={(e) => setRotaSearchQuery(e.target.value)}
                     className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
@@ -1426,9 +1434,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
             ) : filteredRota.length === 0 ? (
               <div className="rounded-2xl border border-sand-line bg-white p-8 text-center text-xs text-moss shadow-sm">
                 {rota.length === 0
-                  ? isPulpit
-                    ? "No one is on the pulpit team yet. Schedule the Sabbath's preachers, players and readers."
-                    : "No duty rota has been scheduled yet."
+                  ? desk === "music"
+                    ? "No one is on the music rota yet. Schedule who sings and plays on the Sabbath."
+                    : isPulpit
+                      ? "No one is on the pulpit team yet. Schedule the Sabbath's preachers, players and readers."
+                      : "No duty rota has been scheduled yet."
                   : "No entries match your filters."}
               </div>
             ) : (
@@ -1721,8 +1731,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* MODAL: SEND PROPERTY REQUEST (buy / repair) */}
       {showRequestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="font-bold text-base text-bark">Send a Property Request</h3>
               <button onClick={() => setShowRequestModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
@@ -1731,7 +1741,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
             <p className="mt-2 text-[11px] text-moss">
               Ask the offices to buy an item or to repair one. The answer comes back to the desk.
             </p>
-            <form onSubmit={sendPropertyRequest} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={sendPropertyRequest} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div>
                 <label className="font-bold text-bark">Request type</label>
                 <div className="mt-1 grid grid-cols-2 gap-2">
@@ -1777,7 +1788,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              </div>
+
+              {/* The always-visible answer row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowRequestModal(false)}
@@ -1801,14 +1815,15 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* MODAL: ADD PROPERTY ITEM */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="font-bold text-base text-bark">Register Church Property</h3>
               <button onClick={() => setShowAddModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={registerItem} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={registerItem} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div>
                 <label className="font-bold text-bark">Property Name *</label>
                 <input
@@ -1893,7 +1908,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              </div>
+
+              {/* The always-visible save row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
@@ -1917,8 +1935,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* MODAL: ITEM MOVEMENT */}
       {showMovementModal && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <div>
                 <h3 className="font-bold text-base text-bark">Log Item Movement &amp; State</h3>
                 <p className="text-xs text-ember font-semibold">
@@ -1930,7 +1948,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               </button>
             </div>
 
-            <form onSubmit={recordMovement} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={recordMovement} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div>
                 <label className="font-bold text-bark">Action Type</label>
                 <select
@@ -1993,7 +2012,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              </div>
+
+              {/* The always-visible record row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
                 <button
                   type="button"
                   onClick={() => setShowMovementModal(false)}
@@ -2017,8 +2039,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* MODAL: ADD DUTY ROTA */}
       {showAddRotaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="font-bold text-base text-bark">
                 {editingRotaId !== null ? `Edit ${rotaName}` : `Schedule ${rotaName}`}
               </h3>
@@ -2026,7 +2048,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={scheduleRota} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={scheduleRota} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div>
                 <label className="font-bold text-bark">Title *</label>
                 <input
@@ -2108,7 +2131,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              </div>
+
+              {/* The always-visible save row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
                 <button
                   type="button"
                   onClick={closeRotaModal}
@@ -2132,8 +2158,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* MODAL: SHARE DUTY ROTA */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-sand-line bg-white p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="font-bold text-base text-bark">
                 {shareTarget ? "Share Duty Details" : `Share ${rotaName}`}
               </h3>
@@ -2146,6 +2172,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               </button>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4">
             <p className="text-xs text-moss">
               Select the channels you wish to share to. You can choose any combination or select all.
             </p>
@@ -2209,7 +2236,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-sand-line">
+            </div>
+
+            {/* The always-visible share row at the foot — the requests modals' pattern. */}
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
               <button
                 type="button"
                 onClick={() => setShowShareModal(false)}
@@ -2237,8 +2267,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
           roll as it is typed; any of the four can also be typed by hand. */}
       {showOfficerModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
+          <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6">
               <div>
                 <h3 className="font-bold text-base text-bark">Add Officer</h3>
                 <p className="mt-0.5 text-[11px] text-moss">
@@ -2252,7 +2282,8 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               </button>
             </div>
 
-            <form onSubmit={addOfficer} className="mt-4 text-xs">
+            <form onSubmit={addOfficer} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="relative">
                   <label className="font-bold text-bark">Name *</label>
@@ -2329,7 +2360,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2">
+              </div>
+
+              {/* The always-visible add row at the foot — the requests modals' pattern. */}
+              <div className="mt-3 flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-4 pt-3">
                 <button
                   type="button"
                   onClick={closeOfficerModal}
@@ -2356,14 +2390,15 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
           storage will hold for now. */}
       {showMomentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl border border-sand-line bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="font-bold text-base text-bark">Document a moment</h3>
               <button onClick={closeMomentModal} aria-label="Close" className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={documentMoment} className="mt-4 space-y-4 text-xs">
+            <form onSubmit={documentMoment} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div>
                 <label className="font-bold text-bark">What it was *</label>
                 <input
@@ -2450,7 +2485,10 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-1">
+              </div>
+
+              {/* The always-visible post row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
                 <button
                   type="button"
                   onClick={closeMomentModal}

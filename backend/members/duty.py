@@ -42,19 +42,30 @@ DEFAULT_PULPIT_ASSIGNMENT_MESSAGE = (
     'Your part: {role}.\n\n'
     'If you cannot serve that day, please notify the PM desk. {church}'
 )
+DEFAULT_MUSIC_ASSIGNMENT_MESSAGE = (
+    '{greeting}, {name}.\n\n'
+    'You have been rostered for {duty} on {day}, {date} at {shift}. '
+    'Your part: {role}.\n\n'
+    'If you cannot make it for that day, please contact the music desk. {church}'
+)
 
 #: Where a reminder's link lands: the deaconate's rota, where the duty is read.
 DUTY_ROTA_LINK = '/administration?tab=deaconate-rota'
 
 #: The pulpit team's roster is kept on the Personal Ministries desk, so its
-#: notices land there, on that desk's Pulpit Team view.
+#: notices land there, on that desk's Pulpit Team view. The music department's
+#: duties land the same way, on the music desk's Duties view.
 PULPIT_ROTA_LINK = '/administration?dept=personal_ministries&view=pulpit-team'
+MUSIC_ROTA_LINK = '/administration?dept=music&view=duties'
 
 
 def rota_link(entry) -> str:
-    """Where this line is read: the deaconate's rota, or the pulpit's view."""
-    if getattr(entry, 'desk', '') == 'pulpit':
+    """Where this line is read: the deaconate's rota, the pulpit's or music's view."""
+    desk = getattr(entry, 'desk', '')
+    if desk == 'pulpit':
         return PULPIT_ROTA_LINK
+    if desk == 'music':
+        return MUSIC_ROTA_LINK
     return DUTY_ROTA_LINK
 
 
@@ -66,6 +77,7 @@ def rota_link(entry) -> str:
 DESK_DEFAULT_TITLES = {
     DutyRota.DESK_PULPIT: 'Sabbath Pulpit Team',
     DutyRota.DESK_DEACONATE: 'Sabbath Duty Rota',
+    DutyRota.DESK_MUSIC: 'Sabbath Music Duties',
 }
 
 
@@ -168,9 +180,10 @@ def duty_template(kind: str, desk: str = '') -> str:
     """The church's configured duty wording, else the shipped default.
 
     ``kind`` is ``'assignment'`` (sent when the officer is rostered) or
-    ``'reminder'`` (the day-before SMS).  ``desk`` is ``'pulpit'`` or
-    ``'deaconate'``; it selects the right field and default when the church
-    has not written its own wording.
+    ``'reminder'`` (the day-before SMS).  ``desk`` is ``'pulpit'``, ``'music'``
+    or ``'deaconate'``; it selects the right field and default when the church
+    has not written its own wording — each desk speaks its own, and the
+    church may write any of them on its settings.
     """
     settings_obj = ChurchSettings.objects.first()
     if kind == 'reminder':
@@ -179,6 +192,9 @@ def duty_template(kind: str, desk: str = '') -> str:
     elif desk == 'pulpit':
         field = 'default_pulpit_assignment_message'
         fallback = DEFAULT_PULPIT_ASSIGNMENT_MESSAGE
+    elif desk == 'music':
+        field = 'default_music_assignment_message'
+        fallback = DEFAULT_MUSIC_ASSIGNMENT_MESSAGE
     else:
         field = 'default_duty_assignment_message'
         fallback = DEFAULT_ASSIGNMENT_MESSAGE

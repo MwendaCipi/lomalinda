@@ -257,8 +257,8 @@ export function ChurchBudgetManager() {
       {/* Post / edit budget modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="max-h-[92vh] w-full max-w-lg space-y-5 overflow-y-auto rounded-3xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="text-xl font-bold text-bark">{editing ? `Edit the ${editing.year} Budget` : "Post Budget"}</h3>
               <button type="button" onClick={() => setShowModal(false)} className="text-xs font-bold text-moss hover:text-bark">
                 Close
@@ -270,8 +270,9 @@ export function ChurchBudgetManager() {
                 event.preventDefault();
                 void save();
               }}
-              className="space-y-4 text-sm"
+              className="flex min-h-0 flex-1 flex-col"
             >
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-1 pt-4 text-sm">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-moss">Year *</label>
@@ -333,13 +334,18 @@ export function ChurchBudgetManager() {
                 <span>Publish to the congregation now. The budget appears on the church&apos;s budget page.</span>
               </label>
 
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex h-11 w-full items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep disabled:opacity-60"
-              >
-                {saving ? "Saving…" : editing ? "Save changes" : "Post the budget"}
-              </button>
+              </div>
+
+              {/* The always-visible save row at the foot — the requests modals' pattern. */}
+              <div className="shrink-0 border-t border-sand-line px-6 py-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full bg-sage px-8 text-sm font-medium text-white transition hover:bg-sage-deep disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : editing ? "Save changes" : "Post the budget"}
+                </button>
+              </div>
             </form>
           </div>
         </div>

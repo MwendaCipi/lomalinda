@@ -433,17 +433,17 @@ export function DepartmentContributionsTable({
       {showWithdrawModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onClick={() => setShowWithdrawModal(false)}>
           <div
-            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="text-lg font-bold text-bark">Request withdrawal</h3>
               <button type="button" onClick={() => setShowWithdrawModal(false)} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-4">
               <div>
                 <label className="block text-xs font-semibold text-bark">Amount (KES) *</label>
                 <input
@@ -469,7 +469,7 @@ export function DepartmentContributionsTable({
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex shrink-0 justify-end gap-3 border-t border-sand-line px-6 pb-4 pt-3">
               <button
                 type="button"
                 onClick={() => setShowWithdrawModal(false)}

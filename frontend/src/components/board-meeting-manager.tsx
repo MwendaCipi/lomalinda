@@ -476,8 +476,8 @@ export function BoardMeetingManager() {
       {/* Scheduling: the meeting itself */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="my-8 w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-            <div className="flex items-center justify-between border-b border-sand-line pb-4">
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
               <div>
                 <h3 className="text-xl font-bold text-bark">Schedule Board Meeting</h3>
               </div>
@@ -496,7 +496,8 @@ export function BoardMeetingManager() {
               </div>
             )}
 
-            <form onSubmit={handleCreateMeeting} className="mt-5 space-y-4">
+            <form onSubmit={handleCreateMeeting} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-5 sm:px-8">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-bold text-bark">Board Meeting Title *</label>
@@ -656,7 +657,10 @@ export function BoardMeetingManager() {
               {/* One row of actions at every width: Cancel holds the left
                   edge, Submit the right. The agenda is not part of creating —
                   items are added one by one to the created meeting. */}
-              <div className="flex items-center justify-between gap-2 border-t border-sand-line pt-4">
+              </div>
+
+              {/* The always-visible answer row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-6 pb-4 pt-3 sm:px-8">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -680,8 +684,8 @@ export function BoardMeetingManager() {
       {/* Add Single Agenda Item Modal */}
       {isAgendaModalOpen && selectedMeeting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <h3 className="text-base font-bold text-bark">Add Agenda to Board Meeting</h3>
               <button
                 type="button"
@@ -698,7 +702,8 @@ export function BoardMeetingManager() {
               </div>
             )}
 
-            <form onSubmit={handleAddAgendaToMeeting} className="mt-4 space-y-3">
+            <form onSubmit={handleAddAgendaToMeeting} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-1 pt-4">
               <div>
                 <label className="block text-xs font-bold text-bark">Agenda Title *</label>
                 <input
@@ -731,7 +736,10 @@ export function BoardMeetingManager() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-3">
+              </div>
+
+              {/* The always-visible save row at the foot — the requests modals' pattern. */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-3 pt-3">
                 <button
                   type="button"
                   onClick={() => setIsAgendaModalOpen(false)}
