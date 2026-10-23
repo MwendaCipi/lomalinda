@@ -1168,6 +1168,43 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     }
   };
 
+  /**
+   * Take an item off the property register: entered twice, sold, or written
+   * off. The item and its movement lines go together — the audit trail
+   * belongs to the item — and the same officers' gate that registers property
+   * is the one the server asks for here.
+   */
+  const removeInventoryItem = async (item: InventoryItem) => {
+    const result = await showAlert(
+      "Remove this item?",
+      `"${item.name}" leaves the property register for good, with its movement history.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Remove",
+        cancelButtonText: "Keep",
+        confirmButtonColor: brand.ember,
+      },
+    );
+    if (!result.isConfirmed) return;
+    try {
+      const res = await apiFetch(`/inventory/${item.id}/`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not remove it", data.detail || "Try again.", "error");
+        return;
+      }
+      setInventory((prev) => prev.filter((row) => row.id !== item.id));
+      showAlert("Item removed", data.detail || "It is off the property register.", "success", {
+        toast: true,
+        timer: 3500,
+        showConfirmButton: false,
+      });
+    } catch {
+      showAlert("Network error", "Could not reach the server.", "error");
+    }
+  };
+
   // The way out of a panel, on a phone: the console's own arrow where these
   // are pages of the console, and the caller's destination where the desk was
   // opened somewhere else — the Ministry map, whose own heading carries no way
@@ -1261,6 +1298,16 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                             <ArrowRightLeft className="h-3.5 w-3.5 text-ember" />
                             Item Movement
                           </button>
+                          <button
+                            onClick={() => {
+                              setOpenActionMenuId(null);
+                              void removeInventoryItem(item);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-ember" />
+                            Remove item
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1294,6 +1341,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                     >
                       <ArrowRightLeft className="h-3 w-3 text-ember" />
                       Item Movement
+                    </button>
+                    <button
+                      onClick={() => { void removeInventoryItem(item); }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark hover:bg-sand"
+                    >
+                      <Trash2 className="h-3 w-3 text-ember" />
+                      Remove
                     </button>
                   </div>
                 </div>

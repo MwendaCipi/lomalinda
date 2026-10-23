@@ -223,7 +223,7 @@ function PeriodButtons({
             : "text-moss-dark hover:text-bark"
         }`}
       >
-        Whole year
+        This year &amp; next
       </button>
     </div>
   );
@@ -327,8 +327,16 @@ function CalendarPageContent() {
 
   const tableRows = useMemo(() => {
     const needle = search.trim().toLowerCase();
+    const nextYear = currentYear + 1;
     return events
-      .filter((event) => event.date?.startsWith(`${currentYear}-`))
+      // This year and the one after it: the church files next season's
+      // Sabbaths months ahead, and the calendar is where the congregation
+      // looks for them — a page pinned to the current year hid everything
+      // filed for the new year until January came round.
+      .filter((event) => {
+        const year = Number((event.date ?? "").slice(0, 4));
+        return year === currentYear || year === nextYear;
+      })
       .filter((event) => {
         if (period === "all") return true;
         const quarter = quarterBounds(currentYear, currentMonth);
@@ -629,7 +637,7 @@ function CalendarPageContent() {
           className={`sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand px-6 pt-3 md:static md:mx-0 md:px-0`}
         >
           <p className="text-xs text-moss">
-            Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : " this year"}.
+            Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : period === "quarter" ? " this quarter" : " this year and next"}.
           </p>
           <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember print:hidden">
             <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print

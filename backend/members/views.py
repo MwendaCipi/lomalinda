@@ -10361,6 +10361,32 @@ class InventoryMovementCreateView(APIView):
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
+class InventoryItemDetailView(APIView):
+    """One property item, removed from the register.
+
+    A piece of property was entered by mistake, sold, or written off — the
+    register must be able to lose the row, not just gain one. Only the item
+    goes: its movement lines go with it (the audit trail belongs to the item,
+    so a row without its item is a line about nothing), and only the
+    deaconate's officers may do it, the same gate that registers one.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers can remove church property.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        item = InventoryItem.objects.filter(pk=pk).first()
+        if item is None:
+            return Response({'detail': 'Property item not found.'}, status=status.HTTP_404_NOT_FOUND)
+        name = item.name
+        item.delete()
+        return Response({'detail': f'"{name}" has been removed from the property register.'})
+
+
 def _officer_key(item):
     """Who an officer is on a line, for telling a newly rostered one apart."""
     if isinstance(item, dict):

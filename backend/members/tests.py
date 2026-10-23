@@ -70,7 +70,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -5586,10 +5586,14 @@ class DeaconateInventoryAPITests(APITestCase):
         self.assertIn('state_after', response.data)
         self.assertEqual(InventoryMovement.objects.count(), 0)
 
-    def test_plain_members_cannot_read_or_write_the_register(self):
+    def test_plain_members_can_read_but_not_write_the_register(self):
+        """The register is on the website; reading it is every member's due.
+
+        Writing it — registering a row — stays the officers' hands.
+        """
         self.client.force_authenticate(self.member)
 
-        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_200_OK)
         self.assertEqual(self._register().status_code, status.HTTP_403_FORBIDDEN)
 
     def test_the_deaconate_itself_keeps_the_register(self):
@@ -5608,9 +5612,49 @@ class DeaconateInventoryAPITests(APITestCase):
         self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_200_OK)
         self.assertEqual(self._register(name='Communion trays', tag_number='SAC-01').status_code, status.HTTP_201_CREATED)
 
-        # A member of the congregation still reaches nothing of it.
+        # A member of the congregation can read the register but still
+        # cannot register into it.
         self.client.force_authenticate(self.member)
-        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get('/api/members/inventory/').status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self._register(name='Unauthorised item', tag_number='X-01').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_an_officer_removes_an_item_and_its_movement_lines(self):
+        """An item entered by mistake, sold or written off leaves the register.
+
+        The movement lines go with it: an audit line about a row that is no
+        longer there is a line about nothing.
+        """
+        item_id = self._register().data['id']
+        self.client.post(f'/api/members/inventory/{item_id}/movements/', {
+            'action': 'check_out',
+            'moved_by': 'Head Deacon John',
+            'destination': 'Parish hall',
+        }, format='json')
+        self.assertEqual(InventoryMovement.objects.count(), 1)
+
+        removed = self.client.delete(f'/api/members/inventory/{item_id}/')
+
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertIn('Yamaha Digital Piano P-125', removed.data['detail'])
+        self.assertEqual(self.client.get('/api/members/inventory/').data, [])
+        self.assertEqual(InventoryMovement.objects.count(), 0)
+
+    def test_plain_members_cannot_remove_items(self):
+        item_id = self._register().data['id']
+        self.client.force_authenticate(self.member)
+
+        response = self.client.delete(f'/api/members/inventory/{item_id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(InventoryItem.objects.filter(pk=item_id).exists())
+
+    def test_removing_an_unknown_item_reports_not_found(self):
+        response = self.client.delete('/api/members/inventory/99999999/')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class DutyRotaAPITests(APITestCase):
