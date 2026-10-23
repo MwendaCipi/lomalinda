@@ -1255,6 +1255,23 @@ function ProgramEditorModal({
       : valid && onSaveAndViewPdf
         ? () => onSaveAndViewPdf(items)
         : undefined;
+  // The printed sheet, in the reader's own tab: a saved programme opens the
+  // letterhead file directly, an unsaved one saves its typed rows first.
+  // On the page variant this rides the typing row — the same row the desk's
+  // buttons sit on — so both sides of the sheet close with one coherent
+  // line of actions; in the modal it stays pinned at the reading column's
+  // foot, under the sheet it reads.
+  const viewPdfClasses =
+    "inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember";
+  const viewPdfControl = programDownloadHref ? (
+    <a href={programDownloadHref} target="_blank" rel="noopener noreferrer" className={viewPdfClasses}>
+      View PDF
+    </a>
+  ) : openPdf ? (
+    <button type="button" onClick={openPdf} className={viewPdfClasses}>
+      View PDF
+    </button>
+  ) : null;
   // The uploaded half of the programme, shown as itself on the page so the
   // desk reads and prints both halves where the desk reads them. The modal
   // leaves it out — its job is the typed rows alone.
@@ -1596,8 +1613,10 @@ function ProgramEditorModal({
               </div>
             );
           })}
-          {/* Add on the left, Save on the right: the two actions of the typing
-              side share its one row at the foot. */}
+          {/* Add on the left, Save and print on the right: the actions of the
+              typing side share its one row at the foot, and the page variant
+              carries the printed sheet's own button on that same line, so
+              both columns close with one coherent row. */}
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
@@ -1613,14 +1632,17 @@ function ProgramEditorModal({
               <Plus className="h-3.5 w-3.5" /> Add session
             </button>
             {isPage && (
-              <button
-                type="button"
-                disabled={!valid}
-                onClick={() => onSave(items)}
-                className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-              >
-                Save program
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!valid}
+                  onClick={() => onSave(items)}
+                  className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+                >
+                  Save program
+                </button>
+                {viewPdfControl}
+              </div>
             )}
           </div>
             </div>
@@ -1661,28 +1683,32 @@ function ProgramEditorModal({
                 it reads, where the eye ends. A saved programme opens its PDF
                 directly; an unsaved one fixes its typed rows on the event
                 first, then opens them as the same paper. */}
-            {programDownloadHref ? (
-              <div className="mt-auto flex justify-end pt-2">
-                <a
-                  href={programDownloadHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  View PDF
-                </a>
-              </div>
-            ) : (
-              openPdf && (
+            {/* The reading column keeps the pinned button only in the modal —
+                the page variant rides the typing row above. */}
+            {!isPage && (
+              programDownloadHref ? (
                 <div className="mt-auto flex justify-end pt-2">
-                  <button
-                    type="button"
-                    onClick={openPdf}
+                  <a
+                    href={programDownloadHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
                     View PDF
-                  </button>
+                  </a>
                 </div>
+              ) : (
+                openPdf && (
+                  <div className="mt-auto flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={openPdf}
+                      className="inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    >
+                      View PDF
+                    </button>
+                  </div>
+                )
               )
             )}
           </aside>

@@ -32,11 +32,11 @@ from svglib.svglib import svg2rlg
 _SYMBOL_DRAWING = svg2rlg(str(Path(__file__).resolve().parent / "sda_symbol.svg"))
 _SYMBOL_RATIO = _SYMBOL_DRAWING.width / _SYMBOL_DRAWING.height
 
-#: The church's building: the rendering the congregation is working towards,
-#: kept beside this module like the symbol above it, so the cover wears the
-#: church's own wall — the image downloaded into the project, not a
-#: stranger's photograph.
-_CHURCH_BUILDING = ImageReader(str(Path(__file__).resolve().parent / "sda-church.jpeg"))
+#: The church's poster: the artwork the congregation downloaded — its own
+#: letterhead, the pastoral lines it speaks and the bible beneath them — kept
+#: beside this module like the symbol above it, so the cover wears the
+#: church's own art rather than a stranger's photograph.
+_CHURCH_BUILDING = ImageReader(str(Path(__file__).resolve().parent / "sda-poster.jpeg"))
 _church_building_w, _church_building_h = _CHURCH_BUILDING.getSize()
 _CHURCH_BUILDING_RATIO = _church_building_w / _church_building_h
 
@@ -2400,12 +2400,35 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         cx = x0 + panel_w / 2
         content_w = panel_w - 2 * side
         if sheet_i == 0:
-            # The building itself stands where the faint symbol used to: the
-            # rendering of the church's own wall, printed true rather than
-            # drawn faint — the image the cover wears, ringed in the panel's
-            # hairline and settled just above the foot band.
-            photo_w = content_w * 0.8
-            photo_h = photo_w / _CHURCH_BUILDING_RATIO
+            title = str(event.title or 'Program').strip() or 'Program'
+            # The church's own poster stands where a faint symbol once did —
+            # printed whole (its letterhead and its lines included, as the
+            # church asked) rather than drawn faint — ringed in the panel's
+            # hairline and settled just above the foot band. The box is set
+            # by the room the words above it leave, and takes the poster's
+            # own shape: this download is square, so it runs taller down the
+            # cover than the wall's wide rendering did, into the space the
+            # panel has to give.
+            photo_w_cap = content_w * 0.8
+            # The words' own arithmetic, run without drawing: the title's
+            # lines, the stroke and rule, then the day's meta rows, each
+            # fifteen points down. The last meta baseline bounds the image.
+            y_title = page_h - 38 - 16 * mm - 44
+            title_size = 21
+            pieces = wrap(title, 'Helvetica-Bold', title_size, content_w)
+            if len(pieces) > 3:
+                title_size = 17
+                pieces = wrap(title, 'Helvetica-Bold', title_size, content_w)
+            y_after = y_title - len(pieces[:4]) * title_size * 1.22
+            y_after -= 22  # the gradient stroke's row
+            y_after -= 22  # the hairline rule's row
+            y_after -= 15 * len(cover_meta)
+            last_baseline = y_after + 15
+            room = max(120.0, last_baseline - 6 - 28)
+            if _CHURCH_BUILDING_RATIO >= photo_w_cap / room:
+                photo_w, photo_h = photo_w_cap, photo_w_cap / _CHURCH_BUILDING_RATIO
+            else:
+                photo_h, photo_w = room, room * _CHURCH_BUILDING_RATIO
             photo_x, photo_y = cx - photo_w / 2, 28
             c.saveState()
             outline = c.beginPath()
