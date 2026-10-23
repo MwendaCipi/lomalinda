@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 const slides = [
+  // The church's own building first — the shot of the new Loma Linda sanctuary
+  // straight from the church's files, not a stranger's photograph — then the
+  // stock photos carry the fellowship around it.
+  { src: "/sda-church.jpeg", alt: "The new SDA Church Loma Linda building", caption: "Our new home in Meru" },
   { src: "https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=1800&q=85", alt: "A welcoming church sanctuary", caption: "A place to worship together" },
   { src: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=85", alt: "Friends sharing fellowship outdoors", caption: "Making room for one another" },
   { src: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1800&q=85", alt: "People gathered in fellowship", caption: "A church family for every season" },
