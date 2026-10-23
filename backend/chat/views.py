@@ -1,6 +1,7 @@
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.http import Http404
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -220,6 +221,44 @@ class ChatReadView(APIView):
             )
         services.mark_read(conversation, request.user)
         return Response({'ok': True, 'unread_count': 0})
+
+
+class ChatConversationDeleteView(APIView):
+    """Delete a chat out of one member's own list.
+
+    What a delete is here: the room leaves the member's list and its unread
+    stops counting, and the other side keeps everything — the room, its
+    messages and their place in it. A message that lands later brings the
+    chat back (see ``services.post_message``), and walking back in is
+    ``open_*``'s own un-hide.
+
+    The church's own rooms are not a member's chat to delete: an area group
+    is stepped out of (the same menu, the leave), and refusing keeps the
+    two verbs reading as they are rather than two names for one thing."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, pk=conversation_id)
+        if not services.access_to(request.user, conversation):
+            return Response(
+                {'detail': 'You are not part of that conversation.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if conversation.kind == Conversation.KIND_GROUP:
+            return Response(
+                {'detail': 'A group is not deleted — step out of it instead.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        participant = conversation.participants.filter(member=request.user).first()
+        if participant is None:
+            return Response(
+                {'detail': 'You are not part of that conversation.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        participant.hidden_at = timezone.now()
+        participant.save(update_fields=['hidden_at'])
+        return Response({'ok': True})
 
 
 class ChatContactsView(APIView):

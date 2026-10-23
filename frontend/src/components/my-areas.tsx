@@ -477,9 +477,16 @@ export function MyAreas() {
                 key={openArea.code}
                 initialDept={openArea.code}
                 // The address bar names the view a desk's strip pressed — the
-                // eldership's Event Calendar is one — so the desk opens on the
-                // view the link named rather than always on its roll.
-                initialTab={openView === "calendar" ? "calendar" : "members"}
+                // eldership's Event Calendar and Baptismal class are two — so
+                // the desk opens on the view the link named rather than always
+                // on its roll.
+                initialTab={
+                  openView === "calendar"
+                    ? "calendar"
+                    : openView === "baptismal-class"
+                      ? "baptismal-class"
+                      : "members"
+                }
                 onBack={showMap}
               />
             )}

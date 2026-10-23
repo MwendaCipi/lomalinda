@@ -13,6 +13,7 @@ import {
   Paperclip,
   Send,
   Smile,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { useConversationSocket } from "@/lib/chat-socket";
 import {
+  deleteConversation,
   fetchContacts,
   fetchConversations,
   fetchMessages,
@@ -44,20 +46,23 @@ import {
 
 const SABBATH_SCHOOL_CODE = "sabbath_school";
 
-/** An Actions popover for a group room's row — Leave (except Sabbath School)
-    and Contact Leadership. One open at a time across the whole list. */
+/** An Actions popover for a room's row — a group's Leave (except Sabbath
+    School) and Contact Leadership, and any room's Delete chat. One open at
+    a time across the whole list. */
 function RoomActionsPopover({
   room,
   open,
   onClose,
+  onDelete,
   onLeave,
   onContactLeadership,
 }: {
   room: ChatConversation;
   open: boolean;
   onClose: () => void;
-  onLeave: () => void;
-  onContactLeadership: () => void;
+  onDelete: () => void;
+  onLeave?: () => void;
+  onContactLeadership?: () => void;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -70,22 +75,35 @@ function RoomActionsPopover({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [open, onClose]);
 
+  const isGroup = room.kind === "group";
   const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
   const menuItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand";
-  const dangerItem = "mt-1 flex w-full items-center gap-2.5 border-t border-sand-line px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50";
+  const dangerItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50";
 
   return (
     <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5" data-room-actions>
-      {!isSabbathSchool && (
-        <button type="button" onClick={() => { onClose(); onLeave(); }} className={dangerItem}>
+      {isGroup && !isSabbathSchool && (
+        <button type="button" onClick={() => { onClose(); onLeave?.(); }} className={dangerItem}>
           <MoreVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
           Leave
         </button>
       )}
-      <button type="button" onClick={() => { onClose(); onContactLeadership(); }} className={menuItem}>
-        <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
-        Contact Leadership
-      </button>
+      {isGroup && (
+        <button type="button" onClick={() => { onClose(); onContactLeadership?.(); }} className={menuItem}>
+          <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Contact Leadership
+        </button>
+      )}
+      {/* Delete is a member's own verb, for the rooms that are theirs: a
+          direct message or their office thread. A group reads the same
+          button as Leave — the room is the church's, not theirs to take
+          out of other members' reach. */}
+      {!isGroup && (
+        <button type="button" onClick={() => { onClose(); onDelete(); }} className={dangerItem}>
+          <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Delete chat
+        </button>
+      )}
     </div>
   );
 }
@@ -392,6 +410,31 @@ export function ChatPanel() {
     }
   };
 
+  const deleteChat = async (room: ChatConversation) => {
+    const result = await showAlert(
+      "Delete chat",
+      `Take “${room.title}” out of your conversations? The messages keep for ${
+        room.kind === "dm" ? "the other member" : "the church office"
+      }, and a further reply restores the chat to your list.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Delete", cancelButtonText: "Keep", confirmButtonColor: brand.alert }
+    );
+    if (!result.isConfirmed) return;
+    try {
+      await deleteConversation(room.id);
+      setRooms((prev) => prev.filter((entry) => entry.id !== room.id));
+      if (activeId === room.id) setActiveId(null);
+      void pollChatUnread();
+      showAlert("Chat deleted", `“${room.title}” is out of your conversations.`, "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      showAlert("Could not delete", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
   const contactLeadership = async (room: ChatConversation) => {
     const code = room.department_code;
     if (!code) return;
@@ -588,8 +631,12 @@ export function ChatPanel() {
           <ul>
             {visibleRooms.map((room) => {
               const isGroup = room.kind === "group";
+              // Every room carries an Actions affordance now: a group's Leave
+              // and Contact Leadership, and a direct message's or an office
+              // thread's Delete chat (the Sabbath School's family group
+              // leaves the list untouched, as before).
               const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
-              const showActions = isGroup && !isSabbathSchool;
+              const showActions = isGroup ? !isSabbathSchool : true;
               const actionsOpen = actionsOpenId === room.id;
 
               return (
@@ -637,6 +684,7 @@ export function ChatPanel() {
                         room={room}
                         open={actionsOpen}
                         onClose={() => setActionsOpenId(null)}
+                        onDelete={() => void deleteChat(room)}
                         onLeave={() => leaveGroup(room)}
                         onContactLeadership={() => contactLeadership(room)}
                       />

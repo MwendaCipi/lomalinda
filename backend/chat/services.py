@@ -248,6 +248,12 @@ def open_dm(member_a, member_b):
             Participant(conversation=conversation, member_id=low),
             Participant(conversation=conversation, member_id=high),
         ])
+    else:
+        # The room stands, including the history of it — so a member who
+        # deleted the chat sees it whole again the moment they walk back in
+        # themselves. (A message from the other side brings it back too; see
+        # post_message.)
+        Participant.objects.filter(conversation=conversation, member=member_a, hidden_at__isnull=False).update(hidden_at=None)
     return conversation
 
 
@@ -267,6 +273,9 @@ def open_office_thread(member):
             + [Participant(conversation=conversation, member_id=user_id, is_moderator=True)
                for user_id in office_holder_ids()]
         )
+    else:
+        # Reopening their own thread undoes the delete they made of it.
+        Participant.objects.filter(conversation=conversation, member=member, hidden_at__isnull=False).update(hidden_at=None)
     return conversation
 
 
@@ -303,10 +312,20 @@ def conversations_for(user):
     Groups and office threads are rooms the church gives rather than ones a
     search conjures, so they stand even while quiet.
     """
-    rooms = Conversation.objects.filter(participants__member=user)
+    # A chat the member deleted (their participant row carries hidden_at)
+    # stays off their list until it is talked in again or they walk back in.
+    rooms = Conversation.objects.filter(participants__member=user, participants__hidden_at__isnull=True)
     if is_office_holder(user):
-        rooms = Conversation.objects.filter(
-            Q(participants__member=user) | Q(kind=Conversation.KIND_OFFICE)
+        # The office reads every thread. A thread the office holder deleted
+        # out of their own list stays deleted — the participant branch above
+        # dropped it, so this branch must not pull it back; the threads it
+        # adds are the ones where the office holds no participant row at all
+        # (another member's thread).
+        rooms = rooms | Conversation.objects.filter(
+            kind=Conversation.KIND_OFFICE,
+        ).exclude(
+            participants__member=user,
+            participants__hidden_at__isnull=False,
         )
     rooms = rooms.filter(~Q(kind=Conversation.KIND_DM) | Q(messages__isnull=False))
     return rooms.distinct().order_by('-last_message_at', '-created_at', '-id')
@@ -334,6 +353,11 @@ def post_message(conversation, user, body, attachment=None):
     )
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=['last_message_at'])
+    # A room that is talked in comes back to anyone who deleted its chat:
+    # other than that, a delete would silence a conversation that keeps
+    # being talked in, and the messages land unseen instead of unseen and
+    # unrecoverable.
+    conversation.participants.filter(hidden_at__isnull=False).update(hidden_at=None)
     return message
 
 

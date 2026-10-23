@@ -109,6 +109,20 @@ export async function leaveConversation(conversationId: number): Promise<boolean
   return true;
 }
 
+/** Delete a chat out of the member's own list — the room and its history
+    stay for everyone else in it, and a later message brings it back. */
+export async function deleteConversation(conversationId: number): Promise<boolean> {
+  const res = await fetch(`${API_URL}/api/members/chat/conversations/${conversationId}/delete/`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "This chat could not be deleted.");
+  }
+  return true;
+}
+
 export async function openConversation(input: {
   kind: ChatConversationKind;
   member_id?: number;

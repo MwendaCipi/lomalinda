@@ -1141,10 +1141,11 @@ function EventProgramMenu({
  * phone's read. On a desk it opens as a page of its own, and the page is
  * a workbench: it takes the viewport under a "Back to events" link, the
  * typing sits on the left, and beside it the programme as the church will  * see it — the uploaded file when the event carries one, and the live
-  * sheet beneath it. Typing carries its own Save at the top of the left
-  * column (the sheet is editable in place, so there is no separate edit);
-  * the calendar row's Actions menu names the upload, and on a phone the
-  * modal's own bar keeps the rest — remove, download, share.
+  * sheet beneath it. Typing carries its own Save at its foot, on the same
+  * row as Add session (the sheet is editable in place, so there is no
+  * separate edit); the calendar row's Actions menu names the upload, and
+  * on a phone the modal's own bar keeps the rest — remove, download,
+  * share.
  */
 function ProgramEditorModal({
   event,
@@ -1347,19 +1348,9 @@ function ProgramEditorModal({
           {/* The typing, on the left — its own scroll on a desk, so the day
               being built travels apart from the sheet beside it. */}
           <div className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs text-moss">
-                Each session is one part of the day. Open a session to add the activities inside it.
-              </p>
-              <button
-                type="button"
-                disabled={!valid}
-                onClick={() => onSave(items)}
-                className="shrink-0 rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-              >
-                Save program
-              </button>
-            </div>
+            <p className="text-xs text-moss">
+              Each session is one part of the day. Open a session to add the activities inside it.
+            </p>
             <div className="mt-3 space-y-3">
           {items.map((session, index) => {
             const open = openSession === index;
@@ -1550,16 +1541,30 @@ function ProgramEditorModal({
               </div>
             );
           })}
-          <button
-            type="button"
-            onClick={() => {
-              setItems((current) => [...current, emptySession]);
-              setOpenSession(items.length);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add session
-          </button>
+          {/* Add on the left, Save on the right: the two actions of the typing
+              side share its one row at the foot. */}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setItems((current) => [...current, emptySession]);
+                setOpenSession(items.length);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add session
+            </button>
+            {isPage && (
+              <button
+                type="button"
+                disabled={!valid}
+                onClick={() => onSave(items)}
+                className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+              >
+                Save program
+              </button>
+            )}
+          </div>
             </div>
           </div>
 
@@ -1567,6 +1572,18 @@ function ProgramEditorModal({
               typed is what is seen — with the uploaded file above it when the
               event carries one. On a phone this stacks under the form. */}
           <aside className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
+            {programDownloadHref && (
+              <div className="mb-3 flex justify-end">
+                <a
+                  href={programDownloadHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  View PDF
+                </a>
+              </div>
+            )}
             {uploadedProgramBlock && (
               <div className="mb-4">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
@@ -4808,10 +4825,11 @@ function DepartmentDetail({
     setSubTab(key as DeptSubTab);
   }, []);
   // The eldership's strip is one list at every width and every door (see
-  // `eldershipViews`): the desk's roll and calendar are views of this desk,
-  // so a press takes them in place, while the rest are console pages, so a
-  // press walks to the page that holds them. The phone's map and the rail
-  // therefore meet the same seven chips, in the same order.
+  // `eldershipViews`): the desk's roll, its baptismal class and the church's
+  // calendar are views of this desk, so a press takes them in place, while
+  // the rest are console pages, so a press walks to the page that holds them.
+  // The phone's map and the rail therefore meet the same eight chips, in the
+  // same order.
   const eldershipStripItems = useMemo(
     () =>
       eldershipViews.map((view) => ({
@@ -4834,6 +4852,8 @@ function DepartmentDetail({
         return "moments";
       case "accounts":
         return "funding";
+      case "baptismal-class":
+        return "baptismal-class";
       case "announcements":
         return "announcements";
       default:
@@ -4844,7 +4864,7 @@ function DepartmentDetail({
     (key: string) => {
       const view = eldershipViews.find((candidate) => candidate.key === key);
       if (!view) return;
-      if (key === "members" || key === "calendar") {
+      if (key === "members" || key === "calendar" || key === "baptismal-class") {
         // A view of this desk. On the map the address bar names it too, so a
         // reload lands where the reader stood; on the console the desk is one
         // department of the directory, so the press walks to it instead.
@@ -4933,9 +4953,8 @@ function DepartmentDetail({
     }
     // The eldership reads one strip wherever it is opened — the rail's row on
     // a desk, the Eldership card in a hand — so this desk draws the same
-    // seven pages the console's strip names, rather than a second list of its
-    // own. Seven chips sit as four a row on a phone: a row of four, a row of
-    // three.
+    // eight pages the console's strip names, rather than a second list of its
+    // own. Eight chips sit four a row on a phone: two level rows of four.
     if (department.code === "eldership") {
       setCustomToggles(
         <SubNav
@@ -6307,7 +6326,8 @@ function DepartmentDetail({
           </div>
           {/* A desk opens the programme as a page: it takes the viewport, the
               sheet is typed where it is read, and Save rides the typing side
-              at its top — no bar pins the page at its foot. */}
+              at its foot beside Add session — no bar pins the page at its
+              foot. */}
           <div className="hidden md:block">
             <ProgramEditorModal
               event={programFor}
@@ -6505,8 +6525,10 @@ export function DepartmentHub({
   directoryHeading = MINISTRIES_AND_DEPARTMENTS_HEADING,
 }: {
   initialDept?: string | null;
-  /** Which of the opened area's views to land on. */
-  initialTab?: "members" | "calendar" | "pulpit-team";
+  /** Which of the opened area's views to land on. The desk's own views
+      (the eldership's baptismal class among them) ride through to the detail
+      as they are typed there. */
+  initialTab?: DeptSubTab;
   /**
    * Where the way out of an opened area leads — the ministry map, or the
    * desk the hub sits inside. Left unset it is the hub's own directory: the
@@ -6524,7 +6546,7 @@ export function DepartmentHub({
   // Which department detail (and which of its tabs) is open; the row's
   // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
-  const [detailTab, setDetailTab] = useState<"members" | "calendar" | "pulpit-team">(initialTab);
+  const [detailTab, setDetailTab] = useState<DeptSubTab>(initialTab);
   // Which department's budget modal is open.
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
   // Which department's leadership modal is open.

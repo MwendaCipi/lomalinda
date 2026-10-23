@@ -78,6 +78,11 @@ class Participant(models.Model):
     #: The moment this member last read the room; the unread count is the
     #: messages after it that somebody else wrote.
     last_read_at = models.DateTimeField(null=True, blank=True)
+    #: The moment this member deleted the chat out of their own list — the
+    #: room and its history stay for everyone else in it. A later message
+    #: brings the room back, so a delete never silences a conversation that
+    #: keeps being talked in.
+    hidden_at = models.DateTimeField(null=True, blank=True)
     muted = models.BooleanField(default=False)
 
     class Meta:

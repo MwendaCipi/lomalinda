@@ -464,7 +464,7 @@ function AdministrationContent() {
           {
             key: "roles",
             href: "/administration?tab=roles",
-            label: "Roles",
+            label: "Role Management",
             short: "Roles",
             help: "Church-wide role permissions.",
           },

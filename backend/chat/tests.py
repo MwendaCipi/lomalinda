@@ -101,6 +101,71 @@ class ChatDirectMessageTests(APITestCase):
         self.assertEqual(listed[0]['unread_count'], 0)
 
 
+class ChatDeleteTests(APITestCase):
+    """Deleting a chat is the member's own verb: the room (and its history)
+    leaves their list, the other side keeps everything, and a further reply
+    brings the chat back rather than leaving messages unseen forever."""
+
+    def setUp(self):
+        self.alice = make_member('alice')
+        self.bob = make_member('bob')
+        self.carol = make_member('carol')
+        self.client.force_authenticate(self.alice)
+
+    def _open_dm(self):
+        room_id = self.client.post('/api/members/chat/conversations/', {'kind': 'dm', 'member_id': self.bob.id}, format='json').data['id']
+        self.client.post(f'/api/members/chat/conversations/{room_id}/messages/', {'body': 'Good morning, Bob.'}, format='json')
+        return room_id
+
+    def test_deleting_a_chat_takes_it_out_of_their_list_and_nobody_elses(self):
+        room_id = self._open_dm()
+        deleted = self.client.delete(f'/api/members/chat/conversations/{room_id}/delete/')
+        self.assertEqual(deleted.status_code, status.HTTP_200_OK)
+        alice_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertFalse([room for room in alice_list if room['id'] == room_id])
+        # Bob keeps the room, its history and his unread in it.
+        self.client.force_authenticate(self.bob)
+        bob_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertEqual([room['id'] for room in bob_list if room['kind'] == 'dm'], [room_id])
+        self.assertEqual(bob_list[0]['unread_count'], 1)
+        # The messages survive: Bob still reads the whole thread.
+        history = self.client.get(f'/api/members/chat/conversations/{room_id}/messages/').data['messages']
+        self.assertEqual(len(history), 1)
+
+    def test_a_reply_brings_a_deleted_chat_back(self):
+        """A delete never silences a conversation that keeps being talked in."""
+        room_id = self._open_dm()
+        self.client.delete(f'/api/members/chat/conversations/{room_id}/delete/')
+        self.client.force_authenticate(self.bob)
+        self.client.post(f'/api/members/chat/conversations/{room_id}/messages/', {'body': 'Hello, Alice.'}, format='json')
+        self.client.force_authenticate(self.alice)
+        alice_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertEqual([room['id'] for room in alice_list if room['kind'] == 'dm'], [room_id])
+
+    def test_walking_back_into_the_room_restores_it_too(self):
+        room_id = self._open_dm()
+        self.client.delete(f'/api/members/chat/conversations/{room_id}/delete/')
+        self.client.post('/api/members/chat/conversations/', {'kind': 'dm', 'member_id': self.bob.id}, format='json')
+        alice_list = self.client.get('/api/members/chat/conversations/').data['conversations']
+        self.assertEqual([room['id'] for room in alice_list if room['kind'] == 'dm'], [room_id])
+
+    def test_a_group_is_stepped_out_of_not_deleted(self):
+        self.code = 'test_delete_area'
+        department = Department.objects.create(code=self.code, name='Delete Area', group='ministry')
+        self.member = make_member('area_member')
+        DepartmentMembership.objects.create(member=self.member, department=self.code)
+        group_id = services.area_room(department).id
+        self.client.force_authenticate(self.member)
+        refused = self.client.delete(f'/api/members/chat/conversations/{group_id}/delete/')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_someone_outside_the_chat_cannot_delete_it(self):
+        room_id = self._open_dm()
+        self.client.force_authenticate(self.carol)
+        refused = self.client.delete(f'/api/members/chat/conversations/{room_id}/delete/')
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class ChatOfficeThreadTests(APITestCase):
     def setUp(self):
         self.member = make_member('member')

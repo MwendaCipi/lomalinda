@@ -10,6 +10,7 @@ import {
   Calendar,
   ClipboardList,
   Crown,
+  Droplets,
   Briefcase,
   FileText,
   Gift,
@@ -736,18 +737,21 @@ export const clerkshipItems: RailRow[] = [
  * The rail's Eldership row opens the desk itself, and so does a phone's
  * Eldership card; but the desk's own views and the console's pages used to be
  * two different strips, so the same desk named a different set of pages in a
- * hand and on a screen. These seven are the church's desk either way: the
- * elders' roll and the church's calendar, which the desk keeps, and the
- * leadership register, the board, the asks, the wall and the accounts, which
- * the console holds. Seven chips sit four a row on a phone — a row of four
- * and a row of three — and as one line on a wide screen, at every door.
+ * hand and on a screen. These eight are the church's desk either way: the
+ * elders' roll, its baptismal class and the church's calendar, which the desk
+ * keeps, and the leadership register, the board, the asks, the wall and the
+ * accounts, which the console holds. Eight chips sit four a row on a phone —
+ * two level rows of four — and as one line on a wide screen, at every door.
+ * The labels are one word at every width, the strip being long now; the one
+ * hybrid is Announcements, which reads "Announce" in a hand and in full on
+ * a desk.
  *
  * Church Settings moved to Administration, where the roster and the roles
  * stand with it; the meetings' minutes and the transfers are the clerk's own
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "members" | "leaders" | "calendar" | "announcements" | "requests" | "moments" | "funding";
+  key: "members" | "baptismal-class" | "leaders" | "calendar" | "announcements" | "requests" | "moments" | "funding";
   label: string;
   short?: string;
   icon: LucideIcon;
@@ -757,18 +761,25 @@ export const eldershipViews: {
   // The desk's roll: everyone the elders answer for, with the asks to join it.
   {
     key: "members",
-    label: "All Members",
-    short: "Members",
+    label: "Members",
     icon: Users,
     href: "/my-areas?area=eldership&view=members",
     description: "The elders' roll, with each member's area and the asks to join it.",
+  },
+  // The baptismal class: who the elders are preparing for the font, their
+  // walk from studying to baptism, kept by the desk itself.
+  {
+    key: "baptismal-class",
+    label: "Baptismal",
+    icon: Droplets,
+    href: "/my-areas?area=eldership&view=baptismal-class",
+    description: "The members being prepared for baptism, their walk from studying to the font.",
   },
   // Assigning the church's leaders: appointing a leader is work the offices do
   // together, so it is a page of their desk rather than a row of its own.
   {
     key: "leaders",
-    label: "Church Leadership",
-    short: "Leadership",
+    label: "Leadership",
     icon: Crown,
     href: "/administration?tab=leaders",
     description: "The church's offices, ministries and departments, with each leader and assistant.",
@@ -776,8 +787,7 @@ export const eldershipViews: {
   // The church's days as the desk keeps them.
   {
     key: "calendar",
-    label: "Event Calendar",
-    short: "Events",
+    label: "Events",
     icon: Calendar,
     href: "/my-areas?area=eldership&view=calendar",
     description: "The church's calendar, with the gatherings the elders keep.",
@@ -785,6 +795,8 @@ export const eldershipViews: {
   {
     key: "announcements",
     label: "Announcements",
+    // The strip's longest name, shortened for the four-a-row phone grid.
+    short: "Announce",
     icon: Megaphone,
     href: "/administration?tab=announcements",
     description: "Notices and updates shared with the church family.",
@@ -799,7 +811,6 @@ export const eldershipViews: {
   {
     key: "moments",
     label: "Moments",
-    short: "Moments",
     icon: Images,
     href: "/administration?tab=eldership-moments",
     description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
@@ -809,8 +820,7 @@ export const eldershipViews: {
   // among them — with the movements on each.
   {
     key: "funding",
-    label: "Funding & Accounts",
-    short: "Funding",
+    label: "Funding",
     icon: Wallet,
     href: "/administration?tab=eldership-funding",
     description: "The church's treasury accounts, with balances and movements.",
@@ -818,7 +828,7 @@ export const eldershipViews: {
 ];
 
 /**
- * The same seven as rail rows, so the rail, the shell's strip and the desk's
+ * The same eight as rail rows, so the rail, the shell's strip and the desk's
  * own strip can never name a different set.
  *
  * A console page answers on its `?tab=`, which is how the console's own pages
