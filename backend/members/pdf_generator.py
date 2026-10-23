@@ -32,6 +32,14 @@ from svglib.svglib import svg2rlg
 _SYMBOL_DRAWING = svg2rlg(str(Path(__file__).resolve().parent / "sda_symbol.svg"))
 _SYMBOL_RATIO = _SYMBOL_DRAWING.width / _SYMBOL_DRAWING.height
 
+#: The church's building: the rendering the congregation is working towards,
+#: kept beside this module like the symbol above it, so the cover wears the
+#: church's own wall — the image downloaded into the project, not a
+#: stranger's photograph.
+_CHURCH_BUILDING = ImageReader(str(Path(__file__).resolve().parent / "sda-church.jpeg"))
+_church_building_w, _church_building_h = _CHURCH_BUILDING.getSize()
+_CHURCH_BUILDING_RATIO = _church_building_w / _church_building_h
+
 
 def _light_symbol_drawing():
     """The symbol again, painted in the paper's own sand.
@@ -59,7 +67,7 @@ def _light_symbol_drawing():
 # that are not records of money hand a wording of their own, so the order
 # of service never carries the treasury's line.
 _RECORD_FOOTER_TEXT = "SDA Church Loma Linda • Official Financial & Administrative Record"
-_PROGRAM_FOOTER_TEXT = "SDA Church Loma Linda • Programme"
+_PROGRAM_FOOTER_TEXT = "SDA Church Loma Linda • Order of Service"
 _LOCKUP_COLOR = colors.HexColor("#5E3929")
 _LOCKUP_LINE_1 = "SDA Church"
 _LOCKUP_LINE_2 = "Loma Linda, Meru"
@@ -2171,7 +2179,7 @@ def _department_accent(code, name=''):
 
 
 def generate_event_program_pdf(event, department_name: str = '', contact=None, department_code: str = '') -> bytes:
-    """One calendar event's programme as a bifold — a sheet that folds.
+    """One calendar event's bifold — the order of service on a sheet that folds.
 
     The desk's typed day — the sessions, the activities inside each one, and
     who facilitates them — is laid out as the booklet the congregation is
@@ -2180,8 +2188,8 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     (flip on the short edge), pages pair as outsides and insides.
 
     A sheet's outside carries the cover on its right panel — the church's
-    mark standing over a watermark of its own symbol, the day, the ministry
-    — and the back panel on its left, which opens with the church's mission
+    mark, the day and its ministry, over the church's own building — and the
+    back panel on its left, which opens with the church's mission
     and its vision (the same statements the About page speaks) and keeps its
     welcome — where to find it, its week of worship, and how to give — at the
     fold's foot. Gradients stay inside the palette's own sand and ember, the
@@ -2289,7 +2297,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         rows.extend(children)
 
     if not rows:
-        rows.append({'hours': '', 'title': 'The programme has not been typed yet.',
+        rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',
                      'people': [], 'indent': 0})
 
     def row_lines(row):
@@ -2392,23 +2400,31 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         cx = x0 + panel_w / 2
         content_w = panel_w - 2 * side
         if sheet_i == 0:
-            # The church's symbol, drawn large and faint, stands behind the
-            # day: the image the cover wears — the church's own mark, not an
-            # outsider's photograph, so it prints soft and stays ours.
-            symbol_h = 170
-            scale = symbol_h / _SYMBOL_DRAWING.height
+            # The building itself stands where the faint symbol used to: the
+            # rendering of the church's own wall, printed true rather than
+            # drawn faint — the image the cover wears, ringed in the panel's
+            # hairline and settled just above the foot band.
+            photo_w = content_w * 0.8
+            photo_h = photo_w / _CHURCH_BUILDING_RATIO
+            photo_x, photo_y = cx - photo_w / 2, 28
             c.saveState()
-            c.translate(cx - symbol_h * _SYMBOL_RATIO / 2, 200 - symbol_h)
-            c.scale(scale, scale)
-            _light_symbol_drawing().drawOn(c, 0, 0)
+            outline = c.beginPath()
+            outline.roundRect(photo_x, photo_y, photo_w, photo_h, 10)
+            c.clipPath(outline, stroke=0, fill=0)
+            c.drawImage(_CHURCH_BUILDING, photo_x, photo_y, photo_w, photo_h)
             c.restoreState()
+            c.setStrokeColor(RULE)
+            c.setLineWidth(0.9)
+            border = c.beginPath()
+            border.roundRect(photo_x, photo_y, photo_w, photo_h, 10)
+            c.drawPath(border, stroke=1, fill=0)
             # The church's mark at the cover's head — the letterhead's own
             # lockup, drawn larger on a cover than the office sheets use.
             _draw_logo(c, cx, page_h - 38, 16 * mm)
-            # The sheet's name, spoken first: the word the inside pages
+            # The sheet's name, spoken first: the name the inside pages
             # label, set wide above the day's title in the department's own
             # accent, so the cover says what the reader is holding.
-            kicker = 'PROGRAMME'
+            kicker = 'ORDER OF SERVICE'
             tracking = 4
             c.setFont('Helvetica-Bold', 9)
             c.setFillColor(ACCENT)
@@ -2459,7 +2475,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
             y = page_h - 38 - 12 * mm - 26
             c.setFont('Helvetica-Bold', 8)
             c.setFillColor(ACCENT)
-            c.drawCentredString(cx, y, 'PROGRAMME')
+            c.drawCentredString(cx, y, 'ORDER OF SERVICE')
             y -= 12
             c.setFont('Helvetica', 9)
             c.setFillColor(GREY)
@@ -2625,8 +2641,8 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         draw_cover(c, panel_w, sheet_i)
         fold_guides()
         c.showPage()
-        # ── The inside spread: the programme down both panels ──
-        label = 'Programme' if sheet_i == 0 else 'Programme \u2013 continued'
+        # ── The inside spread: the order of service down both panels ──
+        label = 'Order of Service' if sheet_i == 0 else 'Order of Service \u2013 continued'
         for col_i, column in enumerate(spread):
             x0 = col_i * panel_w
             c.setFont('Helvetica-Bold', 8)
