@@ -381,8 +381,8 @@ export function ReportComposer({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line">
-        <div className="flex items-start justify-between border-b border-sand-line pb-4">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line">
+        <div className="flex shrink-0 items-start justify-between border-b border-sand-line px-6 pb-4 pt-6">
           <div>
             <h2 className="text-xl font-semibold text-bark">
               {report ? "Edit report" : "Post a financial report"}
@@ -404,12 +404,13 @@ export function ReportComposer({
         </div>
 
         {generalError && (
-          <p className="mt-4 rounded-xl border border-ember/40 bg-sand-linen px-3 py-2 text-sm text-ember">
+          <p className="mx-6 mt-4 rounded-xl border border-ember/40 bg-sand-linen px-3 py-2 text-sm text-ember sm:mx-8">
             {generalError}
           </p>
         )}
 
-        <form onSubmit={submit} className="mt-4 grid gap-4 sm:grid-cols-2">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-6 pb-3 pt-1 sm:px-8 sm:grid-cols-2">
           <label className="text-sm font-medium text-bark sm:col-span-2">
             Title
             <input
@@ -565,7 +566,12 @@ export function ReportComposer({
             </span>
           </label>
 
-          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-sand-line pt-4 sm:col-span-2">
+            <p className="flex items-center gap-1.5 text-xs text-moss sm:col-span-2">
+              <FileText className="h-3.5 w-3.5" />
+              Reports you publish appear on the congregation&apos;s Reports page immediately.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-sand-line bg-white px-6 py-3">
             <button
               type="button"
               onClick={onClose}
@@ -598,11 +604,6 @@ export function ReportComposer({
             </button>
           </div>
         </form>
-
-        <p className="mt-4 flex items-center gap-1.5 text-xs text-moss">
-          <FileText className="h-3.5 w-3.5" />
-          Reports you publish appear on the congregation&apos;s Reports page immediately.
-        </p>
       </div>
     </div>
   );

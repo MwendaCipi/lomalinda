@@ -2687,8 +2687,8 @@ export function UserManagement() {
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="add-member-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-4 sm:px-8 sm:pt-5">
               <div>
                 <h3 id="add-member-title" className="text-xl font-bold text-bark">Add User</h3>
                 <p className="mt-0.5 text-xs text-moss">Step {addStep} of 2 · {addStep === 1 ? "Basic account details" : "Additional details"}</p>
@@ -2697,7 +2697,8 @@ export function UserManagement() {
                 className="rounded-full p-2 text-moss hover:bg-sand hover:text-bark transition text-xl leading-none" aria-label="Close modal"><X size={18} aria-hidden="true" /></button>
             </div>
 
-            <form onSubmit={addStep === 1 ? (e) => { e.preventDefault(); setAddStep(2); } : handleAddPerson} className="mt-3.5 space-y-4">
+            <form onSubmit={addStep === 1 ? (e) => { e.preventDefault(); setAddStep(2); } : handleAddPerson} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-3 space-y-4 sm:px-8">
               {addStep === 1 && (
                 <>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -2885,7 +2886,11 @@ export function UserManagement() {
                 <div className={`rounded-xl p-3 text-xs font-semibold ${message.type === "success" ? "bg-mist-select text-moss-dark" : "bg-red-50 text-red-700"}`}>{message.text}</div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+                </>
+              )}
+            </div>
+            {addStep === 2 && (
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3 sm:px-8">
                 <button type="button" onClick={() => setAddStep(1)}
                   className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Back
@@ -2899,18 +2904,17 @@ export function UserManagement() {
                   {submitting ? "Registering..." : addAccountType === "friend" ? "Add Friend" : "Register Member"}
                 </button>
               </div>
-                </>
-              )}
-              {addStep === 1 && (
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button type="button" onClick={() => setShowAddForm(false)} className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
-                    Cancel
-                  </button>
-                  <button type="submit" className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
-                    Next: Additional Details
-                  </button>
-                </div>
-              )}
+            )}
+            {addStep === 1 && (
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3 sm:px-8">
+                <button type="button" onClick={() => setShowAddForm(false)} className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
+                  Cancel
+                </button>
+                <button type="submit" className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
+                  Next: Additional Details
+                </button>
+              </div>
+            )}
             </form>
           </div>
         </div>
@@ -2920,8 +2924,8 @@ export function UserManagement() {
       {showInviteForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="invite-member-title"
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line sm:px-8">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-5 sm:px-8">
               <div>
                 <h3 id="invite-member-title" className="text-xl font-bold text-bark">Invite by Email</h3>
                 <p className="mt-0.5 text-xs text-moss">
@@ -2931,7 +2935,8 @@ export function UserManagement() {
               <button type="button" onClick={() => setShowInviteForm(false)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
 
-            <form onSubmit={handleSendInvite} className="mt-4 space-y-4">
+            <form onSubmit={handleSendInvite} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-3 space-y-4 sm:px-8">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold text-bark">Email Address *</label>
@@ -3009,7 +3014,8 @@ export function UserManagement() {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              </div>
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3 sm:px-8">
                 <button type="button" onClick={() => setShowInviteForm(false)}
                   className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
                   Cancel
@@ -3072,8 +3078,8 @@ export function UserManagement() {
       {profileMemberId && profileData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="profile-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-4 sm:px-8 sm:pt-5">
               <div>
                 <h3 id="profile-title" className="text-xl font-bold text-bark">
                   {profileData.first_name || profileData.last_name
@@ -3091,7 +3097,7 @@ export function UserManagement() {
 
             {profileLoading && <p className="mt-3 text-[11px] text-moss">Loading full record…</p>}
 
-            <div className="mt-4 space-y-5">
+            <div className="mt-2 min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-2 pt-4 sm:px-8">
               <section>
                 <h4 className="text-xs font-bold uppercase tracking-wide text-moss-faint">Basic details</h4>
                 <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
@@ -3185,31 +3191,31 @@ export function UserManagement() {
                 );
               })()}
 
-              <div className="flex items-center gap-3 pb-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const member = members.find((m) => m.id === profileMemberId);
-                    if (member) {
-                      setProfileMemberId(null);
-                      setProfileData(null);
-                      setLeadershipMember(member);
-                    }
-                  }}
-                  className="rounded-full border border-bark bg-white px-5 py-2.5 text-xs font-semibold text-bark transition hover:bg-sand"
-                >
-                  Assign role
-                </button>
-                <button type="button"
-                  onClick={() => { const member = members.find((m) => m.id === profileMemberId); if (member) { setProfileMemberId(null); setProfileData(null); handleStartEdit(member); } }}
-                  className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
-                  Propose Changes
-                </button>
-                <button type="button" onClick={() => { setProfileMemberId(null); setProfileData(null); }}
-                  className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
-                  Close
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3 sm:px-8">
+              <button
+                type="button"
+                onClick={() => {
+                  const member = members.find((m) => m.id === profileMemberId);
+                  if (member) {
+                    setProfileMemberId(null);
+                    setProfileData(null);
+                    setLeadershipMember(member);
+                  }
+                }}
+                className="rounded-full border border-bark bg-white px-5 py-2.5 text-xs font-semibold text-bark transition hover:bg-sand"
+              >
+                Assign role
+              </button>
+              <button type="button"
+                onClick={() => { const member = members.find((m) => m.id === profileMemberId); if (member) { setProfileMemberId(null); setProfileData(null); handleStartEdit(member); } }}
+                className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
+                Propose Changes
+              </button>
+              <button type="button" onClick={() => { setProfileMemberId(null); setProfileData(null); }}
+                className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss hover:border-ember">
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -3219,14 +3225,15 @@ export function UserManagement() {
       {editingMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
           <div role="dialog" aria-modal="true" aria-labelledby="edit-member-title"
-            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white px-6 py-4 shadow-2xl ring-1 ring-sand-line sm:px-8 sm:py-5">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-4 sm:px-8 sm:pt-5">
               <h3 id="edit-member-title" className="text-xl font-bold text-bark">
                 Edit Profile: {editingMember.first_name || editingMember.username}
               </h3>
               <button type="button" onClick={() => setEditingMember(null)} className="rounded-full p-2 text-moss hover:bg-sand text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
-            <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
+            <form onSubmit={handleSaveEdit} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-4 space-y-4 sm:px-8">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-medium text-bark">First Name</label>
@@ -3298,7 +3305,8 @@ export function UserManagement() {
                 Profile changes take effect when <strong className="text-bark">{editingMember.first_name || editingMember.username}</strong> approves
                 them. They&apos;ll get a notification on their dashboard and can accept or keep their current details. Role changes apply immediately.
               </p>
-              <div className="flex items-center gap-3 pt-2">
+              </div>
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3 sm:px-8">
                 <button type="submit" disabled={submitting}
                   className="rounded-full bg-bark px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-ember">
                   {submitting ? "Sending…" : "Send Update for Approval"}
@@ -3317,14 +3325,15 @@ export function UserManagement() {
       {/* ══ Transfer Modal ══ */}
       {transferMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-5">
               <h3 className="text-base font-bold text-bark">
                 Transfer Member: {transferMember.first_name || transferMember.username}
               </h3>
               <button onClick={() => setTransferMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
-            <form onSubmit={handleTransferSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleTransferSubmit} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-bark">Destination Church *</label>
                 <input type="text" required placeholder="e.g. Meru Central SDA" value={transferChurch}
@@ -3337,7 +3346,8 @@ export function UserManagement() {
                   onChange={(e) => setTransferReason(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-4 py-2.5 text-xs focus:border-ember focus:outline-none" />
               </div>
-              <div className="flex gap-3 pt-1">
+              </div>
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3">
                 <button type="submit" disabled={transferSubmitting}
                   className="rounded-xl bg-bark px-5 py-2 text-xs font-semibold text-white hover:bg-ember">
                   {transferSubmitting ? "Processing..." : "Submit Transfer"}
@@ -3355,13 +3365,14 @@ export function UserManagement() {
       {/* ══ Account Type Modal ══ */}
       {typeMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-5">
               <h3 className="text-base font-bold text-bark">
                 Account Type: {typeMember.first_name || typeMember.username}
               </h3>
               <button onClick={() => setTypeMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 pt-3">
             {accountTypeOf(typeMember.account_type, typeMember.is_disfellowshipped) === "ex_member" && (
               <p className="mt-3 rounded-xl bg-sand-glow px-3 py-2 text-[11px] text-ember-deep">
                 They are recorded as an ex-member. Choosing a type here puts them back on the church roll.
@@ -3395,7 +3406,8 @@ export function UserManagement() {
                 </button>
               ))}
             </div>
-            <div className="mt-4 flex gap-3 pt-1">
+            </div>
+            <div className="flex shrink-0 justify-end gap-3 border-t border-sand-line bg-sand-linen/40 px-6 py-3">
               <button
                 type="button"
                 onClick={handleAccountTypeSubmit}
@@ -3419,14 +3431,14 @@ export function UserManagement() {
       {/* ══ Roles Modal — church-wide roles, editable here ══ */}
       {leadershipMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl bg-white px-6 py-5 shadow-2xl ring-1 ring-sand-line">
-            <div className="flex items-center justify-between border-b border-sand-line pb-3">
+          <div className="flex max-h-[92vh] w-full max-w-sm flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-5">
               <h3 className="text-base font-bold text-bark">
                 Roles: {leadershipMember.first_name || leadershipMember.username}
               </h3>
               <button onClick={() => setLeadershipMember(null)} className="text-moss hover:text-bark text-xl leading-none"><X size={18} aria-hidden="true" /></button>
             </div>
-            <div className="mt-4 space-y-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-2 pt-4">
               <div>
                 <label className="block text-xs font-semibold text-bark">Roles held</label>
                 <p className="mt-0.5 text-[10px] text-moss">
@@ -3474,12 +3486,12 @@ export function UserManagement() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-1">
-                <button type="button" onClick={() => setLeadershipMember(null)}
-                  className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember">
-                  Close
-                </button>
-              </div>
+            </div>
+            <div className="flex shrink-0 justify-end border-t border-sand-line bg-sand-linen/40 px-6 py-3">
+              <button type="button" onClick={() => setLeadershipMember(null)}
+                className="rounded-xl border border-sand-mute px-5 py-2 text-xs font-semibold text-moss hover:border-ember">
+                Close
+              </button>
             </div>
           </div>
         </div>

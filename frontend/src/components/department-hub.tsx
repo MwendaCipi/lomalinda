@@ -46,6 +46,7 @@ import {
   Printer,
   Pencil,
   Search,
+  ListMusic,
   Sparkles,
   Sun,
   Trash2,
@@ -499,9 +500,9 @@ function AddChildModal({
         role="dialog"
         aria-modal="true"
         aria-label="Add Child to Children Ministry"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
           <div>
             <h3 className="text-lg font-bold text-bark">Add Child to Children's Ministry</h3>
             <p className="text-[11px] text-moss">Enter child details, age and assign to their age division.</p>
@@ -511,7 +512,9 @@ function AddChildModal({
           </button>
         </div>
 
-        <form onSubmit={submit} className="mt-4 space-y-3.5">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* The fields scroll; the register row below does not. */}
+          <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-6 pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block text-xs font-semibold text-bark">
               First Name *
@@ -625,7 +628,10 @@ function AddChildModal({
             />
           </label>
 
-          <div className="flex items-center justify-end gap-2 border-t border-sand-line pt-3">
+          </div>
+
+          {/* The always-visible action row at the foot — the requests modals' pattern. */}
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-sand-line bg-sand-linen/40 px-6 py-4">
             <button
               type="button"
               onClick={onClose}
@@ -723,15 +729,18 @@ function AddMemberModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Add member to ${departmentLabel}`}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
           <h3 className="text-lg font-bold text-bark">{title ?? `Add to ${departmentLabel}`}</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="relative mt-4">
+        {/* The search and the matches scroll; the batch's send row below, when
+            it is on, does not. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
           <input
             autoFocus
@@ -778,8 +787,9 @@ function AddMemberModal({
             );
           })}
         </div>
+        </div>
         {batch && (
-          <div className="mt-4 border-t border-sand-line pt-3">
+          <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-6 pb-4 pt-3">
             {picked.length === 0 ? (
               <p className="text-center text-[11px] text-moss">Search and pick everyone to add, then send them to the roll together.</p>
             ) : (
@@ -884,9 +894,9 @@ function AddEventModal({
         role="dialog"
         aria-modal="true"
         aria-label={editing ? "Edit event" : `Add event to ${targetLabel}`}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-5 pb-2.5 pt-5">
           <h3 className="text-lg font-bold text-bark">{editing ? "Edit event" : `Add event for ${targetLabel}`}</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
@@ -894,15 +904,17 @@ function AddEventModal({
         </div>
         {/* The programme is not this form's to carry: an event is filed in a
             line and given its programme afterwards, from its own row — so the
-            form keeps only what names the event itself. */}
+            form keeps only what names the event itself. Its fields scroll;
+            the save row below does not. */}
         <form
-          className="mt-3 space-y-3"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
           onSubmit={(e) => {
             e.preventDefault();
             if (!valid) return;
             onAdd({ ...form });
           }}
         >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pt-3">
           {/* Title */}
           <div>
             <label className="text-xs font-semibold text-bark">Event title *</label>
@@ -1049,13 +1061,17 @@ function AddEventModal({
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={!valid}
-            className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-          >
-            {editing ? "Save changes" : "Add event"}
-          </button>
+          </div>
+          {/* The always-visible save row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-5 pb-5 pt-3">
+            <button
+              type="submit"
+              disabled={!valid}
+              className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              {editing ? "Save changes" : "Add event"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -1141,6 +1157,7 @@ function ProgramEditorModal({
   onSave,
   onRemoveProgram,
   programDownloadHref,
+  onSaveAndViewPdf,
   onShare,
 }: {
   event: DeptEvent;
@@ -1154,6 +1171,10 @@ function ProgramEditorModal({
   /** What "Download program" hands out — the letterhead PDF of the typed
       rows, or the file the desk uploaded. Blank hides it. */
   programDownloadHref?: string;
+  /** Save the typed rows and open their letterhead PDF. What an unsaved
+      programme's "View PDF" does: the server prints what the event carries,
+      so the rows must be fixed on it before they can be read as paper. */
+  onSaveAndViewPdf?: (items: ProgramItem[]) => void;
   /** Share the printed programme or its link. */
   onShare?: () => void;
 }) {
@@ -1218,6 +1239,17 @@ function ProgramEditorModal({
       participants: part.participants.map((person, p) => (p === personIndex ? { ...person, ...patch } : person)),
     }));
   const valid = items.some(programItemHasContent);
+  // The reading side's "View PDF": a saved programme opens the letterhead
+  // sheet straight away; an unsaved one can't be printed until it is on the
+  // event, so the click saves the typed rows first and then opens their PDF
+  // — the same sheet the desk was typing, now fixed on the event. Both
+  // render at the foot of the reading column, after what it shows.
+  const openPdf =
+    programDownloadHref
+      ? undefined
+      : valid && onSaveAndViewPdf
+        ? () => onSaveAndViewPdf(items)
+        : undefined;
   // The uploaded half of the programme, shown as itself on the page so the
   // desk reads and prints both halves where the desk reads them. The modal
   // leaves it out — its job is the typed rows alone.
@@ -1592,19 +1624,7 @@ function ProgramEditorModal({
           {/* The sheet as it will be read, live, beside the typing: what is
               typed is what is seen — with the uploaded file above it when the
               event carries one. On a phone this stacks under the form. */}
-          <aside className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
-            {programDownloadHref && (
-              <div className="mb-3 flex justify-end">
-                <a
-                  href={programDownloadHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  View PDF
-                </a>
-              </div>
-            )}
+          <aside className="flex min-w-0 flex-col md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             {uploadedProgramBlock && (
               <div className="mb-4">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
@@ -1614,7 +1634,7 @@ function ProgramEditorModal({
               </div>
             )}
             {valid && (
-              <div>
+              <div className="mb-4">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
                   How it will look
                 </p>
@@ -1631,6 +1651,34 @@ function ProgramEditorModal({
             )}
             {!uploadedProgramBlock && !valid && (
               <p className="text-xs text-moss">Name a session — the sheet grows here as it is typed.</p>
+            )}
+            {/* The letterhead sheet, at the reading column's foot — under what
+                it reads, where the eye ends. A saved programme opens its PDF
+                directly; an unsaved one fixes its typed rows on the event
+                first, then opens them as the same paper. */}
+            {programDownloadHref ? (
+              <div className="mt-auto flex justify-end pt-2">
+                <a
+                  href={programDownloadHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  View PDF
+                </a>
+              </div>
+            ) : (
+              openPdf && (
+                <div className="mt-auto flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={openPdf}
+                    className="inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  >
+                    View PDF
+                  </button>
+                </div>
+              )
             )}
           </aside>
         </div>
@@ -1718,16 +1766,16 @@ function RegisterSingingGroupModal({
         role="dialog"
         aria-modal="true"
         aria-label="Register a singing group"
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
           <h3 className="text-lg font-bold text-bark">Register a singing group</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         <form
-          className="mt-4 space-y-3"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
           onSubmit={(e) => {
             e.preventDefault();
             if (!valid) return;
@@ -1739,6 +1787,7 @@ function RegisterSingingGroupModal({
             });
           }}
         >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pt-4">
           <div>
             <label className="text-xs font-semibold text-bark">Group name *</label>
             <input
@@ -1805,13 +1854,17 @@ function RegisterSingingGroupModal({
               className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
           </div>
-          <button
-            type="submit"
-            disabled={!valid}
-            className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-          >
-            Register group
-          </button>
+          </div>
+          {/* The always-visible register row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-6 pb-5 pt-3">
+            <button
+              type="submit"
+              disabled={!valid}
+              className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              Register group
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -1865,15 +1918,16 @@ function RequestToRegisterModal({ departmentCode, onClose }: { departmentCode: s
         role="dialog"
         aria-modal="true"
         aria-label="Request to register a singing group"
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
           <h3 className="text-lg font-bold text-bark">Request to register a group</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
-        <form className="mt-4 space-y-3" onSubmit={submit}>
+        <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={submit}>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pt-4">
           {error && <p className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
           <div>
             <label className="text-xs font-semibold text-bark">Group name *</label>
@@ -1910,13 +1964,17 @@ function RequestToRegisterModal({ departmentCode, onClose }: { departmentCode: s
             Your proposal goes to the music desk's leadership and the elders' desk. If it is approved, the group is
             registered under Music and you are its first singer; the answer reaches your rail.
           </p>
-          <button
-            type="submit"
-            disabled={!valid || submitting}
-            className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-          >
-            {submitting ? "Sending…" : "Send proposal"}
-          </button>
+          </div>
+          {/* The always-visible send row at the foot — the requests modals' pattern. */}
+          <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-6 pb-5 pt-3">
+            <button
+              type="submit"
+              disabled={!valid || submitting}
+              className="w-full rounded-xl bg-ember py-2.5 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              {submitting ? "Sending…" : "Send proposal"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -2646,9 +2704,9 @@ function LeadershipEditModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${department.label} leadership`}
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6">
           <div>
             <h3 className="text-lg font-bold text-bark">Leadership: {department.label}</h3>
             <p className="text-[11px] text-moss">Search a member, set them into a position, then save. Contacts stay on their accounts.</p>
@@ -2661,7 +2719,7 @@ function LeadershipEditModal({
         {/* One search at the top: find a member, then set them into a
             position — the leader's seat, one of the assistants', or an
             elder's office. */}
-        <div className="mt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
             <input
@@ -2773,7 +2831,7 @@ function LeadershipEditModal({
           )}
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-sand-line px-6 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -2951,9 +3009,9 @@ function AssignRoleModal({
         role="dialog"
         aria-modal="true"
         aria-label={`Assign a role to ${member.name}`}
-        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6">
           <div className="min-w-0">
             <h3 className="text-lg font-bold text-bark">Assign role</h3>
             {/* The person, not the place: their name and what they already
@@ -2967,7 +3025,7 @@ function AssignRoleModal({
           </button>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4 pt-4">
           <div>
             <span className="text-xs font-semibold text-bark">Seats to give</span>
             {/* One combo with a checkbox per seat: the area's offices in a
@@ -3068,7 +3126,7 @@ function AssignRoleModal({
           })}
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2 border-t border-sand-line pt-4">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-sand-line px-6 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -4311,6 +4369,7 @@ type DeptSubTab =
   | "moments"
   | "meetings"
   | "pulpit-team"
+  | "duties"
   | "singing_groups"
   | "choir"
   | "accounts"
@@ -4705,12 +4764,13 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
-    } else if (subTab === "pulpit-team") {
-      // The pulpit team's date range and search ride the right of this desk's
+    } else if (subTab === "pulpit-team" || subTab === "duties") {
+      // The rota views' date range and search ride the right of this desk's
       // heading, the place every other view here keeps its controls, rather
-      // than a band of the panel's own below it. The values live in the panel,
-      // which owns the rota; it exposes them through context and reads them
-      // back the same way.
+      // than a band of the panel's own below it. The values live in the
+      // panel, which owns the rota; it exposes them through context and
+      // reads them back the same way.
+      const rotaPlaceholder = subTab === "pulpit-team" ? "Search the pulpit team…" : "Search music duties…";
       const filters = hostedRotaFilters?.filters;
       setHeaderRightAction(
         filters ? (
@@ -4719,7 +4779,7 @@ function DepartmentDetail({
               type="text"
               value={filters.searchQuery}
               onChange={(e) => filters.setSearchQuery(e.target.value)}
-              placeholder="Search the pulpit team…"
+              placeholder={rotaPlaceholder}
               className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
             />
             <input
@@ -4804,6 +4864,10 @@ function DepartmentDetail({
       // groups registered under it each get a view beside the roll.
       ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
+      // Music's own duties — who sings and plays on a Sabbath — sit beside
+      // the groups, rostered on the same rota panel the deaconate and the
+      // pulpit team keep (see DeaconateManager's music desk).
+      ...(isMusic ? [{ key: "duties", label: "Duties", short: "Duties", icon: ListMusic }] : []),
       ...(isSabbathSchool ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", icon: BookOpen }] : []),
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
@@ -5334,6 +5398,38 @@ function DepartmentDetail({
           "success",
           { toast: true, timer: 4000, showConfirmButton: false },
         );
+      },
+    );
+  };
+
+  /**
+   * The typed rows saved and then read as the letterhead sheet — what an
+   * unsaved programme's "View PDF" does: the server prints what the event
+   * carries, so the rows must be on it before the paper exists. The sheet
+   * stays open, and its own reading side is there to open the PDF again.
+   */
+  const saveProgramAndViewPdf = (event: DeptEvent, items: ProgramItem[]) => {
+    const saved = serializeProgramItems(items);
+    // The tab is opened while the click is still being handled — a window
+    // opened only after the save round-trips would be refused by a browser
+    // as not the reader's doing.
+    const reading = window.open("about:blank", "_blank");
+    patchProgram(
+      event,
+      {
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ program_items: saved }),
+      },
+      () => {
+        if (reading) {
+          reading.location.href = `${API_URL}/api/members/departments/${department.code}/events/${event.id}/program/`;
+        } else {
+          window.open(
+            `${API_URL}/api/members/departments/${department.code}/events/${event.id}/program/`,
+            "_blank",
+            "noopener",
+          );
+        }
       },
     );
   };
@@ -6259,6 +6355,14 @@ function DepartmentDetail({
         </div>
       )}
 
+      {/* Music's duties — who sings and plays on a Sabbath. The same shared
+          rota panel, on Music's own desk's lines. */}
+      {subTab === "duties" && isMusic && (
+        <div className="h-full min-h-0">
+          <DeaconateManager initialTab="rota" desk="music" embedded filtersHosted />
+        </div>
+      )}
+
       {/* Sabbath School Lesson Orders */}
       {subTab === "lesson-orders" && isSabbathSchool && <LessonOrdersPanel />}
 
@@ -6332,6 +6436,7 @@ function DepartmentDetail({
               onSave={(items) => saveProgram(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
+              onSaveAndViewPdf={(items) => saveProgramAndViewPdf(programFor, items)}
               onShare={() => void shareProgram(programFor)}
             />
           </div>
@@ -6348,6 +6453,7 @@ function DepartmentDetail({
               onSave={(items) => saveProgramInline(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
+              onSaveAndViewPdf={(items) => saveProgramAndViewPdf(programFor, items)}
               onShare={() => void shareProgram(programFor)}
             />
           </div>
@@ -7105,9 +7211,9 @@ function AddAreaModal({
         role="dialog"
         aria-modal="true"
         aria-label="Add a department"
-        className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-sand-line"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
           <div>
             <h3 className="text-lg font-bold text-bark">Add Department</h3>
             <p className="text-[11px] text-moss">A new department with its own roles, roll and calendar.</p>
@@ -7116,7 +7222,7 @@ function AddAreaModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <form onSubmit={submit} className="mt-4 space-y-3">
+        <form onSubmit={submit} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4 pt-4">
           <label className="block text-xs font-semibold text-bark">
             Name *
             <input
@@ -7162,7 +7268,7 @@ function AddAreaModal({
           <p className="text-[11px] text-moss">
             Created with Leader, Secretary and Treasurer roles. Appoint their holders when editing leadership.
           </p>
-          <div className="flex items-center justify-end gap-2 border-t border-sand-line pt-3">
+          <div className="mt-3 flex shrink-0 items-center justify-end gap-2 border-t border-sand-line px-6 pb-4 pt-3">
             <button
               type="button"
               onClick={onClose}

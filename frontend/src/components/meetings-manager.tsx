@@ -787,8 +787,8 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       {/* Modal: Create Meeting */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-sand-line bg-white p-6 shadow-2xl scrollbar-thin">
-            <div className="flex items-center justify-between border-b border-sand-line pb-4">
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-sand-line bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-4 pt-6">
               <div>
                 <h3 className="text-lg font-extrabold text-bark">Schedule a Meeting</h3>
                 <p className="text-xs text-moss">
@@ -804,7 +804,8 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
               </button>
             </div>
 
-            <form onSubmit={handleCreateMeeting} className="mt-5 space-y-5">
+            <form onSubmit={handleCreateMeeting} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-3 pt-5 space-y-5">
               {formError && (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">
                   {formError}
@@ -1049,8 +1050,9 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                 </div>
               </div>
 
-              {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-3 border-t border-sand-line pt-4">
+              </div>
+              {/* Submit Buttons — pinned below the scrolling form, visible while scrolling */}
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line bg-white px-6 py-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

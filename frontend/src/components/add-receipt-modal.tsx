@@ -297,10 +297,10 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-150">
       <div
-        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
+        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-sand-line pb-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-4 pt-6">
           <div>
             <h2 className="text-xl font-semibold text-bark">Add Receipt</h2>
             <p className="mt-0.5 text-xs text-moss">Record a manual payment or contribution for the treasury ledger.</p>
@@ -314,7 +314,9 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 grid gap-4 sm:grid-cols-2">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-3 pt-4">
+            <div className="grid gap-4 sm:grid-cols-2">
           {/* Method of Giving */}
           <label className="text-sm font-medium text-bark">
             Method of Giving
@@ -552,7 +554,9 @@ export function AddReceiptModal({ open, onClose, presetPurpose, onSaved }: AddRe
             />
           </label>
 
-          <div className="sm:col-span-2 flex items-center justify-end gap-3 pt-4 border-t border-sand-line">
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-sand-line bg-white px-6 py-3">
             <button
               type="button"
               onClick={onClose}
