@@ -59,7 +59,7 @@ def _light_symbol_drawing():
 # that are not records of money hand a wording of their own, so the order
 # of service never carries the treasury's line.
 _RECORD_FOOTER_TEXT = "SDA Church Loma Linda • Official Financial & Administrative Record"
-_PROGRAM_FOOTER_TEXT = "SDA Church Loma Linda • Order of Service"
+_PROGRAM_FOOTER_TEXT = "SDA Church Loma Linda • Programme"
 _LOCKUP_COLOR = colors.HexColor("#5E3929")
 _LOCKUP_LINE_1 = "SDA Church"
 _LOCKUP_LINE_2 = "Loma Linda, Meru"
@@ -2289,7 +2289,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         rows.extend(children)
 
     if not rows:
-        rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',
+        rows.append({'hours': '', 'title': 'The programme has not been typed yet.',
                      'people': [], 'indent': 0})
 
     def row_lines(row):
@@ -2405,13 +2405,29 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
             # The church's mark at the cover's head — the letterhead's own
             # lockup, drawn larger on a cover than the office sheets use.
             _draw_logo(c, cx, page_h - 38, 16 * mm)
+            # The sheet's name, spoken first: the word the inside pages
+            # label, set wide above the day's title in the department's own
+            # accent, so the cover says what the reader is holding.
+            kicker = 'PROGRAMME'
+            tracking = 4
+            c.setFont('Helvetica-Bold', 9)
+            c.setFillColor(ACCENT)
+            kick_w = c.stringWidth(kicker, 'Helvetica-Bold', 9) + tracking * (len(kicker) - 1)
+            ktext = c.beginText(cx - kick_w / 2, page_h - 38 - 16 * mm - 14)
+            # Letter-spacing lives in the text state, so it is cleared inside
+            # the same line: otherwise every line drawn after the kicker
+            # inherits the tracking and drifts wide of its measure.
+            ktext.setCharSpace(tracking)
+            ktext.textOut(kicker)
+            ktext.setCharSpace(0)
+            c.drawText(ktext)
             title = str(event.title or 'Program').strip() or 'Program'
             size = 21
             pieces = wrap(title, 'Helvetica-Bold', size, content_w)
             if len(pieces) > 3:
                 size = 17
                 pieces = wrap(title, 'Helvetica-Bold', size, content_w)
-            y = page_h - 38 - 16 * mm - 28
+            y = page_h - 38 - 16 * mm - 44
             c.setFillColor(DARK)
             c.setFont('Helvetica-Bold', size)
             for piece in pieces[:4]:
@@ -2443,7 +2459,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
             y = page_h - 38 - 12 * mm - 26
             c.setFont('Helvetica-Bold', 8)
             c.setFillColor(ACCENT)
-            c.drawCentredString(cx, y, 'ORDER OF SERVICE')
+            c.drawCentredString(cx, y, 'PROGRAMME')
             y -= 12
             c.setFont('Helvetica', 9)
             c.setFillColor(GREY)
@@ -2460,14 +2476,42 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         w = panel_w - 2 * side
 
         # ── Who we are: the mission and the vision open the panel — the two
-        # statements the congregation should meet before anything else of the
-        # church's business. The mission sits on dark paper, the vision on
-        # white, as the landing page does. ──
-        inner_pad = 16
+        # statements the congregation should meet before anything else of
+        # the church's business. Neither sits in a box: both are set as bare
+        # ink on the panel's own linen, each measured by a bar of the day's
+        # accent rising behind it, and a gradient stroke marks the turn from
+        # one statement to the next. ──
+        bar_w = 3
+        body_x = x + bar_w + 11
+        body_w = w - bar_w - 11
 
-        def card_h(text, size, lead):
-            inner = w - 2 * inner_pad
-            return inner_pad + 10 + 16 + len(wrap(text, 'Helvetica', size, inner)) * lead + 4 + 10 + inner_pad
+        def block_h(text, size, lead):
+            # What one statement occupies from its top line to its foot: the
+            # air above its label, the label, its wrapped lines, its
+            # reference, and the breath after it. Drawn and measured from
+            # the same numbers, so the pinned foot never drifts.
+            return 12 + 8 + 15 + 8 + len(wrap(text, 'Helvetica', size, body_w)) * lead + 10 + 3
+
+        def statement(label_text, statement_text, ref, statement_colour, bar_cols, y):
+            """Set one statement as open ink over the panel, from a `y` that
+            is its top, and report where the panel lands at its foot."""
+            y -= 12
+            bar_top = y + 1
+            c.setFont('Helvetica-Bold', 8)
+            c.setFillColor(EMBER)
+            c.drawString(body_x, y - 8, label_text)
+            y -= 15 + 8
+            c.setFont('Helvetica', t_size)
+            c.setFillColor(statement_colour)
+            for piece in wrap(statement_text, 'Helvetica', t_size, body_w):
+                c.drawString(body_x, y, piece)
+                y -= t_lead
+            y -= 10
+            c.setFont('Helvetica-Oblique', 7.5)
+            c.setFillColor(GREY)
+            c.drawString(body_x, y, ref)
+            wash(x, y - 2, bar_w, bar_top - y + 2, bar_cols)
+            return y - 3
 
         # Contacts wrap at the sizes below; both passes are measured the same
         # way they will be drawn, so the pinned foot never drifts.
@@ -2512,16 +2556,14 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         chosen = (9, 11.5, 8.5, 10.5)
         for maybe in ((9, 11.5, 8.5, 10.5), (9, 11.5, 8, 9.5), (8.5, 10.5, 8, 9.5)):
             t_size, t_lead, c_size, c_lead = maybe
-            mission_h = card_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
-            vision_h = card_h(PROGRAM_VISION_STATEMENT, t_size, t_lead)
-            cards_end = page_h - headroom - 26 - mission_h - 10 - vision_h
-            budget = cards_end - footroom
+            mission_foot = block_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
+            vision_foot = block_h(PROGRAM_VISION_STATEMENT, t_size, t_lead)
+            blocks_end = page_h - headroom - 26 - mission_foot - 26 - vision_foot
+            budget = blocks_end - footroom
             if contact_total(c_size, c_lead) <= budget:
                 chosen = maybe
                 break
         t_size, t_lead, c_size, c_lead = chosen
-        mission_h = card_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
-        vision_h = card_h(PROGRAM_VISION_STATEMENT, t_size, t_lead)
 
         kicker_y = page_h - headroom - 8
         c.setFont('Helvetica-Bold', 7)
@@ -2531,48 +2573,16 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         c.setLineWidth(0.7)
         c.line(x, kicker_y - 4, x + w, kicker_y - 4)
 
-        card_top = page_h - headroom - 26
-        # The mission card: dark ground with sand rising through it.
-        mission_h = card_h(PROGRAM_MISSION_STATEMENT, t_size, t_lead)
-        wash(x, card_top - mission_h, w, mission_h, [colors.HexColor('#33493d'), DARK], radius=10)
-        body_x = x + inner_pad
-        inner_w = w - 2 * inner_pad
-        ty = card_top - inner_pad - 8
-        c.setFont('Helvetica-Bold', 8)
-        c.setFillColor(GOLD)
-        c.drawString(body_x, ty, 'OUR MISSION')
-        ty -= 16
-        c.setFont('Helvetica', t_size)
-        c.setFillColor(colors.Color(0.97, 0.98, 0.97))
-        for piece in wrap(PROGRAM_MISSION_STATEMENT, 'Helvetica', t_size, inner_w):
-            c.drawString(body_x, ty, piece)
-            ty -= t_lead
-        ty -= 2
-        c.setFont('Helvetica', 7.5)
-        c.setFillColor(colors.HexColor('#aebfb5'))
-        c.drawString(body_x, ty, PROGRAM_MISSION_REF)
-
-        # The vision card: white ground against the wash, ringed.
-        card_top = card_top - mission_h - 10
-        c.setFillColor(colors.white)
-        c.roundRect(x, card_top - vision_h, w, vision_h, 10, fill=1, stroke=0)
-        c.setStrokeColor(RULE)
-        c.setLineWidth(0.9)
-        c.roundRect(x, card_top - vision_h, w, vision_h, 10, fill=0, stroke=1)
-        ty = card_top - inner_pad - 8
-        c.setFont('Helvetica-Bold', 8)
-        c.setFillColor(EMBER)
-        c.drawString(body_x, ty, 'OUR VISION')
-        ty -= 16
-        c.setFont('Helvetica', t_size)
-        c.setFillColor(colors.HexColor('#3c4b44'))
-        for piece in wrap(PROGRAM_VISION_STATEMENT, 'Helvetica', t_size, inner_w):
-            c.drawString(body_x, ty, piece)
-            ty -= t_lead
-        ty -= 2
-        c.setFont('Helvetica', 7.5)
-        c.setFillColor(GREY)
-        c.drawString(body_x, ty, PROGRAM_VISION_REF)
+        # The mission, first: open ink over the linen, its bar carrying the
+        # day's accent easing into the lockup's gold.
+        y = statement('OUR MISSION', PROGRAM_MISSION_STATEMENT, PROGRAM_MISSION_REF,
+                      DARK, [ACCENT, GOLD], page_h - headroom - 26)
+        # A gradient stroke marks the turn — the same stroke the cover draws
+        # between the day's name and its date.
+        wash(x + (w - 44) / 2, y - 13, 44, 2, [ACCENT, GOLD], horizontal=True)
+        # The vision follows: the same measure, its own bar beneath it.
+        y = statement('OUR VISION', PROGRAM_VISION_STATEMENT, PROGRAM_VISION_REF,
+                      colors.HexColor('#3c4b44'), [ACCENT, GOLD], y - 26)
 
         # ── The welcome face, pinned to the fold's foot: where the church
         # stands, its week of worship, and how to give towards the day. A
@@ -2615,8 +2625,8 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         draw_cover(c, panel_w, sheet_i)
         fold_guides()
         c.showPage()
-        # ── The inside spread: the order of service down both panels ──
-        label = 'Order of Service' if sheet_i == 0 else 'Order of Service \u2013 continued'
+        # ── The inside spread: the programme down both panels ──
+        label = 'Programme' if sheet_i == 0 else 'Programme \u2013 continued'
         for col_i, column in enumerate(spread):
             x0 = col_i * panel_w
             c.setFont('Helvetica-Bold', 8)
