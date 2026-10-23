@@ -4,7 +4,7 @@ from decimal import Decimal
 from datetime import datetime
 from pathlib import Path
 from django.utils import timezone
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
@@ -18,7 +18,7 @@ from reportlab.platypus import (
     Flowable,
     Image,
 )
-from reportlab.lib.utils import ImageReader
+from reportlab.lib.utils import ImageReader, simpleSplit
 from xml.sax.saxutils import escape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
@@ -31,6 +31,12 @@ from svglib.svglib import svg2rlg
 # that makes a printout an official record.
 _SYMBOL_DRAWING = svg2rlg(str(Path(__file__).resolve().parent / "sda_symbol.svg"))
 _SYMBOL_RATIO = _SYMBOL_DRAWING.width / _SYMBOL_DRAWING.height
+# The footer every paper prints page-numbered — the church's own name and
+# what the sheet is: an official financial & administrative record. Papers
+# that are not records of money hand a wording of their own, so the order
+# of service never carries the treasury's line.
+_RECORD_FOOTER_TEXT = "SDA Church Loma Linda • Official Financial & Administrative Record"
+_PROGRAM_FOOTER_TEXT = "SDA Church Loma Linda • Order of Service"
 _LOCKUP_COLOR = colors.HexColor("#5E3929")
 _LOCKUP_LINE_1 = "SDA Church"
 _LOCKUP_LINE_2 = "Loma Linda, Meru"
@@ -68,11 +74,9 @@ def _draw_logo(c, center_x, top_y, height):
 
 
 class NumberedCanvas(canvas.Canvas):
-    """
-    Two-pass canvas to add 'Page X of Y' and running footer dynamically.
-    """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, **kwargs):
         super().__init__(*args, **kwargs)
+        self._footer_text = footer_text
         self._saved_page_states = []
 
     def showPage(self):
@@ -103,7 +107,7 @@ class NumberedCanvas(canvas.Canvas):
         self.line(1.5 * cm, 1.8 * cm, A4[0] - 1.5 * cm, 1.8 * cm)
         
         # Footer text
-        footer_text = "SDA Church Loma Linda • Official Financial & Administrative Record"
+        footer_text = self._footer_text
         page_text = f"Page {self._pageNumber} of {page_count}"
         
         self.drawString(1.5 * cm, 1.2 * cm, footer_text)
@@ -2068,139 +2072,333 @@ def _spoken_range(start, end):
     return first or second
 
 
-def generate_event_program_pdf(event, department_name: str = '') -> bytes:
-    """One calendar event's programme, printed on the church's own paper.
+def generate_event_program_pdf(event, department_name: str = '', contact=None) -> bytes:
+    """One calendar event's programme as a bifold — a sheet that folds.
 
-    The rows the desk typed onto the calendar — the sessions of the day, the
-    activities inside each one, and who facilitates them — laid out as the
-    sheet a member is handed at the door: the church's letterhead above, the
-    day and the ministry under the title, and the order of service running
-    down the page with its hours spoken the sheet's way and its facilitators
-    named under what they carry.
+    The desk's typed day — the sessions, the activities inside each one, and
+    who facilitates them — is laid out as the booklet the congregation is
+    handed at the door: an A4 sheet printed on both sides and folded once
+    down the middle, each pair of pages one sheet of paper. Printed duplex
+    (flip on the short edge), pages pair as outsides and insides.
+
+    A sheet's outside carries the cover on its right panel — the church's
+    mark, the day, the ministry — and the back panel on its left, which
+    speaks for the church: where to find it, its week of worship, and how to
+    give towards the day. Faced with the fold, the panel opens into the
+    inside spread: the order of service running down both panels, its hours
+    spoken the sheet's way, its facilitators named under what they carry, an
+    activity hanging under its session.
+
+    A day too long for one spread flows onto another sheet — the same bifold
+    whose cover says continued, its back panel repeating the welcome so the
+    second sheet folds up complete on its own.
+
+    `contact` holds what the back panel speaks: `address`, `services` (the
+    church's weekly gatherings as {weekday, text} rows) and `giving` (its
+    M-Pesa and bank lines). Whatever is absent is left off the paper, never
+    guessed at.
 
     An uploaded file cannot be folded into a typed sheet's paper, so this
     prints what was typed; a file rides on the event beside it and is opened
     as itself.
     """
+    contact = contact or {}
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=1.5 * cm,
-        rightMargin=1.5 * cm,
-        topMargin=2.0 * cm,
-        bottomMargin=2.2 * cm,
-    )
 
-    st = get_pdf_styles()
-    time_style = ParagraphStyle('ProgramTime', parent=st['cell'], alignment=2)  # right-aligned hours
-    story = []
+    page_w, page_h = landscape(A4)          # 841.89 x 595.28 — fold across the middle
+    panel_w = page_w / 2
+    side = 13 * mm
+    headroom = 56                            # the inside label lives at the top edge
+    footroom = 42
+    fold_x = panel_w
 
-    story.append(Paragraph(escape(str(event.title or 'Program')), st['title_big']))
+    DARK = colors.HexColor('#26352f')
+    GREY = colors.HexColor('#617068')
+    EMBER = colors.HexColor('#b36b3c')
+    RULE = colors.HexColor('#dfdbd1')
 
-    meta_bits = []
-    date_text = str(event.event_date)[:10]
-    try:
-        parsed_day = datetime.strptime(date_text, '%Y-%m-%d')
-        meta_bits.append(parsed_day.strftime('%A'))
-        meta_bits.append(parsed_day.strftime('%d/%m/%Y'))
-    except ValueError:
-        if date_text:
-            meta_bits.append(date_text)
-    if department_name:
-        meta_bits.append(department_name)
-    if event.unit:
-        meta_bits.append(f'Unit: {event.unit}')
-    if event.lead:
-        meta_bits.append(f'Led by {event.lead}')
-    if event.mode == 'virtual':
-        meta_bits.append('Virtual')
-    elif event.location:
-        meta_bits.append(event.location)
-    if meta_bits:
-        story.append(Paragraph(escape(' · '.join(meta_bits)), st['meta']))
-    story.append(Spacer(1, 6))
-    story.append(HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#26352f')))
-    story.append(Spacer(1, 10))
+    def wrap(text, font, size, width):
+        return simpleSplit(text, font, size, width)
+
+    # ── The typed rows, as the panels will flow them ──────────────────────
 
     sessions = event.program_items if isinstance(event.program_items, list) else []
+    INDENT = 14
 
-    def facilitator_lines(people):
-        lines = []
-        for person in (people or [])[:20]:
-            if isinstance(person, dict) and str(person.get('name') or '').strip():
-                name = escape(str(person['name']).strip())
-                role = escape(str(person.get('role') or '').strip())
-                lines.append(f'\u2022 <b>{name}</b>' + (f' \u00b7 {role}' if role else ''))
-        return '<br/>'.join(lines)
+    def people_of(entry):
+        out = []
+        for person in (entry or [])[:20]:
+            if isinstance(person, dict):
+                name = str(person.get('name') or '').strip()
+                if name:
+                    out.append((name, str(person.get('role') or '').strip()))
+        return out
 
     rows = []
     for session in sessions[:60]:
         if not isinstance(session, dict):
             continue
         title = str(session.get('title') or '').strip()
-        people = facilitator_lines(session.get('participants'))
-        activities = []
+        session_people = people_of(session.get('participants'))
+        children = []
         for part in (session.get('parts') or [])[:40]:
             if not isinstance(part, dict):
                 continue
             part_title = str(part.get('title') or '').strip()
-            part_people = facilitator_lines(part.get('participants'))
+            part_people = people_of(part.get('participants'))
             if not part_title and not part_people:
                 continue
-            part_content = f"<b>{escape(part_title) if part_title else '\u2014'}</b>"
-            if part_people:
-                part_content += f"<br/><font color='#617068' size='8'>{part_people}</font>"
-            activities.append((_spoken_range(part.get('start'), part.get('end')), part_content))
-        if not title and not people and not activities:
+            children.append({
+                'hours': _spoken_range(part.get('start'), part.get('end')),
+                'title': part_title,
+                'people': part_people,
+                'indent': INDENT,
+            })
+        if not title and not session_people and not children:
             continue
-        content = f"<font size='10.5'><b>{escape(title) if title else '\u2014'}</b></font>"
-        if people:
-            content += f"<br/><font color='#617068' size='8'>{people}</font>"
-        rows.append((_spoken_range(session.get('start'), session.get('end')), content, 0))
-        rows.extend((hours, part_content, 1) for hours, part_content in activities)
+        rows.append({
+            'hours': _spoken_range(session.get('start'), session.get('end')),
+            'title': title,
+            'people': session_people,
+            'indent': 0,
+        })
+        rows.extend(children)
 
     if not rows:
-        story.append(Paragraph('The order of service has not been typed yet.', st['cell']))
-    else:
-        table_data = []
-        table_style = [
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ('LINEBELOW', (0, 0), (-1, -1), 0.4, colors.HexColor('#dfdbd1')),
-        ]
-        for row_index, (hours, content, indent) in enumerate(rows):
-            table_data.append([
-                Paragraph(
-                    f"<font color='#b36b3c'><b>{escape(hours)}</b></font>" if hours else '',
-                    time_style,
-                ),
-                Paragraph(content, st['cell']),
-            ])
-            if indent:
-                # An activity hangs under its session the sheet indents it:
-                # pushed right, so the day reads inside-out from the session
-                # down to what runs through it. The padding goes on the
-                # content column only — the hours are right-aligned and stay
-                # anchored at the same right edge as their session's hours;
-                # indenting this cell instead squeezed them narrow enough
-                # that ranges like "9:30 – 10:30 AM" wrapped, dropping the
-                # meridiem onto a row of its own.
-                table_style.append(('LEFTPADDING', (1, row_index), (1, row_index), int(2.2 * cm)))
-        # The hour column is wide enough that the longest spoken range —
-        # "11:30 AM – 12:45 PM", both halves of the day named — stays on the
-        # one row it belongs to, beside the entry it runs; a narrow column
-        # wrapped the meridiem onto its own line and read as a broken cell.
-        table = Table(table_data, colWidths=[4.6 * cm, 13.4 * cm])
-        table.setStyle(TableStyle(table_style))
-        story.append(table)
+        rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',
+                     'people': [], 'indent': 0})
 
-    doc.build(story, canvasmaker=NumberedCanvas)
+    def row_lines(row):
+        """One row's spoken pieces: its hours, its name, its facilitators."""
+        width = panel_w - 2 * side - row['indent']
+        lines = []
+        if row['hours']:
+            lines.append((row['hours'], 'Helvetica-Bold', 9, EMBER, 4))
+        size = 11 if row['indent'] else 12.5
+        for piece in wrap(row['title'] or '\u2014', 'Helvetica-Bold', size, width):
+            lines.append((piece, 'Helvetica-Bold', size, DARK, 2.5))
+        for name, role in row['people']:
+            text = f'\u2022 {name}' + (f' \u00b7 {role}' if role else '')
+            for piece in wrap(text, 'Helvetica', 8.5, width):
+                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5))
+        return lines
+
+    def row_height(row):
+        # What the panel consumes for one row: its lines, the hairline under
+        # it, and the breath after. Drawn and measured from the same numbers,
+        # so the flow never drifts from where the ink lands.
+        return sum(size + space for (_t, _f, size, _c, space) in row_lines(row)) + 8
+
+    # ── Fitting the rows onto panels: two columns of one spread per sheet ─
+
+    usable_h = page_h - headroom - footroom
+    spreads = [[[], []]]
+    y_left = usable_h
+    y_right = usable_h
+    col_i = 0
+    row_i = 0
+    while row_i < len(rows):
+        row = rows[row_i]
+        lines = row_lines(row)
+        height = sum(size + space for (_t, _f, size, _c, space) in lines) + 8
+        column = spreads[-1][col_i]
+
+        # A session head never sits as its column's last line while the
+        # activity it opens follows it: the name should carry its first
+        # activity onto the same panel, or both travel to the next one.
+        stranded = (
+            row['indent'] == 0
+            and len(column) > 0
+            and row_i + 1 < len(rows)
+            and rows[row_i + 1]['indent'] > 0
+        )
+        need = height
+        if stranded:
+            next_lines = row_lines(rows[row_i + 1])
+            need += sum(size + space for (_t, _f, size, _c, space) in next_lines) + 8
+
+        if column and need > (y_left if col_i == 0 else y_right):
+            if col_i == 0:
+                col_i = 1
+            else:
+                spreads.append([[], []])
+                y_left = usable_h
+                y_right = usable_h
+                col_i = 0
+            continue
+
+        spreads[-1][col_i].append((row, lines))
+        if col_i == 0:
+            y_left -= height
+        else:
+            y_right -= height
+        row_i += 1
+
+    # ── The panels themselves ──────────────────────────────────────────────
+
+    date_text = str(event.event_date)[:10]
+    cover_meta = []
+    try:
+        parsed_day = datetime.strptime(date_text, '%Y-%m-%d')
+        cover_meta.append(parsed_day.strftime('%A'))
+        cover_meta.append(parsed_day.strftime('%d/%m/%Y'))
+    except ValueError:
+        if date_text:
+            cover_meta.append(date_text)
+    if department_name:
+        cover_meta.append(department_name)
+    if event.unit:
+        cover_meta.append(f'Unit: {event.unit}')
+    if event.lead:
+        cover_meta.append(f'Led by {event.lead}')
+    if event.mode == 'virtual':
+        cover_meta.append('Virtual')
+    elif str(event.location or '').strip():
+        cover_meta.append(str(event.location).strip())
+
+    def fold_guides():
+        # Where the paper folds: two short ticks on each page's top and
+        # bottom edges, at the fold. Nothing in the panels ever reaches them.
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.7)
+        c.line(fold_x, page_h - 6, fold_x, page_h - 18)
+        c.line(fold_x, 18, fold_x, 6)
+
+    def draw_cover(c, x0, sheet_i):
+        cx = x0 + panel_w / 2
+        content_w = panel_w - 2 * side
+        if sheet_i == 0:
+            # The church's mark at the cover's head — the letterhead's own
+            # lockup, drawn larger on a cover than the office sheets use.
+            _draw_logo(c, cx, page_h - 38, 16 * mm)
+            title = str(event.title or 'Program').strip() or 'Program'
+            size = 21
+            pieces = wrap(title, 'Helvetica-Bold', size, content_w)
+            if len(pieces) > 3:
+                size = 17
+                pieces = wrap(title, 'Helvetica-Bold', size, content_w)
+            y = page_h - 38 - 16 * mm - 28
+            c.setFillColor(DARK)
+            c.setFont('Helvetica-Bold', size)
+            for piece in pieces[:4]:
+                c.drawCentredString(cx, y, piece)
+                y -= size * 1.22
+            # A short ember stroke ties the name to its day — the same
+            # accent the inside spread gives the hours.
+            c.setFillColor(EMBER)
+            c.rect(cx - 22, y + 8, 44, 2, fill=1, stroke=0)
+            y -= 22
+            c.setStrokeColor(RULE)
+            c.setLineWidth(1)
+            c.line(x0 + side + 10, y, x0 + panel_w - side - 10, y)
+            y -= 22
+            for bit in cover_meta:
+                c.setFont('Helvetica', 10)
+                c.setFillColor(GREY)
+                c.drawCentredString(cx, y, bit)
+                y -= 15
+        else:
+            # A continuation sheet folds up complete on its own: its own
+            # mark, and a cover that says so.
+            _draw_logo(c, cx, page_h - 38, 12 * mm)
+            y = page_h - 38 - 12 * mm - 26
+            c.setFont('Helvetica-Bold', 8)
+            c.setFillColor(EMBER)
+            c.drawCentredString(cx, y, 'ORDER OF SERVICE')
+            y -= 12
+            c.setFont('Helvetica', 9)
+            c.setFillColor(GREY)
+            c.drawCentredString(cx, y, f'continued \u00b7 sheet {sheet_i + 1} of {len(spreads)}')
+            y -= 24
+            c.setFont('Helvetica-Bold', 13)
+            c.setFillColor(DARK)
+            for piece in wrap(str(event.title or 'Program'), 'Helvetica-Bold', 13, content_w)[:3]:
+                c.drawCentredString(cx, y, piece)
+                y -= 16
+
+    def draw_back(c, x0):
+        x = x0 + side
+        w = panel_w - 2 * side
+        y = page_h - headroom
+
+        def kicker(y, label):
+            c.setFont('Helvetica-Bold', 8)
+            c.setFillColor(EMBER)
+            c.drawString(x, y, label.upper())
+            c.setStrokeColor(RULE)
+            c.setLineWidth(0.8)
+            c.line(x, y - 4, x + w, y - 4)
+            return y - 20
+
+        def body(y, text, gap=4):
+            for piece in wrap(text, 'Helvetica', 9, w):
+                c.setFont('Helvetica', 9)
+                c.setFillColor(DARK)
+                c.drawString(x, y, piece)
+                y -= 12
+            return y - gap
+
+        # The welcome face. Whatever the church has not written — an address,
+        # a gathering, a giving line — is left off; a blank is never made up.
+        if contact.get('address'):
+            y = kicker(y, 'Find us')
+            y = body(y, str(contact['address']).strip())
+        if contact.get('services'):
+            y = kicker(y, 'When we gather')
+            for svc in contact['services']:
+                line = ' \u00b7 '.join(part for part in (
+                    str(svc.get('weekday') or '').strip(),
+                    str(svc.get('text') or '').strip(),
+                ) if part)
+                if line:
+                    y = body(y, line, gap=3)
+            y -= 6
+        if contact.get('giving'):
+            y = kicker(y, 'Give towards the day')
+            for line in contact['giving']:
+                line = str(line or '').strip()
+                if line:
+                    y = body(y, line, gap=3)
+            y -= 6
+        if not (contact.get('address') or contact.get('services') or contact.get('giving')):
+            y = body(y, 'Ask any of the officers at the door — they will help you find your way.')
+
+    def draw_row(c, x, y, row, lines):
+        """Draw one row's lines, rule under it, and step to the next."""
+        for text, font, size, colour, space in lines:
+            c.setFont(font, size)
+            c.setFillColor(colour)
+            y -= size
+            c.drawString(x, y, text)
+            y -= space
+        c.setStrokeColor(RULE)
+        c.setLineWidth(0.4)
+        c.line(x, y - 2, x + (panel_w - 2 * side - row['indent']), y - 2)
+        return y - 8
+
+    c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
+    for sheet_i, spread in enumerate(spreads):
+        # ── The sheet's outside: the church's welcome left, the cover right ──
+        draw_back(c, 0)
+        draw_cover(c, panel_w, sheet_i)
+        fold_guides()
+        c.showPage()
+        # ── The inside spread: the order of service down both panels ──
+        label = 'Order of Service' if sheet_i == 0 else 'Order of Service \u2013 continued'
+        for col_i, column in enumerate(spread):
+            x0 = col_i * panel_w
+            c.setFont('Helvetica-Bold', 8)
+            c.setFillColor(GREY)
+            c.drawString(x0 + side, page_h - 26, label.upper())
+            y = page_h - headroom
+            for row, lines in column:
+                y = draw_row(c, x0 + side + row['indent'], y, row, lines)
+        fold_guides()
+        c.showPage()
+    c.save()
     buffer.seek(0)
     return buffer.getvalue()
+
 
 
 def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=None, search=None) -> bytes:

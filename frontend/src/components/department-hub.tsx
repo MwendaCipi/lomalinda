@@ -1171,6 +1171,19 @@ function ProgramEditorModal({
   // closes whichever other was open and the desk reads one part of the day
   // rather than all of them at once.
   const [openSession, setOpenSession] = useState<number | null>(0);
+  // Every "Add" on this sheet appends at the foot of its list, below the
+  // fold once a day grows long — the typing column keeps its own scroll on
+  // a desk, and on a phone the sheet scrolls as one page, and both carry
+  // the new row out of sight. So a click marks where to land, and the
+  // commit that mounts the new row walks it into the viewport. The mark is
+  // cleared on use, so plain typing and edits never scroll anything.
+  const pendingScrollRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingScrollRef.current) return;
+    const target = pendingScrollRef.current;
+    pendingScrollRef.current = null;
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [items]);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   /** Removing a session also settles which one is left open. */
@@ -1345,7 +1358,11 @@ function ProgramEditorModal({
             // that rule shows the hours it still carries.
             const range = sessionRange(session);
             return (
-              <div key={index} className="overflow-hidden rounded-2xl border border-sand-line bg-white">
+              <div
+                key={index}
+                id={`session-card-${index}`}
+                className="overflow-hidden rounded-2xl border border-sand-line bg-white"
+              >
                 {/* The session shut: its hours and its name on the outside.
                     Opening one closes the other, so only one part of the day
                     is ever unfolded. */}
@@ -1408,7 +1425,11 @@ function ProgramEditorModal({
                       )}
 
                       {session.parts.map((part, partIndex) => (
-                        <div key={partIndex} className="rounded-xl border border-sand-line bg-white p-2.5">
+                        <div
+                          key={partIndex}
+                          id={`part-${index}-${partIndex}`}
+                          className="rounded-xl border border-sand-line bg-white p-2.5"
+                        >
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
                               Activity {partIndex + 1}
@@ -1456,7 +1477,11 @@ function ProgramEditorModal({
                           <div className="mt-2 space-y-1.5">
                             <p className="text-[11px] font-semibold text-moss">Facilitator</p>
                             {part.participants.map((person, personIndex) => (
-                              <div key={personIndex} className="flex items-center gap-1.5">
+                              <div
+                                key={personIndex}
+                                id={`part-${index}-${partIndex}-person-${personIndex}`}
+                                className="flex items-center gap-1.5"
+                              >
                                 <input
                                   type="text"
                                   value={person.name}
@@ -1497,12 +1522,15 @@ function ProgramEditorModal({
                             ))}
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
                                 mapPart(index, partIndex, (p) => ({
                                   ...p,
                                   participants: [...p.participants, { name: "", role: "" }],
-                                }))
-                              }
+                                }));
+                                // Land on the row just made — the
+                                // hand-off above finds it by its id.
+                                pendingScrollRef.current = `part-${index}-${partIndex}-person-${part.participants.length}`;
+                              }}
                               className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-bark hover:underline"
                             >
                               <Plus className="h-3 w-3" /> Add facilitator
@@ -1512,11 +1540,15 @@ function ProgramEditorModal({
                       ))}
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
                           setSession(index, {
                             parts: [...session.parts, { start: carryTime(session), end: "", title: "", participants: [] }],
-                          })
-                        }
+                          });
+                          // Land on the activity just made — its row
+                          // mounts below here, out of the viewport once
+                          // the session holds a few of them.
+                          pendingScrollRef.current = `part-${index}-${session.parts.length}`;
+                        }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:border-ember"
                       >
                         <Plus className="h-3 w-3" /> Add activity
@@ -1535,6 +1567,9 @@ function ProgramEditorModal({
               onClick={() => {
                 setItems((current) => [...current, emptySession]);
                 setOpenSession(items.length);
+                // Land on the card just minted — its opened panel rides
+                // below the fold once the day is long.
+                pendingScrollRef.current = `session-card-${items.length}`;
               }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep"
             >

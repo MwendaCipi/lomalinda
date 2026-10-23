@@ -12152,8 +12152,57 @@ class DepartmentEventProgramView(APIView):
         if event is None:
             return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        from .pdf_generator import generate_event_program_pdf
-        pdf_bytes = generate_event_program_pdf(event, department_row.name)
+        from .pdf_generator import (
+            generate_event_program_pdf,
+            _spoken_hour,
+            _spoken_range,
+        )
+
+        # The brochure's back panel speaks for the church: where to find it,
+        # its week of worship, and how to give. Everything the office has not
+        # written stays off the paper.
+        church_row = ChurchSettings.objects.first()
+
+        def _spoken_clock(moment):
+            """A stored clock spoken the programme sheet's way — reuse, not a
+            second hour format to keep in step."""
+            return _spoken_hour(moment.strftime('%H:%M') if hasattr(moment, 'strftime') else str(moment))
+
+        services = [
+            {
+                'weekday': meeting.get_weekday_display(),
+                'text': (
+                    f"{meeting.title} \u00b7 "
+                    f"{_spoken_range(_spoken_clock(meeting.start_time), _spoken_clock(meeting.end_time))}"
+                ),
+            }
+            for meeting in WeeklyMeeting.objects.filter(is_active=True)[:8]
+        ]
+        giving = []
+        if church_row:
+            if church_row.mpesa_paybill_number:
+                bits = [f'M-PESA Pay Bill {church_row.mpesa_paybill_number}']
+                if church_row.mpesa_account_number:
+                    bits.append(f'Account {church_row.mpesa_account_number}')
+                if church_row.mpesa_account_name:
+                    bits.append(church_row.mpesa_account_name)
+                giving.append(', '.join(bits))
+            if church_row.mpesa_phone_number:
+                giving.append(f'Send Money {church_row.mpesa_phone_number}')
+            if church_row.bank_name:
+                bank_bits = [church_row.bank_name]
+                if church_row.bank_account_number:
+                    bank_bits.append(f'A/C {church_row.bank_account_number}')
+                giving.append(' \u00b7 '.join(bank_bits))
+            if church_row.bank_paybill_number:
+                giving.append(f'Bank Pay Bill {church_row.bank_paybill_number}')
+
+        contact = {
+            'address': (church_row.address if church_row else '') or '',
+            'services': services,
+            'giving': giving,
+        }
+        pdf_bytes = generate_event_program_pdf(event, department_row.name, contact=contact)
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         # Served inline: the desk's "View program" opens the sheet in its own
         # tab to be read. The Download button carries its own `download`
