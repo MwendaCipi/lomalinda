@@ -1085,6 +1085,7 @@ function EventProgramMenu({
   onView,
   onEdit,
   onCreate,
+  onUpload,
   onRemove,
 }: {
   event: DeptEvent;
@@ -1092,6 +1093,8 @@ function EventProgramMenu({
   /** Correct the event's details — the form, open on what it holds. */
   onEdit: () => void;
   onCreate: () => void;
+  /** Send a programme in as a file, replacing what the event carries. */
+  onUpload: () => void;
   onRemove: () => void;
 }) {
   const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
@@ -1107,7 +1110,7 @@ function EventProgramMenu({
       </button>
       {hasProgram ? (
         <>
-          <button type="button" onClick={onView} className={`${item} font-semibold text-bark`}>
+          <button type="button" onClick={onView} className={`${item} text-bark`}>
             View program
           </button>
           <button type="button" onClick={onCreate} className={`${item} text-bark`}>
@@ -1115,10 +1118,13 @@ function EventProgramMenu({
           </button>
         </>
       ) : (
-        <button type="button" onClick={onCreate} className={`${item} font-semibold text-bark`}>
+        <button type="button" onClick={onCreate} className={`${item} text-bark`}>
           Add program
         </button>
       )}
+      <button type="button" onClick={onUpload} className={`${item} text-bark`}>
+        Upload program
+      </button>
       <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
         Remove event
       </button>
@@ -1134,12 +1140,11 @@ function EventProgramMenu({
  * It opens two ways. In a modal it is the create/edit form — that is the
  * phone's read. On a desk it opens as a page of its own, and the page is
  * a workbench: it takes the viewport under a "Back to events" link, the
- * typing sits on the left, and beside it the programme as the church will
- * see it — the uploaded file when the event carries one, and the live
- * sheet beneath it. Its actions live on a bar at the foot: Save program
- * (the sheet is editable in place, so there is no separate edit), Remove
- * program, Download program, Upload program and Share — so the programme
- * is typed, printed and handed on from where it is read.
+ * typing sits on the left, and beside it the programme as the church will  * see it — the uploaded file when the event carries one, and the live
+  * sheet beneath it. Typing carries its own Save at the top of the left
+  * column (the sheet is editable in place, so there is no separate edit);
+  * the calendar row's Actions menu names the upload, and on a phone the
+  * modal's own bar keeps the rest — remove, download, share.
  */
 function ProgramEditorModal({
   event,
@@ -1150,7 +1155,6 @@ function ProgramEditorModal({
   onRemoveProgram,
   programDownloadHref,
   onShare,
-  onUpload,
 }: {
   event: DeptEvent;
   departmentLabel: string;
@@ -1165,8 +1169,6 @@ function ProgramEditorModal({
   programDownloadHref?: string;
   /** Share the printed programme or its link. */
   onShare?: () => void;
-  /** Send the programme in as a file, replacing what the event carries. */
-  onUpload?: () => void;
 }) {
   const isPage = variant === "page";
   // The programme as it stands. A programme that does not exist yet opens
@@ -1241,9 +1243,10 @@ function ProgramEditorModal({
     )
   ) : null;
 
-  // The things a finished programme is done with, identical on the page's
-  // bar and the phone modal's: taken off the event, printed to paper, a
-  // file sent in to replace the typed rows, handed on.
+  // The things a finished programme is done with, on the phone modal's bar:
+  // taken off the event, printed to paper, handed on. Upload moved to the
+  // calendar row's Actions menu, and the desk's page saves from the typing
+  // side — no bar pins the sheet at its foot any more.
   const programBarButtons = (
     <>
       {onRemoveProgram && eventHasProgram(event) && (
@@ -1263,15 +1266,6 @@ function ProgramEditorModal({
         >
           Download program
         </a>
-      )}
-      {onUpload && (
-        <button
-          type="button"
-          onClick={onUpload}
-          className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-        >
-          Upload program
-        </button>
       )}
       {onShare && programDownloadHref && (
         <button
@@ -1353,9 +1347,19 @@ function ProgramEditorModal({
           {/* The typing, on the left — its own scroll on a desk, so the day
               being built travels apart from the sheet beside it. */}
           <div className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
-            <p className="text-xs text-moss">
-              Each session is one part of the day. Open a session to add the activities inside it.
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs text-moss">
+                Each session is one part of the day. Open a session to add the activities inside it.
+              </p>
+              <button
+                type="button"
+                disabled={!valid}
+                onClick={() => onSave(items)}
+                className="shrink-0 rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+              >
+                Save program
+              </button>
+            </div>
             <div className="mt-3 space-y-3">
           {items.map((session, index) => {
             const open = openSession === index;
@@ -1593,23 +1597,7 @@ function ProgramEditorModal({
           </aside>
         </div>
 
-        {isPage ? (
-          // The page's action bar: save what has been typed (the sheet is
-          // editable in place, so there is no separate "Edit program"),
-          // and on its left the things a finished programme is done with —
-          // taken off the event, printed to paper, a file sent in, handed on.
-          <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3 md:shrink-0 sm:-mx-6 sm:px-6">
-            <div className="flex flex-wrap items-center gap-2">{programBarButtons}</div>
-            <button
-              type="button"
-              disabled={!valid}
-              onClick={() => onSave(items)}
-              className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-            >
-              Save program
-            </button>
-          </div>
-        ) : (
+        {!isPage && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line pt-3">
             <div className="flex flex-wrap items-center gap-2">{programBarButtons}</div>
             <div className="flex items-center gap-2">
@@ -6001,6 +5989,7 @@ function DepartmentDetail({
                           onView={() => { onClose(); viewProgram(event); }}
                           onEdit={() => { onClose(); setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
+                          onUpload={() => { onClose(); chooseProgramFile(event); }}
                           onRemove={() => { onClose(); removeEvent(event); }}
                         />
                       </div>
@@ -6086,6 +6075,7 @@ function DepartmentDetail({
                                         onView={() => { setOpenEventMenuKey(null); viewProgram(event); }}
                                         onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                         onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                        onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
                                         onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                                       />
                                 </div>,
@@ -6157,6 +6147,7 @@ function DepartmentDetail({
                                     onView={() => { setOpenEventMenuKey(null); viewProgram(event); }}
                                     onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                     onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
+                                    onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
                                     onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                               />
                             </div>
@@ -6302,7 +6293,7 @@ function DepartmentDetail({
         <>
           {/* The phone keeps the modal it knew: the create/edit form as one
               card over a dimmed sheet, with the programme's other actions —
-              remove, download, upload, share — on its own bar. */}
+              remove, download, share — on its own bar. */}
           <div className="md:hidden">
             <ProgramEditorModal
               event={programFor}
@@ -6311,13 +6302,12 @@ function DepartmentDetail({
               onSave={(items) => saveProgram(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
-              onUpload={() => chooseProgramFile(programFor)}
               onShare={() => void shareProgram(programFor)}
             />
           </div>
           {/* A desk opens the programme as a page: it takes the viewport, the
-              sheet is typed where it is read, and its actions — save, remove,
-              download, share — sit at its foot. */}
+              sheet is typed where it is read, and Save rides the typing side
+              at its top — no bar pins the page at its foot. */}
           <div className="hidden md:block">
             <ProgramEditorModal
               event={programFor}
@@ -6327,7 +6317,6 @@ function DepartmentDetail({
               onSave={(items) => saveProgramInline(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
-              onUpload={() => chooseProgramFile(programFor)}
               onShare={() => void shareProgram(programFor)}
             />
           </div>
