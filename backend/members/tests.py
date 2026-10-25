@@ -1325,6 +1325,17 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(credits.filter(account=tithe).first().amount, Decimal('200.00'))
         self.assertEqual(credits.filter(account=combined).first().amount, Decimal('150.00'))
 
+        # The giving ledger itself is split too — one line per account under
+        # one payment group, the shape a giver's own split payment is stored
+        # in — so the ledger, the statements and the receipt paper all read
+        # the split the treasurer chose.
+        group_rows = list(Contribution.objects.filter(payment_group=self.held.payment_group).order_by('id'))
+        self.assertEqual(len(group_rows), 2)
+        by_purpose = {row.purpose: row for row in group_rows}
+        self.assertEqual(by_purpose['Tithe'].amount, Decimal('200.00'))
+        self.assertEqual(by_purpose['CombinedOffering'].amount, Decimal('150.00'))
+        self.assertTrue(all(not row.needs_review for row in group_rows))
+
         # A second press refuses — already assigned.
         response = self.client.post(
             f'/api/members/treasury/contributions/{self.held.id}/assign/',
@@ -1361,6 +1372,46 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.held.refresh_from_db()
         self.assertFalse(self.held.needs_review)
+
+        # A single-account press leaves the ledger row whole — no group line
+        # was ever needed.
+        self.assertIsNone(self.held.payment_group)
+        self.assertEqual(self.held.purpose, 'LCB')
+
+    def test_a_split_assignment_receipts_the_whole_payment(self):
+        """A payment assigned across several accounts is thanked for the
+        whole payment: the letter names every account the money went to and
+        the full statement figure, and the attached slip itemises the split
+        from the ledger's own lines.
+        """
+        tithe = TreasuryAccount.objects.create(name='Tithe', description='Tithe', account_type='mobile_money')
+        welfare = TreasuryAccount.objects.create(name='Welfare', description='Welfare', account_type='mobile_money')
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            f'/api/members/treasury/contributions/{self.held.id}/assign/',
+            {
+                'allocations': [
+                    {'account_id': tithe.id, 'amount': '200.00'},
+                    {'account_id': welfare.id, 'amount': '150.00'},
+                ],
+                'receipt_email': 'friend@example.com',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # The letter names both accounts, and the amount is the payment's
+        # own statement figure — not the first line's share.
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn('Tithe', body)
+        self.assertIn('Welfare', body)
+        self.assertIn('KES 350.00', body)
+        # The slip rides with the letter.
+        self.assertTrue(mail.outbox[0].attachments)
+        filename, content, mimetype = mail.outbox[0].attachments[0]
+        self.assertEqual(mimetype, 'application/pdf')
+        self.assertTrue(content.startswith(b'%PDF'))
 
 
 class TreasuryFailedViewTests(APITestCase):

@@ -6227,7 +6227,13 @@ class AssignContributionAccountView(APIView):
             email=contribution.donor_email,
             phone=contribution.phone_number,
         ) or 'friend'
-        amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
+        # The amount a receipt names is the payment's whole statement figure —
+        # the sum of its ledger lines — not the first line's share of it: a
+        # split payment thanks the giver for everything they gave.
+        from .treasury import ContributionSiblings
+
+        total_amount = sum((row.amount for row in ContributionSiblings(contribution).rows()), Decimal('0'))
+        amount_display = f"{contribution.currency} {total_amount:,.2f}"
         account_list = ' / '.join(account_names)
         # The treasurer's message is already the words they wrote (the modal
         # prefills the church's default); the render pass fills any placeholder
@@ -6330,21 +6336,53 @@ class AssignContributionAccountView(APIView):
             )
 
         reference = contribution.mpesa_receipt_number or contribution.paystack_reference or f'CONTRIB-{contribution.id}'
-        credited = credit_contribution_lines(
-            contribution,
-            allocations=[(account.name, amount) for account, amount in resolved],
-            created_by=request.user,
-        )
-        if not credited:
-            return Response({'detail': 'No account could be credited.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        contribution.needs_review = False
-        # The typed reference is no longer the ledger's truth — the desk chose
-        # the accounts. Store the first assigned account name as the purpose
-        # (single string column); the full split lives in the transaction
-        # descriptions.
-        contribution.purpose = resolved[0][0].name
-        contribution.save(update_fields=['needs_review', 'purpose'])
+        # The ledger keeps one line per account — the same shape a giver's own
+        # split payment is stored in — so every reader of the giving ledger,
+        # the receipt paper included, itemises the split the desk chose.
+        # Assigning a payment across several accounts therefore rewrites the
+        # one held row as the first share and files its siblings beside it
+        # under one payment group. A single-account press keeps the row
+        # whole, and a payment already stored split (the giver's own lines)
+        # is credited as it stands.
+        with transaction.atomic():
+            if len(resolved) > 1 and not contribution.payment_group:
+                group = uuid.uuid4()
+                first_account, first_amount = resolved[0]
+                copy_fields = (
+                    'member', 'donor_name', 'donor_email', 'giving_type', 'currency',
+                    'phone_number', 'payment_method', 'status', 'mpesa_receipt_number',
+                    'paid_at', 'campaign', 'card_assignment', 'honoree', 'honoree_name',
+                    'relationship', 'honoree_phone', 'anonymous',
+                )
+                Contribution.objects.filter(pk=contribution.pk).update(
+                    payment_group=group, purpose=first_account.name, amount=first_amount,
+                    needs_review=False,
+                )
+                Contribution.objects.bulk_create([
+                    Contribution(
+                        **{field: getattr(contribution, field) for field in copy_fields},
+                        payment_group=group,
+                        purpose=account.name,
+                        amount=amount,
+                    )
+                    for account, amount in resolved[1:]
+                ])
+                contribution.refresh_from_db(fields=['amount', 'purpose', 'payment_group', 'needs_review'])
+            else:
+                contribution.needs_review = False
+                contribution.purpose = resolved[0][0].name
+                contribution.save(update_fields=['needs_review', 'purpose'])
+
+            credited = credit_contribution_lines(
+                contribution,
+                allocations=[(account.name, amount) for account, amount in resolved],
+                created_by=request.user,
+            )
+            if not credited:
+                transaction.set_rollback(True)
+                return Response({'detail': 'No account could be credited.'}, status=status.HTTP_400_BAD_REQUEST)
+
         delivery = self._send_receipt(request, contribution, [c.account.name for c in credited])
         return Response(
             {
