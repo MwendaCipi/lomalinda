@@ -5083,9 +5083,22 @@ class ResendContributionReceiptView(APIView):
             if send_email and not email:
                 return Response({'detail': 'This giver does not have a verified email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            amount_display = f"KES {contribution.amount:,.2f}"
-            summary = receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))
-            receipt_message = render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, contribution.purpose)
+            # A copy retells the whole payment, not the one ledger row the
+            # desk was handed: a split payment lists every account its lines
+            # name and thanks the giver for the statement's full figure —
+            # the letter re-cut from the same rows the receipt paper reads.
+            from .treasury import ContributionSiblings
+
+            grouped = ContributionSiblings(contribution).rows()
+            account_names = []
+            for line in grouped:
+                if line.purpose and line.purpose not in account_names:
+                    account_names.append(line.purpose)
+            total_amount = sum((line.amount for line in grouped), Decimal('0'))
+            account_display = ' / '.join(account_names)
+            amount_display = f"KES {total_amount:,.2f}"
+            summary = receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))
+            receipt_message = render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, account_display)
             # A copy arrives with its paper — the same slip the first letter
             # carried, re-cut from the ledger rows.
             attachment = contribution_receipt_attachment(contribution) if send_email else None
@@ -5095,10 +5108,14 @@ class ResendContributionReceiptView(APIView):
                 f"{receipt_email_signature()}"
             )
             delivery = _deliver_receipt_message(
-                subject=f"Receipt Copy — {contribution.purpose}",
+                subject=f"Receipt Copy — {account_display}",
                 body=body,
                 email=email if send_email else '',
                 phone=phone if send_sms else '',
+                # Both channels ticked means both deliveries: the desk's
+                # own picker says the receipt rides email and SMS, so the
+                # SMS does not stand behind an email that already went.
+                both=send_email and send_sms,
                 mark_sent=lambda: None,
                 attachments=[attachment] if attachment else None,
             )
@@ -5161,6 +5178,8 @@ class ResendContributionReceiptView(APIView):
                 body=body,
                 email=email if send_email else '',
                 phone=phone if send_sms else '',
+                # The desk's own picker: both ticked, both delivered.
+                both=send_email and send_sms,
                 mark_sent=lambda: None,
             )
             sent = bool(delivery['email_sent'] or delivery['sms_sent'])

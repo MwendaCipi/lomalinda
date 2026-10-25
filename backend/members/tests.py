@@ -1413,6 +1413,137 @@ class UnassignedPaymentsApiTests(APITestCase):
         self.assertEqual(mimetype, 'application/pdf')
         self.assertTrue(content.startswith(b'%PDF'))
 
+    def test_a_resend_of_a_split_payment_names_every_account(self):
+        """The desk's resend retells the whole payment, not the one row it
+        was handed: both accounts the split named, and the statement's full
+        figure — not the first line's share of it.
+        """
+        group = uuid.uuid4()
+        tithe_row = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='HELD99PAY1', amount=Decimal('200.00'),
+            purpose='Tithe', phone_number='254701000101', needs_review=False,
+            payment_group=group, paid_at=timezone.now(), donor_name='Jane Doe',
+        )
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='HELD99PAY1', amount=Decimal('150.00'),
+            purpose='Welfare', phone_number='254701000101', needs_review=False,
+            payment_group=group, paid_at=timezone.now(), donor_name='Jane Doe',
+        )
+        self.client.force_authenticate(user=self.treasurer)
+        response = self.client.post(
+            '/api/members/treasury/resend-receipt/',
+            {'source': 'digital', 'id': tithe_row.id, 'email': 'friend@example.com'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn('Tithe', body)
+        self.assertIn('Welfare', body)
+        self.assertIn('KES 350.00', body)
+
+    def test_the_assignment_fix_reshapes_the_ledger_rows_assigned_before_it(self):
+        """Payments the desk split before the assignment fix still sit on
+        one row naming the first account alone; the repair migration reads
+        their treasury credits and retells the ledger the way the desk now
+        writes it — one line per account under one payment group.
+        """
+        from importlib import import_module
+        reshape = import_module(
+            'members.migrations.0231_reshape_historical_split_assignments'
+        ).reshape_historical_split_assignments
+
+        tithe = TreasuryAccount.objects.create(name='Tithe', description='Tithe', account_type='mobile_money')
+        combined = TreasuryAccount.objects.create(name='Combined Offering', description='Combined Offering', account_type='mobile_money')
+
+        legacy = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='LEGACY-SPLIT-1', amount=Decimal('350.00'),
+            phone_number='254701000101', needs_review=False,
+            purpose='Tithe', paid_at=timezone.now(), donor_name='Jane Doe',
+        )
+        TreasuryAccountTransaction.objects.create(
+            account=tithe, transaction_type='credit', amount=Decimal('200.00'),
+            description='Jane Doe — M-Pesa (Tithe)', reference='LEGACY-SPLIT-1',
+        )
+        TreasuryAccountTransaction.objects.create(
+            account=combined, transaction_type='credit', amount=Decimal('150.00'),
+            description='Jane Doe — M-Pesa (Combined Offering)', reference='LEGACY-SPLIT-1',
+        )
+
+        # A payment that was only ever one account, and a giver's own split
+        # payment already stored right, are left exactly as they are.
+        single = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='LEGACY-SINGLE', amount=Decimal('80.00'),
+            needs_review=False, purpose='Tithe', paid_at=timezone.now(),
+        )
+        TreasuryAccountTransaction.objects.create(
+            account=tithe, transaction_type='credit', amount=Decimal('80.00'),
+            description='John — M-Pesa (Tithe)', reference='LEGACY-SINGLE',
+        )
+        giver_group = uuid.uuid4()
+        giver_rows = [
+            Contribution.objects.create(
+                payment_method='mpesa', giving_type='financial', status='completed',
+                mpesa_receipt_number='GIVER-SPLIT', amount=share, purpose=purpose,
+                needs_review=False, payment_group=giver_group, paid_at=timezone.now(),
+            )
+            for purpose, share in (('Tithe', Decimal('90.00')), ('Welfare', Decimal('60.00')))
+        ]
+
+        reshape(django_apps, None)
+
+        legacy.refresh_from_db()
+        rows = sorted(
+            Contribution.objects.filter(payment_group=legacy.payment_group),
+            key=lambda row: row.id,
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {(row.purpose, row.amount) for row in rows},
+            {('Tithe', Decimal('200.00')), ('Combined Offering', Decimal('150.00'))},
+        )
+
+        single.refresh_from_db()
+        self.assertIsNone(single.payment_group)
+        for row in giver_rows:
+            row.refresh_from_db()
+            self.assertEqual(row.payment_group, giver_group)
+
+    def test_the_repair_leaves_the_books_unmoved_when_totals_disagree(self):
+        """A row whose credits do not add up to its amount is exactly the
+        row the repair must not rewrite on a guess: it stays on one line.
+        """
+        from importlib import import_module
+        reshape = import_module(
+            'members.migrations.0231_reshape_historical_split_assignments'
+        ).reshape_historical_split_assignments
+
+        tithe = TreasuryAccount.objects.create(name='Tithe', description='Tithe', account_type='mobile_money')
+        combined = TreasuryAccount.objects.create(name='Combined Offering', description='Combined Offering', account_type='mobile_money')
+        mismatch = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='MISMATCH-REF', amount=Decimal('350.00'),
+            needs_review=False, purpose='Tithe', paid_at=timezone.now(),
+        )
+        TreasuryAccountTransaction.objects.create(
+            account=tithe, transaction_type='credit', amount=Decimal('200.00'),
+            description='A — M-Pesa (Tithe)', reference='MISMATCH-REF',
+        )
+        TreasuryAccountTransaction.objects.create(
+            account=combined, transaction_type='credit', amount=Decimal('100.00'),
+            description='A — M-Pesa (Combined Offering)', reference='MISMATCH-REF',
+        )
+
+        reshape(django_apps, None)
+
+        mismatch.refresh_from_db()
+        self.assertIsNone(mismatch.payment_group)
+        self.assertEqual(mismatch.amount, Decimal('350.00'))
+
 
 class TreasuryFailedViewTests(APITestCase):
     """The Failed tab: what never arrived — counted for the badge, and
