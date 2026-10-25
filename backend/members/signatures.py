@@ -30,7 +30,11 @@ RECEIPT_OFFICES = (
 
 #: Every office that may keep a signature, senior office last so that
 #: ``office_for`` can let the senior office win when one person holds both.
+#: The head deacon witnesses the church's money papers, so the office keeps
+#: a pen too — junior to the treasurer it sits beside on the treasury report,
+#: and junior to the elder who authorises.
 SIGNING_OFFICES = (
+    ('head_deacon', 'Head Deacon'),
     ('treasurer', 'Treasurer'),
     ('first_elder', 'First Elder'),
 )

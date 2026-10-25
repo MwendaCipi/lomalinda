@@ -48,6 +48,7 @@ import {
   Printer,
   Pencil,
   Search,
+  Send,
   ListMusic,
   Sparkles,
   Sun,
@@ -64,6 +65,7 @@ import {
 import { showAlert } from "@/lib/alerts";
 import {
   areaHasMoments,
+  areaHasMessaging,
   DEPARTMENT_BLURBS,
   deaconateViews,
   departmentDeskCode,
@@ -93,6 +95,7 @@ import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
+import { MessageComposeModal, MessagingPanel } from "@/components/messages-desk";
 import { DeaconateManager, useRotaFilters } from "@/components/deaconate-manager";
 import { AnnouncementManager } from "@/components/announcement-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -4443,6 +4446,7 @@ type DeptSubTab =
   | "members"
   | "calendar"
   | "moments"
+  | "messaging"
   | "meetings"
   | "pulpit-team"
   | "duties"
@@ -4557,6 +4561,9 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  // The Message button at the foot of the roll opens the composer over the
+  // desk — the roll on screen is the roll the send addresses.
+  const [showMessageModal, setShowMessageModal] = useState(false);
   const [churchName, setChurchName] = useState("SDA Church Loma Linda, Meru");
   const [showLeadership, setShowLeadership] = useState(false);
   // A member reading the area who is not on its roll can ask to join from
@@ -4970,11 +4977,15 @@ function DepartmentDetail({
         : []),
       ...names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })),
       // A desk without units keeps the roll named "All Members".
-      ...(names.length === 0 ? [{ key: "members", label: "All Members", short: "Members", icon: Users }] : []),
+      ...(names.length === 0
+        ? [{ key: "members", label: isMusic ? "Members" : "All Members", short: "Members", icon: Users }]
+        : []),
       // Music sings in more than one voice: the choir's own roll and the
-      // groups registered under it each get a view beside the roll.
-      ...(isMusic ? [{ key: "choir", label: "Church Choir", icon: Music }] : []),
-      ...(isMusic ? [{ key: "singing_groups", label: "Singing Groups", icon: MicVocal }] : []),
+      // groups registered under it each get a view beside the roll. The desk
+      // names each of its views one word — Choir, Groups, Events, Account —
+      // so its strip reads the same in a hand as on a desk.
+      ...(isMusic ? [{ key: "choir", label: "Choir", icon: Music }] : []),
+      ...(isMusic ? [{ key: "singing_groups", label: "Groups", icon: MicVocal }] : []),
       // Music's own duties — who sings and plays on a Sabbath — sit beside
       // the groups, rostered on the same rota panel the deaconate and the
       // pulpit team keep (see DeaconateManager's music desk).
@@ -4992,19 +5003,26 @@ function DepartmentDetail({
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
       // row (see MembersFilterButton).
-      { key: "calendar", label: "Event Calendar", short: "Events", icon: CalendarDays },
+      { key: "calendar", label: isMusic ? "Events" : "Event Calendar", short: "Events", icon: CalendarDays },
       // Moments — every ministry and department keeps its door to the
       // church's wall of days, except the two office record desks (Treasury
       // and Clerkship), whose work is books rather than the church's days.
       ...(areaHasMoments(department.code)
         ? [{ key: "moments", label: "Moments", short: "Moments", icon: Sparkles }]
         : []),
+      // The desk's own text to its roll — one box to write in, one list of
+      // what has been sent, kept so it can be read or typed again. The
+      // Treasury and the Clerkship keep books rather than the church's
+      // people, so their desks do not carry the view.
+      ...(areaHasMessaging(department.code)
+        ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }]
+        : []),
       // The fund ledger and withdrawal requests unified under one desk.
       // The deaconate names the page Funding & Accounts, as its console and
       // map pages do — behind the same desk sit its funding requests too.
       {
         key: "accounts",
-        label: isDeaconate ? "Funding & Accounts" : "Account Status",
+        label: isDeaconate ? "Funding & Accounts" : isMusic ? "Account" : "Account Status",
         short: isDeaconate ? "Funding" : "Account",
         icon: Wallet,
       },
@@ -6223,6 +6241,15 @@ function DepartmentDetail({
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> Chat
                 </button>
+                {areaHasMessaging(department.code) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageModal(true)}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  >
+                    <Send className="h-3.5 w-3.5" /> Message
+                  </button>
+                )}
                 {department.code === "children" && (
                   <button
                     type="button"
@@ -6563,6 +6590,18 @@ function DepartmentDetail({
         <AreaMomentsPanel departmentLabel={department.label} canManage={canDocumentMoments} />
       )}
 
+      {/* Messaging — the desk's own text to its roll: the composer over the
+          log of what has been sent, opening empty. The Treasury and the
+          Clerkship keep books rather than the church's people, so their desks
+          carry no such view (see `areaHasMessaging`). */}
+      {subTab === "messaging" && areaHasMessaging(department.code) && (
+        <MessagingPanel
+          departmentCode={department.code}
+          departmentLabel={department.label}
+          onChanged={onChanged}
+        />
+      )}
+
       {/* Singing groups — the music register: groups registered under the
           department, each with the singers who make it up. */}
       {subTab === "choir" && isMusic && (
@@ -6730,6 +6769,16 @@ function DepartmentDetail({
           if (file && target) uploadProgram(target, file);
         }}
       />
+      {showMessageModal && (
+        <MessageComposeModal
+          departmentCode={department.code}
+          departmentLabel={department.label}
+          rollCount={roll.length}
+          reachable={0}
+          onClose={() => setShowMessageModal(false)}
+          onSent={() => setShowMessageModal(false)}
+        />
+      )}
       {showAddChild && (
         <AddChildModal
           initialUnit={unit}

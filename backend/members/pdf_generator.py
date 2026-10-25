@@ -461,8 +461,8 @@ def generate_treasury_pdf(
         return cell
 
     # The office signatures, read once for both of the report's shapes: the
-    # treasurer prepares, the first elder verifies, and a deacon has no pen
-    # on file here (see members/signatures.py).
+    # treasurer prepares, the head deacon witnesses, and the first elder
+    # verifies (see members/signatures.py).
     offices = signatures or {}
 
     total_val = totals.get("total", 0)
@@ -601,14 +601,16 @@ def generate_treasury_pdf(
             story.append(p_table)
             story.append(Spacer(1, 20))
 
-        # The sign-off block now checks the saved signatures too: the
-        # treasurer's and the first elder's uploaded pens print on their
-        # lines, the same way the summary's sign-off does — and the rules
-        # stand where an office has no signature on file yet.
+        # The sign-off block names the three offices the report answers to —
+        # prepared by the Treasurer, witnessed by the Head Deacon, verified by
+        # the Elder — and checks the saved signatures too: each office's
+        # uploaded pen prints on its line, the same way the summary's sign-off
+        # does, and the rules stand where an office has no signature on file
+        # yet.
         sig_data = [[
-            signature_cell("<b>Prepared By:</b>", offices.get("treasurer"), "Name: ______________________"),
-            signature_cell("<b>Witnessed By:</b>", None, "Name: ______________________"),
-            signature_cell("<b>Verified By:</b>", offices.get("first_elder"), "Name: ______________________"),
+            signature_cell("<b>Prepared by: Treasurer</b>", offices.get("treasurer"), "Name: ______________________"),
+            signature_cell("<b>Witnessed by: Head Deacon</b>", offices.get("head_deacon"), "Name: ______________________"),
+            signature_cell("<b>Verified by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
         ]]
         sig_table = Table(sig_data, colWidths=[6.0 * cm, 6.0 * cm, 6.0 * cm])
         sig_table.setStyle(TableStyle([
@@ -1861,16 +1863,26 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
             amount = Decimal(str(row.get("amount") or "0"))
             total += amount
             details = [f"<b>{escape(str(row.get('reason') or '—'))}</b>"]
-            details.append(
-                f"Asked by {escape(str(row.get('requested_by') or '—'))} · Bal: KES {format_money(row.get('account_balance'))}"
-            )
+            details.append(f"Asked by {escape(str(row.get('requested_by') or '—'))}")
+            # Each office's own approval, named as the office's approval —
+            # the elder's first (the gate every request passes), the
+            # treasurer's decision after it.
             if row.get("elder_approved_by"):
-                details.append(f"Elder approved by {escape(str(row['elder_approved_by']))}")
+                # The office's phrase reads on its own line and the officer's
+                # name starts the next: the cell is only ~40 characters wide,
+                # so one long line would break the name across two.
+                details.append("Elder's Approval: Approved by")
+                details.append(escape(str(row["elder_approved_by"])))
             if row.get("decided_by") and row.get("status") in ("approved", "declined"):
-                line = f"{'Approved' if row['status'] == 'approved' else 'Rejected'} by {escape(str(row['decided_by']))}"
+                verdict = "Approved" if row["status"] == "approved" else "Rejected"
+                details.append(f"Treasurer's Approval: {verdict} by")
+                decided = escape(str(row["decided_by"]))
                 if row.get("reply"):
-                    line += f" — “{escape(str(row['reply']))}”"
-                details.append(line)
+                    decided += f" — “{escape(str(row['reply']))}”"
+                details.append(decided)
+            # The balance reads last: it is the figure the whole request
+            # ends on — what the fund holds once the row has been read.
+            details.append(f"Bal: KES {format_money(row.get('account_balance'))}")
             table_data.append([
                 Paragraph(str(idx), st["cell"]),
                 Paragraph(fmt_date(row.get("created_at")), st["cell"]),

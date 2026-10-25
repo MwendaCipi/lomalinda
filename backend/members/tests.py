@@ -70,7 +70,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -198,6 +198,72 @@ class ContributionTreasuryAPITests(APITestCase):
         donor_names = {item['donor_name'] for item in response.data}
         self.assertIn('Jane Doe', donor_names)
         self.assertIn('John Smith', donor_names)
+
+    def test_summary_merges_the_account_names_the_ledgers_spelled_differently(self):
+        """One account, one summary row.
+
+        'AYM' beside 'Adventist Youth Ministries' beside 'Youth' is one
+        treasury account the same hands spelled differently; the summary
+        folds the family the way the givings report already folds its
+        aliases, so the same money cannot read twice on one screen.
+        """
+        Contribution.objects.create(
+            amount=Decimal('200.00'),
+            purpose='AYM',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        Contribution.objects.create(
+            amount=Decimal('50.00'),
+            purpose='Adventist Youth Ministries',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        CashContribution.objects.create(
+            received_by=self.user,
+            amount=Decimal('25.00'),
+            purpose='Youth',
+            received_on=self.today,
+            payment_method='cash',
+            donor_name='Jane Doe',
+        )
+        response = self.client.get(f'/api/members/treasury/ledger/?date={self.today.isoformat()}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = {row['purpose']: Decimal(row['total']) for row in response.data['purpose_breakdown']}
+        self.assertEqual(rows.get('AYM'), Decimal('275.00'))
+        self.assertNotIn('Adventist Youth Ministries', rows)
+        self.assertNotIn('Youth', rows)
+
+    def test_the_merged_aym_summary_row_opens_on_every_spelling(self):
+        """Clicking the summary's folded 'AYM' row still opens the rows the
+        ledgers carried under the older spellings, so the drill-down reads
+        the same money the summary does."""
+        Contribution.objects.create(
+            amount=Decimal('200.00'),
+            purpose='AYM',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        CashContribution.objects.create(
+            received_by=self.user,
+            amount=Decimal('25.00'),
+            purpose='Adventist Youth Ministry',
+            received_on=self.today,
+            payment_method='cash',
+            donor_name='Jane Doe',
+        )
+        response = self.client.get(
+            f"/api/members/treasury/purpose-contributions/?purpose=AYM&from_date={self.today.isoformat()}&to_date={self.today.isoformat()}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(
+            {Decimal(item['amount']) for item in response.data},
+            {Decimal('200.00'), Decimal('25.00')},
+        )
 
     def test_member_cannot_access_treasury_ledger(self):
         member = User.objects.create_user(username='member', password='secure-password')
@@ -2443,6 +2509,18 @@ class PdfGenerationAPITests(APITestCase):
         self.assertEqual(text.count('LocalChurchBudget'), 3)
         self.assertEqual(text.count('ChildrenMinistry'), 3)
 
+    def test_the_treasury_report_names_its_three_offices(self):
+        # The sign-off block answers to the church's own desks: the treasurer
+        # prepares the report, the head deacon witnesses it, and the elder
+        # verifies it — each named on its own line, with whatever signature
+        # the office has on file printed on the rule.
+        response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        self.assertIn('Preparedby:Treasurer', text)
+        self.assertIn('Witnessedby:HeadDeacon', text)
+        self.assertIn('Verifiedby:Elder', text)
+
     def test_individual_report_reads_mode_only(self):
         # The desk reads how the money moved — one Mode column. The type and
         # mode pair the table used to carry is no longer a question the
@@ -2880,6 +2958,34 @@ class WithdrawalRequestsPdfTests(APITestCase):
         for label in (b'Authorizing Officer', b'Issued By', b'Received By'):
             self.assertNotIn(label, text)
 
+    def test_the_report_reads_a_date_window(self):
+        """The desk's from/to filter travels with the print: only the rows
+        the screen shows land on the sheet, and the heading names the window
+        so a filtered report cannot read as the whole history."""
+        from .models import DepartmentWithdrawalRequest
+
+        # Two days ago is out of a window that opens today; the same-day ask
+        # stays in it. (created_at is stamped on insert, so the past row is
+        # walked back afterwards.
+        DepartmentWithdrawalRequest.objects.filter(pk=self.pending.pk).update(
+            created_at=timezone.now() - timedelta(days=2)
+        )
+        today = timezone.localdate().isoformat()
+        self.client.force_authenticate(self.treasurer)
+
+        windowed = self.client.get(f'/api/members/department-withdrawals/pdf/?from_date={today}')
+        self.assertEqual(windowed.status_code, status.HTTP_200_OK)
+        text = self._pdf_text(windowed.content)
+        self.assertNotIn(b'Sound', text)
+        self.assertIn(b'Tent', text)
+        self.assertIn(today.encode(), text)
+
+        # No window: every row still prints.
+        whole = self.client.get('/api/members/department-withdrawals/pdf/')
+        text = self._pdf_text(whole.content)
+        self.assertIn(b'Sound', text)
+        self.assertIn(b'Tent', text)
+
     def test_the_printed_name_includes_the_word_church(self):
         """Every PDF carries the church's own name in its letterhead —
         "SDA Church" over "Loma Linda, Meru" beside the mark — rather than
@@ -2961,6 +3067,48 @@ class WithdrawalRequestsPdfTests(APITestCase):
         text = self._pdf_text(response.content)
         self.assertIn(b'Sound', text)
         self.assertNotIn(b'Tent', text)
+
+    def test_each_offices_approval_is_named_as_that_offices_and_the_balance_closes_the_row(self):
+        """The wide report reads each approval as the office's own — the
+        elder's first, the treasurer's decision after it — and the balance
+        is the last line of the row: the figure the request ends on.
+        """
+        from .pdf_generator import generate_withdrawal_requests_pdf
+
+        pdf = generate_withdrawal_requests_pdf('SDA Church Test', [{
+            'id': 7,
+            'department': 'Music', 'department_code': 'music',
+            'account_name': 'Music Ministry', 'account_balance': '500.00',
+            'amount': '75.00', 'reason': 'Choir robes for the term',
+            'status': 'approved',
+            'requested_by': 'Marta Member',
+            'elder_approved_by': 'Eli Elder', 'elder_approved_at': date(2026, 10, 1),
+            'decided_by': 'Tess Treasurer', 'decided_at': date(2026, 10, 2),
+            'reply': 'Released for the term.',
+            'created_at': date(2026, 9, 28),
+        }], signatures=False)
+        # Spaces drop out of the extraction: each drawn string of a cell
+        # arrives on its own.
+        flat = self._pdf_text(pdf).replace(b' ', b'')
+
+        # The office's phrase on its own line, the officer's name beneath
+        # it — the cell is only ~40 characters wide, so one long line would
+        # break the name across two.
+        self.assertIn(b"Elder'sApproval:Approvedby", flat)
+        self.assertIn(b"EliElder", flat)
+        self.assertIn(b"Treasurer'sApproval:Approvedby", flat)
+        self.assertIn(b"TessTreasurer", flat)
+        # The treasurer's reply rides the officer's own line.
+        self.assertIn(b"Releasedfortheterm.", flat)
+        # The old bare wording is gone.
+        self.assertNotIn(b'Elderapprovedby', flat)
+        # …and in that order, the balance last of the three.
+        elder_at = flat.find(b"Elder'sApproval:")
+        treasurer_at = flat.find(b"Treasurer'sApproval:")
+        balance_at = flat.find(b'Bal:')
+        self.assertNotEqual(elder_at, -1)
+        self.assertGreater(treasurer_at, elder_at)
+        self.assertGreater(balance_at, treasurer_at)
 
     def test_only_the_desk_may_print(self):
         self.client.force_authenticate(self.elder)
@@ -17243,4 +17391,142 @@ class AnnouncementResponsesViewTests(APITestCase):
         self.assertEqual(self._public_get(draft.pk).status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(self._public_get(removed.pk).status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(self._public_get(self.public.pk).status_code, status.HTTP_200_OK)
+
+
+class DepartmentMessageTests(APITestCase):
+    """The Messaging view: a desk composes one text, its roll receives it, and
+    the message is kept so it can be read — or reused — afterwards.
+
+    The recipients are read from the roll itself (``DepartmentMembersView``),
+    so a message reaches exactly the list the desk has on screen: the choir
+    unioned under music, the roster under Sabbath School, no second list that
+    could drift away from the first.
+    """
+
+    def setUp(self):
+        self.choir = Department.objects.get_or_create(
+            code='choir', defaults={'name': 'Church Choir', 'group': 'department'},
+        )[0]
+        self.leader_role = DepartmentRole.objects.get_or_create(
+            department=self.choir, name='Leader', defaults={'has_assistant': True},
+        )[0]
+        self.leader = User.objects.create_user('msg.leader', 'msg.leader@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        DepartmentAssignment.objects.create(
+            department=self.choir, member=self.leader, role=self.leader_role, kind='leader',
+        )
+        for username, phone in (('msg.a', '0700000011'), ('msg.b', '+254700000012'), ('msg.c', '')):
+            user = User.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
+            MemberProfile.objects.create(user=user, role='member', roles='member', phone_number=phone)
+            DepartmentMembership.objects.create(department='choir', member=user)
+        # A member of the church who holds no keys here: they read the log as
+        # they read the roll, but they do not write to it.
+        self.bystander = User.objects.create_user('msg.other', 'msg.other@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.bystander, role='member', roles='member')
+
+    def test_a_leader_composes_and_the_message_is_kept_to_read_again(self):
+        self.client.force_authenticate(self.leader)
+        sent = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Rehearsal moves to six on Friday.',
+        }, format='json')
+
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED, sent.data)
+        message = DepartmentMessage.objects.get()
+        self.assertEqual(message.body, 'Rehearsal moves to six on Friday.')
+        self.assertEqual(message.audience, 'Church Choir roll')
+        self.assertEqual(message.recipient_count, 3)
+        self.assertEqual(message.created_by, self.leader)
+
+        listed = self.client.get('/api/members/departments/choir/messages/')
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertTrue(listed.data['can_send'])
+        self.assertEqual([row['body'] for row in listed.data['messages']], ['Rehearsal moves to six on Friday.'])
+
+    @override_settings(SMS_API_KEY='')
+    def test_a_message_is_kept_even_when_the_gateway_has_no_key(self):
+        """A server with no token must not swallow what the desk wrote."""
+        self.client.force_authenticate(self.leader)
+        sent = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Saved for the day the key is set.',
+        }, format='json')
+
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED, sent.data)
+        self.assertEqual(sent.data['sent'], 0)
+        self.assertIn('nothing went out', sent.data['detail'])
+        message = DepartmentMessage.objects.get()
+        self.assertEqual(message.sent_count, 0)
+        self.assertEqual(message.body, 'Saved for the day the key is set.')
+
+    @override_settings(SMS_API_KEY='test-token', SMS_SEND_DELAY=0)
+    @patch('members.sms.requests.post')
+    def test_every_reachable_number_on_the_roll_is_texted_once(self, sms_post):
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True}
+        # The same number written a second way, and a singer with no number
+        # on file — one text for the shared number, none for the empty one.
+        twin = User.objects.create_user('msg.twin', 'msg.twin@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=twin, role='member', roles='member', phone_number='254700000011')
+        DepartmentMembership.objects.create(department='choir', member=twin)
+        self.client.force_authenticate(self.leader)
+
+        sent = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Sabbath rehearsal is at five.',
+        }, format='json')
+
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED, sent.data)
+        recipients = sorted(call.kwargs['json']['recipient'] for call in sms_post.call_args_list)
+        self.assertEqual(recipients, ['+254700000011', '+254700000012'])
+        body = sms_post.call_args_list[0].kwargs['json']['message']
+        self.assertEqual(body, 'Sabbath rehearsal is at five.')
+        message = DepartmentMessage.objects.get()
+        self.assertEqual(message.recipient_count, 4)
+        self.assertEqual(message.sent_count, 2)
+        self.assertEqual(message.failed_count, 0)
+        self.assertEqual(sent.data['detail'], 'Sent to 2 of 2 numbers.')
+
+    def test_a_member_without_the_desk_keys_cannot_send(self):
+        self.client.force_authenticate(self.bystander)
+        refused = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Let me in.',
+        }, format='json')
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(DepartmentMessage.objects.exists())
+        # Reading the log stays open to the desk, exactly as the roll is.
+        listed = self.client.get('/api/members/departments/choir/messages/')
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertFalse(listed.data['can_send'])
+
+    def test_an_empty_message_is_refused(self):
+        self.client.force_authenticate(self.leader)
+        refused = self.client.post('/api/members/departments/choir/messages/', {'body': '   '}, format='json')
+
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(DepartmentMessage.objects.exists())
+
+    @override_settings(SMS_API_KEY='test-token', SMS_SEND_DELAY=0)
+    @patch('members.sms.requests.post')
+    def test_the_music_desk_texts_the_choir_it_unions_onto_its_roll(self, sms_post):
+        """Music's roll is a union; the message walks the same one."""
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True}
+        music = Department.objects.get_or_create(code='music', defaults={'name': 'Music', 'group': 'ministry'})[0]
+        music_role = DepartmentRole.objects.get_or_create(
+            department=music, name='Leader', defaults={'has_assistant': True},
+        )[0]
+        DepartmentAssignment.objects.create(
+            department=music, member=self.leader, role=music_role, kind='leader',
+        )
+        self.client.force_authenticate(self.leader)
+
+        sent = self.client.post('/api/members/departments/music/messages/', {
+            'body': 'Call for Sabbath morning.',
+        }, format='json')
+
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED, sent.data)
+        recipients = sorted(call.kwargs['json']['recipient'] for call in sms_post.call_args_list)
+        self.assertEqual(recipients, ['+254700000011', '+254700000012'])
+        message = DepartmentMessage.objects.get(department='music')
+        self.assertEqual(message.audience, 'Music roll')
+        self.assertEqual(message.recipient_count, 3)
 

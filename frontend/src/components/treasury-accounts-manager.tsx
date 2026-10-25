@@ -103,10 +103,16 @@ type WithdrawalRequestRow = {
 function WithdrawalRequestsPanel({
   search = "",
   statusFilter = "all",
+  fromDate = "",
+  toDate = "",
   onChanged,
 }: {
   search?: string;
   statusFilter?: "all" | "pending" | "approved" | "rejected";
+  /** The date window the desk hides under: the day each request was asked,
+      read the same way the Givings and Expenses dates read their rows. */
+  fromDate?: string;
+  toDate?: string;
   /**
    * Called after an action that moves money (approve / reverse), so the desk
    * refetches its accounts. The approval debits the fund server-side; without
@@ -201,6 +207,9 @@ function WithdrawalRequestsPanel({
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (search.trim()) params.set("search", search.trim());
+      // The printed report reads the same window the screen shows.
+      if (fromDate) params.set("from_date", fromDate);
+      if (toDate) params.set("to_date", toDate);
       const res = await fetch(`${API_URL}/api/members/department-withdrawals/pdf/?${params.toString()}`, {
         headers: fundAuthHeaders(),
       });
@@ -248,6 +257,13 @@ function WithdrawalRequestsPanel({
       if (row.status !== "approved") return false;
     } else if (statusFilter === "rejected") {
       if (row.status !== "declined") return false;
+    }
+    // The date window: a request stands in it by the day it was asked,
+    // in the church's timezone — the same day the table prints on the row.
+    if (fromDate || toDate) {
+      const askedOn = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(row.created_at));
+      if (fromDate && askedOn < fromDate) return false;
+      if (toDate && askedOn > toDate) return false;
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -944,6 +960,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // Withdrawal requests search and status filter (all / pending / approved / rejected)
   const [withdrawalSearch, setWithdrawalSearch] = useState("");
   const [withdrawalFilter, setWithdrawalFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  // Withdrawal requests date window — the same from/to pair the Givings page
+  // opens on: the month to date, until the treasurer narrows or clears it.
+  const [withdrawalFrom, setWithdrawalFrom] = useState(firstDayOfMonth);
+  const [withdrawalTo, setWithdrawalTo] = useState(localDate);
   // The spending window opens on the church's month to date — the same window
   // the treasury ledger and the report composer open on — so the desk
   // lands on what it is reviewing rather than on the whole history.
@@ -955,27 +975,54 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // and the toggles sit below both.
   useEffect(() => {
     if (view === "withdrawals") {
+      // The date window and the state filter, written once and shown twice:
+      // in the phone's popover and in the open on a wide screen — the same
+      // pair the Expenses desk shows.
+      const statusControl = (
+        <select
+          value={withdrawalFilter}
+          onChange={(e) => setWithdrawalFilter(e.target.value as typeof withdrawalFilter)}
+          className={FILTER_SELECT_CLASS}
+          aria-label="Filter by status"
+        >
+          <option value="all">All requests</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      );
+      const statusLabel =
+        withdrawalFilter === "all" ? "All requests" : withdrawalFilter === "pending" ? "Pending" : withdrawalFilter === "approved" ? "Approved" : "Rejected";
+      const windowed = withdrawalFrom !== firstDayOfMonth() || withdrawalTo !== localDate();
       setHeaderRightAction(
         <div className="flex w-full items-center gap-2 sm:w-auto">
+          {/* The phone: one button, the same three controls inside. */}
           <FilterPopover
-            title="Filter by status"
-            summary={withdrawalFilter === "all" ? "All requests" : withdrawalFilter === "pending" ? "Pending" : withdrawalFilter === "approved" ? "Approved" : "Rejected"}
-            active={withdrawalFilter !== "all"}
+            title="Request filters"
+            summary={withdrawalFilter !== "all" ? statusLabel : windowed ? "This window" : "All requests"}
+            active={withdrawalFilter !== "all" || windowed}
+            minW={272}
           >
-            <FilterSet label="Status">
-              <select
-                value={withdrawalFilter}
-                onChange={(e) => setWithdrawalFilter(e.target.value as typeof withdrawalFilter)}
-                className={FILTER_SELECT_CLASS}
-                aria-label="Filter by status"
-              >
-                <option value="all">All requests</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
+            <FilterSet label="Status">{statusControl}</FilterSet>
+            <FilterSet label="From">
+              <DateField value={withdrawalFrom} onChange={setWithdrawalFrom} label="Requests from date" />
+            </FilterSet>
+            <FilterSet label="To">
+              <DateField value={withdrawalTo} onChange={setWithdrawalTo} label="Requests to date" />
             </FilterSet>
           </FilterPopover>
+          {/* The wider screens: the same controls, in the open. */}
+          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+            <div className="w-40">{statusControl}</div>
+            <label className="flex items-center gap-1 text-xs font-medium text-moss">
+              <span>From</span>
+              <DateField value={withdrawalFrom} onChange={setWithdrawalFrom} label="Requests from date" />
+            </label>
+            <label className="flex items-center gap-1 text-xs font-medium text-moss">
+              <span>To</span>
+              <DateField value={withdrawalTo} onChange={setWithdrawalTo} label="Requests to date" />
+            </label>
+          </div>
           <input
             type="text"
             placeholder="Search department, purpose, requester..."
@@ -1061,7 +1108,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       />
     );
     return () => setHeaderRightAction(null);
-  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter]);
+  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter, withdrawalFrom, withdrawalTo]);
 
   /**
    * Publish a statement from the desk the treasurer is already sitting at.
@@ -1343,7 +1390,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} onChanged={fetchAccounts} />
+          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
         ) : (

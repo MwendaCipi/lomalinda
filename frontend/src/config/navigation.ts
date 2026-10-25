@@ -1370,6 +1370,21 @@ export function areaHasMoments(code: string): boolean {
   return !MOMENTS_LESS_AREA_CODES.has(code.trim().toLowerCase());
 }
 
+/**
+ * The two areas Messaging is not a view of — the same two. The Treasury and
+ * the Clerkship keep books rather than the church's people: their work goes
+ * out as receipts and minutes, never as a text to a roll, so every other
+ * ministry and department desk carries the Messaging toggle.
+ */
+const MESSAGING_LESS_AREA_CODES = new Set(["treasury", "clerkship"]);
+
+/** Does this area's desk carry a Messaging view? One rule, asked by the strip
+ *  that draws a desk's pages and by the view itself, so the two can never
+ *  disagree about which areas have the page. */
+export function areaHasMessaging(code: string): boolean {
+  return !MESSAGING_LESS_AREA_CODES.has(code.trim().toLowerCase());
+}
+
 /** What a caller tells the rail about the signed-in member. */
 export type RailMember = {
   /** The roles on the account; empty for a member with no office. */

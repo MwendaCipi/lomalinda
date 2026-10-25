@@ -47,7 +47,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 
 from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
 from chat.realtime import broadcast_announcement_response
@@ -4105,7 +4105,10 @@ class ContributionTreasuryView(APIView):
         purposes_dict = {}
 
         for c in digital:
-            p = c.purpose.strip() if c.purpose else 'Combined Offering'
+            # One account reads one name — the same folding the givings
+            # report applies, so the summary cannot split one account into
+            # two rows by spelling ('AYM' beside 'Adventist Youth Ministries').
+            p = canonical_purpose_name(c.purpose)
             if p not in purposes_dict:
                 purposes_dict[p] = {'purpose': p, 'mpesa': Decimal('0'), 'bank_transfer': Decimal('0'), 'cheque': Decimal('0'), 'cash': Decimal('0')}
             pm = (c.payment_method or 'mpesa').lower().strip()
@@ -4122,7 +4125,7 @@ class ContributionTreasuryView(APIView):
                 purposes_dict[p]['mpesa'] += c.amount
 
         for c in cash:
-            p = c.purpose.strip() if c.purpose else 'Combined Offering'
+            p = canonical_purpose_name(c.purpose)
             if p not in purposes_dict:
                 purposes_dict[p] = {'purpose': p, 'mpesa': Decimal('0'), 'bank_transfer': Decimal('0'), 'cheque': Decimal('0'), 'cash': Decimal('0')}
 
@@ -4220,6 +4223,11 @@ def _get_purpose_q(purpose_param):
         return Q(purpose__icontains="development") | Q(purpose__icontains="building")
     elif "lcb" in p_str or "budget" in p_str:
         return Q(purpose__icontains="lcb") | Q(purpose__icontains="budget")
+    elif "aym" in p_str or "adventist youth" in p_str:
+        # The summary's one row for the youth account — 'AYM', folded —
+        # still opens on the spellings the ledgers carried before the fold:
+        # 'AYM' beside 'Adventist Youth Ministry' beside 'Youth'.
+        return Q(purpose__icontains="aym") | Q(purpose__icontains="adventist youth") | Q(purpose__iexact="youth")
     elif "others" in p_str or "other" in p_str:
         known_keywords = ["tithe", "combined", "offertory", "camp", "msamaria", "evangelism", "station", "13th", "thirteenth", "building", "development", "lcb", "youth"]
         q = Q()
@@ -9658,11 +9666,12 @@ def _get_saturdays_in_month(ref_date):
 
 # The ledgers spell the church's giving accounts in more than one wording —
 # 'LCB' beside 'Local Church Budget', 'tithe' typed beside 'Tithe', 'Combined'
-# beside 'Combined Offering', 'Children' beside 'Children Ministry' — all of it
-# one account the same hands named differently. The report keyed its rows on
-# the raw string, so the same money read twice. One name per account: the
-# church's own long name for what it knows, and the rows' arrival spelling
-# for what it does not.
+# beside 'Combined Offering', 'Children' beside 'Children Ministry', the
+# youth account as 'AYM' beside 'Adventist Youth Ministry' beside 'Adventist
+# Youth Ministries' — all of it one account the same hands named differently.
+# The report keyed its rows on the raw string, so the same money read twice.
+# One name per account: the church's own short name for what it knows, and
+# the rows' arrival spelling for what it does not.
 CANONICAL_TREASURY_NAMES = {
     'tithe': 'Tithe',
     'combined offering': 'Combined Offering',
@@ -9680,6 +9689,15 @@ CANONICAL_TREASURY_NAMES = {
     'children ministry': 'Children Ministry',
     'childrens ministry': 'Children Ministry',
     "children's ministry": 'Children Ministry',
+    # The youth account, spoken as the M-Pesa prompt's short form, as the
+    # migration's one-word shortening, and as the description the giving
+    # forms read — every one the same treasury account ('AYM').
+    'aym': 'AYM',
+    'youth': 'AYM',
+    'adventist youth': 'AYM',
+    'adventist youth ministry': 'AYM',
+    'adventist youth ministries': 'AYM',
+    'adventist youth ministries (ay)': 'AYM',
 }
 
 
@@ -11745,11 +11763,16 @@ class DepartmentMembersView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, department):
+    def get(self, request, department, *, unit=None):
+        # ``unit`` is passed straight in by the messaging endpoint below, which
+        # reads this same roll for its recipients without a query string of its
+        # own; a plain read still takes it off the URL as before.
         target = Department.objects.filter(code=department, is_active=True).first()
         if target is None:
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
-        unit = str(request.query_params.get('unit') or '').strip()
+        if unit is None:
+            unit = request.query_params.get('unit')
+        unit = str(unit or '').strip()
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
         def row_for(user, *, membership_id=None, unit_value='', via='', role=''):
@@ -12001,6 +12024,193 @@ class DepartmentMembersView(APIView):
         if not deleted and not unfiled:
             return Response({'detail': 'That member is not on this roll.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Member removed from the roll.'})
+
+
+def department_message_payload(message):
+    """One stored message, as the Messaging view reads it back."""
+    sender = message.created_by
+    name = ''
+    if sender is not None:
+        name = f"{sender.first_name} {sender.last_name}".strip() or sender.get_username()
+    return {
+        'id': message.id,
+        'department': message.department,
+        'unit': message.unit or '',
+        'body': message.body,
+        'audience': message.audience,
+        'recipient_count': message.recipient_count,
+        'sent_count': message.sent_count,
+        'failed_count': message.failed_count,
+        'by': name,
+        'created_at': message.created_at,
+    }
+
+
+def send_department_message(message, phones, body):
+    """Hand one stored message to the gateway, one number at a time.
+
+    Paced the way a broadcast is: the gateway allows sixty requests a minute,
+    so the pause keeps a roll's worth of texts under that ceiling instead of
+    collecting refusals halfway down the list. The counts land on the row when
+    the walk finishes — the desk reads the log rather than this return value,
+    because a send that had to wait off the request still writes its answer.
+    """
+    sent = failed = 0
+    for phone in phones:
+        if sms.send(phone, body):
+            sent += 1
+        else:
+            failed += 1
+        if settings.SMS_SEND_DELAY > 0:
+            time.sleep(settings.SMS_SEND_DELAY)
+    DepartmentMessage.objects.filter(pk=message.pk).update(sent_count=sent, failed_count=failed)
+    return sent, failed
+
+
+def dispatch_department_message_safely(message_id, phones, body, schema_name=None):
+    """Text a desk's message off the request cycle, failures logged.
+
+    A roll long enough to walk under the gateway's pace would hold the
+    officer's request open for a minute or more, so the sends leave in a
+    thread — the same reason the announcement broadcast does — and the row
+    carries the counts once they are known.
+    """
+    if schema_name:
+        try:
+            from django_tenants.utils import schema_context
+            with schema_context(schema_name):
+                _dispatch_department_message_impl(message_id, phones, body)
+            return
+        except ImportError:
+            pass
+    _dispatch_department_message_impl(message_id, phones, body)
+
+
+def _dispatch_department_message_impl(message_id, phones, body):
+    message = DepartmentMessage.objects.filter(pk=message_id).first()
+    if message is None:
+        # The desk cleared its log between the post and the thread's start.
+        return
+    try:
+        send_department_message(message, phones, body)
+    except Exception:
+        logger.exception('Department message #%s failed to send', message_id)
+
+
+class DepartmentMessagesView(APIView):
+    """A desk's messages: what it has sent, and one it is sending now.
+
+    Two doors write this one log — the Messaging view's composer and the
+    Message button at the foot of the members roll — and both address the
+    roll the desk itself reads: the recipients come from
+    ``DepartmentMembersView``, so a text can never reach further than the
+    list on screen. Reading the log is open to the desk as the roll is;
+    writing to it is the leader's hand, as every other write here is.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, department):
+        if not Department.objects.filter(code=department).exists():
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        # The roll as the composer will address it, counted here so the box can
+        # say who it goes to before the officer writes a word of it.
+        members = DepartmentMembersView().get(request, department).data.get('members', [])
+        reachable = {
+            phone for phone in (sms.recipient(row.get('phone_number') or '') for row in members) if phone
+        }
+        return Response({
+            'messages': [
+                department_message_payload(message)
+                for message in DepartmentMessage.objects.filter(department=department)[:50]
+            ],
+            # The flag the composer renders behind, so a reader who cannot
+            # send is not offered a box that would refuse them.
+            'can_send': can_manage_department(request.user, department),
+            # Whether the gateway has a token — asked once so the view can say
+            # what a send will do before the officer writes one.
+            'gateway': sms.configured(),
+            'roll_count': len(members),
+            'reachable': len(reachable),
+        })
+
+    def post(self, request, department):
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only church officers or this department's leader can message the roll."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        body = str(request.data.get('body') or '').strip()
+        if not body:
+            return Response({'body': 'Write the message first.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(body) > 900:
+            return Response({'body': 'That runs past 900 characters — send it as two messages.'}, status=status.HTTP_400_BAD_REQUEST)
+        unit = str(request.data.get('unit') or '').strip()
+        if unit and unit not in target.unit_names:
+            return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # The roll as the desk reads it — the same union of rows (the choir
+        # and the singing groups under music, the roster under Sabbath School,
+        # the children's records), so the message goes to exactly the list on
+        # screen and no further.
+        roll = DepartmentMembersView().get(request, department, unit=unit)
+        members = roll.data.get('members', [])
+        seen = set()
+        phones = []
+        for row in members:
+            phone = sms.recipient(row.get('phone_number') or '')
+            if not phone or phone in seen:
+                continue
+            seen.add(phone)
+            phones.append(phone)
+
+        message = DepartmentMessage.objects.create(
+            department=department,
+            unit=unit,
+            body=body,
+            audience=f"{target.name} roll" if not unit else f"{target.name} — {unit}",
+            recipient_count=len(members),
+            created_by=request.user,
+        )
+        payload = department_message_payload(message)
+        if not phones:
+            return Response(
+                {'message': payload, 'sent': 0, 'failed': 0, 'reachable': 0,
+                 'detail': 'Saved — nobody on this roll has a phone number on file yet.'},
+                status=status.HTTP_201_CREATED,
+            )
+        if not sms.configured():
+            # An honest answer rather than a walk that silently fails: the
+            # message is kept either way, so it is written when the token is.
+            return Response(
+                {'message': payload, 'sent': 0, 'failed': 0, 'reachable': len(phones),
+                 'detail': 'Saved, but nothing went out — the SMS gateway has no key on this server yet.'},
+                status=status.HTTP_201_CREATED,
+            )
+        if sms_broadcasts_run_inline():
+            sent, failed = send_department_message(message, phones, body)
+            return Response(
+                {'message': department_message_payload(message), 'sent': sent, 'failed': failed,
+                 'reachable': len(phones),
+                 'detail': f'Sent to {sent} of {len(phones)} numbers.'},
+                status=status.HTTP_201_CREATED,
+            )
+        schema_name = getattr(connection, 'schema_name', None)
+        threading.Thread(
+            target=dispatch_department_message_safely,
+            args=(message.pk, phones, body, schema_name),
+            name=f'department-message-{message.pk}',
+            daemon=True,
+        ).start()
+        return Response(
+            {'message': department_message_payload(message), 'sent': None, 'failed': None,
+             'reachable': len(phones), 'sending': True,
+             'detail': f'Sending to {len(phones)} numbers…'},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 def singing_group_payload(group):
@@ -13628,6 +13838,21 @@ class WithdrawalRequestsPdfView(APIView):
         search = (request.query_params.get('search') or '').strip().lower()
         wanted = self.STATUS_FILTERS.get(status_param)
 
+        # The desk's date window, read the way the screen's own inputs send it
+        # (YYYY-MM-DD), so the printed report shows the same rows the filtered
+        # queue shows — the day each request was asked.
+        def _read_window_date(value):
+            value = (value or '').strip()
+            try:
+                return datetime.strptime(value, '%Y-%m-%d').date() if value else None
+            except ValueError:
+                return None
+
+        wanted_from = _read_window_date(request.query_params.get('from_date'))
+        wanted_to = _read_window_date(request.query_params.get('to_date'))
+        if wanted_from and wanted_to and wanted_from > wanted_to:
+            wanted_from, wanted_to = wanted_to, wanted_from
+
         rows = DepartmentWithdrawalRequest.objects.select_related(
             'department', 'account', 'requested_by', 'elder_approved_by', 'decided_by',
         ).order_by('-created_at')
@@ -13635,6 +13860,11 @@ class WithdrawalRequestsPdfView(APIView):
         data = []
         for row in rows:
             if wanted and row.status not in wanted:
+                continue
+            asked_on = timezone.localdate(row.created_at)
+            if wanted_from and asked_on < wanted_from:
+                continue
+            if wanted_to and asked_on > wanted_to:
                 continue
             item = _withdrawal_review_row(row)
             if search and not self._matches(item, search):
@@ -13644,10 +13874,21 @@ class WithdrawalRequestsPdfView(APIView):
         church_name = current_church_name()
 
         from .pdf_generator import generate_withdrawal_requests_pdf
+        # The heading names the window when one stands, so a filtered report
+        # does not print as if it were the whole history.
+        window_suffix = (
+            f' {wanted_from.isoformat()} to {wanted_to.isoformat()}'
+            if wanted_from and wanted_to
+            else f' from {wanted_from.isoformat()}'
+            if wanted_from
+            else f' to {wanted_to.isoformat()}'
+            if wanted_to
+            else ''
+        )
         pdf_bytes = generate_withdrawal_requests_pdf(
             church_name,
             data,
-            status_label=self.STATUS_LABELS.get(status_param, 'All requests'),
+            status_label=f"{self.STATUS_LABELS.get(status_param, 'All requests')}{window_suffix}",
             search=request.query_params.get('search', '').strip(),
             # This is the desk's wide report; a signed sheet belongs to one
             # request, printed from that request's own row.

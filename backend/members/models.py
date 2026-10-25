@@ -640,6 +640,42 @@ class DepartmentJoinRequest(models.Model):
         return f"{self.member.get_username()} → {self.department} ({self.get_kind_display()})"
 
 
+class DepartmentMessage(models.Model):
+    """One text a desk sent its own roll, kept so it can be read again.
+
+    The Messaging view composes a text and hands it to the SMS gateway, but a
+    send that lives only in a response is a send nobody can learn from: these
+    rows are the desk's own log — who sent what, to how many, on which day —
+    and the "Reuse" button loads a stored body back into the composer, so last
+    Sabbath's notice does not have to be typed again.
+
+    The roll it went to is not stored as a list of numbers: the audience is
+    named (``audience``) and counted (``recipient_count``), and the recipients
+    themselves are always read fresh from the roll at send time. A roll moves
+    — singers join, members move away — so the record keeps what was promised
+    while the next send addresses who is on the roll now.
+    """
+
+    department = models.CharField(max_length=100, help_text="The desk's code — the message belongs to the area that sent it")
+    unit = models.CharField(max_length=60, blank=True, help_text="The sub-unit addressed; blank for the whole roll")
+    body = models.TextField(help_text="The message exactly as it was written")
+    audience = models.CharField(max_length=160, help_text="Who it went to, as the desk reads it — e.g. 'Church Choir roll'")
+    recipient_count = models.PositiveIntegerField(default=0, help_text="People on the roll it went to")
+    sent_count = models.PositiveIntegerField(default=0, help_text="Numbers the gateway accepted")
+    failed_count = models.PositiveIntegerField(default=0, help_text="Numbers the gateway refused or could not reach")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='department_messages_sent',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f"{self.department}: {self.body[:60]}"
+
+
 class DeaconateRequest(models.Model):
     """The deaconate's own ask to the office: to buy an item, or to repair one.
 
