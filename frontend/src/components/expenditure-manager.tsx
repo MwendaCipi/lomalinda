@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Printer, Receipt, Trash2, X } from "lucide-react";
+import { Plus, Printer, Receipt, RefreshCw, Trash2, X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
 import { densityCellPad } from "@/lib/table-density";
@@ -359,6 +359,18 @@ export function ExpenditureManager({
           <strong className="text-alert">KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
         </p>
         <div className="flex shrink-0 gap-2">
+        {/* Refresh re-reads the roll: an expense entered at the giving desk
+            or an approval that debits a fund lands the moment it is tapped.
+            First in the row, before Print and Record. */}
+        <button
+          type="button"
+          onClick={fetchData}
+          disabled={loading}
+          className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3.5 text-xs font-semibold text-bark transition hover:border-ember disabled:opacity-45"
+          aria-label="Refresh expenditures"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </button>
         <button
           type="button"
           onClick={printExpenditures}

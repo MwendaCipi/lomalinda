@@ -2,18 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MoveLeft, LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
+import { LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
 
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
 import {
   DEACONATE_ROLES,
   deaconateViews,
-  DEPARTMENT_BLURBS,
   isStaffRole,
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
-import { DeaconateManager } from "@/components/deaconate-manager";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { invalidateDepartments, useAllDepartments, useMyTies } from "@/hooks/use-departments";
@@ -222,11 +220,13 @@ export function MyAreas() {
   const opensDeaconateDesk = openArea?.code === "deaconate" && holdsDeaconate;
   const deaconateView = (deaconateViews.find((page) => page.view === openView)?.view ?? "members") as
     (typeof deaconateViews)[number]["view"];
-  // The register, the rota and the funding are the console desk's own panels,
-  // so they are read from it; the roll and the calendar are the ones this desk
-  // already draws — the hub implements them, and the calendar is the real one
-  // (the console's ordinances page is still a stub).
-  const deaconateUsesHub = deaconateView === "members" || deaconateView === "calendar";
+  // Every deaconate page reads the hub now, the way every other toggle of an
+  // area does: the roll, the calendar and the moments wall come from the hub
+  // itself, and the register and the rota are the console desk's own panels
+  // riding inside it (see DepartmentDetail's deaconate block). The funding
+  // page is the hub's accounts desk — for the deaconate it carries the desk's
+  // funding requests beside the ledger, under the structure the map's other
+  // toggles keep.
 
   const { setCustomToggles, setCustomHeader, setHeadingFirst, setHeaderRightAction, setPinnedDesk } =
     usePageHeader();
@@ -284,7 +284,7 @@ export function MyAreas() {
     return () => setCustomToggles(null);
   }, [openArea, tab, setCustomToggles, showMap]);
 
-  // The deaconate's desk draws the desk's own five pages, the same ones the
+  // The deaconate's desk draws the desk's own six pages, the same ones the
   // console's strip names. Moving between them replaces the entry, so a
   // session of toggling leaves one step and the address bar names the view on
   // screen — the way the map's own toggles behave.
@@ -365,31 +365,18 @@ export function MyAreas() {
   // desk's own and its text is the one that stands — a view change would move
   // the strip under the wrong heading otherwise.
   useEffect(() => {
-    if (openArea) {
-      if (opensDeaconateDesk && !deaconateUsesHub) {
-        setCustomHeader({
-          label: openArea.label,
-          description: openArea.description || DEPARTMENT_BLURBS[openArea.code],
-          leading: (
-            <button
-              type="button"
-              onClick={showMap}
-              aria-label="Back"
-              className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
-            >
-              <MoveLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-          ),
-        });
-      }
-      return;
-    }
+    // The deaconate once headed its here (its register, rota and funding drew
+    // the manager and wrote nothing to this band). Every deaconate page reads
+    // the hub now, and the hub heads itself, so an open area only visits when
+    // the hub is not the desk: it stays quiet and lets the child under it name
+    // the desk.
+    if (openArea) return;
     setCustomHeader({
       label: MINISTRIES_AND_DEPARTMENTS_HEADING.label,
       description: MINISTRIES_AND_DEPARTMENTS_HEADING.description,
     });
     return () => setCustomHeader(null);
-  }, [openArea, opensDeaconateDesk, deaconateUsesHub, setCustomHeader, showMap]);
+  }, [openArea, setCustomHeader]);
 
   async function requestToJoin(code: string, label: string) {
     setJoining(code);
@@ -461,17 +448,15 @@ export function MyAreas() {
         <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
           <div className="min-h-0 w-full flex-1">
             {opensDeaconateDesk ? (
-              deaconateUsesHub ? (
-                <DepartmentHub
-                  key={`deaconate-${deaconateView}`}
-                  initialDept="deaconate"
-                  initialTab={deaconateView}
-                  embedded
-                  onBack={showMap}
-                />
-              ) : (
-                <DeaconateManager initialTab={deaconateView} embedded onBack={showMap} />
-              )
+              // Funding is the hub's accounts desk, which for the deaconate
+              // carries its funding requests beside the ledger.
+              <DepartmentHub
+                key={`deaconate-${deaconateView}`}
+                initialDept="deaconate"
+                initialTab={deaconateView === "funding" ? "accounts" : deaconateView}
+                embedded
+                onBack={showMap}
+              />
             ) : (
               <DepartmentHub
                 key={openArea.code}

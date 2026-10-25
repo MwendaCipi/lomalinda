@@ -34,21 +34,35 @@ def safe_mpesa_phone(value, max_length=20):
     """Coerce a Safaricom-supplied phone into the 2547… form, never raising.
 
     The C2B confirmation's MSISDN is untrusted text: it may carry a leading
-    plus or zero, stray separators, or junk. If the number was masked by Safaricom
-    (e.g., contains 'X' or missing digits), non-digit stripping leaves an invalid
-    length; discard it rather than storing a mangled or double-prefixed number.
-    Returns '' when nothing phone-shaped remains.
+    plus or zero — or the ``00254`` dial-out prefix a manually keyed till
+    payment can arrive wearing — plus stray separators, or junk. If the
+    number was masked by Safaricom (e.g., contains 'X' or missing digits),
+    non-digit stripping leaves an invalid length; discard it rather than
+    storing a mangled or double-prefixed number. Returns '' when nothing
+    phone-shaped remains.
     """
     digits = re.sub(r'\D', '', str(value or ''))
-    if digits.startswith('254'):
+    # The international call prefixes come off first: a ``00254``-wearing
+    # number is the church's own MSISDN, and a trunk-prefix ``0`` before it
+    # would otherwise be peeled as the trunk and leave the dial-out ``0``
+    # standing. This is the same normalisation the SMS gateway's recipient()
+    # makes — a number the receipt could deliver to must never be the one
+    # the ledger could not keep.
+    if digits.startswith('00254'):
+        digits = digits[2:]
+    elif digits.startswith('254'):
         pass
     elif digits.startswith('0') and len(digits) >= 10:
         digits = f'254{digits[1:]}'
-    elif len(digits) == 9:
+    elif len(digits) == 9 and digits[0] in '71':
+        # The leading zero was dropped somewhere along the way.
         digits = f'254{digits}'
 
-    # A valid Kenyan phone must be exactly 12 digits starting with 254
-    if len(digits) != 12 or not digits.startswith('254'):
+    # A Kenyan mobile is exactly 12 digits starting 254, and the digit after
+    # it a mobile prefix (7…, 1…): anything else wearing 12 digits is a
+    # masked or scrambled value, worth discarding rather than storing where
+    # no receipt could ever reach it.
+    if len(digits) != 12 or not re.fullmatch(r'254[17]\d{8}', digits):
         return ''
     return digits[:max_length]
 

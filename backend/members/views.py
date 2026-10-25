@@ -9413,7 +9413,10 @@ class TreasuryPdfView(APIView):
         purposes_dict = {}
 
         for c in digital:
-            p = c.purpose.strip() if c.purpose else "Combined Offering"
+            # The raw spelling may name the same account another row already
+            # opened (an 'LCB' beside a 'Local Church Budget'): the canonical
+            # key folds them onto the one row the report should read.
+            p = canonical_purpose_name(c.purpose)
             if p not in purposes_dict:
                 purposes_dict[p] = {"name": p, "mpesa": Decimal("0"), "bank_transfer": Decimal("0"), "cheque": Decimal("0"), "cash": Decimal("0"), "total": Decimal("0")}
             pm = (c.payment_method or "mpesa").lower().strip()
@@ -9428,7 +9431,7 @@ class TreasuryPdfView(APIView):
                 purposes_dict[p]["mpesa"] += c.amount
 
         for c in cash:
-            p = c.purpose.strip() if c.purpose else "Combined Offering"
+            p = canonical_purpose_name(c.purpose)
             if p not in purposes_dict:
                 purposes_dict[p] = {"name": p, "mpesa": Decimal("0"), "bank_transfer": Decimal("0"), "cheque": Decimal("0"), "cash": Decimal("0"), "total": Decimal("0")}
             pm = (c.payment_method or "cash").lower().strip()
@@ -9468,7 +9471,7 @@ class TreasuryPdfView(APIView):
                 individual_rows.append({
                     "member_name": m_name,
                     "date": d.created_at.strftime("%Y-%m-%d"),
-                    "purpose_name": d.purpose or "Combined Offering",
+                    "purpose_name": canonical_purpose_name(d.purpose),
                     "contribution_type": "individual",
                     "payment_method": d.payment_method or "mpesa",
                     "receipt_number": d.mpesa_receipt_number or d.paystack_reference or "—",
@@ -9480,7 +9483,7 @@ class TreasuryPdfView(APIView):
                 individual_rows.append({
                     "member_name": m_name,
                     "date": c.received_on.strftime("%Y-%m-%d"),
-                    "purpose_name": c.purpose or "Combined Offering",
+                    "purpose_name": canonical_purpose_name(c.purpose),
                     "contribution_type": c.entry_type or "individual",
                     "payment_method": c.payment_method or "cash",
                     "receipt_number": c.receipt_number or "—",
@@ -9653,6 +9656,50 @@ def _get_saturdays_in_month(ref_date):
     return saturdays
 
 
+# The ledgers spell the church's giving accounts in more than one wording —
+# 'LCB' beside 'Local Church Budget', 'tithe' typed beside 'Tithe', 'Combined'
+# beside 'Combined Offering', 'Children' beside 'Children Ministry' — all of it
+# one account the same hands named differently. The report keyed its rows on
+# the raw string, so the same money read twice. One name per account: the
+# church's own long name for what it knows, and the rows' arrival spelling
+# for what it does not.
+CANONICAL_TREASURY_NAMES = {
+    'tithe': 'Tithe',
+    'combined offering': 'Combined Offering',
+    'combined': 'Combined Offering',
+    'combined off': 'Combined Offering',
+    'combinedoff': 'Combined Offering',
+    'combinedoffer': 'Combined Offering',
+    'combinedoffering': 'Combined Offering',
+    'combined (50%)': 'Combined Offering',
+    'combined 50%': 'Combined Offering',
+    'lcb': 'Local Church Budget',
+    'local church budget': 'Local Church Budget',
+    'local church budget (lcb)': 'Local Church Budget',
+    'children': 'Children Ministry',
+    'children ministry': 'Children Ministry',
+    'childrens ministry': 'Children Ministry',
+    "children's ministry": 'Children Ministry',
+}
+
+
+def canonical_purpose_name(purpose):
+    """The report's one name for a giving account, folded from the ledgers.
+
+    Case and stray spacing never separate an account — 'Tithe' and 'tithe'
+    were typed by the same hand — and the known alternate spellings (the
+    M-Pesa short forms, the migration leftovers, the desk abbreviations) all
+    answer to the account they name. Anything the report has never met keeps
+    the wording it arrived in: inventing canonical spellings for accounts
+    the church has not named is guesswork this chapter is not about.
+    """
+    stripped = (purpose or '').strip()
+    key = ' '.join(stripped.lower().split())
+    if not key:
+        return 'Combined Offering'
+    return CANONICAL_TREASURY_NAMES.get(key, stripped)
+
+
 def _gather_weekly_contributions(start_date, end_date):
     """
     Returns (saturdays, weekly_data, overall_purpose_map) where:
@@ -9725,7 +9772,7 @@ def _gather_weekly_contributions(start_date, end_date):
         purpose_map[purpose]['total'] += float(amount)
 
     for c in digital:
-        p = c.purpose.strip() if c.purpose else 'Combined Offering'
+        p = canonical_purpose_name(c.purpose)
         dt = c.paid_at or c.created_at
         week_sat = _assign_week(dt)
         pm = (c.payment_method or 'mpesa').lower().strip()
@@ -9743,7 +9790,7 @@ def _gather_weekly_contributions(start_date, end_date):
         _add_to_week(week_sat, p, pt, c.amount)
 
     for c in cash_list:
-        p = c.purpose.strip() if c.purpose else 'Combined Offering'
+        p = canonical_purpose_name(c.purpose)
         week_sat = _assign_week(c.received_on)
         pm = (c.payment_method or 'cash').lower().strip()
         if pm in ['mpesa', 'bank_transfer', 'cheque', 'cash']:
@@ -12427,10 +12474,51 @@ class DepartmentEventProgramView(APIView):
             if church_row.bank_paybill_number:
                 giving.append(f'Bank Pay Bill {church_row.bank_paybill_number}')
 
+        # The day's own ministry account: its department fund, printed beside
+        # the church's giving lines. The account name is what the giver types
+        # into the M-Pesa prompt for this ministry's money — the same short
+        # name the desk's reports read. A fund with no M-Pesa account still
+        # speaks through its bank or cash account number when it has one.
+        dept_account = None
+        fallback_account = None
+        for account in department_row.treasury_accounts.all():
+            if not (account.name or '').strip():
+                continue
+            if account.account_type == 'mobile_money':
+                dept_account = account
+                break
+            if fallback_account is None and (account.account_number or '').strip():
+                fallback_account = account
+        if dept_account or fallback_account:
+            account = dept_account or fallback_account
+            name = account.name.strip()
+            if dept_account and church_row.mpesa_paybill_number:
+                giving.append(
+                    f'{department_row.name}: M-PESA Pay Bill {church_row.mpesa_paybill_number}, '
+                    f'Account {name}'
+                )
+            elif account.account_number:
+                giving.append(f'{department_row.name}: Account {name} · A/C {account.account_number}')
+            else:
+                giving.append(f'{department_row.name}: Account {name}')
+
+        # The QR the papers carry: the system's own giving page, opened with
+        # the ministry's account already chosen when its fund names one, or
+        # the plain giving page when it does not — the scanner arrives at the
+        # form, not the front door.
+        import urllib.parse
+        give_account = dept_account or fallback_account
+        give_url = (
+            f'{settings.FRONTEND_URL}/give?purpose={urllib.parse.quote(give_account.name.strip())}'
+            if give_account else
+            f'{settings.FRONTEND_URL}/give'
+        )
+
         contact = {
             'address': (church_row.address if church_row else '') or '',
             'services': services,
             'giving': giving,
+            'give_url': give_url,
         }
         # Two papers for one programme, chosen by the reader's purpose. The
         # plain sheet (`style=plain`) is the single letterhead page the desk

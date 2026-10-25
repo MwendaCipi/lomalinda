@@ -19,6 +19,8 @@ import { brand } from "@/lib/brand";
 import {
   Accessibility,
   ArrowDownLeft,
+  Boxes,
+  ClipboardList,
   ArrowLeft,
   MoveLeft,
   ArrowUpRight,
@@ -1231,6 +1233,25 @@ function ProgramEditorModal({
     const last = session.parts[session.parts.length - 1];
     return last?.end || last?.start || "";
   };
+  /** The last hour a session has on record, from anywhere it may have said
+      it: its activities' end (or start), else the session's own hours. */
+  const sessionHour = (item: ProgramItem) => carryTime(item) || item.end || item.start || "";
+  /** Where an added activity starts, by index: within a session that already
+      holds activities, immediately where the one before it leaves off — its
+      end hour (its own start, when it named no end). A session holding none
+      yet continues from the session before it, walking back through the day
+      until some hour is found — so a new part of the day keeps the chain
+      the desk has typed so far rather than returning to a blank hour. An
+      hour typed on the empty session itself is honoured first. */
+  const carryStart = (index: number) => {
+    const current = items[index];
+    if (current.parts.length > 0) return carryTime(current);
+    for (let i = current.start || current.end ? -1 : index - 1; i >= 0; i--) {
+      const hour = sessionHour(items[i]);
+      if (hour) return hour;
+    }
+    return current.start || current.end || "";
+  };
   /** One change to one part of one session — the row every edit below makes. */
   const mapPart = (index: number, partIndex: number, edit: (part: ProgramItem["parts"][number]) => ProgramItem["parts"][number]) =>
     setItems((current) =>
@@ -1270,8 +1291,10 @@ function ProgramEditorModal({
   // buttons sit on — so both sides of the sheet close with one coherent
   // line of actions; in the modal it stays pinned at the reading column's
   // foot, under the sheet it reads.
-  const viewPdfClasses =
-    "inline-flex items-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember";
+  // On the page variant the two papers ride the typing foot and share its
+  // width equally with Add session and Save program; in the modal they keep
+  // their own measure where they are pinned.
+  const viewPdfClasses = `inline-flex items-center justify-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember${isPage ? " min-w-0 flex-1" : ""}`;
   // The two papers, side by side: the plain sheet to hand on, the bifold to
   // print. The brochure belongs to a saved typed programme — before the rows
   // exist on the event there is nothing for it to fold — so it shows when
@@ -1614,7 +1637,7 @@ function ProgramEditorModal({
                         type="button"
                         onClick={() => {
                           setSession(index, {
-                            parts: [...session.parts, { start: carryTime(session), end: "", title: "", participants: [] }],
+                            parts: [...session.parts, { start: carryStart(index), end: "", title: "", participants: [] }],
                           });
                           // Land on the activity just made — its row
                           // mounts below here, out of the viewport once
@@ -1631,11 +1654,13 @@ function ProgramEditorModal({
               </div>
             );
           })}
-          {/* Add on the left, Save and print on the right: the actions of the
-              typing side share its one row at the foot, and the page variant
-              carries the printed sheet's own button on that same line, so
-              both columns close with one coherent row. */}
-          <div className="flex items-center justify-between gap-3">
+          {/* The row the whole sheet closes on: Add session, View PDF,
+              View Brochure and Save program share its width equally, in that
+              order — the day grows at the left, the papers open in the
+              middle, and the save sits where the hand ends. The modal keeps
+              Add session alone at the typing foot; its other actions live
+              on its own bar beneath the sheet. */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -1645,23 +1670,23 @@ function ProgramEditorModal({
                 // below the fold once the day is long.
                 pendingScrollRef.current = `session-card-${items.length}`;
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep"
+              className={`inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep${isPage ? " min-w-0 flex-1 justify-center" : ""}`}
             >
               <Plus className="h-3.5 w-3.5" /> Add session
             </button>
             {isPage && (
-              <div className="flex items-center gap-2">
+              <>
+                {viewPdfControl}
+                {viewBrochureControl}
                 <button
                   type="button"
                   disabled={!valid}
                   onClick={() => onSave(items)}
-                  className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+                  className="min-w-0 flex-1 justify-center rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition inline-flex items-center hover:bg-ember-deep disabled:opacity-50"
                 >
                   Save program
                 </button>
-                {viewPdfControl}
-                {viewBrochureControl}
-              </div>
+              </>
             )}
           </div>
             </div>
@@ -4427,7 +4452,11 @@ type DeptSubTab =
   | "lesson-orders"
   | "baptismal-class"
   | "daily-word"
-  | "announcements";
+  | "announcements"
+  // The deaconate desk's two panels that live in the console desk and ride
+  // this desk's structure when it opens from the map (see the panels block).
+  | "inventory"
+  | "rota";
 
 /**
  * The month a search names, as an index into the year's wall: "mar",
@@ -4876,12 +4905,17 @@ function DepartmentDetail({
           </div>
         ) : null
       );
-    } else {
+    } else if (!(isDeaconate && (subTab === "inventory" || subTab === "rota"))) {
+      // The deaconate's property and rota panels are the console desk's own:
+      // they write their own search (and rota filters) to this slot from
+      // inside themselves, so leaving it to them is what keeps those
+      // controls alive under this desk's structure.
       setHeaderRightAction(null);
     }
     return () => setHeaderRightAction(null);
   }, [
     subTab,
+    isDeaconate,
     rollSearch,
     eventSearch,
     calendarView,
@@ -4946,6 +4980,15 @@ function DepartmentDetail({
       // pulpit team keep (see DeaconateManager's music desk).
       ...(isMusic ? [{ key: "duties", label: "Duties", short: "Duties", icon: ListMusic }] : []),
       ...(isSabbathSchool ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", icon: BookOpen }] : []),
+      // The deaconate's two desk panels — the church's property register and
+      // its duty rota — ride the strip wherever this desk names itself, in
+      // the order the console's six-page strip holds (see DeaconateManager).
+      ...(isDeaconate
+        ? [
+            { key: "inventory", label: "Church Property", short: "Property", icon: Boxes },
+            { key: "rota", label: "Duty Rota", short: "Rota", icon: ClipboardList },
+          ]
+        : []),
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
       // row (see MembersFilterButton).
@@ -4957,7 +5000,14 @@ function DepartmentDetail({
         ? [{ key: "moments", label: "Moments", short: "Moments", icon: Sparkles }]
         : []),
       // The fund ledger and withdrawal requests unified under one desk.
-      { key: "accounts", label: "Account Status", short: "Account", icon: Wallet },
+      // The deaconate names the page Funding & Accounts, as its console and
+      // map pages do — behind the same desk sit its funding requests too.
+      {
+        key: "accounts",
+        label: isDeaconate ? "Funding & Accounts" : "Account Status",
+        short: isDeaconate ? "Funding" : "Account",
+        icon: Wallet,
+      },
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
       // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
@@ -4974,7 +5024,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, isMusic, isSabbathSchool, keepsTheWeek, canOpenOfficeViews, department.code]);
+  }, [unitsKey, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, canOpenOfficeViews, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -5679,14 +5729,34 @@ function DepartmentDetail({
   // marker on its own wrapper (a ref would only attach to whichever row
   // mounted last; see the treasury desk's handler for the fuller note).
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+  // Where the row's Actions button sat in the viewport the moment its menu
+  // opened. The menu draws in a document-level portal — fixed, above the
+  // card and every clipping wrapper — because the members card and its rows'
+  // scroll box clip a menu left in place: a roll with a single member (the
+  // card is then only a row tall) or a row near the foot cut the menu off
+  // below the table. The calendar table's popover is the same dance; see
+  // its own anchor note. Like the calendar's, it closes on any scroll,
+  // since a floating menu no longer rides the scroll box.
+  const [rollMenuAnchor, setRollMenuAnchor] = useState<{ x: number; y: number; up: boolean } | null>(null);
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Element | null;
       if (target?.closest?.("[data-action-menu]")) return;
       setOpenMenuKey(null);
+      setRollMenuAnchor(null);
     }
-    if (openMenuKey) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    function handleScroll() {
+      setOpenMenuKey(null);
+      setRollMenuAnchor(null);
+    }
+    if (openMenuKey) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("scroll", handleScroll, true);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("scroll", handleScroll, true);
+    };
   }, [openMenuKey]);
 
   // Assign Role: the desk seats a member into one of the area's roles —
@@ -5970,7 +6040,26 @@ function DepartmentDetail({
                         <div className="relative inline-block" data-action-menu>
                           <button
                             type="button"
-                            onClick={() => setOpenMenuKey(openMenuKey === row.key ? null : row.key)}
+                            onClick={(clickEvent) => {
+                              const opening = openMenuKey !== row.key;
+                              if (opening) {
+                                // The menu is portalled to the document and
+                                // anchored to this button, so the choice of
+                                // hanging below or above is made against the
+                                // viewport, not the card: a row near the foot
+                                // of the screen opens its menu upwards.
+                                const rect = clickEvent.currentTarget.getBoundingClientRect();
+                                const openingUp = rect.bottom + 280 > window.innerHeight;
+                                setRollMenuAnchor({
+                                  x: rect.right,
+                                  y: openingUp ? rect.top : rect.bottom,
+                                  up: openingUp,
+                                });
+                              } else {
+                                setRollMenuAnchor(null);
+                              }
+                              setOpenMenuKey(opening ? row.key : null);
+                            }}
                             aria-expanded={openMenuKey === row.key}
                             aria-label={
                               row.request ? `Answer ${row.name}'s ask to join` : `Actions for ${row.name}`
@@ -5986,12 +6075,25 @@ function DepartmentDetail({
                               : "Actions"}
                             <MoreVertical className="h-3 w-3 text-moss" />
                           </button>
-                          {openMenuKey === row.key && (
-                            <div
-                              className={`absolute right-0 top-full z-40 mt-1.5 rounded-2xl border border-sand-line bg-white text-left shadow-2xl ring-1 ring-black/5 ${
-                                row.request ? "w-72 p-3" : "w-48 p-1.5"
-                              }`}
-                            >
+                          {openMenuKey === row.key && rollMenuAnchor && (
+                            // Portalled into the document, above the card and
+                            // its clipping wrappers: in place, a one-row roll
+                            // clipped the menu at the card's edge, below the
+                            // table. The join-ask popover (w-72, a textarea
+                            // and two buttons) is the taller of the two
+                            // shapes, so the flip-up check budgets for it.
+                            createPortal(
+                              <div
+                                data-action-menu
+                                className={`fixed z-50 rounded-2xl border border-sand-line bg-white text-left shadow-2xl ring-1 ring-black/5 ${
+                                  row.request ? "w-72 p-3" : "w-48 p-1.5"
+                                }`}
+                                style={
+                                  rollMenuAnchor.up
+                                    ? { right: window.innerWidth - rollMenuAnchor.x, bottom: window.innerHeight - rollMenuAnchor.y + 6 }
+                                    : { right: window.innerWidth - rollMenuAnchor.x, top: rollMenuAnchor.y + 6 }
+                                }
+                              >
                               {row.request ? (
                                 <JoinAskAnswer
                                   ask={row.request}
@@ -6083,8 +6185,10 @@ function DepartmentDetail({
                               )}
                                 </>
                               )}
-                            </div>
-                          )}
+                              </div>,
+                                document.body,
+                              )
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -6491,6 +6595,20 @@ function DepartmentDetail({
       {subTab === "duties" && isMusic && (
         <div className="h-full min-h-0">
           <DeaconateManager initialTab="rota" desk="music" embedded filtersHosted />
+        </div>
+      )}
+
+      {/* The deaconate's property register and duty rota — the console desk's
+          own panels — ride this desk's structure wherever it opens, the same
+          way the pulpit and music rota ride their desks above. On the console
+          the desk never reaches here (its six pages are their own panels); on
+          the map this is what keeps Property and the Rota on the same page
+          structure every other view of this desk keeps. The rota filters and
+          the register's search stay the panels' own: no desk above hosts them
+          here, so `filtersHosted` is deliberately unset. */}
+      {(subTab === "inventory" || subTab === "rota") && isDeaconate && (
+        <div className="h-full min-h-0">
+          <DeaconateManager initialTab={subTab} desk="deaconate" embedded />
         </div>
       )}
 

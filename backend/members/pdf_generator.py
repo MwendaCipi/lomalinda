@@ -421,6 +421,12 @@ def generate_treasury_pdf(
     Generates NEKF-format Cash Count & Offering Report Summary PDF.
     """
     church_name = pdf_church_name(church_name)
+    # A caller that did not read the signing offices itself still prints them:
+    # the report checks what is actually on file, so every shape of the report
+    # — viewed or generated directly — carries the signatures it has.
+    if signatures is None:
+        from .signatures import report_signatures
+        signatures = report_signatures()
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -433,6 +439,31 @@ def generate_treasury_pdf(
 
     story = []
     st = get_pdf_styles()
+
+    def signature_cell(heading, entry, fallback):
+        """One signature cell: the named officer, their signature on the line,
+        or the blank rules the cell has always kept when nobody has signed.
+
+        The upload is checked, not assumed — a holder who has not signed yet,
+        or whose file has gone missing, leaves their ruled line as it was.
+        """
+        entry = entry or {}
+        cell = [Paragraph(heading, st["cell"])]
+        if entry.get("name"):
+            cell.append(Paragraph(f"Name: <b>{escape(entry['name'])}</b>", st["cell"]))
+        else:
+            cell.append(Paragraph(fallback, st["cell"]))
+        image = _signature_flowable(entry.get("image"), 4.6 * cm, 1.0 * cm)
+        if image:
+            cell.append(image)
+        else:
+            cell.append(Paragraph("Signature: _______________", st["cell"]))
+        return cell
+
+    # The office signatures, read once for both of the report's shapes: the
+    # treasurer prepares, the first elder verifies, and a deacon has no pen
+    # on file here (see members/signatures.py).
+    offices = signatures or {}
 
     total_val = totals.get("total", 0)
     cash_val = totals.get("cash", 0)
@@ -467,7 +498,7 @@ def generate_treasury_pdf(
         story.append(Paragraph(summary_text, st["h2"]))
         story.append(Spacer(1, 8))
 
-        ind_headers = ["Contributor Name", "Date", "Account", "Type & Mode", "Receipt / Ref", "Amount (KES)"]
+        ind_headers = ["Contributor Name", "Date", "Account", "Mode", "Receipt / Ref", "Amount (KES)"]
         ind_data = [[
             Paragraph(ind_headers[0], st["header"]),
             Paragraph(ind_headers[1], st["header"]),
@@ -479,7 +510,6 @@ def generate_treasury_pdf(
 
         for g in ind_rows:
             donor = g.get("member_name") or g.get("collection_name") or "Anonymous"
-            g_type = (g.get("contribution_type") or "individual").capitalize()
             mode = (g.get("payment_method") or "cash").upper()
             amt_val = g.get("amount", 0)
             amt_str = format_money(amt_val)
@@ -488,7 +518,7 @@ def generate_treasury_pdf(
                 Paragraph(str(donor), st["cell_bold"]),
                 Paragraph(str(g.get("date", "")), st["cell"]),
                 Paragraph(str(g.get("purpose_name", "")), st["cell"]),
-                Paragraph(f"{g_type} • {mode}", st["cell"]),
+                Paragraph(mode, st["cell"]),
                 Paragraph(str(g.get("receipt_number") or g.get("transaction_id") or "—"), st["cell"]),
                 Paragraph(amt_str, st["cell_right"]),
             ])
@@ -502,7 +532,7 @@ def generate_treasury_pdf(
             Paragraph(format_money(tot_amount), st["cell_right_bold"]),
         ])
 
-        ind_table = Table(ind_data, colWidths=[4.2 * cm, 2.3 * cm, 4.0 * cm, 2.7 * cm, 2.3 * cm, 2.5 * cm], repeatRows=1)
+        ind_table = Table(ind_data, colWidths=[4.6 * cm, 2.3 * cm, 4.2 * cm, 2.2 * cm, 2.3 * cm, 2.4 * cm], repeatRows=1)
         ind_style = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -571,10 +601,14 @@ def generate_treasury_pdf(
             story.append(p_table)
             story.append(Spacer(1, 20))
 
+        # The sign-off block now checks the saved signatures too: the
+        # treasurer's and the first elder's uploaded pens print on their
+        # lines, the same way the summary's sign-off does — and the rules
+        # stand where an office has no signature on file yet.
         sig_data = [[
-            Paragraph("<b>Prepared By:</b><br/><br/>Name: ______________________<br/>Treasurer Sign: _______________", st["cell"]),
-            Paragraph("<b>Witnessed By:</b><br/><br/>Name: ______________________<br/>Deacon Sign: ________________", st["cell"]),
-            Paragraph("<b>Verified By:</b><br/><br/>Name: ______________________<br/>Elder Sign: _________________", st["cell"]),
+            signature_cell("<b>Prepared By:</b>", offices.get("treasurer"), "Name: ______________________"),
+            signature_cell("<b>Witnessed By:</b>", None, "Name: ______________________"),
+            signature_cell("<b>Verified By:</b>", offices.get("first_elder"), "Name: ______________________"),
         ]]
         sig_table = Table(sig_data, colWidths=[6.0 * cm, 6.0 * cm, 6.0 * cm])
         sig_table.setStyle(TableStyle([
@@ -716,23 +750,6 @@ def generate_treasury_pdf(
     story.append(Spacer(1, 8))
 
     # --- Signatures: Treasurer, Deacon, Elder ---
-    def signature_cell(heading, entry, fallback):
-        """One signature cell: the named officer, their signature on the line,
-        or the blank rules the cell has always kept when nobody has signed."""
-        entry = entry or {}
-        cell = [Paragraph(heading, st["cell"])]
-        if entry.get("name"):
-            cell.append(Paragraph(f"Name: <b>{escape(entry['name'])}</b>", st["cell"]))
-        else:
-            cell.append(Paragraph(fallback, st["cell"]))
-        image = _signature_flowable(entry.get("image"), 4.6 * cm, 1.0 * cm)
-        if image:
-            cell.append(image)
-        else:
-            cell.append(Paragraph("Signature: _______________", st["cell"]))
-        return cell
-
-    offices = signatures or {}
     sig_data = [[
         signature_cell("<b>Signed By:</b>", offices.get("treasurer"), "Name: ______________________"),
         signature_cell("Deacon", None, "Name: ______________________"),
@@ -2183,6 +2200,32 @@ def _department_accent(code, name=''):
 PROGRAM_ROW_INDENT = 14
 
 
+def _draw_qr(c, url, x, y, size):
+    """A QR code drawn as vector ink at (x, y), ``size`` points on the side.
+
+    The giving QR needs no new dependency: reportlab ships its own QR widget,
+    scaled here from the widget's own bounds so the matrix stays square at
+    whatever paper size it is asked for. A white pad rides behind it, so a
+    panel drawn over a wash still reads as clean black-on-white to a camera.
+    """
+    try:
+        from reportlab.graphics import renderPDF
+        from reportlab.graphics.barcode.qr import QrCodeWidget
+        from reportlab.graphics.shapes import Drawing
+    except Exception:
+        return
+    widget = QrCodeWidget(url, barLevel='M')
+    x0, y0, x1, y1 = widget.getBounds()
+    scale_x, scale_y = size / (x1 - x0), size / (y1 - y0)
+    c.setFillColor(colors.white)
+    c.rect(x - 2, y - 2, size + 4, size + 4, fill=1, stroke=0)
+    # The position rides the drawing's own transform, not the draw offset:
+    # the widget's bounds are mapped onto the (x, y, size, size) square.
+    drawing = Drawing(size, size, transform=[scale_x, 0, 0, scale_y, x - x0 * scale_x, y - y0 * scale_y])
+    drawing.add(widget)
+    renderPDF.draw(drawing, c, 0, 0)
+
+
 def _program_rows(event):
     """The typed order of service, spoken the way every paper reads it.
 
@@ -2269,6 +2312,11 @@ def generate_event_program_plain_pdf(
     side = 16 * mm
     bottom = 18 * mm
     foot_h = 34                             # room the page's foot keeps
+    # The giving QR floats above the foot rule at the page's right edge, when
+    # the day carries one: the rows give up the room it needs up front, so
+    # the flow's budget and the ink agree.
+    give_url = (contact.get('give_url') or '').strip()
+    qr_size = 15 * mm if give_url else 0
 
     DARK = colors.HexColor('#26352f')
     GREY = colors.HexColor('#617068')
@@ -2322,7 +2370,11 @@ def generate_event_program_plain_pdf(
 
     def foot(page_i, pages):
         """The page's foot: a rule and, when the church handed one, its name
-        and where it stands — small, grey, and never mistaken for the day."""
+        and where it stands — small, grey, and never mistaken for the day.
+        The giving QR holds the foot's right edge when the day carries one,
+        and the foot's text wraps short of it."""
+        qr_x = page_w - side - qr_size
+        text_w = page_w - 2 * side - (qr_size + 12 if qr_size else 0)
         c.setStrokeColor(RULE)
         c.setLineWidth(0.6)
         c.line(side, bottom - 6, page_w - side, bottom - 6)
@@ -2333,12 +2385,12 @@ def generate_event_program_plain_pdf(
             lines.append((name, 'Helvetica-Bold'))
         address = str(contact.get('address') or '').strip()
         if address:
-            address_lines = wrap(address, 'Helvetica', 7.5, page_w - 2 * side)
+            address_lines = wrap(address, 'Helvetica', 7.5, text_w)
             lines.extend((piece, 'Helvetica') for piece in address_lines[:2])
         giving = contact.get('giving') or []
-        giving_line = ', '.join(str(part or '').strip() for part in giving[:2] if str(part or '').strip())
+        giving_line = ', '.join(str(part or '').strip() for part in giving[:3] if str(part or '').strip())
         if giving_line:
-            for piece in wrap('\u2192 ' + giving_line, 'Helvetica', 7.5, page_w - 2 * side)[:1]:
+            for piece in wrap('\u2192 ' + giving_line, 'Helvetica', 7.5, text_w)[:1]:
                 lines.append((piece, 'Helvetica'))
         if page_i + 1 < pages:
             lines.append((f'Page {page_i + 1} of {pages}', 'Helvetica'))
@@ -2347,6 +2399,13 @@ def generate_event_program_plain_pdf(
             c.setFillColor(GREY)
             c.drawString(side, y, text)
             y -= 10
+        if qr_size:
+            _draw_qr(c, give_url, qr_x, bottom + 2, qr_size)
+            c.setFont('Helvetica-Bold', 6.5)
+            c.setFillColor(GREY)
+            c.drawRightString(qr_x - 6, bottom + 2 + qr_size / 2 + 4, 'Scan to give')
+            c.setFont('Helvetica', 6.5)
+            c.drawRightString(qr_x - 6, bottom + 2 + qr_size / 2 - 7, 'through the system')
 
     # ── The day as the letterhead names it ────────────────────────────────
     title = str(event.title or 'Program').strip() or 'Program'
@@ -2386,15 +2445,18 @@ def generate_event_program_plain_pdf(
     def row_lines(row):
         width = content_w - row['indent']
         lines = []
-        if row['hours']:
-            lines.append((row['hours'], 'Helvetica-Bold', 9, ACCENT, 4, side + row['indent']))
         size = 10.5 if row['indent'] else 12
-        for piece in wrap(row['title'] or '\u2014', 'Helvetica-Bold', size, width):
+        # A part of the day reads the way a hymn sheet speaks one: the hour
+        # and the name share one bold line — "8:00 – 8:10 AM: Opening Song"
+        # — and the people carrying it sit on their own indented line beneath.
+        title = row['title'] or '\u2014'
+        head = f"{row['hours']}: {title}" if row['hours'] else title
+        for piece in wrap(head, 'Helvetica-Bold', size, width):
             lines.append((piece, 'Helvetica-Bold', size, DARK, 2.5, side + row['indent']))
         for name, role in row['people']:
             text = f'\u2022 {name}' + (f' \u00b7 {role}' if role else '')
-            for piece in wrap(text, 'Helvetica', 8.5, width):
-                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5, side + row['indent']))
+            for piece in wrap(text, 'Helvetica', 8.5, width - PROGRAM_ROW_INDENT):
+                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5, side + row['indent'] + PROGRAM_ROW_INDENT))
         return lines
 
     # The rows are fitted before the paper is drawn: the page count the
@@ -2416,7 +2478,7 @@ def generate_event_program_plain_pdf(
         - 14 * len(meta)                                # the meta's spoken lines
         - 16                                            # the air below the head
     )
-    usable = head_bottom - (bottom + foot_h)
+    usable = head_bottom - (bottom + foot_h + (qr_size + 8 if qr_size else 0))
     if usable < 120:
         usable = 120
 
@@ -2545,25 +2607,27 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     rows = _program_rows(event)
 
     def row_lines(row):
-        """One row's spoken pieces: its hours, its name, its facilitators."""
+        """One row's spoken pieces: its hour and its name sharing one bold
+        line, and its facilitators on an indented line beneath — the same
+        reading the plain sheet lays down."""
         width = panel_w - 2 * side - row['indent']
         lines = []
-        if row['hours']:
-            lines.append((row['hours'], 'Helvetica-Bold', 9, ACCENT, 4))
         size = 11 if row['indent'] else 12.5
-        for piece in wrap(row['title'] or '\u2014', 'Helvetica-Bold', size, width):
-            lines.append((piece, 'Helvetica-Bold', size, DARK, 2.5))
+        title = row['title'] or '\u2014'
+        head = f"{row['hours']}: {title}" if row['hours'] else title
+        for piece in wrap(head, 'Helvetica-Bold', size, width):
+            lines.append((piece, 'Helvetica-Bold', size, DARK, 2.5, 0))
         for name, role in row['people']:
             text = f'\u2022 {name}' + (f' \u00b7 {role}' if role else '')
-            for piece in wrap(text, 'Helvetica', 8.5, width):
-                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5))
+            for piece in wrap(text, 'Helvetica', 8.5, width - PROGRAM_ROW_INDENT):
+                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5, PROGRAM_ROW_INDENT))
         return lines
 
     def row_height(row):
         # What the panel consumes for one row: its lines, the hairline under
         # it, and the breath after. Drawn and measured from the same numbers,
         # so the flow never drifts from where the ink lands.
-        return sum(size + space for (_t, _f, size, _c, space) in row_lines(row)) + 8
+        return sum(size + space for (_t, _f, size, _c, space, _x) in row_lines(row)) + 8
 
     # ── Fitting the rows onto panels: two columns of one spread per sheet ─
 
@@ -2576,7 +2640,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     while row_i < len(rows):
         row = rows[row_i]
         lines = row_lines(row)
-        height = sum(size + space for (_t, _f, size, _c, space) in lines) + 8
+        height = sum(size + space for (_t, _f, size, _c, space, _x) in lines) + 8
         column = spreads[-1][col_i]
 
         # A session head never sits as its column's last line while the
@@ -2591,7 +2655,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         need = height
         if stranded:
             next_lines = row_lines(rows[row_i + 1])
-            need += sum(size + space for (_t, _f, size, _c, space) in next_lines) + 8
+            need += sum(size + space for (_t, _f, size, _c, space, _x) in next_lines) + 8
 
         if column and need > (y_left if col_i == 0 else y_right):
             if col_i == 0:
@@ -2885,13 +2949,28 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
                 y -= c_lead
             y -= 6
 
+        # The giving QR, at the panel's foot beside the welcome: the system's
+        # own giving page, opened with the day's account already chosen —
+        # the scanner arrives at the form, not the front door.
+        qr_url = (contact.get('give_url') or '').strip()
+        if qr_url:
+            qr_size = 12 * mm
+            qr_x = x + w - qr_size
+            _draw_qr(c, qr_url, qr_x, 6, qr_size)
+            c.setFont('Helvetica-Bold', 7)
+            c.setFillColor(EMBER)
+            c.drawRightString(qr_x - 8, 26, 'Scan to give')
+            c.setFont('Helvetica', 6.5)
+            c.setFillColor(GREY)
+            c.drawRightString(qr_x - 8, 15, 'through the system')
+
     def draw_row(c, x, y, row, lines):
         """Draw one row's lines, rule under it, and step to the next."""
-        for text, font, size, colour, space in lines:
+        for text, font, size, colour, space, lx in lines:
             c.setFont(font, size)
             c.setFillColor(colour)
             y -= size
-            c.drawString(x, y, text)
+            c.drawString(x + lx, y, text)
             y -= space
         c.setStrokeColor(RULE)
         c.setLineWidth(0.4)

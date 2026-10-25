@@ -671,6 +671,59 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(contribution.phone_number, '254792007989')
         self.assertEqual(contribution.status, 'completed')
 
+    def test_c2b_dialout_prefixed_msisdn_is_kept_and_links_the_member(self):
+        # A paybill payment keyed manually at the till can arrive wearing the
+        # ``00254…`` international dial-out prefix — the same shape the SMS
+        # gateway documents for such payments. The old recorder mangled it
+        # into 16 digits and threw the number away, so the row stored no
+        # phone, member matching had nothing to work with, and the receipt
+        # went nowhere. Each must be kept, matched, and be receiptable.
+        member = User.objects.create_user(
+            username='254712345678', email='giver@member.example', password='secure-password')
+        MemberProfile.objects.create(user=member, phone_number='+254712345678')
+        TreasuryAccount.objects.create(name='TITHE', description='Tithe', account_type='mobile_money')
+        payload = {
+            'TransID': 'REV14TEST',
+            'TransAmount': '300.00',
+            'BillRefNumber': 'TITHE',
+            'MSISDN': '00254712345678',
+            'FirstName': 'Dialout',
+            'LastName': 'Giver',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='REV14TEST')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertFalse(contribution.needs_review)
+        # The ledger keeps a receiptable phone, not the mangled 16 digits.
+        self.assertEqual(contribution.phone_number, '254712345678')
+        # And the giver it belongs to: the phone is the only thread back —
+        # losing it also lost the member link and the donor email.
+        self.assertEqual(contribution.member, member)
+        self.assertEqual(contribution.donor_email, 'giver@member.example')
+
+    def test_c2b_masked_msisdn_is_discarded_whole_not_garbled(self):
+        # When Safaricom masks part of the number, digit-stripping cannot
+        # restore it: the recorder must throw the whole value away rather
+        # than store a short or scrambled string the gateway would refuse —
+        # an unusable empty phone must not come back dressed as a number.
+        payload = {
+            'TransID': 'REV15TEST',
+            'TransAmount': '50.00',
+            'BillRefNumber': 'Tithe',
+            'MSISDN': '2547XX345678',
+            'FirstName': 'Masked',
+            'LastName': 'Giver',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='REV15TEST')
+        self.assertEqual(contribution.status, 'completed')
+        self.assertFalse(contribution.phone_number)
+        self.assertFalse(contribution.member)
+
     def test_c2b_overlong_text_fields_are_trimmed_not_fatal(self):
         # The MSISDN overflow was one instance of a wider rule: every string
         # column the save touches is bounded, and anything past its width
@@ -2359,6 +2412,108 @@ class PdfGenerationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response['Content-Type'], 'application/pdf')
         self.assertTrue(response.content.startswith(b'%PDF'))
+
+    def test_treasury_report_folds_account_spellings_into_one_row(self):
+        # 'LCB' beside 'Local Church Budget' is one account written twice — as
+        # are 'tithe' and 'Tithe', and 'Children' and 'Children Ministry'. The
+        # report read the raw string per row, so the same money sat on two
+        # lines. The report reads one name per account now: the spellings fold
+        # onto the account they name, and no alternate spelling survives.
+        digital_filter = {'status': 'completed', 'giving_type': 'financial', 'paid_at': timezone.now()}
+        Contribution.objects.create(
+            amount=Decimal('500.00'), purpose='LCB', payment_method='mpesa', **digital_filter)
+        Contribution.objects.create(
+            amount=Decimal('300.00'), purpose='Children', payment_method='mpesa', **digital_filter)
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('1000.00')
+            , purpose='Local Church Budget', received_on=date.today(), payment_method='cash')
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('200.00')
+            , purpose='Children Ministry', received_on=date.today(), payment_method='cash')
+
+        response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        # The short forms are gone entirely: every line that names the account
+        # — the breakdown's row and each gift's own row — reads its one name.
+        self.assertNotIn('LCB', text)
+        # The full name arrives…
+        self.assertIn('LocalChurchBudget', text)
+        # …exactly once per context: two gift rows and the breakdown's row.
+        self.assertEqual(text.count('LocalChurchBudget'), 3)
+        self.assertEqual(text.count('ChildrenMinistry'), 3)
+
+    def test_individual_report_reads_mode_only(self):
+        # The desk reads how the money moved — one Mode column. The type and
+        # mode pair the table used to carry is no longer a question the
+        # report answers: the rows say cash, M-Pesa, cheque, bank — the
+        # contributor's own record is separate work.
+        from .pdf_generator import generate_treasury_pdf
+
+        text = _pdf_text(generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 1000},
+            is_individual=True,
+            individual_rows=[{
+                "member_name": "Test Member",
+                "date": "2026-01-15",
+                "purpose_name": "Tithe",
+                "contribution_type": "individual",
+                "payment_method": "cash",
+                "receipt_number": "REC-001",
+                "amount": 1000,
+            }],
+        ))
+        # The pair is gone; the mode stands alone.
+        self.assertNotIn('Type&Mode', text)
+        self.assertNotIn('Individual\u2022CASH', text)
+        self.assertIn('AccountMode', text)
+        self.assertIn('CASH', text)
+
+    def test_individual_report_appends_the_uploaded_signatures(self):
+        # The sign-off block checks what is actually on file: an officer who
+        # has uploaded a signature has their pen printed on their line — the
+        # name the paper signs — and the rules stand for an office with no
+        # signature yet, as it always has.
+        from io import BytesIO
+        from django.core.files.base import ContentFile
+        from .pdf_generator import generate_treasury_pdf
+        from PIL import Image
+
+        profile = MemberProfile.objects.get(user=self.user)
+        # The setUp profile keeps the legacy singular role only; an officer
+        # whose desk the signature answers for carries the offices the way
+        # the serializers write them.
+        profile.roles = 'treasurer'
+        profile.save(update_fields=['roles'])
+        buffer = BytesIO()
+        Image.new('RGBA', (40, 18), (0, 0, 0, 0)).save(buffer, format='PNG')
+        profile.signature.save('treasurer-signature.png', ContentFile(buffer.getvalue()), save=True)
+
+        text = _pdf_text(generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 1000},
+            is_individual=True,
+            individual_rows=[{
+                "member_name": "Test Member",
+                "date": "2026-01-15",
+                "purpose_name": "Tithe",
+                "contribution_type": "individual",
+                "payment_method": "cash",
+                "receipt_number": "REC-001",
+                "amount": 1000,
+            }],
+        ))
+        # The uploaded signature's holder signs by name…
+        self.assertIn('Name:JohnDoe', text)
+        # …and the treasurer slot no longer reads as a bare rule to fill.
+        self.assertNotIn('TreasurerSign:_______', text)
 
     def test_individual_treasury_pdf_direct_call(self):
         from .pdf_generator import generate_treasury_pdf

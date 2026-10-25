@@ -608,6 +608,17 @@ function WithdrawalRequestsPanel({
           {filteredRows.length !== rows.length ? ` (filtered from ${rows.length})` : ""} ·{" "}
           <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action</span></span>
         </div>
+        {/* Refresh re-reads the request roll: gives a pending withdrawal its
+            answer the instant it is approved elsewhere. First in the row. */}
+        <button
+          type="button"
+          onClick={load}
+          disabled={loading}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60"
+          aria-label="Refresh withdrawal requests"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        </button>
         <button
           type="button"
           onClick={printReport}
@@ -1526,6 +1537,20 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+              {/* Refreshing re-reads the books without leaving the desk: a gift
+                  made on the go (M-Pesa, the giving desk) shows up the moment
+                  the treasurer taps this, first in the row so the hand finds
+                  it where the action buttons begin. */}
+              <button
+                type="button"
+                onClick={fetchAccounts}
+                disabled={loading}
+                className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
+                aria-label="Refresh treasury accounts"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">{loading ? "Refreshing…" : "Refresh"}</span>
+              </button>
               {/* The congregation's statement is written from the same desk that
                   keeps the accounts: publishing it is what tells members what
                   the month's giving and spending came to. */}
