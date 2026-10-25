@@ -4228,6 +4228,19 @@ def _get_purpose_q(purpose_param):
         # still opens on the spellings the ledgers carried before the fold:
         # 'AYM' beside 'Adventist Youth Ministry' beside 'Youth'.
         return Q(purpose__icontains="aym") | Q(purpose__icontains="adventist youth") | Q(purpose__iexact="youth")
+    elif "sabbat" in p_str:
+        # The Sabbath School row, folded in the summary, opens the same
+        # family here: 'Sabbat School' typed with the 'h' off beside
+        # 'sabbath school' beside the church's own title and its M-Pesa
+        # short name. '13th Sabbath' matched earlier and stays its own
+        # account — the branch reaches only what 'sabbat' names with the
+        # school account, never the 13th-Sabbath offering.
+        return (
+            Q(purpose__icontains="sabbat school") | Q(purpose__icontains="sabbath school")
+            | Q(purpose__icontains="sabbat sch") | Q(purpose__icontains="sabbath sch")
+            | Q(purpose__icontains="sabbat scho") | Q(purpose__icontains="sabbath scho")
+            | Q(purpose__icontains="sabbatscho") | Q(purpose__icontains="sabbathsch")
+        )
     elif "others" in p_str or "other" in p_str:
         known_keywords = ["tithe", "combined", "offertory", "camp", "msamaria", "evangelism", "station", "13th", "thirteenth", "building", "development", "lcb", "youth"]
         q = Q()
@@ -9668,7 +9681,8 @@ def _get_saturdays_in_month(ref_date):
 # 'LCB' beside 'Local Church Budget', 'tithe' typed beside 'Tithe', 'Combined'
 # beside 'Combined Offering', 'Children' beside 'Children Ministry', the
 # youth account as 'AYM' beside 'Adventist Youth Ministry' beside 'Adventist
-# Youth Ministries' — all of it one account the same hands named differently.
+# Youth Ministries', the Sabbath School list as 'Sabbat School' beside
+# 'sabbath school' — all of it one account the same hands named differently.
 # The report keyed its rows on the raw string, so the same money read twice.
 # One name per account: the church's own short name for what it knows, and
 # the rows' arrival spelling for what it does not.
@@ -9698,6 +9712,18 @@ CANONICAL_TREASURY_NAMES = {
     'adventist youth ministry': 'AYM',
     'adventist youth ministries': 'AYM',
     'adventist youth ministries (ay)': 'AYM',
+    # The Sabbath School account, misspelled on the ledger with the 'h' off
+    # 'Sabbat', read plainly lowercase beside the church's own title, and
+    # filed under its M-Pesa short name — every one 'Sabbath School'.
+    'sabbath school': 'Sabbath School',
+    'sabbat school': 'Sabbath School',
+    'sabath school': 'Sabbath School',
+    'sabbath sch': 'Sabbath School',
+    'sabbath scho': 'Sabbath School',
+    'sabbathsch': 'Sabbath School',
+    'sabbat sch': 'Sabbath School',
+    'sabbat scho': 'Sabbath School',
+    'sabbatscho': 'Sabbath School',
 }
 
 

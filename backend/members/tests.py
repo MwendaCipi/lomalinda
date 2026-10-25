@@ -236,6 +236,40 @@ class ContributionTreasuryAPITests(APITestCase):
         self.assertNotIn('Adventist Youth Ministries', rows)
         self.assertNotIn('Youth', rows)
 
+    def test_summary_merges_the_sabbath_school_spellings(self):
+        """The Sabbath School account once read twice: 'Sabbat School' typed
+        with the 'h' off beside 'sabbath school' beside the church's own
+        'Sabbath School' — the summary folds the family onto one row.
+        """
+        Contribution.objects.create(
+            amount=Decimal('120.00'),
+            purpose='Sabbat School',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        Contribution.objects.create(
+            amount=Decimal('30.00'),
+            purpose='sabbath school',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        CashContribution.objects.create(
+            received_by=self.user,
+            amount=Decimal('10.00'),
+            purpose='Sabbath School',
+            received_on=self.today,
+            payment_method='cash',
+            donor_name='Jane Doe',
+        )
+        response = self.client.get(f'/api/members/treasury/ledger/?date={self.today.isoformat()}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = {row['purpose']: Decimal(row['total']) for row in response.data['purpose_breakdown']}
+        self.assertEqual(rows.get('Sabbath School'), Decimal('160.00'))
+        self.assertNotIn('Sabbat School', rows)
+        self.assertNotIn('sabbath school', rows)
+
     def test_the_merged_aym_summary_row_opens_on_every_spelling(self):
         """Clicking the summary's folded 'AYM' row still opens the rows the
         ledgers carried under the older spellings, so the drill-down reads
@@ -263,6 +297,36 @@ class ContributionTreasuryAPITests(APITestCase):
         self.assertEqual(
             {Decimal(item['amount']) for item in response.data},
             {Decimal('200.00'), Decimal('25.00')},
+        )
+
+    def test_the_merged_sabbath_school_summary_row_opens_on_every_spelling(self):
+        """The folded summary's drill-down must cover the misspelling, not
+        just the church's title — the rows recorded as 'Sabbat School' are
+        the same Sabbath School money the summary row counts.
+        """
+        Contribution.objects.create(
+            amount=Decimal('120.00'),
+            purpose='Sabbat School',
+            status='completed',
+            paid_at=timezone.now(),
+            payment_method='mpesa',
+        )
+        CashContribution.objects.create(
+            received_by=self.user,
+            amount=Decimal('10.00'),
+            purpose='Sabbath School',
+            received_on=self.today,
+            payment_method='cash',
+            donor_name='Jane Doe',
+        )
+        response = self.client.get(
+            f"/api/members/treasury/purpose-contributions/?purpose=Sabbath%20School&from_date={self.today.isoformat()}&to_date={self.today.isoformat()}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(
+            {Decimal(item['amount']) for item in response.data},
+            {Decimal('120.00'), Decimal('10.00')},
         )
 
     def test_member_cannot_access_treasury_ledger(self):
