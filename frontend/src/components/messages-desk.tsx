@@ -14,6 +14,9 @@ type DeskMessage = {
   body: string;
   /** Who it went to, as the desk reads it — e.g. "Church Choir roll". */
   audience: string;
+  /** The one number this went to when it was typed by hand, outside the
+      roll; empty for an ordinary send to the desk's own people. */
+  direct_phone: string;
   recipient_count: number;
   sent_count: number;
   failed_count: number;
@@ -55,15 +58,17 @@ async function loadMessages(departmentCode: string): Promise<MessagesIndex> {
 
 type SendResult = { message: DeskMessage; detail: string; sent: number | null; reachable: number };
 
-async function sendMessage(departmentCode: string, body: string): Promise<SendResult> {
+async function sendMessage(departmentCode: string, body: string, phone?: string): Promise<SendResult> {
   const response = await fetch(`${API_URL}/api/members/departments/${departmentCode}/messages/`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ body }),
+    // A number rides beside the body only when one was typed: the server
+    // reads its absence as "the roll", which is where the box starts.
+    body: JSON.stringify(phone ? { body, phone } : { body }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data?.body || data?.detail || "That message could not be sent.");
+    throw new Error(data?.body || data?.phone || data?.detail || "That message could not be sent.");
   }
   return data as SendResult;
 }
@@ -111,6 +116,13 @@ export function MessageCompose({
   autoFocus?: boolean;
 }) {
   const [sending, setSending] = useState(false);
+  // Who the box is addressed to: the roll the desk already reads, or one
+  // number typed by hand for someone the system has never met. It starts on
+  // the roll, so a message left here can never be sent to an outsider's
+  // number by a stray click — pointing it elsewhere is a choice made each
+  // time, and the number is cleared again once its message has gone.
+  const [toNumber, setToNumber] = useState(false);
+  const [phone, setPhone] = useState("");
 
   if (!canSend) {
     return (
@@ -122,18 +134,24 @@ export function MessageCompose({
     );
   }
 
+  const trimmedPhone = phone.trim();
+  // A number mode cannot send without its number; the roll mode needs only
+  // the body it has always needed.
+  const ready = Boolean(value.trim()) && (!toNumber || Boolean(trimmedPhone));
+
   const send = async () => {
     const body = value.trim();
-    if (!body || sending) return;
+    if (!ready || sending) return;
     setSending(true);
     try {
-      const result = await sendMessage(departmentCode, body);
+      const result = await sendMessage(departmentCode, body, toNumber ? trimmedPhone : undefined);
       showAlert("Message sent", result.detail, "success", {
         toast: true,
         timer: 4500,
         showConfirmButton: false,
       });
       onChange("");
+      setPhone("");
       onSent(result.message);
     } catch (error) {
       showAlert("Could not send", error instanceof Error ? error.message : "Try again.", "error");
@@ -148,16 +166,55 @@ export function MessageCompose({
         <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
           <Send className="h-4 w-4 text-ember" aria-hidden="true" /> New message
         </h3>
-        <p className="text-[11px] font-semibold text-moss">
+        <div className="flex items-center gap-1 rounded-xl border border-sand-line bg-sand p-1">
+          <button
+            type="button"
+            onClick={() => setToNumber(false)}
+            aria-pressed={!toNumber}
+            className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+              !toNumber ? "bg-white text-bark shadow-sm" : "text-moss hover:text-bark"
+            }`}
+          >
+            {departmentLabel} roll
+          </button>
+          <button
+            type="button"
+            onClick={() => setToNumber(true)}
+            aria-pressed={toNumber}
+            className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+              toNumber ? "bg-white text-bark shadow-sm" : "text-moss hover:text-bark"
+            }`}
+          >
+            A number
+          </button>
+        </div>
+      </div>
+      {toNumber ? (
+        <div className="mb-3">
+          <input
+            type="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            autoFocus={autoFocus}
+            placeholder="0712 345 678"
+            aria-label="Phone number to send this message to"
+            className="w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm text-bark outline-none transition placeholder:text-moss-faint focus:border-ember sm:max-w-xs"
+          />
+          <p className="mt-1.5 text-[11px] text-moss">
+            Someone not in the system — this text goes to that one number, and to nobody on the roll.
+          </p>
+        </div>
+      ) : (
+        <p className="mb-3 text-[11px] font-semibold text-moss">
           To {audience} · {rollCount} {rollCount === 1 ? "person" : "people"} · {reachable} with a number
         </p>
-      </div>
+      )}
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={4}
         autoFocus={autoFocus}
-        placeholder={`Write to ${audience}…`}
+        placeholder={toNumber ? "Write your message…" : `Write to ${audience}…`}
         className="w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2.5 text-sm text-bark outline-none transition placeholder:text-moss-faint focus:border-ember"
       />
       {!gateway && (
@@ -170,7 +227,7 @@ export function MessageCompose({
         <button
           type="button"
           onClick={() => void send()}
-          disabled={!value.trim() || sending}
+          disabled={!ready || sending}
           className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Send className="h-3.5 w-3.5" aria-hidden="true" /> {sending ? "Sending…" : "Send"}
@@ -283,7 +340,7 @@ export function MessagingPanel({
                 <p className="mt-2 text-[11px] text-moss">
                   {formatWhen(message.created_at)}
                   {message.by ? ` · ${message.by}` : ""} · to {message.audience} ·{" "}
-                  {message.recipient_count} on the roll
+                  {message.direct_phone ? "outside the roll" : `${message.recipient_count} on the roll`}
                   {message.sent_count > 0 ? ` · ${message.sent_count} sent` : ""}
                   {message.failed_count > 0 ? ` · ${message.failed_count} refused` : ""}
                 </p>

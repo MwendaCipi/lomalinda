@@ -12121,6 +12121,7 @@ def department_message_payload(message):
         'unit': message.unit or '',
         'body': message.body,
         'audience': message.audience,
+        'direct_phone': message.direct_phone,
         'recipient_count': message.recipient_count,
         'sent_count': message.sent_count,
         'failed_count': message.failed_count,
@@ -12187,7 +12188,9 @@ class DepartmentMessagesView(APIView):
     Message button at the foot of the members roll — and both address the
     roll the desk itself reads: the recipients come from
     ``DepartmentMembersView``, so a text can never reach further than the
-    list on screen. Reading the log is open to the desk as the roll is;
+    list on screen. A desk may also hand it one number of its own, for
+    someone the system has never met; that send walks no roll and keeps
+    the number it used. Reading the log is open to the desk as the roll is;
     writing to it is the leader's hand, as every other write here is.
     """
 
@@ -12235,27 +12238,50 @@ class DepartmentMessagesView(APIView):
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # The roll as the desk reads it — the same union of rows (the choir
-        # and the singing groups under music, the roster under Sabbath School,
-        # the children's records), so the message goes to exactly the list on
-        # screen and no further.
-        roll = DepartmentMembersView().get(request, department, unit=unit)
-        members = roll.data.get('members', [])
-        seen = set()
-        phones = []
-        for row in members:
-            phone = sms.recipient(row.get('phone_number') or '')
-            if not phone or phone in seen:
-                continue
-            seen.add(phone)
-            phones.append(phone)
+        # One number the system has never met, typed by hand: the door for a
+        # parent who has not joined, a visitor, a supplier. It goes to that
+        # number and to nobody else — the roll beside it is not walked — and
+        # the row keeps which number it was, so the log still says what left
+        # the church's gateway. A number the gateway could not use is refused
+        # before anything is stored, rather than kept as a send that never had
+        # a chance of landing.
+        typed = str(request.data.get('phone') or '').strip()
+        direct = ''
+        if typed:
+            direct = sms.recipient(typed)
+            if not direct:
+                return Response(
+                    {'phone': 'That is not a usable Kenyan mobile number — try 07… or +254….'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            unit = ''
 
+        if direct:
+            members, phones = [], [direct]
+        else:
+            # The roll as the desk reads it — the same union of rows (the choir
+            # and the singing groups under music, the roster under Sabbath School,
+            # the children's records), so the message goes to exactly the list on
+            # screen and no further.
+            roll = DepartmentMembersView().get(request, department, unit=unit)
+            members = roll.data.get('members', [])
+            seen = set()
+            phones = []
+            for row in members:
+                phone = sms.recipient(row.get('phone_number') or '')
+                if not phone or phone in seen:
+                    continue
+                seen.add(phone)
+                phones.append(phone)
+
+        count_word = 'number' if len(phones) == 1 else 'numbers'
         message = DepartmentMessage.objects.create(
             department=department,
             unit=unit,
             body=body,
-            audience=f"{target.name} roll" if not unit else f"{target.name} — {unit}",
-            recipient_count=len(members),
+            audience=direct or (f"{target.name} roll" if not unit else f"{target.name} — {unit}"),
+            direct_phone=direct,
+            recipient_count=1 if direct else len(members),
             created_by=request.user,
         )
         payload = department_message_payload(message)
@@ -12278,7 +12304,7 @@ class DepartmentMessagesView(APIView):
             return Response(
                 {'message': department_message_payload(message), 'sent': sent, 'failed': failed,
                  'reachable': len(phones),
-                 'detail': f'Sent to {sent} of {len(phones)} numbers.'},
+                 'detail': f'Sent to {sent} of {len(phones)} {count_word}.'},
                 status=status.HTTP_201_CREATED,
             )
         schema_name = getattr(connection, 'schema_name', None)
@@ -12290,8 +12316,7 @@ class DepartmentMessagesView(APIView):
         ).start()
         return Response(
             {'message': department_message_payload(message), 'sent': None, 'failed': None,
-             'reachable': len(phones), 'sending': True,
-             'detail': f'Sending to {len(phones)} numbers…'},
+             'reachable': len(phones), 'sending': True,                 'detail': f'Sending to {len(phones)} {count_word}…'},
             status=status.HTTP_201_CREATED,
         )
 

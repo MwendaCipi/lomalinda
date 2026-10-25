@@ -654,12 +654,22 @@ class DepartmentMessage(models.Model):
     themselves are always read fresh from the roll at send time. A roll moves
     — singers join, members move away — so the record keeps what was promised
     while the next send addresses who is on the roll now.
+
+    A desk may also write to one number the system has never met — a parent
+    who has not joined, a visitor, a supplier — and that send is a row here
+    too, with the number itself kept on ``direct_phone``. The roll is never
+    touched by it: one number in, one number out, and the log says whose it
+    was.
     """
 
     department = models.CharField(max_length=100, help_text="The desk's code — the message belongs to the area that sent it")
     unit = models.CharField(max_length=60, blank=True, help_text="The sub-unit addressed; blank for the whole roll")
     body = models.TextField(help_text="The message exactly as it was written")
     audience = models.CharField(max_length=160, help_text="Who it went to, as the desk reads it — e.g. 'Church Choir roll'")
+    direct_phone = models.CharField(
+        max_length=30, blank=True, default='',
+        help_text="The one number texted outside the roll; blank when the roll itself was addressed",
+    )
     recipient_count = models.PositiveIntegerField(default=0, help_text="People on the roll it went to")
     sent_count = models.PositiveIntegerField(default=0, help_text="Numbers the gateway accepted")
     failed_count = models.PositiveIntegerField(default=0, help_text="Numbers the gateway refused or could not reach")

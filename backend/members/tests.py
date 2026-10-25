@@ -17783,3 +17783,64 @@ class DepartmentMessageTests(APITestCase):
         self.assertEqual(message.audience, 'Music roll')
         self.assertEqual(message.recipient_count, 3)
 
+    @override_settings(SMS_API_KEY='test-token', SMS_SEND_DELAY=0)
+    @patch('members.sms.requests.post')
+    def test_a_desk_can_text_a_number_that_is_not_on_the_roll(self, sms_post):
+        """A leader may write to someone the system has never met — a parent
+        who has not joined, a visitor, a supplier — by typing the number.
+
+        One number in, one number out: the roll beside it is not walked, the
+        send is kept in the log like any other, and the log says which number
+        it was.
+        """
+        sms_post.return_value.status_code = 200
+        sms_post.return_value.json.return_value = {'success': True}
+        self.client.force_authenticate(self.leader)
+
+        sent = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Welcome — our service begins at 9 on Saturday.',
+            'phone': '0700000099',
+        }, format='json')
+
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED, sent.data)
+        recipients = [call.kwargs['json']['recipient'] for call in sms_post.call_args_list]
+        self.assertEqual(recipients, ['+254700000099'])
+        message = DepartmentMessage.objects.get()
+        self.assertEqual(message.direct_phone, '+254700000099')
+        self.assertEqual(message.audience, '+254700000099')
+        self.assertEqual(message.recipient_count, 1)
+        self.assertEqual(message.sent_count, 1)
+        self.assertEqual(message.failed_count, 0)
+
+        listed = self.client.get('/api/members/departments/choir/messages/')
+        self.assertEqual(listed.data['messages'][0]['direct_phone'], '+254700000099')
+
+    @override_settings(SMS_API_KEY='test-token', SMS_SEND_DELAY=0)
+    @patch('members.sms.requests.post')
+    def test_a_number_that_is_not_a_number_is_refused_before_it_is_kept(self, sms_post):
+        """The gateway would refuse it anyway; the desk is told now rather
+        than the log carrying a send that never had a chance of landing."""
+        self.client.force_authenticate(self.leader)
+
+        refused = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Hello?',
+            'phone': '12345',
+        }, format='json')
+
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone', refused.data)
+        self.assertFalse(DepartmentMessage.objects.exists())
+        sms_post.assert_not_called()
+
+    def test_a_member_without_the_desk_keys_cannot_text_a_number(self):
+        """The outside door is the leader's hand, like every other write."""
+        self.client.force_authenticate(self.bystander)
+
+        refused = self.client.post('/api/members/departments/choir/messages/', {
+            'body': 'Let me in.',
+            'phone': '0700000099',
+        }, format='json')
+
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(DepartmentMessage.objects.exists())
+
