@@ -2338,11 +2338,14 @@ def generate_event_program_plain_pdf(
     side = 16 * mm
     bottom = 18 * mm
     foot_h = 34                             # room the page's foot keeps
-    # The giving QR floats above the foot rule at the page's right edge, when
-    # the day carries one: the rows give up the room it needs up front, so
-    # the flow's budget and the ink agree.
+    # The giving link holds the foot's right edge at the page's right edge,
+    # when the day carries one: the rows give up the room it needs up front,
+    # so the flow's budget and the ink agree. This sheet is read on a
+    # screen, where a QR would only be a scan of the device already holding
+    # it — the brochure, the paper that folds, is where the QR belongs, on
+    # its back side; here the same giving door is a clickable link.
     give_url = (contact.get('give_url') or '').strip()
-    qr_size = 15 * mm if give_url else 0
+    give_block = 15 * mm if give_url else 0
 
     DARK = colors.HexColor('#26352f')
     GREY = colors.HexColor('#617068')
@@ -2397,10 +2400,9 @@ def generate_event_program_plain_pdf(
     def foot(page_i, pages):
         """The page's foot: a rule and, when the church handed one, its name
         and where it stands — small, grey, and never mistaken for the day.
-        The giving QR holds the foot's right edge when the day carries one,
-        and the foot's text wraps short of it."""
-        qr_x = page_w - side - qr_size
-        text_w = page_w - 2 * side - (qr_size + 12 if qr_size else 0)
+        The giving link holds the foot's right edge when the day carries
+        one, and the foot's text wraps short of it."""
+        text_w = page_w - 2 * side - (give_block + 12 if give_block else 0)
         c.setStrokeColor(RULE)
         c.setLineWidth(0.6)
         c.line(side, bottom - 6, page_w - side, bottom - 6)
@@ -2425,13 +2427,31 @@ def generate_event_program_plain_pdf(
             c.setFillColor(GREY)
             c.drawString(side, y, text)
             y -= 10
-        if qr_size:
-            _draw_qr(c, give_url, qr_x, bottom + 2, qr_size)
-            c.setFont('Helvetica-Bold', 6.5)
-            c.setFillColor(GREY)
-            c.drawRightString(qr_x - 6, bottom + 2 + qr_size / 2 + 4, 'Scan to give')
+        if give_block:
+            # The link's two lines hold the block the QR would have: the
+            # door named in the accent, the address beneath it in grey,
+            # both opening the same giving page on a tap.
+            link_x = page_w - side
+            y1 = bottom + 2 + give_block / 2 + 6
+            y2 = y1 - 10
+            label = 'Give through the system'
+            c.setFont('Helvetica-Bold', 7.5)
+            c.setFillColor(ACCENT)
+            c.drawRightString(link_x, y1, label)
+            shown = give_url
+            max_link_w = give_block + 130
             c.setFont('Helvetica', 6.5)
-            c.drawRightString(qr_x - 6, bottom + 2 + qr_size / 2 - 7, 'through the system')
+            while shown and c.stringWidth(shown, 'Helvetica', 6.5) > max_link_w:
+                shown = shown[:-1]
+            if shown != give_url:
+                shown = shown.rstrip('/?&=#') + '\u2026'
+            c.setFillColor(GREY)
+            c.drawRightString(link_x, y2, shown)
+            link_w = max(
+                c.stringWidth(label, 'Helvetica-Bold', 7.5),
+                c.stringWidth(shown, 'Helvetica', 6.5),
+            )
+            c.linkURL(give_url, (link_x - link_w - 4, y2 - 3, link_x, y1 + 9), thickness=0)
 
     # ── The day as the letterhead names it ────────────────────────────────
     title = str(event.title or 'Program').strip() or 'Program'
@@ -2504,7 +2524,7 @@ def generate_event_program_plain_pdf(
         - 14 * len(meta)                                # the meta's spoken lines
         - 16                                            # the air below the head
     )
-    usable = head_bottom - (bottom + foot_h + (qr_size + 8 if qr_size else 0))
+    usable = head_bottom - (bottom + foot_h + (give_block + 8 if give_block else 0))
     if usable < 120:
         usable = 120
 

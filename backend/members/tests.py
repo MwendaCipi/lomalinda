@@ -11720,6 +11720,13 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(shared['Content-Type'], 'application/pdf')
         self.assertTrue(shared.content[:5] in (b'%PDF-', b'%PDF\n'))
         self.assertIn("filename=\"Event_Program_", shared['Content-Disposition'])
+        # The sheet a screen reads carries its giving door as a clickable
+        # link — a QR there would be a scan of the device already holding
+        # it — opening the same giving page the brochure's QR points at.
+        # The QR itself stays where the paper folds: the brochure's back
+        # side, which the printout above already opens by default.
+        self.assertIn(b'/URI', shared.content)
+        self.assertIn(b'http://localhost:3000/give', shared.content)
         unknown = self.client.get(f'/api/members/departments/amm/events/{event.id}/program/?style=nonsense')
         self.assertEqual(unknown.status_code, 200)
         self.assertEqual(unknown['Content-Type'], 'application/pdf')
