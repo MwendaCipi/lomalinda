@@ -1203,11 +1203,13 @@ function ProgramEditorModal({
   const [items, setItems] = useState<ProgramItem[]>(
     initialItems.length > 0 ? initialItems : [{ start: "", end: "", title: "", participants: [], parts: [] }],
   );
-  // The first session starts unfolded, so the sheet opens on typing rather
-  // than on a row of closed headings. One at a time, so opening a session
-  // closes whichever other was open and the desk reads one part of the day
-  // rather than all of them at once.
-  const [openSession, setOpenSession] = useState<number | null>(0);
+  // Every session starts folded: the sheet opens on the day as a list of
+  // its parts, and a part unfolds only when the desk reaches for it — so a
+  // programme never lands with one card thrown open halfway down it, and a
+  // fresh one does not open on a blank form the desk has not asked for yet.
+  // One at a time, so opening a session closes whichever other was open and
+  // the desk reads one part of the day rather than all of them at once.
+  const [openSession, setOpenSession] = useState<number | null>(null);
   // Every "Add" on this sheet appends at the foot of its list, below the
   // fold once a day grows long — the typing column keeps its own scroll on
   // a desk, and on a phone the sheet scrolls as one page, and both carry
@@ -1660,10 +1662,21 @@ function ProgramEditorModal({
           {/* The row the whole sheet closes on: Add session, View PDF,
               View Brochure and Save program share its width equally, in that
               order — the day grows at the left, the papers open in the
-              middle, and the save sits where the hand ends. The modal keeps
-              Add session alone at the typing foot; its other actions live
-              on its own bar beneath the sheet. */}
-          <div className="flex items-center gap-2">
+              middle, and the save sits where the hand ends. On the page it
+              sticks to the foot of the typing column's own scroll, so a day
+              grown long never carries the row out of view; sticky only pulls
+              it up when it would fall below the fold, so a short or empty
+              sheet leaves it in line under its cards rather than pinned to
+              the bottom of a panel with nothing in it. The modal keeps Add
+              session alone at the typing foot; its other actions live on its
+              own bar beneath the sheet. */}
+          <div
+            className={
+              isPage
+                ? "sticky bottom-0 z-10 mt-3 flex items-center gap-2 bg-white pb-1 pt-2.5"
+                : "flex items-center gap-2"
+            }
+          >
             <button
               type="button"
               onClick={() => {
