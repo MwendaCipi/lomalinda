@@ -453,11 +453,25 @@ def generate_treasury_pdf(
             cell.append(Paragraph(f"Name: <b>{escape(entry['name'])}</b>", st["cell"]))
         else:
             cell.append(Paragraph(fallback, st["cell"]))
-        image = _signature_flowable(entry.get("image"), 4.6 * cm, 1.0 * cm)
-        if image:
-            cell.append(image)
-        else:
-            cell.append(Paragraph("Signature: _______________", st["cell"]))
+        image = _signature_flowable(entry.get("image"), 4.8 * cm, 1.3 * cm)
+        # One fixed-height signing slot for every office: an uploaded pen
+        # prints inside it, an office still unsigning keeps its ruled line in
+        # it — so the signing space reads the same on the row whether the
+        # report is printed before or after the officers have signed, and it
+        # always holds a passage of pen worth the name it signs.
+        slot_table = Table(
+            [[image if image else Paragraph("Signature: _______________", st["cell"])]],
+            colWidths=[5.2 * cm],
+            rowHeights=[1.7 * cm],
+        )
+        slot_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ]))
+        cell.append(slot_table)
         return cell
 
     # The office signatures, read once for both of the report's shapes: the
