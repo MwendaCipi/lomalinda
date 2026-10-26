@@ -13,7 +13,7 @@
  * server-side, so permissions and audiences follow without a second save.
  */
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { brand } from "@/lib/brand";
 import {
@@ -36,6 +36,7 @@ import {
   HeartPulse,
   Landmark,
   Droplets,
+  GripVertical,
   Megaphone,
   MessageSquare,
   Mic,
@@ -1140,6 +1141,11 @@ function EventProgramMenu({
   );
 }
 
+/** Where a programme drag began: an activity's card, or one facilitator's line. */
+type ProgramDragSource =
+  | { kind: "part"; session: number; part: number }
+  | { kind: "person"; session: number; part: number; person: number };
+
 /**
  * Type an event's programme: one row per item of the order of service, and
  * the sheet it will be read as laid out beside what is typed — the desk
@@ -1272,6 +1278,105 @@ function ProgramEditorModal({
       ...part,
       participants: part.participants.map((person, p) => (p === personIndex ? { ...person, ...patch } : person)),
     }));
+
+  // ── Moving things by hand ─────────────────────────────────────────────────
+  // What the hand picked up lives in a ref: drag events fire faster than a
+  // render, and the drop must read where the drag began rather than what the
+  // last paint believed. The two ids are held only to paint the dimmed card
+  // and the outline under the cursor.
+  const dragSource = useRef<ProgramDragSource | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const partCardId = (session: number, part: number) => `part-${session}-${part}`;
+  const personRowId = (session: number, part: number, person: number) => `part-${session}-${part}-person-${person}`;
+  const endDrag = () => {
+    dragSource.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+  /** A card is picked up from anywhere on it except its fields — text
+      pulled out of an input is typing being moved, not the card. */
+  const beginDrag = (source: ProgramDragSource, id: string) => (event: DragEvent) => {
+    if ((event.target as HTMLElement).closest("input, textarea")) {
+      event.preventDefault();
+      return;
+    }
+    // A facilitator's line is *inside* an activity card, so the card's own
+    // start would fire too as the event bubbles and quietly rewrite what is
+    // being carried — the line would then be refused at every line it was
+    // dropped on. The inner start stops here.
+    event.stopPropagation();
+    dragSource.current = source;
+    setDraggingId(id);
+    event.dataTransfer.effectAllowed = "move";
+    // Firefox will not start a drag with an empty transfer.
+    event.dataTransfer.setData("text/plain", id);
+  };
+  /** Only what is being carried may be set down here: an activity card on
+      another activity card, a facilitator's line on another line. Anything
+      else lets the event pass by untouched. */
+  const allowDrop = (kind: ProgramDragSource["kind"], id: string) => (event: DragEvent) => {
+    const source = dragSource.current;
+    if (!source || source.kind !== kind) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dragOverId !== id) setDragOverId(id);
+  };
+  /** The outline is dropped when the pointer truly leaves the box — every
+      child fires a leave of its own as the cursor crosses it. */
+  const leaveDrop = (id: string) => (event: DragEvent) => {
+    if (dragOverId === id && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDragOverId(null);
+    }
+  };
+  const dropOnSource = (event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  /** Two activities trade places — and the hours stay with the slot, so
+      the dragged card takes up the other's time and the other takes its
+      back. The cards move; the timeline keeps climbing. */
+  const swapParts = (from: { session: number; part: number }, to: { session: number; part: number }) => {
+    if (from.session === to.session && from.part === to.part) return;
+    setItems((current) => {
+      const next = current.map((session) => ({
+        ...session,
+        parts: session.parts.map((part) => ({ ...part, participants: [...part.participants] })),
+      }));
+      const dragged = next[from.session].parts[from.part];
+      const target = next[to.session].parts[to.part];
+      if (!dragged || !target) return current;
+      next[from.session].parts[from.part] = {
+        start: dragged.start,
+        end: dragged.end,
+        title: target.title,
+        participants: target.participants,
+      };
+      next[to.session].parts[to.part] = {
+        start: target.start,
+        end: target.end,
+        title: dragged.title,
+        participants: dragged.participants,
+      };
+      return next;
+    });
+  };
+  /** Two facilitators trade places — each keeping the role she came in
+      with. The role belongs to the person, not to the line she stands on,
+      so the swap carries the pair across and leaves the roles alone. */
+  const swapPeople = (session: number, part: number, from: number, to: number) => {
+    if (from === to) return;
+    mapPart(session, part, (row) => {
+      const people = [...row.participants];
+      const moved = people[from];
+      const other = people[to];
+      if (!moved || !other) return row;
+      people[from] = other;
+      people[to] = moved;
+      return { ...row, participants: people };
+    });
+  };
+
   const valid = items.some(programItemHasContent);
   // The reading side's two papers: "View PDF" opens the plain letterhead
   // sheet for sharing; "View Brochure" opens the bifold for print. A saved
@@ -1466,8 +1571,12 @@ function ProgramEditorModal({
         )}
         <div className="mt-4 md:grid md:min-h-0 md:flex-1 md:grid-cols-2 md:grid-rows-1 md:gap-6">
           {/* The typing, on the left — its own scroll on a desk, so the day
-              being built travels apart from the sheet beside it. */}
-          <div className="min-w-0 md:h-full md:min-h-0 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
+              being built travels apart from the sheet beside it. The column
+              is a stack: what is typed scrolls inside it, and the buttons
+              keep a panel of their own at its foot, out of the scroll, so it
+              is always at the bottom of the column. */}
+          <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
+            <div className="min-w-0 flex-1 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             <p className="text-xs text-moss">
               Each session is one part of the day. Open a session to add the activities inside it.
             </p>
@@ -1549,12 +1658,36 @@ function ProgramEditorModal({
                         <div
                           key={partIndex}
                           id={`part-${index}-${partIndex}`}
-                          className="rounded-xl border border-sand-line bg-white p-2.5"
+                          draggable
+                          onDragStart={
+                            beginDrag({ kind: "part", session: index, part: partIndex }, partCardId(index, partIndex))
+                          }
+                          onDragEnd={endDrag}
+                          onDragOver={allowDrop("part", partCardId(index, partIndex))}
+                          onDragLeave={leaveDrop(partCardId(index, partIndex))}
+                          onDrop={(event) => {
+                            dropOnSource(event);
+                            const source = dragSource.current;
+                            if (source?.kind === "part") {
+                              swapParts(source, { session: index, part: partIndex });
+                            }
+                            endDrag();
+                          }}
+                          title="Drag onto another activity to swap places"
+                          className={`rounded-xl border bg-white p-2.5 transition ${
+                            dragOverId === partCardId(index, partIndex) ? "border-ember" : "border-sand-line"
+                          }${draggingId === partCardId(index, partIndex) ? " opacity-40" : ""}`}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
-                              Activity {partIndex + 1}
-                            </p>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <GripVertical
+                                className="h-3.5 w-3.5 shrink-0 cursor-grab text-moss-faint transition hover:text-moss active:cursor-grabbing"
+                                aria-hidden="true"
+                              />
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
+                                Activity {partIndex + 1}
+                              </p>
+                            </span>
                             <button
                               type="button"
                               onClick={() => dropPart(index, partIndex)}
@@ -1601,8 +1734,39 @@ function ProgramEditorModal({
                               <div
                                 key={personIndex}
                                 id={`part-${index}-${partIndex}-person-${personIndex}`}
-                                className="flex items-center gap-1.5"
+                                draggable
+                                onDragStart={
+                                  beginDrag(
+                                    { kind: "person", session: index, part: partIndex, person: personIndex },
+                                    personRowId(index, partIndex, personIndex),
+                                  )
+                                }
+                                onDragEnd={endDrag}
+                                onDragOver={allowDrop("person", personRowId(index, partIndex, personIndex))}
+                                onDragLeave={leaveDrop(personRowId(index, partIndex, personIndex))}
+                                onDrop={(event) => {
+                                  dropOnSource(event);
+                                  const source = dragSource.current;
+                                  if (
+                                    source?.kind === "person" &&
+                                    source.session === index &&
+                                    source.part === partIndex
+                                  ) {
+                                    swapPeople(index, partIndex, source.person, personIndex);
+                                  }
+                                  endDrag();
+                                }}
+                                title="Drag onto another facilitator to swap places"
+                                className={`flex items-center gap-1.5 rounded-lg transition ${
+                                  dragOverId === personRowId(index, partIndex, personIndex)
+                                    ? "bg-mist-select outline outline-ember"
+                                    : ""
+                                }${draggingId === personRowId(index, partIndex, personIndex) ? " opacity-40" : ""}`}
                               >
+                                <GripVertical
+                                  className="h-3.5 w-3.5 shrink-0 cursor-grab text-moss-faint transition hover:text-moss active:cursor-grabbing"
+                                  aria-hidden="true"
+                                />
                                 <input
                                   type="text"
                                   value={person.name}
@@ -1680,23 +1844,19 @@ function ProgramEditorModal({
               </div>
             );
           })}
-          {/* The row the whole sheet closes on: Add session, View PDF,
-              View Brochure and Save program share its width equally, in that
-              order — the day grows at the left, the papers open in the
-              middle, and the save sits where the hand ends. On the page it
-              sticks to the foot of the typing column's own scroll, so a day
-              grown long never carries the row out of view; sticky only pulls
-              it up when it would fall below the fold, so a short or empty
-              sheet leaves it in line under its cards rather than pinned to
-              the bottom of a panel with nothing in it. The modal keeps Add
-              session alone at the typing foot; its other actions live on its
-              own bar beneath the sheet. */}
+            </div>
+            </div>
+          {/* The buttons keep a panel of their own at the column's foot: Add
+              session, View PDF, View Brochure and Save program share its
+              width in that order — the day grows above it, the papers open
+              in the middle, and the save sits where the hand ends. The panel
+              is its own box rather than a row among the cards, and it stays
+              at the foot: pinned by the column's stack on a page, sticky to
+              the foot of the modal's own scroll on a phone. The modal keeps
+              Add session alone here; its other actions live on its bar
+              beneath the sheet. */}
           <div
-            className={
-              isPage
-                ? "sticky bottom-0 z-10 mt-3 flex items-center gap-2 bg-white pb-1 pt-2.5"
-                : "flex items-center gap-2"
-            }
+            className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5 shadow-sm"
           >
             <button
               type="button"
@@ -1726,7 +1886,6 @@ function ProgramEditorModal({
               </>
             )}
           </div>
-            </div>
           </div>
 
           {/* The sheet as it will be read, live, beside the typing: what is

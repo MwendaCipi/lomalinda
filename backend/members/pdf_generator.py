@@ -494,11 +494,11 @@ def generate_treasury_pdf(
     digital_val = float(mpesa_val) + float(bank_transfer_val) + float(cheque_val)
 
     if is_individual:
-        # Dedicated Individual Givings Report
+        # Dedicated Church Givings Report
         if purpose_title:
-            subtitle_text = f"INDIVIDUAL CONTRIBUTIONS REPORT - {purpose_title.upper()}"
+            subtitle_text = f"CHURCH GIVINGS REPORT - {purpose_title.upper()}"
         else:
-            subtitle_text = f"INDIVIDUAL MEMBER CONTRIBUTIONS REPORT FROM {start_date} TO {end_date}"
+            subtitle_text = f"CHURCH GIVINGS REPORT FROM {start_date} TO {end_date}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
         if start_date == end_date:
             date_str = f"Date: {start_date}"
@@ -519,7 +519,7 @@ def generate_treasury_pdf(
         story.append(Paragraph(summary_text, st["h2"]))
         story.append(Spacer(1, 8))
 
-        ind_headers = ["Contributor Name", "Date", "Account", "Mode", "Receipt / Ref", "Amount (KES)"]
+        ind_headers = ["Giver Name", "Date", "Account", "Mode", "Receipt / Ref", "Amount (KES)"]
         ind_data = [[
             Paragraph(ind_headers[0], st["header"]),
             Paragraph(ind_headers[1], st["header"]),

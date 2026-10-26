@@ -2874,7 +2874,7 @@ class PdfGenerationAPITests(APITestCase):
             individual_rows=[],
         ))
 
-        heading = 'INDIVIDUAL MEMBER CONTRIBUTIONS REPORT FROM 2026-01-01 TO 2026-01-31'
+        heading = 'CHURCH GIVINGS REPORT FROM 2026-01-01 TO 2026-01-31'
         self.assertIn(''.join(heading.split()), text)
         self.assertNotIn(
             ''.join('INDIVIDUAL MEMBER & COLLECTION CONTRIBUTIONS REPORT'.split()),
