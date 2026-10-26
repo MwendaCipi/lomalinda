@@ -993,24 +993,23 @@ function AddEventModal({
             <div className="mt-1 grid grid-cols-2 gap-3">
               <div>
                 <span className="text-[11px] text-moss">From</span>
-                <input
-                  type="time"
-                  aria-label="From time"
+                {/* The hour is typed the way the programme types it — "8",
+                    "8:30", "2:30 pm" — settled when the field is left, so
+                    the calendar asks for words rather than a clock wheel. */}
+                <TimeField
+                  label="From time"
                   value={form.time}
-                  onChange={(e) => setForm({ ...form, time: e.target.value })}
+                  onChange={(time) => setForm({ ...form, time })}
                   className={inputCls}
-                  placeholder="HH:MM"
                 />
               </div>
               <div>
                 <span className="text-[11px] text-moss">To</span>
-                <input
-                  type="time"
-                  aria-label="To time"
+                <TimeField
+                  label="To time"
                   value={form.end_time}
-                  onChange={(e) => setForm({ ...form, end_time: e.target.value })}
+                  onChange={(time) => setForm({ ...form, end_time: time })}
                   className={inputCls}
-                  placeholder="HH:MM"
                 />
               </div>
             </div>

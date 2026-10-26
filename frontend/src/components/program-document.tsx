@@ -225,7 +225,7 @@ function Facilitators({ people, className = "" }: { people: ProgramParticipant[]
   return (
     <ul className={`space-y-0.5 ${className}`}>
       {people.map((person, index) => (
-        <li key={`${person.name}-${index}`} className="text-xs leading-5 text-moss">
+        <li key={`${person.name}-${index}`} className="text-xs font-semibold leading-5 text-moss">
           <span className="text-moss-dark">{person.name}</span>
           {person.role && <span aria-hidden="true"> – </span>}
           {person.role && <span>{person.role}</span>}

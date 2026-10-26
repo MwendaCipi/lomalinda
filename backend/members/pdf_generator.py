@@ -19,6 +19,7 @@ from reportlab.platypus import (
     Image,
 )
 from reportlab.lib.utils import ImageReader, simpleSplit
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from xml.sax.saxutils import escape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfgen import canvas
@@ -2231,11 +2232,6 @@ def _department_accent(code, name=''):
 #: both of a programme's papers read with the same measure.
 PROGRAM_ROW_INDENT = 14
 
-#: How far the people carrying a row sit under its name — deeper than the
-#: row's own indent, so a facilitator reads as belonging to the line above
-#: it rather than starting a line of its own.
-PEOPLE_ROW_INDENT = 26
-
 
 def _draw_qr(c, url, x, y, size):
     """A QR code drawn as vector ink at (x, y), ``size`` points on the side.
@@ -2267,11 +2263,6 @@ def _draw_qr(c, url, x, y, size):
 #: papers and the site's screens keep "SDA Church Loma Linda, Meru"; the
 #: sheet handed out at the door reads "SDA Church Loma Linda".
 _PROGRAM_LOCKUP_LINE_2 = "Loma Linda"
-
-
-def _program_church_name(text):
-    """The church's name as a programme prints it — without the town."""
-    return re.sub(r",\s*Meru\s*$", "", str(text or "").strip()).strip()
 
 
 def _program_department_name(code, name):
@@ -2346,7 +2337,6 @@ def _program_rows(event):
 
 def generate_event_program_plain_pdf(
     event, department_name: str = '', contact=None, department_code: str = '',
-    church_name: str = '',
 ) -> bytes:
     """One calendar event's plain sheet — the programme as one letterhead page.
 
@@ -2405,7 +2395,6 @@ def generate_event_program_plain_pdf(
     give_url = (contact.get('give_url') or '').strip()
     GIVE_LABEL = 'Support the Loma Linda Ensemble through by clicking'
     GIVE_MPESA = 'or M-Pesa Pay Bill 4132723, Account name Ensemble'
-    church_line = _program_church_name(pdf_church_name(church_name))
     address_line = str(contact.get('address') or '').strip()
 
     FOOT_STEP = 10                          # one foot line's step
@@ -2414,34 +2403,36 @@ def generate_event_program_plain_pdf(
     def foot_lines(page_i, pages):
         """The foot's lines, top first — built once and read by both the
         flow (which gives up the room they need up front) and the ink, so
-        the two never drift apart. The page's own count is part of the
-        list; a one-page day simply leaves it off the paper."""
+        the two never drift apart. Each line says whether it is drawn
+        centred: the page's own count sits under the middle of the sheet
+        rather than hung at its left edge."""
         lines = []
-        if church_line:
-            lines.append((church_line, 'Helvetica-Bold', 7.5, GREY, None))
         if address_line:
             for piece in wrap(address_line, 'Helvetica', 7.5, content_w)[:2]:
-                lines.append((piece, 'Helvetica', 7.5, GREY, None))
+                lines.append((piece, 'Helvetica', 7.5, GREY, None, False))
         if give_url:
             for piece in wrap(GIVE_LABEL, 'Helvetica-Bold', 8, content_w)[:1]:
-                lines.append((piece, 'Helvetica-Bold', 8, ACCENT, give_url))
+                lines.append((piece, 'Helvetica-Bold', 8, ACCENT, give_url, False))
             shown = give_url
             while shown and c.stringWidth(shown, 'Helvetica', 6.5) > content_w:
                 shown = shown[:-1]
             if shown != give_url:
                 shown = shown.rstrip('/?&=#') + '\u2026'
-            lines.append((shown, 'Helvetica', 6.5, GREY, give_url))
+            lines.append((shown, 'Helvetica', 6.5, GREY, give_url, False))
             # The second door, for a hand with no browser: the pay-bill and
             # the account name typed into the M-Pesa prompt as it stands.
             for piece in wrap(GIVE_MPESA, 'Helvetica', 7.5, content_w)[:1]:
-                lines.append((piece, 'Helvetica', 7.5, GREY, None))
-        if page_i + 1 < pages:
-            lines.append((f'Page {page_i + 1} of {pages}', 'Helvetica', 7.5, GREY, None))
+                lines.append((piece, 'Helvetica', 7.5, GREY, None, False))
+        # The count is part of the list whenever the day runs past one
+        # page — every sheet says which of them it is — and a one-page day
+        # simply leaves it off the paper.
+        if pages > 1:
+            lines.append((f'Page {page_i + 1} of {pages}', 'Helvetica', 7.5, GREY, None, True))
         return lines
 
     # The rows give the foot its band up front, measured by the same
-    # arithmetic the foot draws with — a church named, up to two lines of
-    # address, the door into the system, and a page to count. The slack over
+    # arithmetic the foot draws with — up to two lines of address, the door
+    # into the system, and a page to count. The slack over
     # the foot's own top line is deliberately small: the day's rows run down
     # to the rule rather than stopping short of it.
     foot_top = FOOT_BASE + FOOT_STEP * (len(foot_lines(0, 2)) - 1) + 8
@@ -2483,19 +2474,22 @@ def generate_event_program_plain_pdf(
         return y
 
     def foot(page_i, pages):
-        """The page's foot: a rule, and beneath it the church's name, where
-        it stands, the one door that carries the day's giving, and the
-        page's own count — small, grey, and never mistaken for the day.
-        Either line of the door opens it on a tap."""
+        """The page's foot: a rule, and beneath it where the church stands,
+        the one door that carries the day's giving, and the page's own
+        count — small, grey, and never mistaken for the day. Either line of
+        the door opens it on a tap."""
         lines = foot_lines(page_i, pages)
         y = FOOT_BASE + FOOT_STEP * (len(lines) - 1)
         c.setStrokeColor(RULE)
         c.setLineWidth(0.6)
         c.line(side, y + 12, page_w - side, y + 12)
-        for text, font, size, colour, link in lines:
+        for text, font, size, colour, link, centred in lines:
             c.setFont(font, size)
             c.setFillColor(colour)
-            c.drawString(side, y, text)
+            if centred:
+                c.drawCentredString(page_w / 2, y, text)
+            else:
+                c.drawString(side, y, text)
             if link:
                 c.linkURL(
                     link,
@@ -2557,8 +2551,15 @@ def generate_event_program_plain_pdf(
         title = row['title'] or '\u2014'
         spoken = f"{row['hours']}: {title}" if row['hours'] else title
         hour = row['hours'] or ''
+        pieces = wrap(spoken, font, size, width)
+        # Where the name itself begins: the hour leads the line and the name
+        # follows its colon, so the people carrying the row sit level with
+        # the name rather than hanging between it and the row's own indent.
+        name_x = side + row['indent']
+        if hour and pieces[0].startswith(hour):
+            name_x += c.stringWidth(f'{hour}: ', font, size)
         lines = []
-        for i, piece in enumerate(wrap(spoken, font, size, width)):
+        for i, piece in enumerate(pieces):
             if i == 0 and hour and piece.startswith(hour):
                 # The hour leads the line in its own colour and the name
                 # follows it on that same line — two runs sharing a
@@ -2574,12 +2575,13 @@ def generate_event_program_plain_pdf(
             else:
                 lines.append((piece, font, size, DARK, 2.5, side + row['indent']))
         for name, role in row['people']:
-            # The role rides the name behind a dash — the same dash the
-            # hours speak with, so a facilitator reads as one run of ink.
+            # The bullet is written in the row's own font, at the row's own
+            # name size and level: time, name and the people carrying it
+            # read with one weight, so nothing in the row shouts louder.
             bullet = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
-            for piece in wrap(bullet, 'Helvetica', ACTIVITY_SIZE, width - PEOPLE_ROW_INDENT):
-                lines.append((piece, 'Helvetica', ACTIVITY_SIZE, GREY, 2.5,
-                              side + row['indent'] + PEOPLE_ROW_INDENT))
+            people_width = max(40, width - (name_x - side - row['indent']))
+            for piece in wrap(bullet, font, ACTIVITY_SIZE, people_width):
+                lines.append((piece, font, ACTIVITY_SIZE, GREY, 2.5, name_x))
         return lines
 
     def row_height(row):
@@ -2778,12 +2780,18 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         font = 'Helvetica-Bold' if session else 'Helvetica'
         title = row['title'] or '\u2014'
         head = f"{row['hours']}: {title}" if row['hours'] else title
-        for piece in wrap(head, font, size, width):
+        head_pieces = wrap(head, font, size, width)
+        # The name's own left edge, inside the line the hour opens: the
+        # people carrying the row sit level with the name, in the row's own
+        # font, so time, name and facilitators read with one weight.
+        name_x = stringWidth(f"{row['hours']}: ", font, size) if row['hours'] else 0
+        for piece in head_pieces:
             lines.append((piece, font, size, DARK, 2.5, 0))
         for name, role in row['people']:
             text = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
-            for piece in wrap(text, 'Helvetica', ACTIVITY_SIZE, width - PEOPLE_ROW_INDENT):
-                lines.append((piece, 'Helvetica', ACTIVITY_SIZE, GREY, 2.5, PEOPLE_ROW_INDENT))
+            people_width = max(40, width - name_x)
+            for piece in wrap(text, font, ACTIVITY_SIZE, people_width):
+                lines.append((piece, font, ACTIVITY_SIZE, GREY, 2.5, name_x))
         return lines
 
     def row_height(row):

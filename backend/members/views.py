@@ -12849,7 +12849,6 @@ class DepartmentEventProgramView(APIView):
         if style == 'plain':
             pdf_bytes = generate_event_program_plain_pdf(
                 event, department_row.name, contact=contact, department_code=department,
-                church_name=church_row.church_name if church_row else '',
             )
             filename = f'Event_Program_{event.event_date}.pdf'
         else:
