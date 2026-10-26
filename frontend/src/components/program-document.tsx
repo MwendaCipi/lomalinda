@@ -218,8 +218,20 @@ export function TimeField({
   );
 }
 
+/**
+ * The measure every row gives its hour: one width for the day, so a time
+ * never grows into the name beside it and every name — and the
+ * facilitators under it — begins at the same place. The indent is that
+ * column plus the gap that follows it, which is exactly where the name
+ * starts, so a facilitator hangs level with the name it carries.
+ */
+const TIME_COL = "w-32";
+const TIME_INDENT = "pl-36";
+
 /** The facilitators, read as "Jane Wanjiru – Teacher" lines — the dash the
- * printed sheet separates name and role with, so screen and paper agree. */
+ * printed sheet separates name and role with, so screen and paper agree.
+ * Name and time speak in one weight; the role is the one thing in the row
+ * allowed to say it more lightly. */
 function Facilitators({ people, className = "" }: { people: ProgramParticipant[]; className?: string }) {
   if (people.length === 0) return null;
   return (
@@ -227,8 +239,12 @@ function Facilitators({ people, className = "" }: { people: ProgramParticipant[]
       {people.map((person, index) => (
         <li key={`${person.name}-${index}`} className="text-xs font-semibold leading-5 text-moss">
           <span className="text-moss-dark">{person.name}</span>
-          {person.role && <span aria-hidden="true"> – </span>}
-          {person.role && <span>{person.role}</span>}
+          {person.role && (
+            <span className="font-normal">
+              <span aria-hidden="true"> – </span>
+              {person.role}
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -302,19 +318,21 @@ export function ProgramDocument({
               return (
                 <li key={`${item.start}-${item.title}-${index}`} className="py-3">
                   <div className="flex items-baseline gap-4">
-                    {range !== "—" && (
-                      <span className="w-32 shrink-0 text-right text-xs font-semibold text-ember">
-                        {range}
-                      </span>
-                    )}
+                    {/* The hour's own column, held open whether the row
+                        carries one or not: the name — and the facilitators
+                        under it — begin at the same place the whole sheet
+                        down, the way the papers print them. */}
+                    <span
+                      className={`${TIME_COL} shrink-0 text-right text-sm font-semibold text-ember`}
+                      aria-hidden={range === "—"}
+                    >
+                      {range !== "—" ? range : ""}
+                    </span>
                     <span className="text-sm font-semibold leading-6 text-bark">
                       {item.title || "—"}
                     </span>
                   </div>
-                  <Facilitators
-                    people={item.participants}
-                    className={range !== "—" ? "mt-1 pl-36" : "mt-1"}
-                  />
+                  <Facilitators people={item.participants} className={`mt-1 ${TIME_INDENT}`} />
 
                   {/* What happens inside the session, indented behind a rule —
                       the printed programme's own way of showing a part of the
@@ -326,17 +344,15 @@ export function ProgramDocument({
                         return (
                           <li key={`${part.start}-${part.title}-${partIndex}`}>
                             <div className="flex items-baseline gap-4">
-                              {partRange !== "—" && (
-                                <span className="w-24 shrink-0 text-right text-[11px] font-semibold text-ember">
-                                  {partRange}
-                                </span>
-                              )}
+                              <span
+                                className={`${TIME_COL} shrink-0 text-right text-xs font-semibold text-ember`}
+                                aria-hidden={partRange === "—"}
+                              >
+                                {partRange !== "—" ? partRange : ""}
+                              </span>
                               <span className="text-xs font-semibold leading-5 text-bark">{part.title || "—"}</span>
                             </div>
-                            <Facilitators
-                              people={part.participants}
-                              className={partRange !== "—" ? "pl-28" : ""}
-                            />
+                            <Facilitators people={part.participants} className={TIME_INDENT} />
                           </li>
                         );
                       })}

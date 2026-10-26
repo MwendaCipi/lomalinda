@@ -1146,6 +1146,11 @@ type ProgramDragSource =
   | { kind: "part"; session: number; part: number }
   | { kind: "person"; session: number; part: number; person: number };
 
+/** How long the hand must pause before the sheet keeps what it holds — long
+    enough that a name is not sent letter by letter, short enough that
+    leaving the page does not lose it. */
+const PROGRAM_AUTOSAVE_MS = 900;
+
 /**
  * Type an event's programme: one row per item of the order of service, and
  * the sheet it will be read as laid out beside what is typed — the desk
@@ -1155,9 +1160,9 @@ type ProgramDragSource =
  * phone's read. On a desk it opens as a page of its own, and the page is
  * a workbench: it takes the viewport under a "Back to events" link, the
  * typing sits on the left, and beside it the programme as the church will  * see it — the uploaded file when the event carries one, and the live
-  * sheet beneath it. Typing carries its own Save at its foot, on the same
-  * row as Add session (the sheet is editable in place, so there is no
-  * separate edit); the page's own head carries the upload, and on a phone
+  * sheet beneath it. There is no Save to press: the sheet keeps itself a
+  * moment after the hand stops, and its foot says where it stands beside
+  * Add session; the page's own head carries the upload, and on a phone
   * the modal's bar keeps it with the rest — remove, download, share.
  */
 function ProgramEditorModal({
@@ -1177,7 +1182,9 @@ function ProgramEditorModal({
   departmentLabel: string;
   variant?: "modal" | "page";
   onClose: () => void;
-  onSave: (items: ProgramItem[]) => void;
+  /** Keep the typed rows on the event — the sheet's own save, called a
+      moment after the hand stops. Answers whether they stand on it. */
+  onSave: (items: ProgramItem[]) => boolean | Promise<boolean>;
   /** Take the whole programme off the event — the page's bar, and on a
       phone the modal's own bar, serve it. */
   onRemoveProgram?: () => void;
@@ -1378,6 +1385,85 @@ function ProgramEditorModal({
   };
 
   const valid = items.some(programItemHasContent);
+
+  // ── Keeping the sheet ────────────────────────────────────────────────────
+  // There is no Save button: the rows go up a moment after the hand stops,
+  // and the foot says where they stand. The sheet exactly as it opened is
+  // not a change, and a sheet holding nothing worth printing has nothing to
+  // keep — the event carries what it already held.
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const openedWith = useRef(items);
+  const queued = useRef<ProgramItem[] | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepRef = useRef(onSave);
+  // Read through a ref rather than the render's own closure: the caller
+  // re-renders each time it says what now stands on the event, and the
+  // pause must keep time with the hand, not with that.
+  useEffect(() => {
+    keepRef.current = onSave;
+  }, [onSave]);
+  /** Write these rows, and say how it went in the foot's own word. */
+  const keep = async (rows: ProgramItem[]) => {
+    queued.current = null;
+    setSaveState("saving");
+    let ok = false;
+    try {
+      ok = (await keepRef.current(rows)) !== false;
+    } catch {
+      ok = false;
+    }
+    setSaveState(ok ? "saved" : "error");
+  };
+  useEffect(() => {
+    if (items === openedWith.current) return;      // the sheet as it opened
+    if (!valid) {
+      // Nothing worth keeping stands here, so nothing is queued and the
+      // foot says nothing — its word is read against `valid` in the render
+      // rather than written away here.
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      queued.current = null;
+      return;
+    }
+    queued.current = items;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      const rows = queued.current;
+      if (rows) void keep(rows);
+    }, PROGRAM_AUTOSAVE_MS);
+    return () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+    };
+  }, [items, valid]);
+  // The sheet closed with rows still inside that pause — written on the way
+  // out rather than dropped, since there is no button left to press for
+  // them. State is left alone here: the sheet this belongs to is gone.
+  useEffect(() => {
+    const held = queued;
+    return () => {
+      const rows = held.current;
+      if (!rows) return;
+      held.current = null;
+      void Promise.resolve(keepRef.current(rows)).catch(() => undefined);
+    };
+  }, []);
+  /** What the foot's own word is: nothing until the hand has changed
+      something worth keeping, and nothing again once the sheet holds
+      nothing worth printing. */
+  const saveWord =
+    !valid
+      ? ""
+      : saveState === "saving"
+        ? "Saving…"
+        : saveState === "saved"
+          ? "Saved"
+          : saveState === "error"
+            ? "Not saved"
+            : "";
   // The reading side's two papers: "View PDF" opens the plain letterhead
   // sheet for sharing; "View Brochure" opens the bifold for print. A saved
   // programme opens either straight away; an unsaved one can't be printed
@@ -1399,7 +1485,7 @@ function ProgramEditorModal({
   // line of actions; in the modal it stays pinned at the reading column's
   // foot, under the sheet it reads.
   // On the page variant the two papers ride the typing foot and share its
-  // width equally with Add session and Save program; in the modal they keep
+  // width equally with Add session; in the modal they keep
   // their own measure where they are pinned.
   const viewPdfClasses = `inline-flex items-center justify-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember${isPage ? " min-w-0 flex-1" : ""}`;
   // The two papers, side by side: the plain sheet to hand on, the bifold to
@@ -1446,8 +1532,8 @@ function ProgramEditorModal({
   ) : null;
 
   // The things a finished programme is done with: sent in as a file, taken
-  // off the event, printed to paper, handed on. The desk's page saves from
-  // its typing side and carries the upload on its head — no bar pins the
+  // off the event, printed to paper, handed on. The desk's page keeps its
+  // rows by itself and carries the upload on its head — no bar pins the
   // sheet at its foot.
   const programBarButtons = (
     <>
@@ -1847,14 +1933,16 @@ function ProgramEditorModal({
             </div>
             </div>
           {/* The buttons keep a panel of their own at the column's foot: Add
-              session, View PDF, View Brochure and Save program share its
-              width in that order — the day grows above it, the papers open
-              in the middle, and the save sits where the hand ends. The panel
+              session, and on a page View PDF and View Brochure — the day
+              grows above it, the papers open in the middle, and the sheet
+              speaks for itself where the hand ends. There is no Save to
+              press: the rows go up on their own a moment after the hand
+              stops, and the foot's own word says where they stand. The panel
               is its own box rather than a row among the cards, and it stays
               at the foot: pinned by the column's stack on a page, sticky to
               the foot of the modal's own scroll on a phone. The modal keeps
-              Add session alone here; its other actions live on its bar
-              beneath the sheet. */}
+              Add session and that word here; its other actions live on its
+              bar beneath the sheet. */}
           <div
             className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5 shadow-sm"
           >
@@ -1875,15 +1963,21 @@ function ProgramEditorModal({
               <>
                 {viewPdfControl}
                 {viewBrochureControl}
-                <button
-                  type="button"
-                  disabled={!valid}
-                  onClick={() => onSave(items)}
-                  className="min-w-0 flex-1 justify-center rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition inline-flex items-center hover:bg-ember-deep disabled:opacity-50"
-                >
-                  Save program
-                </button>
               </>
+            )}
+            {/* Where the sheet stands, in the place the save used to sit:
+                a screen reader is told as the word changes, and an empty
+                word takes no room at all. */}
+            {saveWord && (
+              <span
+                role="status"
+                aria-live="polite"
+                className={`shrink-0 text-[11px] font-semibold${
+                  saveState === "error" ? " text-red-600" : " text-moss"
+                }`}
+              >
+                {saveWord}
+              </span>
             )}
           </div>
           </div>
@@ -1965,14 +2059,6 @@ function ProgramEditorModal({
                 className="rounded-xl border border-sand-line bg-white px-4 py-2 text-sm font-semibold text-moss hover:border-ember"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!valid}
-                onClick={() => onSave(items)}
-                className="rounded-xl bg-ember px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-              >
-                Save program
               </button>
             </div>
           </div>
@@ -5731,42 +5817,31 @@ function DepartmentDetail({
   };
 
   /** The typed programme, saved — and then read as the sheet it was fixed into. */
-  const saveProgram = (event: DeptEvent, items: ProgramItem[]) => {
-    const saved = serializeProgramItems(items);
-    patchProgram(
-      event,
-      {
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ program_items: saved }),
-      },
-      () => {
-        setProgramFor(null);
-      },
-    );
-  };
-
   /**
-   * The programme saved from the desk's program page — the sheet stays open,
-   * because the page is both the reading and the writing of the programme:
-   * it is only told what now stands on the event.
+   * The typed programme kept as the desk types — the sheet's own save, and
+   * the only one there is now that no button asks for it. It answers how it
+   * went, so the sheet's foot can say where the rows stand. On success the
+   * event's own row takes what was written — which is what turns on View PDF
+   * and View Brochure for rows that had none — and a refusal is said out
+   * loud by the write itself, leaving what stands as it was.
    */
-  const saveProgramInline = (event: DeptEvent, items: ProgramItem[]) => {
+  const autosaveProgram = async (event: DeptEvent, items: ProgramItem[]): Promise<boolean> => {
     const saved = serializeProgramItems(items);
-    patchProgram(
+    let written = false;
+    await patchProgram(
       event,
       {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ program_items: saved }),
       },
       () => {
-        showAlert(
-          "Program saved",
-          `"${event.title}" now carries the programme as typed.`,
-          "success",
-          { toast: true, timer: 4000, showConfirmButton: false },
+        written = true;
+        setProgramFor((current) =>
+          current && current.id === event.id ? { ...current, program_items: saved } : current,
         );
       },
     );
+    return written;
   };
 
   /**
@@ -6918,7 +6993,7 @@ function DepartmentDetail({
               event={programFor}
               departmentLabel={department.label}
               onClose={() => setProgramFor(null)}
-              onSave={(items) => saveProgram(programFor, items)}
+              onSave={(items) => autosaveProgram(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               onUpload={() => chooseProgramFile(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
@@ -6928,8 +7003,8 @@ function DepartmentDetail({
             />
           </div>
           {/* A desk opens the programme as a page: it takes the viewport, the
-              sheet is typed where it is read, and Save rides the typing side
-              at its foot beside Add session — no bar pins the page at its
+              sheet is typed where it is read and keeps itself, its foot
+              saying so beside Add session — no bar pins the page at its
               foot. */}
           <div className="hidden md:block">
             <ProgramEditorModal
@@ -6937,7 +7012,7 @@ function DepartmentDetail({
               departmentLabel={department.label}
               variant="page"
               onClose={() => setProgramFor(null)}
-              onSave={(items) => saveProgramInline(programFor, items)}
+              onSave={(items) => autosaveProgram(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
               onUpload={() => chooseProgramFile(programFor)}
               programDownloadHref={programDownloadHref(programFor)}

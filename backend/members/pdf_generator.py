@@ -2232,6 +2232,20 @@ def _department_accent(code, name=''):
 #: both of a programme's papers read with the same measure.
 PROGRAM_ROW_INDENT = 14
 
+#: The measure both of a programme's papers give the hour: a column of its
+#: own at the row's left edge, wide enough for the widest range a day can
+#: say. Every name begins where the column ends — so the names run down
+#: the page in one line, and the people carrying a row sit level with that
+#: row's own name instead of hanging wherever its hour happened to stop.
+PROGRAM_TIME_COL = 112
+
+#: The air left between the hour and the name it opens.
+PROGRAM_TIME_GAP = 8
+
+#: The ink a role is written in — the one part of a row allowed to say
+#: what it says more quietly than the name beside it.
+PROGRAM_ROLE_COLOUR = colors.HexColor('#93a09a')
+
 
 def _draw_qr(c, url, x, y, size):
     """A QR code drawn as vector ink at (x, y), ``size`` points on the side.
@@ -2335,6 +2349,41 @@ def _program_rows(event):
     return rows
 
 
+def _people_entries(body, name_font, name_colour, size, width, x, space=2.5):
+    """A facilitator's line as the ink draws it: the name in the row's own
+    font, the role that follows it in the lighter ink, the two sharing a
+    baseline.
+
+    Name and role wrap as one string — they are one line on the page — but
+    each wrapped piece is inked with the run it belongs to, so the role
+    reads lighter wherever the break falls. The entries are shaped the way
+    both papers' drawing loops read them: a negative step keeps a pair of
+    runs on one line, and the line's last entry carries the step on.
+    """
+    separator = ' \u2013 '
+    role_from = body.find(separator)
+    role_font = 'Helvetica'
+    entries = []
+    cursor = 0
+    for piece in simpleSplit(body, name_font, size, width):
+        start = body.find(piece, cursor)
+        if start < 0:
+            start = cursor
+        end = start + len(piece)
+        cursor = end
+        head = piece[:min(end, role_from) - start] if role_from >= 0 and start < role_from else ''
+        tail = piece[max(start, role_from) - start:] if role_from >= 0 and end > role_from else ''
+        if head and tail:
+            entries.append((head, name_font, size, name_colour, -size, x))
+            entries.append((tail, role_font, size, PROGRAM_ROLE_COLOUR, space,
+                            x + stringWidth(head, name_font, size)))
+        elif head:
+            entries.append((head, name_font, size, name_colour, space, x))
+        elif tail:
+            entries.append((tail, role_font, size, PROGRAM_ROLE_COLOUR, space, x))
+    return entries
+
+
 def generate_event_program_plain_pdf(
     event, department_name: str = '', contact=None, department_code: str = '',
 ) -> bytes:
@@ -2353,10 +2402,11 @@ def generate_event_program_plain_pdf(
     activities beneath them in plain type and a grey hour of their own.
 
     `contact` trims the page's foot, spoken small under a rule: where the
-    church stands, how to support the Loma Linda Ensemble — the link a
-    screen can tap, and the pay-bill a hand reaches for without one. The
-    bank lines are the brochure's to speak; whatever is absent is left off
-    the paper, never guessed at.
+    church stands, then the one sentence that asks for support with its
+    link beside it on the same row, and the pay-bill a hand reaches for
+    without a browser on the row beneath. The bank lines are the
+    brochure's to speak; whatever is absent is left off the paper, never
+    guessed at.
     """
     contact = contact or {}
     buffer = io.BytesIO()
@@ -2385,16 +2435,19 @@ def generate_event_program_plain_pdf(
 
     c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
 
-    # The foot speaks with one voice about giving: how to support the
-    # Loma Linda Ensemble — the link a screen taps, and beside it the
-    # pay-bill and account name a phone keys in without one — as lines of
-    # the foot itself rather than a block parked at its right edge. The
-    # sheet is read on a screen, where a QR would only be a scan of the
-    # device already holding it; the brochure, the paper that folds, is
-    # where the QR belongs.
+    # The foot speaks with one voice about giving: the ask is ordinary
+    # foot type — the words the rest of the foot is set in — and the door
+    # itself rides the same row in a link's own colour, underlined and
+    # tappable, with the pay-bill and account name a phone keys in without
+    # a browser on the row beneath. The sheet is read on a screen, where a
+    # QR would only be a scan of the device already holding it; the
+    # brochure, the paper that folds, is where the QR belongs.
     give_url = (contact.get('give_url') or '').strip()
-    GIVE_LABEL = 'Support the Loma Linda Ensemble through by clicking'
+    GIVE_LABEL = 'To support us through '
     GIVE_MPESA = 'or M-Pesa Pay Bill 4132723, Account name Ensemble'
+    LINK_COLOUR = colors.HexColor('#1a4fa0')
+    FOOT_FONT = 'Helvetica'
+    FOOT_SIZE = 7.5
     address_line = str(contact.get('address') or '').strip()
 
     FOOT_STEP = 10                          # one foot line's step
@@ -2411,18 +2464,26 @@ def generate_event_program_plain_pdf(
             for piece in wrap(address_line, 'Helvetica', 7.5, content_w)[:2]:
                 lines.append((piece, 'Helvetica', 7.5, GREY, None, False))
         if give_url:
-            for piece in wrap(GIVE_LABEL, 'Helvetica-Bold', 8, content_w)[:1]:
-                lines.append((piece, 'Helvetica-Bold', 8, ACCENT, give_url, False))
+            # One row: the ask in the foot's own ink, the link trailing it
+            # in a link's own colour. The link is cut down to what the ask
+            # leaves of the measure rather than given the whole of it.
+            room = content_w - c.stringWidth(GIVE_LABEL, FOOT_FONT, FOOT_SIZE)
             shown = give_url
-            while shown and c.stringWidth(shown, 'Helvetica', 6.5) > content_w:
+            while shown and c.stringWidth(shown, FOOT_FONT, FOOT_SIZE) > room:
                 shown = shown[:-1]
-            if shown != give_url:
+            if not shown:
+                shown = give_url
+            elif shown != give_url:
                 shown = shown.rstrip('/?&=#') + '\u2026'
-            lines.append((shown, 'Helvetica', 6.5, GREY, give_url, False))
+            lines.append((
+                [(GIVE_LABEL, GREY, None), (shown, LINK_COLOUR, give_url)],
+                FOOT_FONT, FOOT_SIZE, GREY, None, False,
+            ))
             # The second door, for a hand with no browser: the pay-bill and
-            # the account name typed into the M-Pesa prompt as it stands.
-            for piece in wrap(GIVE_MPESA, 'Helvetica', 7.5, content_w)[:1]:
-                lines.append((piece, 'Helvetica', 7.5, GREY, None, False))
+            # the account name typed into the M-Pesa prompt as it stands,
+            # on the row beneath the one that carries the link.
+            for piece in wrap(GIVE_MPESA, FOOT_FONT, FOOT_SIZE, content_w)[:1]:
+                lines.append((piece, FOOT_FONT, FOOT_SIZE, GREY, None, False))
         # The count is part of the list whenever the day runs past one
         # page — every sheet says which of them it is — and a one-page day
         # simply leaves it off the paper.
@@ -2486,7 +2547,27 @@ def generate_event_program_plain_pdf(
         for text, font, size, colour, link, centred in lines:
             c.setFont(font, size)
             c.setFillColor(colour)
-            if centred:
+            if isinstance(text, list):
+                # A row carrying its own link: each piece is inked in its
+                # own colour as it is set, and the link's piece wears an
+                # underline and takes the tap over its own width alone —
+                # the words around it stay ordinary foot type.
+                x = side
+                for piece, piece_colour, piece_link in text:
+                    c.setFillColor(piece_colour)
+                    c.drawString(x, y, piece)
+                    piece_w = c.stringWidth(piece, font, size)
+                    if piece_link:
+                        c.setStrokeColor(piece_colour)
+                        c.setLineWidth(0.5)
+                        c.line(x, y - 1.6, x + piece_w, y - 1.6)
+                        c.linkURL(
+                            piece_link,
+                            (x - 2, y - 3, x + piece_w + 2, y + size),
+                            thickness=0,
+                        )
+                    x += piece_w
+            elif centred:
                 c.drawCentredString(page_w / 2, y, text)
             else:
                 c.drawString(side, y, text)
@@ -2538,8 +2619,12 @@ def generate_event_program_plain_pdf(
         speaks in bold and leads with its own hour in the ministry's
         accent; an activity beneath it speaks in plain type with a grey
         hour — the eye finds the sessions first and reads down into them.
-        The people carrying either sit on their own indented line."""
-        width = content_w - row['indent']
+        The hour stands in a column of its own, so every name in the sheet
+        begins at the same place and the people carrying a row sit level
+        with that row's own name."""
+        left = side + row['indent']
+        name_x = left + PROGRAM_TIME_COL
+        width = content_w - row['indent'] - PROGRAM_TIME_COL
         session = row['indent'] == 0
         # The size an activity's name is set at — and the size a facilitator
         # is written at, so the people carrying a row read at the name's own
@@ -2549,39 +2634,26 @@ def generate_event_program_plain_pdf(
         font = 'Helvetica-Bold' if session else 'Helvetica'
         hour_colour = ACCENT if session else GREY
         title = row['title'] or '\u2014'
-        spoken = f"{row['hours']}: {title}" if row['hours'] else title
         hour = row['hours'] or ''
-        pieces = wrap(spoken, font, size, width)
-        # Where the name itself begins: the hour leads the line and the name
-        # follows its colon, so the people carrying the row sit level with
-        # the name rather than hanging between it and the row's own indent.
-        name_x = side + row['indent']
-        if hour and pieces[0].startswith(hour):
-            name_x += c.stringWidth(f'{hour}: ', font, size)
         lines = []
-        for i, piece in enumerate(pieces):
-            if i == 0 and hour and piece.startswith(hour):
-                # The hour leads the line in its own colour and the name
-                # follows it on that same line — two runs sharing a
-                # baseline, whose negative step keeps the pair's height to
-                # the single line they draw together.
-                rest = piece[len(hour):]
-                if not rest:
-                    lines.append((hour, font, size, hour_colour, 2.5, side + row['indent']))
-                    continue
-                lines.append((hour, font, size, hour_colour, -size, side + row['indent']))
-                lines.append((rest, font, size, DARK, 2.5,
-                              side + row['indent'] + c.stringWidth(hour, font, size)))
-            else:
-                lines.append((piece, font, size, DARK, 2.5, side + row['indent']))
+        if hour:
+            # The hour leads the row in its own colour, right up against the
+            # name's edge; the name begins there on the same baseline — a
+            # negative step keeps the pair on the one line they draw.
+            hour_x = max(left, name_x - PROGRAM_TIME_GAP - stringWidth(hour, font, size))
+            lines.append((hour, font, size, hour_colour, -size, hour_x))
+        for piece in wrap(title, font, size, width):
+            # Every line of the name — the first riding the hour's baseline
+            # when the row has one — sits at the column's far edge, so the
+            # names run down the sheet in one line.
+            lines.append((piece, font, size, DARK, 2.5, name_x))
         for name, role in row['people']:
             # The bullet is written in the row's own font, at the row's own
             # name size and level: time, name and the people carrying it
-            # read with one weight, so nothing in the row shouts louder.
+            # read with one weight, so nothing in the row shouts louder —
+            # only the role is allowed to answer more quietly.
             bullet = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
-            people_width = max(40, width - (name_x - side - row['indent']))
-            for piece in wrap(bullet, font, ACTIVITY_SIZE, people_width):
-                lines.append((piece, font, ACTIVITY_SIZE, GREY, 2.5, name_x))
+            lines.extend(_people_entries(bullet, font, GREY, ACTIVITY_SIZE, width, name_x))
         return lines
 
     def row_height(row):
@@ -2767,10 +2839,10 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     def row_lines(row):
         """One row's spoken pieces: a session's hour and its name sharing
         one bold line, an activity beneath them set in plain type, and the
-        people carrying either on a line indented under it — the same
-        reading the plain sheet lays down, so the eye finds the sessions
-        first on either paper."""
-        width = panel_w - 2 * side - row['indent']
+        people carrying either level with that name — the same reading the
+        plain sheet lays down, so the eye finds the sessions first on
+        either paper and the names fall in one line down both."""
+        width = panel_w - 2 * side - row['indent'] - PROGRAM_TIME_COL
         lines = []
         session = row['indent'] == 0
         # The activity's own size — the same ink a facilitator is written
@@ -2779,19 +2851,19 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         size = 12.5 if session else ACTIVITY_SIZE
         font = 'Helvetica-Bold' if session else 'Helvetica'
         title = row['title'] or '\u2014'
-        head = f"{row['hours']}: {title}" if row['hours'] else title
-        head_pieces = wrap(head, font, size, width)
-        # The name's own left edge, inside the line the hour opens: the
-        # people carrying the row sit level with the name, in the row's own
-        # font, so time, name and facilitators read with one weight.
-        name_x = stringWidth(f"{row['hours']}: ", font, size) if row['hours'] else 0
-        for piece in head_pieces:
-            lines.append((piece, font, size, DARK, 2.5, 0))
+        hour = row['hours'] or ''
+        # The name's own left edge: the hour holds a column of its own at
+        # the row's left, so every name — and the people carrying it —
+        # begins at the same place whatever that row's hour said.
+        name_x = PROGRAM_TIME_COL
+        if hour:
+            hour_x = max(0, name_x - PROGRAM_TIME_GAP - stringWidth(hour, font, size))
+            lines.append((hour, font, size, DARK, -size, hour_x))
+        for piece in wrap(title, font, size, width):
+            lines.append((piece, font, size, DARK, 2.5, name_x))
         for name, role in row['people']:
             text = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
-            people_width = max(40, width - name_x)
-            for piece in wrap(text, font, ACTIVITY_SIZE, people_width):
-                lines.append((piece, font, ACTIVITY_SIZE, GREY, 2.5, name_x))
+            lines.extend(_people_entries(text, font, GREY, ACTIVITY_SIZE, width, name_x))
         return lines
 
     def row_height(row):
