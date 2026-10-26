@@ -51,8 +51,18 @@ export type ProgramItem = ProgramPart & {
  * hour. The field takes the hour the way it is said ("8", "8:30", "8.30",
  * "14:00", "2:30 pm") so the desk types rather than works a clock control;
  * this settles what was typed into the form the programme stores.
+ *
+ * `around` is the hour the programme has already reached — the one typed
+ * just before this field. A bare hour ("3", "12") names the clock's own
+ * twelve and so is two places in the day, and a programme running through
+ * the afternoon knows which one it means: whichever of the two sits nearer
+ * the surrounding hour wins, so "3" after two o'clock becomes three in the
+ * afternoon rather than three in the morning. Say a meridiem ("3 pm") or an
+ * hour of the twenty-four ("15:00") and nothing is guessed. With nothing
+ * around it, a bare hour stands as typed — the first half of the day, where
+ * a programme begins.
  */
-export function parseClockInput(value: unknown): string {
+export function parseClockInput(value: unknown, around?: unknown): string {
   const match = /^(\d{1,2})[:.]?(\d{2})?\s*(am|pm|a|p)?$/.exec(String(value ?? "").trim().toLowerCase());
   if (!match) return "";
   let hour = Number(match[1]);
@@ -66,6 +76,19 @@ export function parseClockInput(value: unknown): string {
     if (meridiem.startsWith("a") && hour === 12) hour = 0;
   } else if (hour > 23) {
     return "";
+  } else if (hour >= 1 && hour <= 12 && toClock(around)) {
+    // Twelve hours twice over, read against what comes before: the nearer
+    // of the two wins, and an even tie falls to the later one — at nine a
+    // desk reaching for "3" means the afternoon's.
+    const ref = toClock(around);
+    const target = Number(ref.slice(0, 2)) * 60 + Number(ref.slice(3, 5));
+    const twelve = hour % 12;
+    const candidates = [twelve, twelve + 12];
+    hour = candidates.reduce((best, candidate) => {
+      const distance = Math.abs(candidate * 60 - target);
+      const bestDistance = Math.abs(best * 60 - target);
+      return distance < bestDistance || (distance === bestDistance && candidate > best) ? candidate : best;
+    });
   }
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
@@ -176,6 +199,7 @@ export function TimeField({
   value,
   onChange,
   label,
+  around,
   placeholder = "8:00",
   className = "",
 }: {
@@ -184,6 +208,9 @@ export function TimeField({
   onChange: (hour: string) => void;
   /** Names the field for a screen reader, e.g. "Start time of activity 2". */
   label: string;
+  /** The hour just before this one, so a bare hour typed here lands in the
+      right half of the day — the end of the row above, or of this row. */
+  around?: string;
   placeholder?: string;
   className?: string;
 }) {
@@ -204,7 +231,7 @@ export function TimeField({
         // A field focused but never typed in has no draft to settle — it
         // must not clear a stored hour merely because it lost attention.
         if (draft === null) return;
-        const hour = parseClockInput(draft);
+        const hour = parseClockInput(draft, around);
         setDraft(null);
         if (hour !== value) onChange(hour);
       }}
@@ -258,6 +285,7 @@ export function ProgramDocument({
   lead,
   items,
   note,
+  idPrefix,
   className = "",
 }: {
   title: string;
@@ -269,6 +297,9 @@ export function ProgramDocument({
   items: ProgramItem[];
   /** A line the desk wrote above the order — the theme, or an announcement. */
   note?: string;
+  /** Stamps each row with ``${idPrefix}-session-…`` / ``-part-…``, so the
+      desk's editor can walk the reading column to the row just added. */
+  idPrefix?: string;
   className?: string;
 }) {
   const weekday = weekdayOf(date);
@@ -316,7 +347,11 @@ export function ProgramDocument({
               // name alone rather than against a column of dashes.
               const range = sessionRange(item);
               return (
-                <li key={`${item.start}-${item.title}-${index}`} className="py-3">
+                <li
+                  key={`${item.start}-${item.title}-${index}`}
+                  id={idPrefix ? `${idPrefix}-session-${index}` : undefined}
+                  className="py-3"
+                >
                   <div className="flex items-baseline gap-4">
                     {/* The hour's own column, held open whether the row
                         carries one or not: the name — and the facilitators
@@ -342,7 +377,10 @@ export function ProgramDocument({
                       {item.parts.map((part, partIndex) => {
                         const partRange = sessionRange(part);
                         return (
-                          <li key={`${part.start}-${part.title}-${partIndex}`}>
+                          <li
+                            key={`${part.start}-${part.title}-${partIndex}`}
+                            id={idPrefix ? `${idPrefix}-part-${index}-${partIndex}` : undefined}
+                          >
                             <div className="flex items-baseline gap-4">
                               <span
                                 className={`${TIME_COL} shrink-0 text-right text-xs font-semibold text-ember`}

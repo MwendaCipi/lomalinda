@@ -1009,6 +1009,7 @@ function AddEventModal({
                 <TimeField
                   label="To time"
                   value={form.end_time}
+                  around={form.time}
                   onChange={(time) => setForm({ ...form, end_time: time })}
                   className={inputCls}
                 />
@@ -1205,6 +1206,11 @@ function ProgramEditorModal({
   onShare?: () => void;
 }) {
   const isPage = variant === "page";
+  // Both copies of this sheet are in the DOM at once — the phone's modal and
+  // the desk's page, one hidden by CSS — so every id this sheet stamps (its
+  // rows, its cards, the land-here marks) is prefixed by its own copy:
+  // otherwise a lookup finds the hidden twin and the walk lands nowhere.
+  const uid = isPage ? "d" : "m";
   // The programme as it stands. A programme that does not exist yet opens
   // on one blank session waiting to be named — the desk goes straight to
   // typing, and "Add session" is a click made only for a second part of the
@@ -1227,11 +1233,36 @@ function ProgramEditorModal({
   // commit that mounts the new row walks it into the viewport. The mark is
   // cleared on use, so plain typing and edits never scroll anything.
   const pendingScrollRef = useRef<string | null>(null);
+  // The reading column answers the same click: the row just added is shown
+  // on the sheet beside it too, so the sheet walks to it — but only where
+  // the reading column scrolls on its own (a desk, md and wider). On a phone
+  // it sits under the typing, and carrying the page down to it would take
+  // the field being typed out of sight. The target is kept for one more
+  // change when it is not there yet: a new session shows on the sheet only
+  // once it is named, and that keystroke is the one that should bring it in.
+  const pendingPreviewRef = useRef<string | null>(null);
+  const previewTriesRef = useRef(0);
+  const followPreview = (id: string) => {
+    pendingPreviewRef.current = id;
+    previewTriesRef.current = 0;
+  };
   useEffect(() => {
-    if (!pendingScrollRef.current) return;
     const target = pendingScrollRef.current;
-    pendingScrollRef.current = null;
-    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (target) {
+      pendingScrollRef.current = null;
+      document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    const previewTarget = pendingPreviewRef.current;
+    if (!previewTarget) return;
+    const row = document.getElementById(previewTarget);
+    if (row) {
+      pendingPreviewRef.current = null;
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    } else if (previewTriesRef.current++ > 0) {
+      pendingPreviewRef.current = null;
+    }
   }, [items]);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -1267,6 +1298,32 @@ function ProgramEditorModal({
     }
     return current.start || current.end || "";
   };
+  /**
+   * The hour the programme has already reached, read backwards from one
+   * field: the end (or start) of the row just before it, else the session's
+   * own hours, else the same walk through the sessions before it. This is
+   * what a bare hour typed in that field is read against — "3" after two
+   * o'clock is three in the afternoon, not three in the morning — so the
+   * field asks what comes before it rather than assuming the morning.
+   */
+  const hourBefore = (index: number, partIndex: number): string => {
+    const session = items[index];
+    const prior = session?.parts[partIndex - 1];
+    if (prior) return prior.end || prior.start || "";
+    if (partIndex === 0 && session && (session.end || session.start)) return session.end || session.start;
+    for (let i = index - 1; i >= 0; i--) {
+      const before = items[i];
+      if (!before) continue;
+      const last = before.parts[before.parts.length - 1];
+      if (last && (last.end || last.start)) return last.end || last.start;
+      if (before.end || before.start) return before.end || before.start;
+    }
+    return "";
+  };
+  /** Where this session stands on the reading column: the sheet leaves out
+      the sessions still holding nothing, so its rows are counted over the
+      ones that print rather than over every card on the left. */
+  const previewIndex = (index: number) => items.slice(0, index).filter(programItemHasContent).length;
   /** One change to one part of one session — the row every edit below makes. */
   const mapPart = (index: number, partIndex: number, edit: (part: ProgramItem["parts"][number]) => ProgramItem["parts"][number]) =>
     setItems((current) =>
@@ -1280,6 +1337,28 @@ function ProgramEditorModal({
         i === index ? { ...item, parts: item.parts.filter((_, p) => p !== partIndex) } : item,
       ),
     );
+  /**
+   * The activity's X, asked out loud first. An activity carries the hour it
+   * runs between, its name and whoever facilitates it, so it leaves the
+   * session only after the desk says so — and it is named in the question,
+   * since the card's own number is not how anyone remembers it. Cancelled:
+   * nothing is touched, and with no change made the sheet keeps quiet rather
+   * than saving what is already there.
+   */
+  const confirmDropPart = async (index: number, partIndex: number) => {
+    const part = items[index]?.parts[partIndex];
+    const name = part?.title?.trim();
+    const result = await showAlert(
+      "Remove activity",
+      name
+        ? `Take ${name} out of this session? Its time and its facilitators go with it.`
+        : "Take this activity out of the session?",
+      "question",
+      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember },
+    );
+    if (!result.isConfirmed) return;
+    dropPart(index, partIndex);
+  };
   const setPartPerson = (index: number, partIndex: number, personIndex: number, patch: Partial<ProgramParticipant>) =>
     mapPart(index, partIndex, (part) => ({
       ...part,
@@ -1676,7 +1755,7 @@ function ProgramEditorModal({
             return (
               <div
                 key={index}
-                id={`session-card-${index}`}
+                id={`${uid}-session-card-${index}`}
                 className="overflow-hidden rounded-2xl border border-sand-line bg-white"
               >
                 {/* The session shut: its hours and its name on the outside.
@@ -1687,7 +1766,7 @@ function ProgramEditorModal({
                     type="button"
                     onClick={() => setOpenSession(open ? null : index)}
                     aria-expanded={open}
-                    aria-controls={`session-${index}`}
+                    aria-controls={`${uid}-session-${index}`}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
                     <ChevronDown
@@ -1715,7 +1794,7 @@ function ProgramEditorModal({
 
                 {open && (
                   <div
-                    id={`session-${index}`}
+                    id={`${uid}-session-${index}`}
                     className="space-y-3 border-t border-sand-line bg-sand-plate p-3"
                   >
                     <label className="block">
@@ -1743,7 +1822,7 @@ function ProgramEditorModal({
                       {session.parts.map((part, partIndex) => (
                         <div
                           key={partIndex}
-                          id={`part-${index}-${partIndex}`}
+                          id={`${uid}-part-${index}-${partIndex}`}
                           draggable
                           onDragStart={
                             beginDrag({ kind: "part", session: index, part: partIndex }, partCardId(index, partIndex))
@@ -1776,7 +1855,7 @@ function ProgramEditorModal({
                             </span>
                             <button
                               type="button"
-                              onClick={() => dropPart(index, partIndex)}
+                              onClick={() => void confirmDropPart(index, partIndex)}
                               aria-label={`Remove activity ${partIndex + 1} from session ${index + 1}`}
                               className="shrink-0 rounded-xl border border-sand-line bg-white p-1.5 text-moss transition hover:border-red-300 hover:text-red-600"
                             >
@@ -1789,6 +1868,7 @@ function ProgramEditorModal({
                               <span className="mt-1 flex items-center gap-1.5">
                                 <TimeField
                                   value={part.start}
+                                  around={hourBefore(index, partIndex)}
                                   onChange={(hour) => mapPart(index, partIndex, (p) => ({ ...p, start: hour }))}
                                   label={`Start time of activity ${partIndex + 1} in session ${index + 1}`}
                                   className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
@@ -1796,6 +1876,7 @@ function ProgramEditorModal({
                                 <span className="text-[11px] text-moss">to</span>
                                 <TimeField
                                   value={part.end}
+                                  around={part.start || hourBefore(index, partIndex)}
                                   onChange={(hour) => mapPart(index, partIndex, (p) => ({ ...p, end: hour }))}
                                   label={`End time of activity ${partIndex + 1} in session ${index + 1}`}
                                   className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
@@ -1819,7 +1900,7 @@ function ProgramEditorModal({
                             {part.participants.map((person, personIndex) => (
                               <div
                                 key={personIndex}
-                                id={`part-${index}-${partIndex}-person-${personIndex}`}
+                                id={`${uid}-part-${index}-${partIndex}-person-${personIndex}`}
                                 draggable
                                 onDragStart={
                                   beginDrag(
@@ -1900,7 +1981,9 @@ function ProgramEditorModal({
                                 }));
                                 // Land on the row just made — the
                                 // hand-off above finds it by its id.
-                                pendingScrollRef.current = `part-${index}-${partIndex}-person-${part.participants.length}`;
+                                pendingScrollRef.current = `${uid}-part-${index}-${partIndex}-person-${part.participants.length}`;
+                                // And the sheet beside it walks to the same row.
+                                followPreview(`preview-${uid}-part-${previewIndex(index)}-${partIndex}`);
                               }}
                               className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-[11px] font-semibold text-bark hover:underline"
                             >
@@ -1918,7 +2001,9 @@ function ProgramEditorModal({
                           // Land on the activity just made — its row
                           // mounts below here, out of the viewport once
                           // the session holds a few of them.
-                          pendingScrollRef.current = `part-${index}-${session.parts.length}`;
+                          pendingScrollRef.current = `${uid}-part-${index}-${session.parts.length}`;
+                          // The reading column shows the same activity: walk to it.
+                          followPreview(`preview-${uid}-part-${previewIndex(index)}-${session.parts.length}`);
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:border-ember"
                       >
@@ -1953,7 +2038,10 @@ function ProgramEditorModal({
                 setOpenSession(items.length);
                 // Land on the card just minted — its opened panel rides
                 // below the fold once the day is long.
-                pendingScrollRef.current = `session-card-${items.length}`;
+                pendingScrollRef.current = `${uid}-session-card-${items.length}`;
+                // Its row on the sheet appears the moment it is named, and
+                // that keystroke is the change this walks in on.
+                followPreview(`preview-${uid}-session-${items.filter(programItemHasContent).length}`);
               }}
               className={`inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep${isPage ? " min-w-0 flex-1 justify-center" : ""}`}
             >
@@ -2006,6 +2094,7 @@ function ProgramEditorModal({
                     department={departmentLabel}
                     lead={event.lead}
                     items={items.filter(programItemHasContent)}
+                    idPrefix={`preview-${uid}`}
                   />
                 </div>
               </div>
