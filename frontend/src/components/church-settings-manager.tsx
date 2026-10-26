@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
 import { Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
-import { DepartmentAccountAssignments } from "./department-account-assignments";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
 
@@ -406,8 +405,6 @@ export function ChurchSettingsManager() {
             </p>
           </div>
         </div>
-
-        <DepartmentAccountAssignments />
 
         {/* Meeting Invitation Templates Box */}
         <div className="rounded-2xl border border-bark/30 bg-sand p-5">
