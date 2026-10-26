@@ -2371,6 +2371,13 @@ def _people_entries(body, name_font, name_colour, size, width, x, space=2.5):
             start = cursor
         end = start + len(piece)
         cursor = end
+        # A name typed without a role carries no separator, so there is no
+        # lighter tail to find: the whole piece is the name and must still
+        # be inked — the row's people were measured into the flow (see the
+        # builders) and a line dropped here would leave empty air here.
+        if role_from < 0:
+            entries.append((piece, name_font, size, name_colour, space, x))
+            continue
         head = piece[:min(end, role_from) - start] if role_from >= 0 and start < role_from else ''
         tail = piece[max(start, role_from) - start:] if role_from >= 0 and end > role_from else ''
         if head and tail:
@@ -2443,7 +2450,7 @@ def generate_event_program_plain_pdf(
     # QR would only be a scan of the device already holding it; the
     # brochure, the paper that folds, is where the QR belongs.
     give_url = (contact.get('give_url') or '').strip()
-    GIVE_LABEL = 'To support us through '
+    GIVE_LABEL = 'Support us through '
     GIVE_MPESA = 'or M-Pesa Pay Bill 4132723, Account name Ensemble'
     LINK_COLOUR = colors.HexColor('#1a4fa0')
     FOOT_FONT = 'Helvetica'

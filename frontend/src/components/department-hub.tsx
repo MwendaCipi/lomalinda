@@ -1263,7 +1263,9 @@ function ProgramEditorModal({
     } else if (previewTriesRef.current++ > 0) {
       pendingPreviewRef.current = null;
     }
-  }, [items]);
+    // `openSession` rides along: a session opened is a click answered on the
+    // sheet beside it, and closing one must leave it wherever it already was.
+  }, [items, openSession]);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   /** Removing a session also settles which one is left open. */
@@ -1480,8 +1482,11 @@ function ProgramEditorModal({
   // ── Keeping the sheet ────────────────────────────────────────────────────
   // There is no Save button: the rows go up a moment after the hand stops,
   // and the foot says where they stand. The sheet exactly as it opened is
-  // not a change, and a sheet holding nothing worth printing has nothing to
-  // keep — the event carries what it already held.
+  // not a change, so it is not sent; every change after that is — including
+  // the one that empties the sheet. A removal that leaves nothing showing
+  // is still a change to stand on the event: it clears the programme from
+  // the event's rows, so reopening the sheet reads the day as the desk last
+  // left it rather than finding what the desk just deleted still there.
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const openedWith = useRef(items);
   const queued = useRef<ProgramItem[] | null>(null);
@@ -1507,15 +1512,10 @@ function ProgramEditorModal({
   };
   useEffect(() => {
     if (items === openedWith.current) return;      // the sheet as it opened
-    if (!valid) {
-      // Nothing worth keeping stands here, so nothing is queued and the
-      // foot says nothing — its word is read against `valid` in the render
-      // rather than written away here.
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = null;
-      queued.current = null;
-      return;
-    }
+    // An emptied sheet is kept too: `valid` decides only where the foot's
+    // word reads, not whether the rows go up — the server reading a sheet
+    // with nothing on it takes the programme off the event, which is what
+    // the hand just asked for by deleting its last row.
     queued.current = items;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
@@ -1529,7 +1529,7 @@ function ProgramEditorModal({
         timer.current = null;
       }
     };
-  }, [items, valid]);
+  }, [items]);
   // The sheet closed with rows still inside that pause — written on the way
   // out rather than dropped, since there is no button left to press for
   // them. State is left alone here: the sheet this belongs to is gone.
@@ -1714,7 +1714,24 @@ function ProgramEditorModal({
         {isPage ? (
           <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-2.5 md:shrink-0">
             <div className="min-w-0">
-              <h3 className="text-lg font-bold text-bark">{event.title}</h3>
+              {/* Where the sheet stands, read where the heading is — the
+                  desk's eye starts at the head of the page, not at the foot
+                  of its column (a phone keeps the word at its own foot where
+                  the hand types, and the word here would find nobody). */}
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5">
+                <h3 className="min-w-0 truncate text-lg font-bold text-bark">{event.title}</h3>
+                {saveWord && (
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className={`shrink-0 text-xs font-semibold${
+                      saveState === "error" ? " text-red-600" : " text-green-600"
+                    }`}
+                  >
+                    {saveWord}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-moss">
                 {uploadedFile
                   ? "Typed on the left; the programme as the church sees it on the right."
@@ -1780,7 +1797,15 @@ function ProgramEditorModal({
                 <div className="flex items-center">
                   <button
                     type="button"
-                    onClick={() => setOpenSession(open ? null : index)}
+                    onClick={() => {
+                      // Opening a session walks the reading column to that
+                      // part of the day as well — the sheet beside answers
+                      // the same click the way its Add buttons already do.
+                      // A session that holds nothing yet is not on the sheet
+                      // to be found; naming it is what brings it in.
+                      if (!open) followPreview(`preview-${uid}-session-${previewIndex(index)}`);
+                      setOpenSession(open ? null : index);
+                    }}
                     aria-expanded={open}
                     aria-controls={`${uid}-session-${index}`}
                     className="flex min-w-0 flex-1 items-center gap-2 rounded-l-2xl py-2.5 pl-2.5 pr-2 text-left transition hover:bg-sand-plate"
@@ -2022,23 +2047,35 @@ function ProgramEditorModal({
                           </div>
                         </div>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSession(index, {
-                            parts: [...session.parts, { start: carryStart(index), end: "", title: "", participants: [] }],
-                          });
-                          // Land on the activity just made — its row
-                          // mounts below here, out of the viewport once
-                          // the session holds a few of them.
-                          pendingScrollRef.current = `${uid}-part-${index}-${session.parts.length}`;
-                          // The reading column shows the same activity: walk to it.
-                          followPreview(`preview-${uid}-part-${previewIndex(index)}-${session.parts.length}`);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:border-ember"
-                      >
-                        <Plus className="h-3 w-3" /> Add activity
-                      </button>
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSession(index, {
+                              parts: [...session.parts, { start: carryStart(index), end: "", title: "", participants: [] }],
+                            });
+                            // Land on the activity just made — its row
+                            // mounts below here, out of the viewport once
+                            // the session holds a few of them.
+                            pendingScrollRef.current = `${uid}-part-${index}-${session.parts.length}`;
+                            // The reading column shows the same activity: walk to it.
+                            followPreview(`preview-${uid}-part-${previewIndex(index)}-${session.parts.length}`);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:border-ember"
+                        >
+                          <Plus className="h-3 w-3" /> Add activity
+                        </button>
+                        {/* The panel folds back into its session strip:
+                            folding is not removing — the strip stays, the
+                            session keeps everything typed into it. */}
+                        <button
+                          type="button"
+                          onClick={() => setOpenSession(null)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:text-ember"
+                        >
+                          <X className="h-3 w-3" aria-hidden="true" /> Close session
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2083,10 +2120,11 @@ function ProgramEditorModal({
                 {viewBrochureControl}
               </>
             )}
-            {/* Where the sheet stands, in the place the save used to sit:
-                a screen reader is told as the word changes, and an empty
-                word takes no room at all. */}
-            {saveWord && (
+            {/* Where the sheet stands, in the place the save used to sit —
+                the phone read it here, and still does: a desk's page says
+                the same word by its heading instead. An empty word takes no
+                room at all. */}
+            {!isPage && saveWord && (
               <span
                 role="status"
                 aria-live="polite"
@@ -2114,9 +2152,6 @@ function ProgramEditorModal({
             )}
             {valid && (
               <div className="mb-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-moss">
-                  How it will look
-                </p>
                 <div className="rounded-xl bg-sand p-4">
                   <ProgramDocument
                     title={event.title}
