@@ -73,16 +73,22 @@ _LOCKUP_LINE_1 = "SDA Church"
 _LOCKUP_LINE_2 = "Loma Linda, Meru"
 
 
-def _draw_logo(c, center_x, top_y, height):
+def _draw_logo(c, center_x, top_y, height, line_2=_LOCKUP_LINE_2):
     """Draw the church's lockup — symbol and name — centred on `center_x`,
-    its top edge at `top_y`, `height` tall."""
+    its top edge at `top_y`, `height` tall.
+
+    ``line_2`` is the second line of the name: every paper that is not a
+    programme prints "Loma Linda, Meru", while a programme the congregation
+    is handed says "Loma Linda" — the church the way the sheet's own reader
+    says it.
+    """
     sym_w = height * _SYMBOL_RATIO
     text_size = height * 0.40
     line_advance = text_size * 1.15
     c.saveState()
     c.setFont("Helvetica-Bold", text_size)
     line_1_w = c.stringWidth(_LOCKUP_LINE_1, "Helvetica-Bold", text_size)
-    line_2_w = c.stringWidth(_LOCKUP_LINE_2, "Helvetica-Bold", text_size)
+    line_2_w = c.stringWidth(line_2, "Helvetica-Bold", text_size)
     gap = height * 0.16
     total_w = sym_w + gap + max(line_1_w, line_2_w)
     left = center_x - total_w / 2
@@ -100,7 +106,7 @@ def _draw_logo(c, center_x, top_y, height):
     baseline_1 = top_y - (height - block_h) / 2 - text_size * 0.8
     text_x = left + sym_w + gap
     c.drawString(text_x, baseline_1, _LOCKUP_LINE_1)
-    c.drawString(text_x, baseline_1 - line_advance, _LOCKUP_LINE_2)
+    c.drawString(text_x, baseline_1 - line_advance, line_2)
     c.restoreState()
 
 
@@ -2257,6 +2263,29 @@ def _draw_qr(c, url, x, y, size):
     renderPDF.draw(drawing, c, 0, 0)
 
 
+#: The church's name on a programme sheet: no town after it. The treasury's
+#: papers and the site's screens keep "SDA Church Loma Linda, Meru"; the
+#: sheet handed out at the door reads "SDA Church Loma Linda".
+_PROGRAM_LOCKUP_LINE_2 = "Loma Linda"
+
+
+def _program_church_name(text):
+    """The church's name as a programme prints it — without the town."""
+    return re.sub(r",\s*Meru\s*$", "", str(text or "").strip()).strip()
+
+
+def _program_department_name(code, name):
+    """The ministry as a programme names it.
+
+    The desk files its choir as "Church Choir"; the sheet the congregation
+    is handed calls it The Loma Linda Ensemble. Every other ministry prints
+    the name its own desk gave it.
+    """
+    if str(code or "").strip().lower() == "choir":
+        return "The Loma Linda Ensemble"
+    return name
+
+
 def _program_rows(event):
     """The typed order of service, spoken the way every paper reads it.
 
@@ -2334,9 +2363,10 @@ def generate_event_program_plain_pdf(
     activities beneath them in plain type and a grey hour of their own.
 
     `contact` trims the page's foot, spoken small under a rule: where the
-    church stands and one door into the system that carries the day's
-    giving. The church's own pay-bill and bank lines are the brochure's to
-    speak; whatever is absent is left off the paper, never guessed at.
+    church stands, how to support the Loma Linda Ensemble — the link a
+    screen can tap, and the pay-bill a hand reaches for without one. The
+    bank lines are the brochure's to speak; whatever is absent is left off
+    the paper, never guessed at.
     """
     contact = contact or {}
     buffer = io.BytesIO()
@@ -2365,16 +2395,17 @@ def generate_event_program_plain_pdf(
 
     c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
 
-    # The foot speaks with one voice about giving: the church's pay-bill and
-    # bank lines are off this paper, and the one door into the system that
-    # carries the day's giving takes their place — a line of the foot
-    # itself rather than a block parked at its right edge. The sheet is
-    # read on a screen, where a QR would only be a scan of the device
-    # already holding it; the brochure, the paper that folds, is where the
-    # QR belongs.
+    # The foot speaks with one voice about giving: how to support the
+    # Loma Linda Ensemble — the link a screen taps, and beside it the
+    # pay-bill and account name a phone keys in without one — as lines of
+    # the foot itself rather than a block parked at its right edge. The
+    # sheet is read on a screen, where a QR would only be a scan of the
+    # device already holding it; the brochure, the paper that folds, is
+    # where the QR belongs.
     give_url = (contact.get('give_url') or '').strip()
-    GIVE_LABEL = 'Support us through Our church management system'
-    church_line = pdf_church_name(church_name)
+    GIVE_LABEL = 'Support the Loma Linda Ensemble through by clicking'
+    GIVE_MPESA = 'or M-Pesa Pay Bill 4132723, Account name Ensemble'
+    church_line = _program_church_name(pdf_church_name(church_name))
     address_line = str(contact.get('address') or '').strip()
 
     FOOT_STEP = 10                          # one foot line's step
@@ -2400,14 +2431,20 @@ def generate_event_program_plain_pdf(
             if shown != give_url:
                 shown = shown.rstrip('/?&=#') + '\u2026'
             lines.append((shown, 'Helvetica', 6.5, GREY, give_url))
+            # The second door, for a hand with no browser: the pay-bill and
+            # the account name typed into the M-Pesa prompt as it stands.
+            for piece in wrap(GIVE_MPESA, 'Helvetica', 7.5, content_w)[:1]:
+                lines.append((piece, 'Helvetica', 7.5, GREY, None))
         if page_i + 1 < pages:
             lines.append((f'Page {page_i + 1} of {pages}', 'Helvetica', 7.5, GREY, None))
         return lines
 
     # The rows give the foot its band up front, measured by the same
     # arithmetic the foot draws with — a church named, up to two lines of
-    # address, the door into the system, and a page to count.
-    foot_top = FOOT_BASE + FOOT_STEP * (len(foot_lines(0, 2)) - 1) + 18
+    # address, the door into the system, and a page to count. The slack over
+    # the foot's own top line is deliberately small: the day's rows run down
+    # to the rule rather than stopping short of it.
+    foot_top = FOOT_BASE + FOOT_STEP * (len(foot_lines(0, 2)) - 1) + 8
 
     def head(title_pieces, title_size, meta_lines):
         """The first page's letterhead — mark, kicker, the day, its meta —
@@ -2416,7 +2453,7 @@ def generate_event_program_plain_pdf(
         rows rather than saying all of this again."""
         cx = page_w / 2
         logo_h = 15 * mm
-        _draw_logo(c, cx, page_h - 30, logo_h)
+        _draw_logo(c, cx, page_h - 30, logo_h, line_2=_PROGRAM_LOCKUP_LINE_2)
         y = page_h - 30 - logo_h - 22
         c.setStrokeColor(RULE)
         c.setLineWidth(0.9)
@@ -2433,10 +2470,9 @@ def generate_event_program_plain_pdf(
         for piece in title_pieces:
             c.drawCentredString(cx, y, piece)
             y -= title_size * 1.22
-        y += (title_size * 0.35)          # the meta's breath, not the line's
-        c.setStrokeColor(RULE)
-        c.setLineWidth(0.7)
-        c.line(side + 24, y - 4, page_w - side - 24, y - 4)
+        y += (title_size * 0.35)          # the meta's breath
+        # No rule under the title: the line that ran between the day and
+        # its date is off the paper, so the date follows the name directly.
         y -= 6
         for bit in meta_lines:
             c.setFont('Helvetica', 9.5)
@@ -2488,8 +2524,9 @@ def generate_event_program_plain_pdf(
                           event.end_time.strftime('%H:%M') if event.end_time else '')
     if hours:
         meta.append(hours)
-    if department_name:
-        meta.append(department_name)
+    ministry = _program_department_name(department_code, department_name)
+    if ministry:
+        meta.append(ministry)
     if event.unit:
         meta.append(f'Unit: {event.unit}')
     if event.lead:
@@ -2510,7 +2547,11 @@ def generate_event_program_plain_pdf(
         The people carrying either sit on their own indented line."""
         width = content_w - row['indent']
         session = row['indent'] == 0
-        size = 12.5 if session else 10.5
+        # The size an activity's name is set at — and the size a facilitator
+        # is written at, so the people carrying a row read at the name's own
+        # ink rather than a step beneath it.
+        ACTIVITY_SIZE = 10.5
+        size = 12.5 if session else ACTIVITY_SIZE
         font = 'Helvetica-Bold' if session else 'Helvetica'
         hour_colour = ACCENT if session else GREY
         title = row['title'] or '\u2014'
@@ -2533,9 +2574,12 @@ def generate_event_program_plain_pdf(
             else:
                 lines.append((piece, font, size, DARK, 2.5, side + row['indent']))
         for name, role in row['people']:
-            bullet = f'\u2022 {name}' + (f' \u00b7 {role}' if role else '')
-            for piece in wrap(bullet, 'Helvetica', 8.5, width - PEOPLE_ROW_INDENT):
-                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5, side + row['indent'] + PEOPLE_ROW_INDENT))
+            # The role rides the name behind a dash — the same dash the
+            # hours speak with, so a facilitator reads as one run of ink.
+            bullet = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
+            for piece in wrap(bullet, 'Helvetica', ACTIVITY_SIZE, width - PEOPLE_ROW_INDENT):
+                lines.append((piece, 'Helvetica', ACTIVITY_SIZE, GREY, 2.5,
+                              side + row['indent'] + PEOPLE_ROW_INDENT))
         return lines
 
     def row_height(row):
@@ -2559,7 +2603,7 @@ def generate_event_program_plain_pdf(
         - 26                                            # the air before the name
         - title_size * 1.22 * len(title_pieces)         # the name's lines
         + title_size * 0.35                             # the name's breath back
-        - 6                                             # the meta rule's step
+        - 6                                             # the breath before the meta
         - 14 * len(meta)                                # the meta's spoken lines
         - 16                                            # the air below the head
     )
@@ -2655,9 +2699,10 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     fold's foot. Gradients stay inside the palette's own sand and ember, the
     washes printing as flat light rather than loud colour.
 
-    A day too long for one spread flows onto another sheet — the same bifold
-    whose cover says continued, its back panel repeating the welcome so the
-    second sheet folds up complete on its own.
+    A day too long for one spread flows onto another sheet — and that sheet
+    grows no cover and no welcome of its own. The order simply continues
+    from face to face, so a reader turns through the day straight from the
+    first cover to its end.
 
     `contact` holds what the back panel speaks: `address`, `services` (the
     church's weekly gatherings as {weekday, text} rows) and `giving` (its
@@ -2726,16 +2771,19 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         width = panel_w - 2 * side - row['indent']
         lines = []
         session = row['indent'] == 0
-        size = 12.5 if session else 11
+        # The activity's own size — the same ink a facilitator is written
+        # at, so the people carrying a row read at the name's own size.
+        ACTIVITY_SIZE = 11
+        size = 12.5 if session else ACTIVITY_SIZE
         font = 'Helvetica-Bold' if session else 'Helvetica'
         title = row['title'] or '\u2014'
         head = f"{row['hours']}: {title}" if row['hours'] else title
         for piece in wrap(head, font, size, width):
             lines.append((piece, font, size, DARK, 2.5, 0))
         for name, role in row['people']:
-            text = f'\u2022 {name}' + (f' \u00b7 {role}' if role else '')
-            for piece in wrap(text, 'Helvetica', 8.5, width - PEOPLE_ROW_INDENT):
-                lines.append((piece, 'Helvetica', 8.5, GREY, 1.5, PEOPLE_ROW_INDENT))
+            text = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
+            for piece in wrap(text, 'Helvetica', ACTIVITY_SIZE, width - PEOPLE_ROW_INDENT):
+                lines.append((piece, 'Helvetica', ACTIVITY_SIZE, GREY, 2.5, PEOPLE_ROW_INDENT))
         return lines
 
     def row_height(row):
@@ -2801,7 +2849,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         if date_text:
             cover_meta.append(date_text)
     if department_name:
-        cover_meta.append(department_name)
+        cover_meta.append(_program_department_name(department_code, department_name))
     if event.unit:
         cover_meta.append(f'Unit: {event.unit}')
     if event.lead:
@@ -2819,122 +2867,101 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         c.line(fold_x, page_h - 6, fold_x, page_h - 18)
         c.line(fold_x, 18, fold_x, 6)
 
-    def draw_cover(c, x0, sheet_i):
+    def draw_cover(c, x0):
         cx = x0 + panel_w / 2
         content_w = panel_w - 2 * side
-        if sheet_i == 0:
-            title = str(event.title or 'Program').strip() or 'Program'
-            # The church's own poster stands where a faint symbol once did —
-            # printed whole (its letterhead and its lines included, as the
-            # church asked) rather than drawn faint — ringed in the panel's
-            # hairline and settled just above the foot band. The box is set
-            # by the room the words above it leave, and takes the poster's
-            # own shape: this download is square, so it runs taller down the
-            # cover than the wall's wide rendering did, into the space the
-            # panel has to give.
-            # The church's own poster is the cover's ground: it runs the
-            # panel's full width and bleeds past the foot of the page, so
-            # nothing frames it — no margin of linen, no ring of hairline
-            # round a picture hung on a wall. Its letterhead and its lines
-            # print whole, as the church asked; only the photograph's own
-            # foreground runs off the edge of the sheet.
-            photo_w = panel_w
-            photo_h = panel_w / _CHURCH_BUILDING_RATIO
-            FLOOR = 360.0                  # the poster keeps at least this much
+        title = str(event.title or 'Program').strip() or 'Program'
+        # The church's own poster stands where a faint symbol once did —
+        # printed whole (its letterhead and its lines included, as the
+        # church asked) rather than drawn faint — ringed in the panel's
+        # hairline and settled just above the foot band. The box is set
+        # by the room the words above it leave, and takes the poster's
+        # own shape: this download is square, so it runs taller down the
+        # cover than the wall's wide rendering did, into the space the
+        # panel has to give.
+        # The church's own poster is the cover's ground: it runs the
+        # panel's full width and bleeds past the foot of the page, so
+        # nothing frames it — no margin of linen, no ring of hairline
+        # round a picture hung on a wall. Its letterhead and its lines
+        # print whole, as the church asked; only the photograph's own
+        # foreground runs off the edge of the sheet.
+        photo_w = panel_w
+        photo_h = panel_w / _CHURCH_BUILDING_RATIO
+        FLOOR = 360.0                  # the poster keeps at least this much
 
-            def words_bottom(title_size, meta_leading=13):
-                """The cover's words measured without inking them — the mark,
-                the shout, the day and its meta — and the last baseline they
-                land on, so the poster knows how much of the page is its own."""
-                y = page_h - 24 - 12 * mm - 10 - 24
-                held = wrap(title, 'Helvetica-Bold', title_size, content_w)
-                y -= len(held) * title_size * 1.22
-                y -= 14 + 12 + 14                  # the stroke, rule and breath
-                y -= max(0, len(cover_meta) - 1) * meta_leading
-                return held, y
+        def words_bottom(title_size, meta_leading=13):
+            """The cover's words measured without inking them — the mark,
+            the shout, the day and its meta — and the last baseline they
+            land on, so the poster knows how much of the page is its own."""
+            y = page_h - 24 - 12 * mm - 10 - 24
+            held = wrap(title, 'Helvetica-Bold', title_size, content_w)
+            y -= len(held) * title_size * 1.22
+            y -= 14 + 14                      # the stroke's breath and the meta's
+            y -= max(0, len(cover_meta) - 1) * meta_leading
+            return held, y
 
-            # The day's name is set at the largest size the room above the
-            # poster still holds, so a long title gives way before the words
-            # crowd the church's own letterhead.
-            fitted = None
-            for candidate in (21, 19, 17, 15, 13):
-                held, bottom = words_bottom(candidate)
-                fitted = (candidate, held, bottom)
-                if bottom >= FLOOR:
-                    break
-            title_size, pieces, last_baseline = fitted
+        # The day's name is set at the largest size the room above the
+        # poster still holds, so a long title gives way before the words
+        # crowd the church's own letterhead.
+        fitted = None
+        for candidate in (21, 19, 17, 15, 13):
+            held, bottom = words_bottom(candidate)
+            fitted = (candidate, held, bottom)
+            if bottom >= FLOOR:
+                break
+        title_size, pieces, last_baseline = fitted
 
-            photo_top = last_baseline - 8
-            c.saveState()
-            ground = c.beginPath()
-            ground.rect(x0, 0, panel_w, page_h)
-            c.clipPath(ground, stroke=0, fill=0)
-            c.drawImage(_CHURCH_BUILDING, x0, photo_top - photo_h, photo_w, photo_h)
-            c.restoreState()
-            # The words, measured above and now inked in the same steps:
-            # the mark at the head, the shout, the name of the day, and the
-            # day itself — each landing where the arithmetic said it would.
-            y = page_h - 24
-            _draw_logo(c, cx, y, 12 * mm)
-            y -= 12 * mm
-            y -= 10
-            kicker = 'ORDER OF SERVICE'
-            tracking = 4
-            c.setFont('Helvetica-Bold', 9)
-            c.setFillColor(ACCENT)
-            kick_w = c.stringWidth(kicker, 'Helvetica-Bold', 9) + tracking * (len(kicker) - 1)
-            ktext = c.beginText(cx - kick_w / 2, y)
-            # Letter-spacing lives in the text state, so it is cleared inside
-            # the same line: otherwise every line drawn after the kicker
-            # inherits the tracking and drifts wide of its measure.
-            ktext.setCharSpace(tracking)
-            ktext.textOut(kicker)
-            ktext.setCharSpace(0)
-            c.drawText(ktext)
-            y -= 24
-            c.setFillColor(DARK)
-            c.setFont('Helvetica-Bold', title_size)
-            for piece in pieces:
-                c.drawCentredString(cx, y, piece)
-                y -= title_size * 1.22
-            # A short gradient stroke ties the name to its day — the
-            # department's own colour easing into the lockup's gold, the
-            # accent the inside spread gives the hours.
-            wash(cx - 22, y + 6, 44, 2, [ACCENT, GOLD], horizontal=True)
-            y -= 14
-            y -= 12
-            c.setStrokeColor(RULE)
-            c.setLineWidth(1)
-            c.line(x0 + side + 10, y, x0 + panel_w - side - 10, y)
-            y -= 14
-            for bit in cover_meta:
-                c.setFont('Helvetica', 10)
-                c.setFillColor(GREY)
-                c.drawCentredString(cx, y, bit)
-                y -= 13
-            # A band of colour closes the cover at its foot: dark easing into
-            # the department's colour easing into the lockup's gold — the
-            # church's paper, the day's identity, standing where a fold meets
-            # a reader's thumb.
-            wash(x0, 16, panel_w, 5, [DARK, ACCENT, GOLD], horizontal=True)
-        else:
-            # A continuation sheet folds up complete on its own: its own
-            # mark, and a cover that says so.
-            _draw_logo(c, cx, page_h - 38, 12 * mm)
-            y = page_h - 38 - 12 * mm - 26
-            c.setFont('Helvetica-Bold', 8)
-            c.setFillColor(ACCENT)
-            c.drawCentredString(cx, y, 'ORDER OF SERVICE')
-            y -= 12
-            c.setFont('Helvetica', 9)
+        photo_top = last_baseline - 8
+        c.saveState()
+        ground = c.beginPath()
+        ground.rect(x0, 0, panel_w, page_h)
+        c.clipPath(ground, stroke=0, fill=0)
+        c.drawImage(_CHURCH_BUILDING, x0, photo_top - photo_h, photo_w, photo_h)
+        c.restoreState()
+        # The words, measured above and now inked in the same steps:
+        # the mark at the head, the shout, the name of the day, and the
+        # day itself — each landing where the arithmetic said it would.
+        y = page_h - 24
+        _draw_logo(c, cx, y, 12 * mm, line_2=_PROGRAM_LOCKUP_LINE_2)
+        y -= 12 * mm
+        y -= 10
+        kicker = 'ORDER OF SERVICE'
+        tracking = 4
+        c.setFont('Helvetica-Bold', 9)
+        c.setFillColor(ACCENT)
+        kick_w = c.stringWidth(kicker, 'Helvetica-Bold', 9) + tracking * (len(kicker) - 1)
+        ktext = c.beginText(cx - kick_w / 2, y)
+        # Letter-spacing lives in the text state, so it is cleared inside
+        # the same line: otherwise every line drawn after the kicker
+        # inherits the tracking and drifts wide of its measure.
+        ktext.setCharSpace(tracking)
+        ktext.textOut(kicker)
+        ktext.setCharSpace(0)
+        c.drawText(ktext)
+        y -= 24
+        c.setFillColor(DARK)
+        c.setFont('Helvetica-Bold', title_size)
+        for piece in pieces:
+            c.drawCentredString(cx, y, piece)
+            y -= title_size * 1.22
+        # A short gradient stroke ties the name to its day — the
+        # department's own colour easing into the lockup's gold, the
+        # accent the inside spread gives the hours.
+        wash(cx - 22, y + 6, 44, 2, [ACCENT, GOLD], horizontal=True)
+        # No rule under the title: the line that ran between the day and
+        # its date is off the paper, so the date follows the stroke directly.
+        y -= 14
+        y -= 14
+        for bit in cover_meta:
+            c.setFont('Helvetica', 10)
             c.setFillColor(GREY)
-            c.drawCentredString(cx, y, f'continued \u00b7 sheet {sheet_i + 1} of {len(spreads)}')
-            y -= 24
-            c.setFont('Helvetica-Bold', 13)
-            c.setFillColor(DARK)
-            for piece in wrap(str(event.title or 'Program'), 'Helvetica-Bold', 13, content_w)[:3]:
-                c.drawCentredString(cx, y, piece)
-                y -= 16
+            c.drawCentredString(cx, y, bit)
+            y -= 13
+        # A band of colour closes the cover at its foot: dark easing into
+        # the department's colour easing into the lockup's gold — the
+        # church's paper, the day's identity, standing where a fold meets
+        # a reader's thumb.
+        wash(x0, 16, panel_w, 5, [DARK, ACCENT, GOLD], horizontal=True)
 
     def draw_back(c, x0):
         x = x0 + side
@@ -3096,17 +3123,12 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         return y - 8
 
     c = canvas.Canvas(buffer, pagesize=(page_w, page_h))
-    for sheet_i, spread in enumerate(spreads):
-        # The outside wears the paper's light: linen easing to white from
-        # head to foot, one wash across the whole sheet.
-        wash(0, 0, page_w, page_h, [LINEN, PLATE])
-        # ── The sheet's outside: the church's welcome left, the cover right ──
-        draw_back(c, 0)
-        draw_cover(c, panel_w, sheet_i)
-        fold_guides()
-        c.showPage()
-        # ── The inside spread: the order of service down both panels ──
-        label = 'Order of Service' if sheet_i == 0 else 'Order of Service \u2013 continued'
+
+    def draw_program_face(spread, continued):
+        """One face of the order — the two panels the fold holds, headed by
+        the label a reader turns to: the day's own on the first face, and
+        continued on every face after it."""
+        label = 'Order of Service \u2013 continued' if continued else 'Order of Service'
         for col_i, column in enumerate(spread):
             x0 = col_i * panel_w
             c.setFont('Helvetica-Bold', 8)
@@ -3117,6 +3139,41 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
                 y = draw_row(c, x0 + side + row['indent'], y, row, lines)
         fold_guides()
         c.showPage()
+
+    # ── The sheets ──────────────────────────────────────────────
+    # The first sheet's outside is the day itself: the church's welcome on
+    # the back panel, the cover on the right. Every face after it is a page
+    # of the order — a day too long for one spread continues straight onto
+    # the next face rather than growing a second cover and a second welcome,
+    # so the booklet reads from the first cover to its end without a break.
+    # Each sheet still prints as two faces, so duplex pairing holds.
+    continuation = spreads[1:]
+    sheet_count = 1 + (len(continuation) + 1) // 2
+    for sheet_i in range(sheet_count):
+        if sheet_i == 0:
+            # The sheet's outside wears the paper's light: linen easing to
+            # white from head to foot, one wash across the whole sheet.
+            wash(0, 0, page_w, page_h, [LINEN, PLATE])
+            # ── The sheet's outside: the church's welcome left, the cover
+            # right ──
+            draw_back(c, 0)
+            draw_cover(c, panel_w)
+            fold_guides()
+            c.showPage()
+            # ── The inside spread: the order of service down both panels ──
+            draw_program_face(spreads[0], continued=False)
+            continue
+        outside = continuation[2 * (sheet_i - 1)]
+        draw_program_face(outside, continued=True)
+        inside_at = 2 * (sheet_i - 1) + 1
+        if inside_at < len(continuation):
+            draw_program_face(continuation[inside_at], continued=True)
+        else:
+            # The last sheet may have only its outside to say: its inside is
+            # left as plain paper, so the two faces still pair for duplex
+            # printing rather than shifting every sheet after it.
+            fold_guides()
+            c.showPage()
     c.save()
     buffer.seek(0)
     return buffer.getvalue()

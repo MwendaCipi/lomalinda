@@ -218,7 +218,8 @@ export function TimeField({
   );
 }
 
-/** The facilitators, read as "Jane Wanjiru · Teacher" lines. */
+/** The facilitators, read as "Jane Wanjiru – Teacher" lines — the dash the
+ * printed sheet separates name and role with, so screen and paper agree. */
 function Facilitators({ people, className = "" }: { people: ProgramParticipant[]; className?: string }) {
   if (people.length === 0) return null;
   return (
@@ -226,7 +227,7 @@ function Facilitators({ people, className = "" }: { people: ProgramParticipant[]
       {people.map((person, index) => (
         <li key={`${person.name}-${index}`} className="text-xs leading-5 text-moss">
           <span className="text-moss-dark">{person.name}</span>
-          {person.role && <span aria-hidden="true"> · </span>}
+          {person.role && <span aria-hidden="true"> – </span>}
           {person.role && <span>{person.role}</span>}
         </li>
       ))}

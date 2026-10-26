@@ -1110,7 +1110,6 @@ function EventProgramMenu({
   event,
   onEdit,
   onCreate,
-  onUpload,
   onRemove,
 }: {
   event: DeptEvent;
@@ -1120,10 +1119,9 @@ function EventProgramMenu({
       desk types beside how the day reads, whose own buttons open the two
       papers the programme prints as: the plain sheet the link hands on, and
       the brochure that folds for the printed copy. Reads "Add program"
-      while none exists. */
+      while none exists. The upload is the page's own button, on the row
+      that names the day — this menu stays choices about the event. */
   onCreate: () => void;
-  /** Send a programme in as a file, replacing what the event carries. */
-  onUpload: () => void;
   onRemove: () => void;
 }) {
   const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
@@ -1134,10 +1132,7 @@ function EventProgramMenu({
         Edit event
       </button>
       <button type="button" onClick={onCreate} className={`${item} text-bark`}>
-        {hasProgram ? "View program" : "Add program"}
-      </button>
-      <button type="button" onClick={onUpload} className={`${item} text-bark`}>
-        Upload program
+        {hasProgram ? "Program" : "Add program"}
       </button>
       <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
         Remove event
@@ -1157,9 +1152,8 @@ function EventProgramMenu({
  * typing sits on the left, and beside it the programme as the church will  * see it — the uploaded file when the event carries one, and the live
   * sheet beneath it. Typing carries its own Save at its foot, on the same
   * row as Add session (the sheet is editable in place, so there is no
-  * separate edit); the calendar row's Actions menu names the upload, and
-  * on a phone the modal's own bar keeps the rest — remove, download,
-  * share.
+  * separate edit); the page's own head carries the upload, and on a phone
+  * the modal's bar keeps it with the rest — remove, download, share.
  */
 function ProgramEditorModal({
   event,
@@ -1168,6 +1162,7 @@ function ProgramEditorModal({
   onClose,
   onSave,
   onRemoveProgram,
+  onUpload,
   programDownloadHref,
   programBrochureHref,
   onSaveAndViewPdf,
@@ -1181,6 +1176,9 @@ function ProgramEditorModal({
   /** Take the whole programme off the event — the page's bar, and on a
       phone the modal's own bar, serve it. */
   onRemoveProgram?: () => void;
+  /** Send a programme in as a file, replacing what the event carries — the
+      page's own head carries it on a desk, and the phone modal's bar. */
+  onUpload?: () => void;
   /** What "View PDF" hands out — the plain letterhead sheet of the typed
       rows for sharing, or the file the desk uploaded. Blank hides it. */
   programDownloadHref?: string;
@@ -1343,12 +1341,21 @@ function ProgramEditorModal({
     )
   ) : null;
 
-  // The things a finished programme is done with, on the phone modal's bar:
-  // taken off the event, printed to paper, handed on. Upload moved to the
-  // calendar row's Actions menu, and the desk's page saves from the typing
-  // side — no bar pins the sheet at its foot any more.
+  // The things a finished programme is done with: sent in as a file, taken
+  // off the event, printed to paper, handed on. The desk's page saves from
+  // its typing side and carries the upload on its head — no bar pins the
+  // sheet at its foot.
   const programBarButtons = (
     <>
+      {onUpload && (
+        <button
+          type="button"
+          onClick={onUpload}
+          className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+        >
+          Upload program
+        </button>
+      )}
       {onRemoveProgram && eventHasProgram(event) && (
         <button
           type="button"
@@ -1424,13 +1431,28 @@ function ProgramEditorModal({
         }
       >
         {isPage ? (
-          <div className="border-b border-sand-line pb-2.5 md:shrink-0">
-            <h3 className="text-lg font-bold text-bark">{event.title}</h3>
-            <p className="text-xs text-moss">
-              {uploadedFile
-                ? "Typed on the left; the programme as the church sees it on the right."
-                : "Typed on the left, read on the right as it will print."}
-            </p>
+          <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-2.5 md:shrink-0">
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold text-bark">{event.title}</h3>
+              <p className="text-xs text-moss">
+                {uploadedFile
+                  ? "Typed on the left; the programme as the church sees it on the right."
+                  : "Typed on the left, read on the right as it will print."}
+              </p>
+            </div>
+            {/* The file's own door, on the row that names the day: the
+                Actions menu beside each event keeps the choices about the
+                event itself, and the upload travels with the sheet it
+                lands on. */}
+            {onUpload && (
+              <button
+                type="button"
+                onClick={onUpload}
+                className="shrink-0 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+              >
+                Upload Program
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-between border-b border-sand-line pb-2.5">
@@ -4661,8 +4683,9 @@ function DepartmentDetail({
   // clip the table also clip any menu left inside them — one overflow rule
   // in the wrapper is all it takes to cut the menu off at its edge.
   const [eventMenuAnchor, setEventMenuAnchor] = useState<{ x: number; y: number; up: boolean } | null>(null);
-  // One hidden file input, asked which event it is for at the moment a row
-  // says "Upload program" — a picker per row would be a picker per event.
+  // One hidden file input, asked which event it is for at the moment the
+  // programme's own "Upload Program" button is pressed — a picker per row
+  // would be a picker per event.
   const programUploadRef = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<DeptEvent | null>(null);
   const chooseProgramFile = (event: DeptEvent) => {
@@ -6386,7 +6409,6 @@ function DepartmentDetail({
                           event={event}
                           onEdit={() => { onClose(); setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
-                          onUpload={() => { onClose(); chooseProgramFile(event); }}
                           onRemove={() => { onClose(); removeEvent(event); }}
                         />
                       </div>
@@ -6474,7 +6496,6 @@ function DepartmentDetail({
                                         event={event}
                                         onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                         onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
-                                        onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
                                         onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                                       />
                                 </div>,
@@ -6548,7 +6569,6 @@ function DepartmentDetail({
                                     event={event}
                                     onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                     onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
-                                    onUpload={() => { setOpenEventMenuKey(null); chooseProgramFile(event); }}
                                     onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                               />
                             </div>
@@ -6742,6 +6762,7 @@ function DepartmentDetail({
               onClose={() => setProgramFor(null)}
               onSave={(items) => saveProgram(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
+              onUpload={() => chooseProgramFile(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
               programBrochureHref={programBrochureHref(programFor)}
               onSaveAndViewPdf={(items) => saveProgramAndViewPdf(programFor, items)}
@@ -6760,6 +6781,7 @@ function DepartmentDetail({
               onClose={() => setProgramFor(null)}
               onSave={(items) => saveProgramInline(programFor, items)}
               onRemoveProgram={() => void removeProgram(programFor)}
+              onUpload={() => chooseProgramFile(programFor)}
               programDownloadHref={programDownloadHref(programFor)}
               programBrochureHref={programBrochureHref(programFor)}
               onSaveAndViewPdf={(items) => saveProgramAndViewPdf(programFor, items)}
@@ -6768,7 +6790,7 @@ function DepartmentDetail({
           </div>
         </>
       )}
-      {/* The one picker the program page's "Upload program" opens; which event it
+      {/* The one picker the programme's "Upload Program" button opens; which event it
           belongs to is read from the row that asked. */}
       <input
         ref={programUploadRef}
