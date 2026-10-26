@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from members.models import Contribution
 from members.mpesa import MpesaConfigurationError, normalize_pull_rows, pull_paybill_transactions
-from members.views import explain_pull_registration, record_direct_paybill_payment
+from members.views import explain_pull_registration, heal_receipt_from_pull_row, record_direct_paybill_payment
 
 
 class Command(BaseCommand):
@@ -90,12 +90,20 @@ class Command(BaseCommand):
         except (requests.RequestException, ValueError, KeyError) as error:
             raise CommandError(f'Safaricom pull failed: {error}') from error
 
-        recorded, skipped = 0, 0
+        recorded, skipped, healed = 0, 0, 0
         for row in rows:
             trans_id = row.get('TransID') or row.get('TransactionID')
             if not trans_id:
                 continue
-            if Contribution.objects.filter(mpesa_receipt_number=trans_id).exists():
+            contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
+            if contribution is not None:
+                # A receipt the ledger already holds may still be waiting for a
+                # contact the confirmation callback never carried — Safaricom's
+                # masked MSISDNs strand them — while the statement this pull just
+                # read carries the payer's real phone. Heal the row, then count
+                # the skip: it is still one payment seen twice, not a new one.
+                if not options['dry_run'] and heal_receipt_from_pull_row(contribution, row):
+                    healed += 1
                 skipped += 1
                 continue
             if options['dry_run']:
@@ -110,7 +118,10 @@ class Command(BaseCommand):
                 recorded += 1
 
         verb = 'would be recorded' if options['dry_run'] else 'recorded'
+        healed_note = (
+            f'; {healed} stranded receipt(s) given the phone from this statement' if healed else ''
+        )
         self.stdout.write(self.style.SUCCESS(
             f'Pulled {len(rows)} transaction(s) for {start_str} → {end_str}: '
-            f'{recorded} {verb}, {skipped} already in the ledger.'
+            f'{recorded} {verb}, {skipped} already in the ledger{healed_note}.'
         ))

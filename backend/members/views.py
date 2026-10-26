@@ -5076,7 +5076,9 @@ class ResendContributionReceiptView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             email = usable_email(supplied_email) or usable_email(contribution.donor_email) or (usable_email(contribution.member.email) if contribution.member else '')
-            phone = supplied_phone or contribution.phone_number or ''
+            # A number the confirmations once stored masked must never ride
+            # the prefill: send it to the gateway and the receipt refuses.
+            phone = supplied_phone or safe_mpesa_phone(contribution.phone_number) or ''
             if not phone and contribution.member:
                 profile = getattr(contribution.member, 'member_profile', None)
                 phone = getattr(profile, 'phone_number', '') or ''
@@ -5934,6 +5936,38 @@ def record_direct_paybill_payment(payload):
     if was_new_record and not contribution.needs_review:
         credit_contribution_lines(contribution)
     return contribution
+
+
+def heal_receipt_from_pull_row(contribution, pull_row):
+    """Give a pending receipt the phone the confirmation callback never carried.
+
+    Some C2B confirmations arrive wearing Safaricom's masked MSISDN — or none
+    at all — so the recorder stores a phone no receipt can reach (or stores
+    nothing) and the receipt waits. The pull statement is the one place the
+    payer's real number still exists while the gift is young: when the pull
+    meets such a row, take the statement's number only if the row holds
+    nothing phone-shaped (a number the desk typed itself never moves), and
+    send the receipt the desk has been waiting for. A row already receipted
+    keeps what it was receipted with — history is not quietly rewritten.
+    Returns True when the row was healed.
+    """
+    if contribution.receipt_sent_at or contribution.status != 'completed':
+        return False
+    real = safe_mpesa_phone(pull_row.get('MSISDN'))
+    if not real:
+        return False
+    if contribution.phone_number and safe_mpesa_phone(contribution.phone_number):
+        return False
+    contribution.phone_number = real
+    if not contribution.member:
+        matched_user = member_for_msisdn(real)
+        if matched_user:
+            contribution.member = matched_user
+            if not contribution.donor_email and matched_user.email:
+                contribution.donor_email = matched_user.email
+    contribution.save(update_fields=['phone_number', 'member', 'donor_email'])
+    send_contribution_receipt(contribution)
+    return True
 
 
 class MpesaC2BConfirmationView(APIView):

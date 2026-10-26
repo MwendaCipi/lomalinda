@@ -2194,6 +2194,144 @@ class PullMpesaTransactionsCommandTests(APITestCase):
         self.assertIn('Pulled 0 transaction(s)', out)
 
 
+class PullHealsMaskedConfirmationTests(APITestCase):
+    """Some C2B confirmations arrive wearing Safaricom's masked MSISDN, and
+    the recorder stores a phone no receipt can reach. The pull statement
+    carries the payer's real number while the gift is young — the pull
+    gives a stranded receipt that phone and sends what was pending."""
+
+    ENV = {
+        'MPESA_CONSUMER_KEY': 'key',
+        'MPESA_CONSUMER_SECRET': 'secret',
+        'MPESA_SHORTCODE': '600000',
+    }
+
+    def _run(self, *args, **options):
+        from django.core.management import call_command
+
+        out, err = StringIO(), StringIO()
+        call_command('pull_mpesa_transactions', *args, stdout=out, stderr=err, **options)
+        return out.getvalue(), err.getvalue()
+
+    @patch('members.views.sms.configured', return_value=True)
+    @patch('members.views.sms.send', return_value=True)
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_pull_backfills_the_real_phone_and_sets_the_receipt(self, mock_post, mock_get, mock_send, mock_cfg):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        # The confirmation stored Safaricom's masked digits; the statement
+        # now holds the payer's true number for the same receipt.
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='UJHLSA01T2', amount=Decimal('500.00'),
+            purpose='LCB', donor_name='TRIZA', phone_number='420121407122',
+            paid_at=timezone.now(),
+        )
+        mock_post.return_value.json.return_value = {
+            'ResultCode': 0,
+            'Result': [
+                {'TransID': 'UJHLSA01T2', 'TransAmount': '500', 'BillRefNumber': 'LCB', 'MSISDN': '254714000140'},
+            ],
+        }
+
+        with patch.dict('os.environ', self.ENV):
+            out, _ = self._run('--start', '2026-10-16', '--end', '2026-10-18')
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='UJHLSA01T2')
+        self.assertEqual(contribution.phone_number, '254714000140')
+        self.assertIsNotNone(contribution.receipt_sent_at, 'the healed phone must carry the pending receipt')
+        self.assertIn('1 stranded receipt(s)', out)
+
+    @patch('members.mpesa.requests.get')
+    @patch('members.mpesa.requests.post')
+    def test_pull_never_overwrites_a_number_the_desk_typed(self, mock_post, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = {'access_token': 'token-123'}
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status.return_value = None
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='UJHLSA01T3', amount=Decimal('350.00'),
+            purpose='AYM', donor_name='HILDAH', phone_number='254717480700',
+            receipt_sent_at=timezone.now(), paid_at=timezone.now(),
+        )
+        mock_post.return_value.json.return_value = {
+            'ResultCode': 0,
+            'Result': [
+                {'TransID': 'UJHLSA01T3', 'TransAmount': '350', 'BillRefNumber': 'AYM', 'MSISDN': '254799999999'},
+            ],
+        }
+
+        with patch.dict('os.environ', self.ENV):
+            out, _ = self._run('--start', '2026-10-16', '--end', '2026-10-18')
+
+        contribution = Contribution.objects.get(mpesa_receipt_number='UJHLSA01T3')
+        self.assertEqual(contribution.phone_number, '254717480700')
+        self.assertIn('already in the ledger', out)
+        self.assertNotIn('stranded receipt(s)', out)
+
+
+class RepairMaskedMpesaPhonesCommandTests(TestCase):
+    """The confirmations once stored masked numbers verbatim; the sweep
+    drops them from unreceipted rows, keeps every real number, and lists
+    the gifts a receipt can still not reach."""
+
+    def _run(self, *args):
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('repair_masked_mpesa_phones', *args, stdout=out)
+        return out.getvalue()
+
+    def test_masked_numbers_are_blanked_and_local_ones_kept(self):
+        stranded = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='UJHPVA497M', amount=Decimal('100.00'),
+            purpose='Combined', donor_name='Ecrah', phone_number='837901615559',
+            paid_at=timezone.now(),
+        )
+        kept = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='UJQMCBA9AU', amount=Decimal('350.00'),
+            purpose='AYM', donor_name='HILDAH', phone_number='0717480700',
+            paid_at=timezone.now(),
+        )
+        out = self._run()
+
+        stranded.refresh_from_db()
+        kept.refresh_from_db()
+        self.assertEqual(stranded.phone_number, '')
+        self.assertEqual(kept.phone_number, '0717480700')
+        self.assertIn('1 masked number(s)', out)
+        self.assertIn('Ecrah', out)
+
+    def test_receipted_rows_keep_the_number_they_were_receipted_with(self):
+        old = Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='UJHJQ9Q1W7', amount=Decimal('1000.00'),
+            purpose='LCB', donor_name='VICTOR', phone_number='749181141186',
+            receipt_sent_at=timezone.now(), paid_at=timezone.now(),
+        )
+        self._run()
+        old.refresh_from_db()
+        self.assertEqual(old.phone_number, '749181141186')
+
+    def test_a_row_whose_email_reaches_the_giver_is_read_on_the_spot(self):
+        Contribution.objects.create(
+            payment_method='mpesa', giving_type='financial', status='completed',
+            mpesa_receipt_number='UJGP7AM2PW', amount=Decimal('250.00'),
+            purpose='LCB', donor_name='CELESTINE', phone_number='858579806536',
+            donor_email='celestin@example.com', paid_at=timezone.now(),
+        )
+        out = self._run()
+        self.assertIn('1 receipt(s) sent on the contact that remains', out)
+
+
 class RegisterMpesaPullUrlCommandTests(TestCase):
     """Safaricom answers a pull query only for a shortcode that has been
     registered for Pull — once, per environment."""
