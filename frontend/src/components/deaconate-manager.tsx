@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePageHeader } from "@/components/app-frame";
+import { showOfflineGuard } from "@/components/toast";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -246,6 +247,13 @@ function rotaTitleOf(entry: { title?: string | null }, fallback: string): string
 
 /** Authenticated JSON call against the members API. */
 async function apiFetch(path: string, init?: RequestInit) {
+  // Rule 3 — guard the click: an action that must reach the server gets an
+  // answer when the network is down, never a silent failure. Hanging up the
+  // same way a real disconnect does (TypeError) keeps every caller's own
+  // "could not …" path honest — nothing is swallowed.
+  if (showOfflineGuard("saving changes")) {
+    throw new TypeError("Failed to fetch");
+  }
   const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
   // A FormData body brings its own boundary; a content type laid over it
   // would misdescribe the encoding and the upload would arrive unreadable.

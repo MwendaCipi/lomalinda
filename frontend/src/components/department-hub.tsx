@@ -64,6 +64,7 @@ import {
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { showOfflineGuard } from "@/components/toast";
 import {
   areaHasMoments,
   areaHasMessaging,
@@ -4302,6 +4303,7 @@ export function DepartmentAccountsPanel({
 
   const requestWithdrawal = async (event: FormEvent) => {
     event.preventDefault();
+    if (showOfflineGuard("saving changes")) return; // Rule 3 — no silent failure.
     setSubmitting(true);
     try {
       const chosenAccountId = withdrawAccountId ?? selectedWithdrawAccount?.id;
