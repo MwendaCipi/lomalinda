@@ -1,4 +1,5 @@
 from datetime import timedelta
+from contextlib import nullcontext
 
 import requests
 from django.core.management.base import BaseCommand, CommandError
@@ -24,6 +25,25 @@ class Command(BaseCommand):
         parser.add_argument('--start', default=None, help="Window start, 'YYYY-MM-DD' (overrides --days).")
         parser.add_argument('--end', default=None, help="Window end, 'YYYY-MM-DD' (default: now).")
         parser.add_argument('--dry-run', action='store_true', help='List what would be recorded without saving.')
+
+    @staticmethod
+    def _church_contexts():
+        """Every church schema; a single plain pass where tenants are off.
+
+        A shell or cron context has no request middleware to pick the church
+        for it — the tables the ledger reads live in each tenant's schema —
+        and where django_tenants is stripped (tests, single-schema deploys)
+        the work simply runs once, against the only schema there is.
+        """
+        try:
+            from django_tenants.utils import get_tenant_model, schema_context
+
+            tenants = list(get_tenant_model().objects.exclude(schema_name='public'))
+        except Exception:
+            return [('default', nullcontext())]
+        if not tenants:
+            return [('default', nullcontext())]
+        return [(tenant.schema_name, schema_context(tenant.schema_name)) for tenant in tenants]
 
     def handle(self, *args, **options):
         nairobi = timezone.localtime().tzinfo
@@ -91,6 +111,25 @@ class Command(BaseCommand):
             raise CommandError(f'Safaricom pull failed: {error}') from error
 
         recorded, skipped, healed = 0, 0, 0
+        for schema, context in self._church_contexts():
+            with context:
+                s_recorded, s_skipped, s_healed = self._record_rows(rows, options)
+                recorded += s_recorded
+                skipped += s_skipped
+                healed += s_healed
+
+        verb = 'would be recorded' if options['dry_run'] else 'recorded'
+        healed_note = (
+            f'; {healed} stranded receipt(s) given the phone from this statement' if healed else ''
+        )
+        self.stdout.write(self.style.SUCCESS(
+            f'Pulled {len(rows)} transaction(s) for {start_str} → {end_str}: '
+            f'{recorded} {verb}, {skipped} already in the ledger{healed_note}.'
+        ))
+
+    def _record_rows(self, rows, options):
+        """Record the pulled statement once, inside one church's schema."""
+        recorded, skipped, healed = 0, 0, 0
         for row in rows:
             trans_id = row.get('TransID') or row.get('TransactionID')
             if not trans_id:
@@ -116,12 +155,4 @@ class Command(BaseCommand):
             contribution = record_direct_paybill_payment(row)
             if contribution is not None:
                 recorded += 1
-
-        verb = 'would be recorded' if options['dry_run'] else 'recorded'
-        healed_note = (
-            f'; {healed} stranded receipt(s) given the phone from this statement' if healed else ''
-        )
-        self.stdout.write(self.style.SUCCESS(
-            f'Pulled {len(rows)} transaction(s) for {start_str} → {end_str}: '
-            f'{recorded} {verb}, {skipped} already in the ledger{healed_note}.'
-        ))
+        return recorded, skipped, healed
