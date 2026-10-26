@@ -17,12 +17,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 /** The giving buttons the officer chose for the post. A post saved before
  *  the choice existed shows the row every card used to carry. Give now's
  *  own modal already offers goods, so Support only stands alone where Give
- *  now was left off. */
+ *  now was left off. Comment is not offered on the card: the thread is
+ *  reached by opening the full feed, which the whole card already is. */
 function chosenActions(item: Announcement): string[] {
-  const chosen = item.giving_actions?.length ? item.giving_actions : ["give_now", "pledge", "comment"];
-  const order = ["give_now", "pledge", "in_kind", "comment"];
+  const chosen = item.giving_actions?.length ? item.giving_actions : ["give_now", "pledge"];
+  const order = ["give_now", "pledge", "in_kind"];
   return chosen
     .filter((code) => code !== "in_kind" || !chosen.includes("give_now"))
+    .filter((code) => code !== "comment")
     .sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
@@ -74,9 +76,8 @@ export function DashboardAnnouncements() {
   const [inKindOpen, setInKindOpen] = useState(false);
   // A contribution card's Give Now opens the money-or-goods choice here, so
   // the rail keeps one button instead of the old inline combo of Pledge /
-  // In-kind / Give Money. A Comment button on every card opens this thread.
-  // Pledge, Give Now and Comment ride the same card so the member can take
-  // any of the three without leaving the rail.
+  // In-kind / Give Money. An opinion card's Give input opens the comment
+  // thread; the other slides reach the thread through the full feed.
   const [methodFor, setMethodFor] = useState<Announcement | null>(null);
   const [commentFor, setCommentFor] = useState<Announcement | null>(null);
 
@@ -143,15 +144,6 @@ export function DashboardAnnouncements() {
       the join row it has room for nothing but the hour and the link. The
       giving and opinion slides already carry their own actions. */
   const showSeeMore = Boolean(current && (isAwareness || isConference) && (textLong || hasImage));
-  const seeMore = (
-    <Link
-      href="/announcements"
-      className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-ember/10 px-2.5 py-1 text-[11px] font-semibold text-ember transition hover:bg-ember/20"
-    >
-      See more
-      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4-4 4" /></svg>
-    </Link>
-  );
 
   /** The pledge modal's view of the slide the member is looking at. */
   const pledgeTargetFor = (announcement: Announcement): PledgeTarget => ({
@@ -245,13 +237,37 @@ export function DashboardAnnouncements() {
           <h2 className="line-clamp-1 text-lg font-bold leading-snug text-bark sm:text-xl">
             {current ? current.title : gathering ? gatheringLabel(gathering, now) : "Our week together"}
           </h2>
-          <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
-            {current
-              ? current.text
-              : gathering
-                ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || churchWhere(settings) || "Church grounds"}`
-                : "The week's meetings are still being set up."}
-          </p>
+          {/* A notice that runs past the three lines is cut with an ellipsis on
+              its last line, and See more rides that same line — pinned over
+              the cut — so the ask to read on is read with the sentence it
+              ends, not as a button standing apart. A slide cut for its image
+              rather than its length takes See more after the text instead:
+              there is no ellipsis to own a line. */}
+          <div className="relative">
+            <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
+              {current
+                ? current.text
+                : gathering
+                  ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || churchWhere(settings) || "Church grounds"}`
+                  : "The week's meetings are still being set up."}
+              {current && showSeeMore && !textLong && (
+                <Link
+                  href="/announcements"
+                  className="pointer-events-auto ml-1 whitespace-nowrap font-semibold text-ember"
+                >
+                  See more
+                </Link>
+              )}
+            </p>
+            {current && showSeeMore && textLong && (
+              <Link
+                href="/announcements"
+                className="pointer-events-auto absolute bottom-0 right-0 bg-white pl-1 text-sm font-semibold leading-6 text-ember"
+              >
+                <span aria-hidden="true">&hellip; </span>See more
+              </Link>
+            )}
+          </div>
           <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-moss">
             {current?.detail || ""}
           </p>
@@ -261,13 +277,10 @@ export function DashboardAnnouncements() {
         {/* The announcement's own actions. Clicking the card opens the full
             announcement in the feed; a giving call carries one Give Now button
             whose modal offers money or goods — the same two forms the old
-            three-wide combo opened — plus Pledge and Comment.
-            A notice that runs past the card's three lines, or one that carries
-            a flyer image, asks the reader to open the full feed: on an
-            awareness notice that ask shares this row with the Comment button,
-            so the card's foot is one line of controls rather than two. */}
+            three-wide combo opened — plus Pledge. Comment lives in the feed:
+            the thread is one tap away through the card itself, and the card's
+            foot stays one line of doing rather than talking. */}
         <div className="flex items-center justify-between gap-3">
-          {isAwareness && showSeeMore && seeMore}
           {isGiving && (
             <div className="flex-1">
               {/* Only the buttons the officer chose for this post; Give now's
@@ -314,16 +327,9 @@ export function DashboardAnnouncements() {
                       </button>
                     );
                   }
-                  return (
-                    <button
-                      key={code}
-                      type="button"
-                      onClick={() => { if (current) setCommentFor(current); }}
-                      className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                    >
-                      Comment
-                    </button>
-                  );
+                  // An officer's saved choice the card no longer carries —
+                  // Comment lives in the feed — renders nothing.
+                  return null;
                 })}
               </div>
             </div>
@@ -337,53 +343,23 @@ export function DashboardAnnouncements() {
               Give input
             </button>
           )}
-          {/* A notice with no action of its own still takes a comment: the
-              feed's rule — every card carries the Comment button — reaches
-              the rail too, so a member reading a plain notice can answer it
-              without first opening the full feed. The giving and opinion
-              slides carry their own controls, and a conference carries its
-              own comment row under the join button, so this sits only on the
-              slides that would otherwise go without. */}
-          {current && !isGiving && !isOpinion && !isConference && (
-            <button
-              type="button"
-              onClick={() => { if (current) setCommentFor(current); }}
-              className="pointer-events-auto rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-            >
-              Comment
-            </button>
-          )}
           {isConference && current?.href && (
             /* A conference reads top to bottom: the hour the meeting begins
-               and the way in share one row, read before the tap; the reply
-               and the ask to read on sit under them, so the rail's rule that
-               every card takes a comment holds here too. */
-            <div className="ml-auto flex w-full flex-col gap-2">
-              <div className="flex items-center justify-end gap-2.5 sm:gap-3">
-                {countdown && (
-                  <span className="whitespace-nowrap text-xs font-semibold text-moss" aria-live="polite">
-                    {countdown}
-                  </span>
-                )}
-                <a
-                  href={current.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
-                >
-                  {platformLabel(current.href)}
-                </a>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => { if (current) setCommentFor(current); }}
-                  className="pointer-events-auto rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  Comment
-                </button>
-                {showSeeMore && seeMore}
-              </div>
+               and the way in share one row, read before the tap. */
+            <div className="ml-auto flex items-center justify-end gap-2.5 sm:gap-3">
+              {countdown && (
+                <span className="whitespace-nowrap text-xs font-semibold text-moss" aria-live="polite">
+                  {countdown}
+                </span>
+              )}
+              <a
+                href={current.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
+              >
+                {platformLabel(current.href)}
+              </a>
             </div>
           )}
           {/* The next gathering is online: the same way in the conference
@@ -450,7 +426,7 @@ export function DashboardAnnouncements() {
         } : undefined}
       />
 
-      {/* A comment on any card opens this box: the thread above, a
+      {/* An opinion card's Give input opens this box: the thread above, a
           500-character composer beneath. */}
       <AnnouncementCommentModal
         open={Boolean(commentFor)}
