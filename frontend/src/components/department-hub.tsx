@@ -1373,20 +1373,21 @@ function ProgramEditorModal({
   const dragSource = useRef<ProgramDragSource | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const partCardId = (session: number, part: number) => `part-${session}-${part}`;
-  const personRowId = (session: number, part: number, person: number) => `part-${session}-${part}-person-${person}`;
+  // The card ids ride the copy's own prefix — a phone's modal and a desk's
+  // page render this sheet twice, one hidden — so the pickup finds the card
+  // of the copy the hand took it from.
+  const partCardId = (session: number, part: number) => `${uid}-part-${session}-${part}`;
+  const personRowId = (session: number, part: number, person: number) => `${uid}-part-${session}-${part}-person-${person}`;
   const endDrag = () => {
     dragSource.current = null;
     setDraggingId(null);
     setDragOverId(null);
   };
-  /** A card is picked up from anywhere on it except its fields — text
-      pulled out of an input is typing being moved, not the card. */
+  /** Only the grip begins a drag — pulling words out of a field is the
+      field's own business, and a drag that starts there once moved the card
+      with it — but what the cursor carries is the card itself, not the
+      small handle it took hold of. */
   const beginDrag = (source: ProgramDragSource, id: string) => (event: DragEvent) => {
-    if ((event.target as HTMLElement).closest("input, textarea")) {
-      event.preventDefault();
-      return;
-    }
     // A facilitator's line is *inside* an activity card, so the card's own
     // start would fire too as the event bubbles and quietly rewrite what is
     // being carried — the line would then be refused at every line it was
@@ -1397,6 +1398,17 @@ function ProgramEditorModal({
     event.dataTransfer.effectAllowed = "move";
     // Firefox will not start a drag with an empty transfer.
     event.dataTransfer.setData("text/plain", id);
+    // The hand took the grip at the card's edge; hand the browser the card
+    // itself to ride under the cursor instead.
+    const card = document.getElementById(id);
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      const offsetX = Math.max(
+        16,
+        Math.min(Math.round((event.clientX || rect.right) - rect.left), Math.max(rect.width - 16, 16)),
+      );
+      event.dataTransfer.setDragImage(card, offsetX, 18);
+    }
   };
   /** Only what is being carried may be set down here: an activity card on
       another activity card, a facilitator's line on another line. Anything
@@ -1761,13 +1773,17 @@ function ProgramEditorModal({
                 {/* The session shut: its hours and its name on the outside.
                     Opening one closes the other, so only one part of the day
                     is ever unfolded. */}
-                <div className="flex items-center gap-2 p-2.5">
+                {/* The strip is one button: the width the name and hours sit
+                    on all opens the session, so a press anywhere on it does —
+                    not only on the words themselves. Remove keeps its own
+                    place beside it. */}
+                <div className="flex items-center">
                   <button
                     type="button"
                     onClick={() => setOpenSession(open ? null : index)}
                     aria-expanded={open}
                     aria-controls={`${uid}-session-${index}`}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-l-2xl py-2.5 pl-2.5 pr-2 text-left transition hover:bg-sand-plate"
                   >
                     <ChevronDown
                       className={`h-3.5 w-3.5 shrink-0 text-moss transition ${open ? "" : "-rotate-90"}`}
@@ -1786,7 +1802,7 @@ function ProgramEditorModal({
                     type="button"
                     onClick={() => removeSession(index)}
                     aria-label={`Remove session ${index + 1}`}
-                    className="shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
+                    className="mr-2.5 shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -1822,12 +1838,7 @@ function ProgramEditorModal({
                       {session.parts.map((part, partIndex) => (
                         <div
                           key={partIndex}
-                          id={`${uid}-part-${index}-${partIndex}`}
-                          draggable
-                          onDragStart={
-                            beginDrag({ kind: "part", session: index, part: partIndex }, partCardId(index, partIndex))
-                          }
-                          onDragEnd={endDrag}
+                          id={partCardId(index, partIndex)}
                           onDragOver={allowDrop("part", partCardId(index, partIndex))}
                           onDragLeave={leaveDrop(partCardId(index, partIndex))}
                           onDrop={(event) => {
@@ -1838,17 +1849,29 @@ function ProgramEditorModal({
                             }
                             endDrag();
                           }}
-                          title="Drag onto another activity to swap places"
                           className={`rounded-xl border bg-white p-2.5 transition ${
                             dragOverId === partCardId(index, partIndex) ? "border-ember" : "border-sand-line"
                           }${draggingId === partCardId(index, partIndex) ? " opacity-40" : ""}`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="flex min-w-0 items-center gap-1.5">
+                              {/* The card's own grip: the one corner a drag
+                                  may begin at — everywhere else the card is
+                                  a card, and its fields are fields. */}
+                              <span
+                                draggable
+                                onDragStart={
+                                  beginDrag({ kind: "part", session: index, part: partIndex }, partCardId(index, partIndex))
+                                }
+                                onDragEnd={endDrag}
+                                title="Drag onto another activity to swap places"
+                                className="flex shrink-0 cursor-grab active:cursor-grabbing"
+                              >
                               <GripVertical
-                                className="h-3.5 w-3.5 shrink-0 cursor-grab text-moss-faint transition hover:text-moss active:cursor-grabbing"
+                                className="h-3.5 w-3.5 text-moss-faint transition hover:text-moss"
                                 aria-hidden="true"
                               />
+                              </span>
                               <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
                                 Activity {partIndex + 1}
                               </p>
@@ -1900,15 +1923,7 @@ function ProgramEditorModal({
                             {part.participants.map((person, personIndex) => (
                               <div
                                 key={personIndex}
-                                id={`${uid}-part-${index}-${partIndex}-person-${personIndex}`}
-                                draggable
-                                onDragStart={
-                                  beginDrag(
-                                    { kind: "person", session: index, part: partIndex, person: personIndex },
-                                    personRowId(index, partIndex, personIndex),
-                                  )
-                                }
-                                onDragEnd={endDrag}
+                                id={personRowId(index, partIndex, personIndex)}
                                 onDragOver={allowDrop("person", personRowId(index, partIndex, personIndex))}
                                 onDragLeave={leaveDrop(personRowId(index, partIndex, personIndex))}
                                 onDrop={(event) => {
@@ -1923,17 +1938,32 @@ function ProgramEditorModal({
                                   }
                                   endDrag();
                                 }}
-                                title="Drag onto another facilitator to swap places"
                                 className={`flex items-center gap-1.5 rounded-lg transition ${
                                   dragOverId === personRowId(index, partIndex, personIndex)
                                     ? "bg-mist-select outline outline-ember"
                                     : ""
                                 }${draggingId === personRowId(index, partIndex, personIndex) ? " opacity-40" : ""}`}
                               >
+                                {/* The line's grip, the way the activity
+                                    card's is: the one corner a drag may
+                                    begin at. */}
+                                <span
+                                  draggable
+                                  onDragStart={
+                                    beginDrag(
+                                      { kind: "person", session: index, part: partIndex, person: personIndex },
+                                      personRowId(index, partIndex, personIndex),
+                                    )
+                                  }
+                                  onDragEnd={endDrag}
+                                  title="Drag onto another facilitator to swap places"
+                                  className="flex shrink-0 cursor-grab active:cursor-grabbing"
+                                >
                                 <GripVertical
-                                  className="h-3.5 w-3.5 shrink-0 cursor-grab text-moss-faint transition hover:text-moss active:cursor-grabbing"
+                                  className="h-3.5 w-3.5 text-moss-faint transition hover:text-moss"
                                   aria-hidden="true"
                                 />
+                                </span>
                                 <input
                                   type="text"
                                   value={person.name}
@@ -4859,7 +4889,9 @@ function monthIndexForQuery(raw: string, year: number): number | null {
 function DepartmentDetail({
   department,
   onChanged,
-  initialTab = "members",
+  // A desk opens on its calendar: the events are what the reader came for;
+  // the roll is one toggle away beneath it.
+  initialTab = "calendar",
   onBack,
   embedded = false,
 }: {
@@ -6279,9 +6311,11 @@ function DepartmentDetail({
       // it already span. Capping it at a reading width (max-w-6xl + mx-auto)
       // left the members table stranded as a centred column with dead space on
       // either side of the panel. Every other view keeps the reading measure,
-      // where a narrow column of prose reads comfortably.
+      // where a narrow column of prose reads comfortably. The calendar joins
+      // it: it is a desk-sized surface too, and its pinned bar of buttons
+      // only stays put while the column holds still beneath the strip.
       className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
-        deskFillsPhone
+        deskFillsPhone || subTab === "calendar"
           ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
           : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
       }`}
@@ -6678,12 +6712,15 @@ function DepartmentDetail({
         />
       )}
       {subTab === "calendar" && (
-        // The card is the calendar's own window, and it is always one
-        // height: the rows and months travel inside its body, which scrolls,
-        // while the buttons at its foot stay pinned — so adding rows never
-        // moves them. Print unrolls both (see .desk-calendar in the print
-        // styles), so a printout still carries the whole calendar.
-        <div className="desk-calendar flex h-[calc(100dvh_-_18rem)] min-h-[16rem] flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+        // The calendar's frame is the room left under the strip, not a height
+        // of its own guessing: the card above carries the rows and months and
+        // scrolls them, and the bar holding the buttons is its own surface,
+        // pinned to the desk's foot outside the card — adding rows never
+        // moves it, whatever height the panel happens to offer. Print unrolls
+        // the card (see .desk-calendar in the print styles), so a printout
+        // still carries the whole calendar.
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="desk-calendar flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div
             className="desk-calendar-body custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-3 pt-4"
             ref={calendarScrollRef}
@@ -6908,11 +6945,12 @@ function DepartmentDetail({
             </>
           )}
           </div>
-          {/* The foot holds its place by the card's own height rather than by
-              sticking to a scroll: the count on the left, and the two things
-              the desk does with a calendar on the right — file one, or print
-              what is here. */}
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3 print:hidden">
+          </div>
+          {/* The bar is its own surface, no longer the card's underside: it
+              is pinned to the desk's foot while the rows scroll above it.
+              The count on the left, and the two things the desk does with a
+              calendar on the right — file one, or print what is here. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm print:hidden">
             <p className="text-xs text-moss">
               {calendarView === "calendar"
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
@@ -7299,7 +7337,9 @@ function ContactLeaderModal({
 
 export function DepartmentHub({
   initialDept = null,
-  initialTab = "members",
+  // Every desk names a calendar in its strip, so the desk opens on it, not
+  // on the roll: a deep link's view still rides through when one is named.
+  initialTab = "calendar",
   onBack,
   embedded = false,
   directoryHeading = MINISTRIES_AND_DEPARTMENTS_HEADING,

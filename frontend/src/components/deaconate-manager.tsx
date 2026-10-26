@@ -1848,6 +1848,9 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {activeTab === "members" && (
         <DepartmentHub
           initialDept="deaconate"
+          // This is the deaconate's own Team page: the strip above names Team
+          // itself, so the desk opens on the roll rather than the calendar.
+          initialTab="members"
           embedded={embedded}
           onBack={
             onBack ?? (() => router.replace("/administration?tab=overview", { scroll: false }))
