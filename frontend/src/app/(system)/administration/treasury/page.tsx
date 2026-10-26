@@ -1811,6 +1811,29 @@ export default function TreasuryPage() {
                                                   <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
                                                   <span>Contact</span>
                                                 </button>
+                                                {isMpesaGiving(giving) && (
+                                                  <button
+                                                    type="button"
+                                                    disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                    title={
+                                                      refundedIds.includes(giving.raw_id)
+                                                        ? "This payment has already been refunded"
+                                                        : "Hand this payment back to the payer's phone through M-Pesa"
+                                                    }
+                                                    onClick={() => {
+                                                      setActiveActionMenuId(null);
+                                                      void handleRefundGiving(giving);
+                                                    }}
+                                                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition disabled:opacity-50"
+                                                  >
+                                                    {refundingId === giving.id ? (
+                                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                    ) : (
+                                                      <Undo2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                    )}
+                                                    <span>{refundedIds.includes(giving.raw_id) ? "Refunded" : "Refund"}</span>
+                                                  </button>
+                                                )}
                                                 <button
                                                   type="button"
                                                   disabled={removingId === giving.id}
@@ -2078,6 +2101,29 @@ export default function TreasuryPage() {
                                                   <MessageSquare className="h-3.5 w-3.5 text-sage" aria-hidden="true" />
                                                   <span>Contact</span>
                                                 </button>
+                                                {isMpesaGiving(giving) && (
+                                                  <button
+                                                    type="button"
+                                                    disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                    title={
+                                                      refundedIds.includes(giving.raw_id)
+                                                        ? "This payment has already been refunded"
+                                                        : "Hand this payment back to the payer's phone through M-Pesa"
+                                                    }
+                                                    onClick={() => {
+                                                      setActiveActionMenuId(null);
+                                                      void handleRefundGiving(giving);
+                                                    }}
+                                                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-ember hover:bg-sand transition disabled:opacity-50"
+                                                  >
+                                                    {refundingId === giving.id ? (
+                                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-ember" />
+                                                    ) : (
+                                                      <Undo2 className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                    )}
+                                                    <span>{refundedIds.includes(giving.raw_id) ? "Refunded" : "Refund"}</span>
+                                                  </button>
+                                                )}
                                                 <button
                                                   type="button"
                                                   disabled={removingId === giving.id}
