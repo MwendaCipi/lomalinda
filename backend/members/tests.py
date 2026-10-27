@@ -15909,6 +15909,61 @@ class DepartmentFundTests(APITestCase):
         row.refresh_from_db()
         self.assertEqual(row.status, 'reversed')
 
+    @patch('members.views.sms.send', return_value=True)
+    def test_withdrawal_notification_pipeline_sms_and_links(self, mock_sms):
+        """SMS and email notifications with links travel across the 3-step pipeline:
+        1. Creation notifies Pastor with link to /my-areas?area=pastorate&view=requests
+        2. Pastor approval notifies Elder with link to /administration?view=accounts&withdrawals=1
+        3. Elder approval notifies Treasury with link to /administration?view=accounts&withdrawals=1
+        """
+        self.pastor.member_profile.phone_number = '+254711111111'
+        self.pastor.member_profile.save()
+        self.elder.member_profile.phone_number = '+254722222222'
+        self.elder.member_profile.save()
+        self.treasurer.member_profile.phone_number = '+254733333333'
+        self.treasurer.member_profile.save()
+
+        # Step 1: Leader requests withdrawal
+        account = self._fund()
+        self.client.force_authenticate(self.leader)
+        res = self.client.post('/api/members/departments/music/account/', {
+            'amount': '150', 'reason': 'Sheet music prints',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        row = self._pending()
+
+        # Verify Pastor received SMS with pastorate requests link
+        pastor_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254711111111']
+        self.assertTrue(len(pastor_calls) >= 1)
+        self.assertIn('area=pastorate&view=requests', pastor_calls[-1][0][1])
+        self.assertIn('Sheet music prints', pastor_calls[-1][0][1])
+
+        # Step 2: Pastor approves
+        self.client.force_authenticate(self.pastor)
+        p_res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_approve',
+        }, format='json')
+        self.assertEqual(p_res.status_code, status.HTTP_200_OK)
+
+        # Verify Elder received SMS with administration withdrawals link
+        elder_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254722222222']
+        self.assertTrue(len(elder_calls) >= 1)
+        self.assertIn('administration?view=accounts&withdrawals=1', elder_calls[-1][0][1])
+        self.assertIn('cleared by Pastor', elder_calls[-1][0][1])
+
+        # Step 3: Elder approves
+        self.client.force_authenticate(self.elder)
+        e_res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'elder_approve',
+        }, format='json')
+        self.assertEqual(e_res.status_code, status.HTTP_200_OK)
+
+        # Verify Treasury received SMS with administration withdrawals link
+        treasurer_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254733333333']
+        self.assertTrue(len(treasurer_calls) >= 1)
+        self.assertIn('administration?view=accounts&withdrawals=1', treasurer_calls[-1][0][1])
+        self.assertIn('cleared by Elder', treasurer_calls[-1][0][1])
+
 
 class SeededDepartmentFundTests(APITestCase):
     """Every seeded department's desk resolves the fund the seed opened.

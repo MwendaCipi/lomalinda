@@ -14076,27 +14076,47 @@ class DepartmentAccountView(APIView):
             Q(member_profile__roles__contains='admin'),
             is_active=True,
         ).distinct()
-        desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
+        desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests'
         subject = f'Funding request from {target.name}' if is_deaconate else f'Withdrawal request from {target.name}'
+        account_name = account.description or account.name
+        requester_name = giver_display_name('', member=request.user)
         body = (
-            f"{giver_display_name('', member=request.user)} asks for KES {amount:,.2f} "
-            f"from the {account.description or account.name} account — {reason}. "
+            f"{requester_name} asks for KES {amount:,.2f} "
+            f"from the {account_name} account — {reason}. "
             f"Awaiting pastor approval: {desk_link}"
         )
-        ChurchNotification.objects.bulk_create([
-            ChurchNotification(user=person, title=subject, message=body, link=desk_link)
-            for person in audience
-        ])
+        sms_text = (
+            f"SDA Loma Linda: KES {amount:,.2f} withdrawal requested by {requester_name} "
+            f"for {target.name} ({account_name}) — {reason}. Review & approve: {desk_link}"
+        )
+        _notify_withdrawal_audience(audience, subject, body, desk_link, sms_text)
+        detail_msg = 'Your funding request has been sent to the treasurer.' if is_deaconate else 'Your withdrawal request has been sent to the treasurer.'
+        return Response({'id': row.id, 'status': row.status, 'detail': detail_msg}, status=status.HTTP_201_CREATED)
+
+
+def _notify_withdrawal_audience(audience, subject, body, link, sms_text=None):
+    """Notify officers across in-app, email, and SMS channels."""
+    ChurchNotification.objects.bulk_create([
+        ChurchNotification(user=person, title=subject, message=body, link=link)
+        for person in audience
+    ])
+    emails = [u.email for u in audience if u.email]
+    if emails:
         try:
             send_mail(
                 subject, body, settings.DEFAULT_FROM_EMAIL,
-                [u.email for u in audience if u.email],
-                fail_silently=True,
+                emails, fail_silently=True,
             )
         except Exception:
-            pass
-        detail_msg = 'Your funding request has been sent to the treasurer.' if is_deaconate else 'Your withdrawal request has been sent to the treasurer.'
-        return Response({'id': row.id, 'status': row.status, 'detail': detail_msg}, status=status.HTTP_201_CREATED)
+            logger.exception("Withdrawal notice email failed.")
+    text = sms_text or body
+    for person in audience:
+        phone = getattr(getattr(person, 'member_profile', None), 'phone_number', '')
+        if phone:
+            try:
+                sms.send(phone, text)
+            except Exception:
+                logger.exception("Withdrawal notice SMS failed for %s.", phone)
 
 
 def _withdrawal_review_row(row):
@@ -14187,19 +14207,18 @@ class DepartmentWithdrawalReviewView(APIView):
             ).distinct()
             desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
             title = f'{row.department.name} withdrawal cleared by pastor'
+            pastor_name = giver_display_name('', member=request.user)
+            account_name = row.account.description or row.account.name
             msg = (
-                f"{giver_display_name('', member=request.user)} has cleared the "
-                f"KES {row.amount:,.2f} withdrawal request from {row.department.name} — "
-                f"it is ready for elder approval: {desk_link}"
+                f"{pastor_name} has cleared the "
+                f"KES {row.amount:,.2f} withdrawal request from {row.department.name} "
+                f"({account_name}) — it is ready for elder approval: {desk_link}"
             )
-            ChurchNotification.objects.bulk_create([
-                ChurchNotification(user=person, title=title, message=msg, link=desk_link)
-                for person in audience
-            ])
-            try:
-                send_mail(title, msg, settings.DEFAULT_FROM_EMAIL, [u.email for u in audience if u.email], fail_silently=True)
-            except Exception:
-                pass
+            sms_text = (
+                f"SDA Loma Linda: KES {row.amount:,.2f} withdrawal for {row.department.name} "
+                f"cleared by Pastor {pastor_name}. Waiting for elder approval: {desk_link}"
+            )
+            _notify_withdrawal_audience(audience, title, msg, desk_link, sms_text)
             return Response({'id': row.id, 'status': row.status})
 
         if action == 'elder_approve':
@@ -14232,19 +14251,18 @@ class DepartmentWithdrawalReviewView(APIView):
             ).distinct()
             desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
             title = f'{row.department.name} withdrawal cleared by elder'
+            elder_name = giver_display_name('', member=request.user)
+            account_name = row.account.description or row.account.name
             msg = (
-                f"{giver_display_name('', member=request.user)} has cleared the "
-                f"KES {row.amount:,.2f} withdrawal request from {row.department.name} — "
-                f"it is ready for your approval: {desk_link}"
+                f"{elder_name} has cleared the "
+                f"KES {row.amount:,.2f} withdrawal request from {row.department.name} "
+                f"({account_name}) — it is ready for your approval: {desk_link}"
             )
-            ChurchNotification.objects.bulk_create([
-                ChurchNotification(user=person, title=title, message=msg, link=desk_link)
-                for person in audience
-            ])
-            try:
-                send_mail(title, msg, settings.DEFAULT_FROM_EMAIL, [u.email for u in audience if u.email], fail_silently=True)
-            except Exception:
-                pass
+            sms_text = (
+                f"SDA Loma Linda: KES {row.amount:,.2f} withdrawal for {row.department.name} "
+                f"cleared by Elder {elder_name}. Ready for Treasury release: {desk_link}"
+            )
+            _notify_withdrawal_audience(audience, title, msg, desk_link, sms_text)
             return Response({'id': row.id, 'status': row.status})
 
         if action == 'approve':

@@ -465,7 +465,7 @@ export function MyAreas() {
                 // eldership's Event Calendar and Baptismal class are two — so
                 // the desk opens on the view the link named rather than always
                 // on its roll.
-                initialTab={openView === "baptismal-class" ? "baptismal-class" : openView === "rota" ? "rota" : "calendar"}
+                initialTab={openView === "requests" ? "requests" : openView === "baptismal-class" ? "baptismal-class" : openView === "rota" ? "rota" : "calendar"}
                 onBack={showMap}
               />
             )}

@@ -34,6 +34,7 @@ import {
   Handshake,
   Heart,
   HeartPulse,
+  Inbox,
   Landmark,
   Droplets,
   GripVertical,
@@ -101,6 +102,8 @@ import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { MessageComposeModal, MessagingPanel } from "@/components/messages-desk";
 import { DeaconateManager, useRotaFilters } from "@/components/deaconate-manager";
 import { AnnouncementManager } from "@/components/announcement-manager";
+import { WithdrawalRequestsPanel } from "@/components/treasury-accounts-manager";
+import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -4903,7 +4906,8 @@ type DeptSubTab =
   // The deaconate desk's two panels that live in the console desk and ride
   // this desk's structure when it opens from the map (see the panels block).
   | "inventory"
-  | "rota";
+  | "rota"
+  | "requests";
 
 /**
  * The month a search names, as an index into the year's wall: "mar",
@@ -4929,6 +4933,56 @@ function monthIndexForQuery(raw: string, year: number): number | null {
   const numeric = query.match(/^(\d{1,2})$/);
   if (numeric && Number(numeric[1]) >= 1 && Number(numeric[1]) <= 12) return Number(numeric[1]) - 1;
   return null;
+}
+
+type PastorateRequestKind = "withdrawals" | "prayer" | "visitation" | "dedication" | "all";
+
+function PastorateRequestsDesk() {
+  const [tab, setTab] = useState<PastorateRequestKind>("withdrawals");
+
+  const tabs: { key: PastorateRequestKind; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: "withdrawals", label: "Fund Withdrawals", icon: Wallet },
+    { key: "prayer", label: "Prayer Requests", icon: HandHeart },
+    { key: "visitation", label: "Visitations", icon: Users },
+    { key: "dedication", label: "Child Dedications", icon: Baby },
+    { key: "all", label: "All Church Requests", icon: ClipboardList },
+  ];
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="flex shrink-0 items-center justify-between border-b border-sand-line bg-sand/20 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {tabs.map((item) => {
+            const active = tab === item.key;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setTab(item.key)}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                  active
+                    ? "bg-white text-bark shadow-xs ring-1 ring-sand-line"
+                    : "text-moss hover:bg-white/60 hover:text-bark"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1">
+        {tab === "withdrawals" && <WithdrawalRequestsPanel statusFilter="all" />}
+        {tab === "prayer" && <RequestsAdminManager initialTab="prayer" />}
+        {tab === "visitation" && <RequestsAdminManager initialTab="visitation" />}
+        {tab === "dedication" && <RequestsAdminManager initialTab="dedication" />}
+        {tab === "all" && <RequestsAdminManager initialTab="all" />}
+      </div>
+    </div>
+  );
 }
 
 function DepartmentDetail({
@@ -4965,6 +5019,7 @@ function DepartmentDetail({
   // singing groups is a music-desk view, not a general department one.
   const isMusic = department.code === "music";
   const isSabbathSchool = department.code === "sabbath_school" || department.code === "sabbath-school";
+  const isPastorate = department.code === "pastorate";
   // The Deaconate reads as one page *in the console*: its Team view is the
   // roll itself, and the console's own Deaconate strip above already names
   // Team / Inventory / Duty Rota / Calendar. The hub's Members / Calendar /
@@ -5358,7 +5413,7 @@ function DepartmentDetail({
           </div>
         ) : null
       );
-    } else if (!(isDeaconate && (subTab === "inventory" || subTab === "rota"))) {
+    } else if (!(isDeaconate && (subTab === "inventory" || subTab === "rota")) && subTab !== "requests") {
       // The deaconate's property and rota panels are the console desk's own:
       // they write their own search (and rota filters) to this slot from
       // inside themselves, so leaving it to them is what keeps those
@@ -5463,6 +5518,9 @@ function DepartmentDetail({
       ...(areaHasMessaging(department.code)
         ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }]
         : []),
+      ...(isPastorate
+        ? [{ key: "requests", label: "Requests", short: "Requests", icon: Inbox }]
+        : []),
       // The fund ledger and withdrawal requests unified under one desk.
       // The deaconate names the page Funding, as its console and
       // map pages do — behind the same desk sit its funding requests too.
@@ -5491,7 +5549,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, canOpenOfficeViews, department.code]);
+  }, [unitsKey, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, canOpenOfficeViews, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -7169,6 +7227,11 @@ function DepartmentDetail({
           </div>
         </div>
       )}
+      {subTab === "requests" && isPastorate && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
+          <PastorateRequestsDesk />
+        </div>
+      )}
 
       {programFor && (
         <>
@@ -7426,7 +7489,9 @@ export function DepartmentHub({
   // Which department detail (and which of its tabs) is open; the row's
   // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
-  const [detailTab, setDetailTab] = useState<DeptSubTab>(initialTab);
+  const hubSearchParams = useSearchParams();
+  const urlTab = (hubSearchParams?.get("view") || hubSearchParams?.get("subtab")) as DeptSubTab | null;
+  const [detailTab, setDetailTab] = useState<DeptSubTab>(urlTab || initialTab);
   // Which department's budget modal is open.
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
   // Which department's leadership modal is open.

@@ -105,7 +105,7 @@ type WithdrawalRequestRow = {
  * Approved requests remain visible so the treasurer can reverse them if needed,
  * and a reversed one can be approved again while the account still covers it.
  */
-function WithdrawalRequestsPanel({
+export function WithdrawalRequestsPanel({
   search = "",
   statusFilter = "all",
   fromDate = "",
