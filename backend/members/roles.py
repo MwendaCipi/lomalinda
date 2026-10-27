@@ -178,15 +178,18 @@ ROLE_RIGHTS = (
 ROLE_RIGHT_CODES = tuple(code for code, _label, _desc in ROLE_RIGHTS)
 
 #: What each role may do before the church edits anything. The administrator
-#: role is not listed — a system role always carries every right.
+#: role is not listed — a system role always carries every right. The elders
+#: hold everything the administrator holds too: their one boundary is not a
+#: missing right but the Administration console (the account register, the
+#: roles and the church's settings), which the console's own gates keep for
+#: the administrator and the clerk.
 DEFAULT_ROLE_RIGHTS = {
     'clerk': ('board_invitations', 'business_invitations', 'announcements', 'members_admin', 'requests_admin'),
-    'elder': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
-    'first_elder': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
-    'second_elder': ('board_invitations', 'business_invitations', 'announcements'),
-    'third_elder': ('board_invitations', 'business_invitations', 'announcements'),
-    # The pastor shepherds every desk, so the rights mirror an elder's.
-    'pastor': ('board_invitations', 'business_invitations', 'announcements', 'requests_admin'),
+    'elder': ROLE_RIGHT_CODES,
+    'first_elder': ROLE_RIGHT_CODES,
+    'second_elder': ROLE_RIGHT_CODES,
+    'third_elder': ROLE_RIGHT_CODES,  # The pastor shepherds every desk, so the rights mirror an elder's.
+    'pastor': ROLE_RIGHT_CODES,
     'treasurer': ('finance', 'treasury_accounts', 'reports'),
     'head_deacon': ('requests_admin',),
     'head_deaconess': ('requests_admin',),

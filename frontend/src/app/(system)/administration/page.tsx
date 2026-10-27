@@ -287,6 +287,11 @@ function AdministrationContent() {
     onDeaconateRoll ||
     hasAnyRole("deacon", "deaconess", "head_deacon", "head_deaconess", "admin");
   const isElderOnly = isElder && !isAdmin;
+  // Administration itself — the church's register, its roles and its
+  // settings — is the administrator's and the clerk's. The elders hold every
+  // right the administrator holds across the church's desks (finance, the
+  // announcements, the requests, the treasury), but the console stays shut
+  // to them, according to the office the church runs it from.
   // The phone overview is one page of desks, each with its own heading and a
   // card per page it holds — the same sections for every officer, so an admin
   // and a single-desk clerk read the same shape. A desk the officer does not
@@ -362,8 +367,10 @@ function AdministrationContent() {
             : isFinance
               ? "accounts"
               : "users"
-        : isClerk || isElder || isAdmin
+        : (isClerk || isAdmin)
           ? "users"
+          : isElder
+            ? "announcements"
           : isDedicatedTreasurer
             ? "treasury"
             : "users";
@@ -442,8 +449,66 @@ function AdministrationContent() {
   // join ask name them. The card on the phone overview sits with the console's
   // own pages, under the office's wider gate.
   const canAnswerJoins = isClerk || isElder || isAdmin || isRequestsDeskLead;
+  // The console's own pages — register, roles, leadership and settings —
+  // belong to the administrator and the clerk. The elders reach the join
+  // queue with the office (it is how the office answers a join ask), but
+  // none of the pages that carry the register.
+  const canSeeConsole = isClerk || isAdmin;
   useEffect(() => {
     if (!consoleTab) return;
+    const items = [
+      ...(canSeeConsole
+        ? [
+            {
+              key: "users",
+              href: "/administration?tab=users",
+              label: "User Management",
+              short: "Users",
+              help: "The church register.",
+            },
+            {
+              key: "roles",
+              href: "/administration?tab=roles",
+              label: "Role Management",
+              short: "Roles",
+              help: "Church-wide role permissions.",
+            },
+            {
+              key: "leadership",
+              href: "/administration?tab=leadership",
+              label: "Church Leadership",
+              short: "Leadership",
+              help: "The church's offices, ministries and departments, with each leader and assistant.",
+            },
+            {
+              key: "settings",
+              href: "/administration?tab=settings",
+              label: "Church Settings",
+              short: "Settings",
+              help: "The church's name, channels, meeting times and public record.",
+            },
+          ]
+        : []),
+      // The office's answer to a join ask is a toggle of the console's
+      // own — it is not a desk of any rail section — so it rides the same
+      // strip as the register and the settings, where whoever holds the
+      // console can find it without hunting a queue for it.
+      ...(canAnswerJoins
+        ? [
+            {
+              key: "join-requests",
+              href: "/administration?tab=join-requests",
+              label: "Join Requests",
+              short: "Join",
+              help: "New members, ministry asks and membership transfers waiting on an answer.",
+            },
+          ]
+        : []),
+    ];
+    // An elder who deep links into the join queue still gets a strip — the
+    // join toggle alone — but never one that names pages the console keeps
+    // from them.
+    if (items.length === 0) return;
     // These are Administration's own pages, so name the console before its
     // page toggles on a phone instead of making the current toggle's label
     // carry the heading.
@@ -453,51 +518,7 @@ function AdministrationContent() {
       <SectionNav
         label="Administration pages"
         activeHref={`/administration?tab=${activeTab}`}
-        items={[
-          {
-            key: "users",
-            href: "/administration?tab=users",
-            label: "User Management",
-            short: "Users",
-            help: "The church register.",
-          },
-          {
-            key: "roles",
-            href: "/administration?tab=roles",
-            label: "Role Management",
-            short: "Roles",
-            help: "Church-wide role permissions.",
-          },
-          {
-            key: "leadership",
-            href: "/administration?tab=leadership",
-            label: "Church Leadership",
-            short: "Leadership",
-            help: "The church's offices, ministries and departments, with each leader and assistant.",
-          },
-          {
-            key: "settings",
-            href: "/administration?tab=settings",
-            label: "Church Settings",
-            short: "Settings",
-            help: "The church's name, channels, meeting times and public record.",
-          },
-          // The office's answer to a join ask is a toggle of the console's
-          // own — it is not a desk of any rail section — so it rides the same
-          // strip as the register and the settings, where whoever holds the
-          // console can find it without hunting a queue for it.
-          ...(canAnswerJoins
-            ? [
-                {
-                  key: "join-requests",
-                  href: "/administration?tab=join-requests",
-                  label: "Join Requests",
-                  short: "Join",
-                  help: "New members, ministry asks and membership transfers waiting on an answer.",
-                },
-              ]
-            : []),
-        ]}
+        items={items}
       />
     );
     return () => {
@@ -505,24 +526,31 @@ function AdministrationContent() {
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [activeTab, consoleTab, canAnswerJoins, setCustomToggles, setCustomHeader, setHeadingFirst]);
+  }, [activeTab, consoleTab, canSeeConsole, canAnswerJoins, setCustomToggles, setCustomHeader, setHeadingFirst]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is
   // why the whole page is hidden from `lg`.
   const overviewDesks: OverviewDesk[] = (
     [
-    // Administration — the console's own pages: church-wide roles and settings.
-    isClerk || isElder || isAdmin
+    // Administration — the console's own pages: church-wide roles and
+    // settings, for the administrator and the clerk. An elder who answers
+    // the join queue reads this desk with the join card alone; the register
+    // and the settings keep to the console's own roles.
+    canSeeConsole || canAnswerJoins
       ? {
           label: "Administration",
           icon: <ShieldCheck size={16} aria-hidden="true" />,
           description: "Church-wide role permissions and church settings.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
-            { icon: <ShieldCheck size={20} aria-hidden="true" />, label: "Roles", description: "Set the permissions each church-wide role holds.", href: "/administration?tab=roles" },
-            { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
-            { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
+            ...(canSeeConsole
+              ? [
+                  { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
+                  { icon: <ShieldCheck size={20} aria-hidden="true" />, label: "Roles", description: "Set the permissions each church-wide role holds.", href: "/administration?tab=roles" },
+                  { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leadership" },
+                  { icon: <Settings size={20} aria-hidden="true" />, label: "Church Settings", description: "The church's name, channels, meeting times and public record.", href: "/administration?tab=settings" },
+                ]
+              : []),
             ...(canAnswerJoins
               ? [{ icon: <UserPlus size={20} aria-hidden="true" />, label: "Join Requests", description: "Approve new members, ministry asks and membership transfers.", href: "/administration?tab=join-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers }]
               : []),
@@ -669,10 +697,24 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Users (Members) View */}
-            {activeTab === "users" && (isClerk || isElder || isAdmin) && <UserManagement />}
+            {/* The console's own pages are the administrator's and the
+                clerk's. An elder holds every desk but not the register, the
+                roles or the settings, so a link that names one of them
+                answers plainly instead of drawing a blank panel. */}
+            {["users", "roles", "leadership", "settings"].includes(activeTab) && !canSeeConsole && (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto max-w-xl p-10 text-center">
+                  <h1 className="text-2xl font-semibold text-bark">Administration access required</h1>
+                  <p className="mt-3 text-sm text-moss">The church register, its roles and its settings are kept by the administrators and the clerk. Your desks — announcements, requests, meetings and the treasury — open from the Eldership section.</p>
+                  <Link href="/administration?tab=announcements" className="mt-6 inline-block text-sm font-semibold text-ember">Back to Eldership</Link>
+                </div>
+              </div>
+            )}
 
-            {activeTab === "roles" && (isAdmin || isClerk || isElder) && (
+            {/* Users (Members) View */}
+            {activeTab === "users" && (isClerk || isAdmin) && <UserManagement />}
+
+            {activeTab === "roles" && (isClerk || isAdmin) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <RoleRightsManager />
               </div>
@@ -683,7 +725,7 @@ function AdministrationContent() {
                 decides who may edit; the page itself is open to every office. */}
             {activeTab === "leaders" && <DepartmentHub key={searchDept ?? "directory"} initialDept={searchDept} directoryHeading={ELDERSHIP_HEADING} />}
 
-            {activeTab === "leadership" && (isClerk || isElder || isAdmin) && (
+            {activeTab === "leadership" && (isClerk || isAdmin) && (
               <DepartmentHub
                 key={`shared-${searchDept ?? "directory"}`}
                 initialDept={searchDept}
@@ -781,7 +823,7 @@ function AdministrationContent() {
             )}
 
             {/* Church Settings Manager */}
-            {activeTab === "settings" && (isAdmin || isClerk || isElder) && (
+            {activeTab === "settings" && (isClerk || isAdmin) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
                 <ChurchSettingsManager />
               </div>

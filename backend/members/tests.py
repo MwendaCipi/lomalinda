@@ -4234,6 +4234,22 @@ class ChurchRoleRegistryTests(TestCase):
         self.assertEqual(normalize_roles('admin, member'), ['member', 'admin'])
         self.assertEqual(role_labels(['clerk']), 'Church Clerk')
 
+    def test_the_elders_hold_every_right_the_administrator_holds(self):
+        """The elders' default bundle is the whole rights vocabulary — the
+        board seats every elder with the administrator's powers across the
+        church's desks. Their one boundary, Administration itself, is kept
+        by the console's own gates, never by a missing right here."""
+        from .roles import ROLE_RIGHT_CODES, role_rights_settings
+
+        rights = role_rights_settings()
+        for code in ('elder', 'first_elder', 'second_elder', 'third_elder'):
+            self.assertEqual(sorted(rights[code]), sorted(ROLE_RIGHT_CODES))
+            self.assertIn('finance', rights[code])
+            self.assertIn('treasury_accounts', rights[code])
+
+        # The pastor shepherds every desk with the elder's bundle.
+        self.assertEqual(sorted(rights['pastor']), sorted(ROLE_RIGHT_CODES))
+
     def test_admin_form_edits_roles_as_a_tick_list(self):
         """Django admin shows the roles as checkboxes and protects the system role."""
         from .admin import MemberProfileRolesForm

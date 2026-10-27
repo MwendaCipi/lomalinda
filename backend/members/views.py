@@ -787,7 +787,18 @@ def is_treasurer_or_admin(user):
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('treasurer', 'admin'))
+    # The elders take everything the treasurer's desk does: their office now
+    # carries every right the administrator holds, and the church's money is
+    # one of the desks that follows from it. Administration itself — the
+    # register, the roles and the settings — stays with the administrator and
+    # the clerk; it is checked on its own endpoints, never through this
+    # helper.
+    return bool(
+        profile
+        and profile.has_role(
+            'treasurer', 'admin', 'elder', 'first_elder', 'second_elder', 'third_elder'
+        )
+    )
 
 
 def is_elder_or_admin(user):

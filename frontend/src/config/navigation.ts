@@ -77,6 +77,17 @@ export const STAFF_ROLES: readonly string[] = [
   "treasurer",
 ];
 
+/** The eldership's codes — every office the board seats, whatever its number. */
+export const ELDER_ROLES: readonly string[] = ["elder", "first_elder", "second_elder", "third_elder"];
+
+/**
+ * The roles that reach Administration itself — the church's register, its
+ * roles and its settings. The elders hold every right the administrator
+ * holds across the church's desks, but the console stays with the
+ * administrator and the clerk: they work from their own desks instead.
+ */
+export const CONSOLE_ROLES: readonly string[] = STAFF_ROLES.filter((role) => !ELDER_ROLES.includes(role));
+
 export type NavDestination = {
   /** Canonical href — the only path for this destination, everywhere. */
   href: string;
@@ -422,7 +433,10 @@ export const destinations = {
     description: "The church's members and the roles they hold, and the church's own settings.",
     icon: ShieldCheck,
     area: "office",
-    audience: STAFF_ROLES,
+    // The console's door opens for administrator and clerk only — an elder
+    // reads every desk through the church, but not the register or the
+    // settings (see CONSOLE_ROLES).
+    audience: CONSOLE_ROLES,
     match: ["/administration"],
   },
   /**
@@ -1029,11 +1043,11 @@ export const treasuryItems: RailRow[] = [
     short: "Ledger",
     icon: Scale,
     match: ["/administration/treasury"],
-    roles: ["treasurer", "admin"],
+    roles: ["treasurer", "admin", "elder", "first_elder", "second_elder", "third_elder"],
     description: "Every contribution the church has received, reconciled line by line.",
   },
   officeTab("accounts", "Church Accounts", Landmark, {
-    roles: ["treasurer", "admin"],
+    roles: ["treasurer", "admin", "elder", "first_elder", "second_elder", "third_elder"],
     short: "Accounts",
     description: "The church's treasury accounts, their balances and their movements.",
   }),
@@ -1049,11 +1063,11 @@ export const treasuryItems: RailRow[] = [
     short: "Drives",
     icon: Target,
     match: ["/administration/fund-drives"],
-    roles: ["treasurer", "admin"],
+    roles: ["treasurer", "admin", "elder", "first_elder", "second_elder", "third_elder"],
     description: "Active fund drives and how far along each one is.",
   },
   officeTab("budget", "Church Budget", BarChart3, {
-    roles: ["treasurer", "admin"],
+    roles: ["treasurer", "admin", "elder", "first_elder", "second_elder", "third_elder"],
     short: "Budget",
     description: "The church's annual budgets and how the ministries and departments plan to use them.",
   }),
@@ -1132,7 +1146,7 @@ export const railEntries: RailEntry[] = [
   { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.clerkship },
   // The treasury's row names the desk; its pages are the desk's own strip (see
   // `ownStrip`), so the rail never draws a second, older list of them.
-  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin"], railMinistry: true, ownStrip: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
+  { label: "Treasury", icon: Landmark, items: treasuryItems, roles: ["treasurer", "admin", "elder", "first_elder", "second_elder", "third_elder"], railMinistry: true, ownStrip: true, description: "The church's treasury accounts, ledgers, fund drives and budget." },
   { label: "Deaconate", icon: Boxes, items: deaconateItems, roles: DEACONATE_ROLES, railMinistry: true, railAreaCode: "deaconate", description: DEPARTMENT_BLURBS.deaconate },
   // The church's music. One page, not two: the desk opens straight onto its
   // own Members / Calendar row rather than a strip that only repeats its name.

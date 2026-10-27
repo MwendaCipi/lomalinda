@@ -579,7 +579,17 @@ export function NavIdentity() {
           <div className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
             <div className="space-y-1">
               {accountMenuKeys
-                .filter(({ staffOnly }) => !staffOnly || isStaff)
+                .filter(({ staffOnly, key }) => {
+                  if (!staffOnly) return true;
+                  // An office entry answers to its destination's own
+                  // audience, not just to "any staff": Administration keeps
+                  // its console roles (administrator and clerk), so an
+                  // elder — who holds every desk but not the console — reads
+                  // the menu without it.
+                  if (!isStaff) return false;
+                  const audience = destinationOf(key).audience;
+                  return !audience || audience.some((role) => roles.includes(role));
+                })
                 .map(({ key }) => {
                   const dest = destinationOf(key);
                   const Icon = dest.icon;
