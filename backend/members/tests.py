@@ -11195,6 +11195,77 @@ class FundDriveAccountBackedTotalTests(APITestCase):
         response = self.client.get(f'/api/members/campaigns/{drive.id}/')
         self.assertEqual(response.data['total_raised'], 750.0)
 
+    def test_a_gift_keyed_to_the_drives_name_lands_in_the_drives_account(self):
+        """A giver keys their purpose with the wording the drive's page read —
+        'Give towards LOCAL CHURCH BUDGET (2)' — which names no account: the
+        church's account is ``LCB`` and ``Local Church Budget`` is only its
+        description. That wording must still credit the drive's account, or
+        the drive's poster never moves (it once sat on KES 2,000 of real
+        giving because the purpose resolved to nothing)."""
+        drive = self._drive(
+            name='LOCAL CHURCH BUDGET (2)', account_name='Local Church Budget',
+        )
+        # The drive's own reading still finds its account: the account's
+        # description answers to the drive's reference.
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # A gift exactly as the drive page keys it — the drive's name.
+        credited = credit_account(
+            purpose='LOCAL CHURCH BUDGET (2)', amount=Decimal('2000.00'),
+            description='Cyprian — M-Pesa (LOCAL CHURCH BUDGET (2))', reference='QGH10LCB',
+        )
+        self.assertIsNotNone(credited)
+
+        # The credit landed in the account the drive raises into — the one
+        # the drive's reference points at, not whichever row happened to
+        # share one of its wordings.
+        lcb = TreasuryAccount.objects.get(pk=credited.account_id)
+        self.assertEqual(lcb.name.upper() == 'LCB' or lcb.description.lower() == 'local church budget', True)
+        self.assertEqual(lcb.balance, Decimal('2000.00'))
+
+        # And the drive's headline moves: the credit rides in after the
+        # drive opened, so the poster reads it.
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.data['total_raised'], 2000.0)
+
+    def test_an_account_name_that_answers_first_wins_over_a_drive(self):
+        """When a purpose names both an account and a drive, the account
+        standing for its own name keeps the money: the resolver's first
+        reading is the account itself, and the drive wording only answers
+        when no account does."""
+        welfare = TreasuryAccount.objects.create(
+            name='Welfare', description='Welfare Fund', balance=Decimal('0.00'),
+        )
+        other = TreasuryAccount.objects.create(
+            name='Chairs', description='From the chairs kitty', balance=Decimal('0.00'),
+        )
+        # A drive says the same word — but an account already answers to it.
+        self._drive(source_account=other)
+        credited = credit_account(
+            purpose='Welfare', amount=Decimal('600.00'),
+            description='Giver — M-Pesa (Welfare)', reference='QGH11WLF',
+        )
+        self.assertEqual(credited.account_id, welfare.id)
+
+    def test_retired_drives_do_not_absorb_living_giving(self):
+        """Two drives share an account reference — the older retired, the
+        younger still open. A gift keyed to that reference must land in the
+        open drive's account, not the closed one its wording once shared."""
+        old_fund = TreasuryAccount.objects.create(
+            name='OldFund', description='Old drive fund', balance=Decimal('0.00'),
+        )
+        young_fund = TreasuryAccount.objects.create(
+            name='YoungFund', description='Young drive fund', balance=Decimal('0.00'),
+        )
+        self._drive(name='Camp Night', account_name='CampFund', source_account=young_fund)
+        self._drive(name='Camp Evening', account_name='CampFund', is_active=False, source_account=old_fund)
+        credited = credit_account(
+            purpose='CampFund', amount=Decimal('120.00'),
+            description='Giver — M-Pesa (CampFund)', reference='QGH12CMP',
+        )
+        self.assertEqual(credited.account_id, young_fund.id)
+
     def test_a_drive_without_a_matching_account_falls_back_to_the_ledgers(self):
         """No treasury account answers to the reference, so the headline is
         the ledger union — M-Pesa gifts plus purpose-named receipts."""

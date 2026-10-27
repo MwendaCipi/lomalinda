@@ -26,6 +26,11 @@ from .models import TreasuryAccount, TreasuryAccountTransaction
 # read (the account's description); the M-Pesa prompt and the allocations
 # payload carry the short name. Either may identify the account, and people
 # type loosely, so the match ignores case and stray spaces.
+def _folded(text):
+    """The reading a match ignores case and stray spacing against."""
+    return ' '.join((text or '').strip().lower().split())
+
+
 def account_for_purpose(purpose):
     """The treasury account a giving line names, or None.
 
@@ -33,15 +38,55 @@ def account_for_purpose(purpose):
     ``Tithe``, ``CombinedOff``) or its description (what the form reads,
     e.g. ``Tithe — returned to God``), case-insensitively. A drive's account
     reference matches too, since a gift for a drive lands in its account.
+    When neither answers, a purpose naming a fund drive itself does: the
+    drive's page keys a giver's purpose with the drive's own name (``Give
+    towards LOCAL CHURCH BUDGET (2)``), which is the desk's wording for the
+    gift, not any account's — so the newest drive answering that wording
+    carries the account its money lands in. A gift keyed to a drive must
+    reach the drive's account, or the drive's poster never moves.
     """
-    needle = (purpose or '').strip().lower()
+    needle = _folded(purpose)
     if not needle:
         return None
     for account in TreasuryAccount.objects.all():
         for candidate in (account.name, account.description):
-            candidate = (candidate or '').strip().lower()
-            if candidate and candidate == needle:
+            if candidate and _folded(candidate) == needle:
                 return account
+    return _account_for_drive_wording(needle)
+
+
+def _account_for_drive_wording(needle):
+    """The account a fund drive's name answers to, or None.
+
+    A giver keys their gift with the wording they read on the drive — the
+    title or the drive's own account substantially — rather than the treasury
+    account behind it. The live drives answer first (a gift should land in
+    the drive still open when two have carried the same name), then the
+    newest of the rest; a drive's account is its own link when the treasurer
+    set one, resolved from its account reference otherwise.
+    """
+    from .models import FundraisingCampaign
+
+    candidates = list(FundraisingCampaign.objects.order_by('-created_at'))
+    # Live drives first, so the same wording on an old, retired drive does
+    # not swallow money meant for its living successor.
+    candidates.sort(key=lambda drive: 0 if drive.is_active else 1)
+    for drive in candidates:
+        spoken = False
+        for wording in (drive.name, drive.account_name):
+            if wording and _folded(wording) == needle:
+                spoken = True
+                break
+        if not spoken:
+            continue
+        if drive.source_account_id is not None:
+            return drive.source_account
+        if drive.account_name and _folded(drive.account_name) != needle:
+            # A second reading: the drive's account reference is genuinely
+            # another account's name, so resolve it without this step again —
+            # a drive whose reference only spelt its own name would recurse.
+            return account_for_purpose(drive.account_name)
+        return None
     return None
 
 
