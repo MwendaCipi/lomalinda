@@ -78,8 +78,12 @@ type WithdrawalRequestRow = {
   account_balance: string;
   amount: string;
   reason: string;
-  status: "pending" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
   requested_by: string;
+  pastor_approved_by: string | null;
+  pastor_approved_at: string | null;
+  /** Whether the signed-in officer gave this row its pastor approval. */
+  you_pastor_approved?: boolean;
   elder_approved_by: string | null;
   elder_approved_at: string | null;
   /** Whether the signed-in officer gave this row its elder approval — the
@@ -94,9 +98,10 @@ type WithdrawalRequestRow = {
 /**
  * The departments' withdrawal queue — showing every request across every
  * department in a structured, actionable table.
- * Approval is a two-step process:
- *   1. An elder clears the request ("Elder Approve")
- *   2. The treasurer then approves (debiting the fund and reflecting in Expenses) or declines
+ * Approval is a three-step process:
+ *   1. A pastor clears the request ("Pastor Approve")
+ *   2. An elder then clears it ("Elder Approve")
+ *   3. The treasurer then approves (debiting the fund and reflecting in Expenses) or declines
  * Approved requests remain visible so the treasurer can reverse them if needed,
  * and a reversed one can be approved again while the account still covers it.
  */
@@ -158,6 +163,7 @@ function WithdrawalRequestsPanel({
       setOpenAction(null);
       setReply("");
       const messages: Record<string, [string, string]> = {
+        pastor_approve: ["Pastor approval recorded", "The elders can now act on this request."],
         elder_approve: ["Elder approval recorded", "The treasurer can now act on this request."],
         approve: ["Withdrawal approved", "The fund has been debited and reflected in Expenses."],
         decline: ["Request declined", "The desk has your reply."],
@@ -179,6 +185,7 @@ function WithdrawalRequestsPanel({
   const statusBadge = (status: WithdrawalRequestRow["status"]) => {
     const map: Record<string, string> = {
       pending: "bg-sand text-bark",
+      pastor_approved: "bg-purple-50 text-purple-800",
       elder_approved: "bg-mist-select text-bark",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
@@ -186,6 +193,7 @@ function WithdrawalRequestsPanel({
     };
     const labels: Record<string, string> = {
       pending: "Pending",
+      pastor_approved: "Pastor Approved",
       elder_approved: "Elder Approved",
       approved: "Approved",
       declined: "Rejected",
@@ -252,7 +260,7 @@ function WithdrawalRequestsPanel({
 
   const filteredRows = rows.filter((row) => {
     if (statusFilter === "pending") {
-      if (row.status !== "pending" && row.status !== "elder_approved") return false;
+      if (row.status !== "pending" && row.status !== "pastor_approved" && row.status !== "elder_approved") return false;
     } else if (statusFilter === "approved") {
       if (row.status !== "approved") return false;
     } else if (statusFilter === "rejected") {
@@ -272,6 +280,7 @@ function WithdrawalRequestsPanel({
         row.account_name.toLowerCase().includes(q) ||
         row.reason.toLowerCase().includes(q) ||
         row.requested_by.toLowerCase().includes(q) ||
+        (row.pastor_approved_by && row.pastor_approved_by.toLowerCase().includes(q)) ||
         (row.elder_approved_by && row.elder_approved_by.toLowerCase().includes(q)) ||
         (row.decided_by && row.decided_by.toLowerCase().includes(q)) ||
         (row.reply && row.reply.toLowerCase().includes(q)) ||
@@ -285,11 +294,17 @@ function WithdrawalRequestsPanel({
   const money = (value: string | number) =>
     `KES ${Number(value).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
-  /* The two desks' trails on one ask: the elder who cleared it, and the
-     treasurer who settled it with the reply they gave. Both layouts read these
-     same lines, so a request says the same thing on a phone as on a desk. */
+  /* The three desks' trails on one ask: the pastor who cleared it first,
+     the elder who cleared it second, and the treasurer who settled it with
+     the reply they gave. Both layouts read these same lines, so a request
+     says the same thing on a phone as on a desk. */
   const trail = (row: WithdrawalRequestRow) => (
     <>
+      {row.pastor_approved_by && (
+        <p className="text-[10px] text-moss-faint">
+          Pastor approved by {row.pastor_approved_by}
+        </p>
+      )}
       {row.elder_approved_by && (
         <p className="text-[10px] text-moss-faint">
           Elder approved by {row.elder_approved_by}
@@ -298,7 +313,7 @@ function WithdrawalRequestsPanel({
       {row.decided_by && (row.status === "approved" || row.status === "declined") && (
         <p className="text-[10px] italic text-moss-faint">
           {row.status === "approved" ? "Approved" : "Rejected"} by {row.decided_by}
-          {row.reply ? `: “${row.reply}”` : ""}
+          {row.reply ? `: "${row.reply}"` : ""}
         </p>
       )}
     </>
@@ -453,16 +468,16 @@ function WithdrawalRequestsPanel({
       {openAction !== null && (() => {
         const target = rows.find((r) => r.id === openAction);
         if (!target) return null;
-        const awaitingElder = target.status === "pending";
+        const awaitingPastor = target.status === "pending";
+        const awaitingElder = target.status === "pastor_approved";
         const awaitingTreasurer = target.status === "elder_approved";
         const canReverse = target.status === "approved";
         const isReversed = target.status === "reversed";
-        // Two desks, two people: whoever cleared this ask as the elder cannot
-        // also release it as the treasurer. The API refuses the second step,
-        // and the button says why rather than letting the desk find out by
-        // error — a person may approve a request as an elder or as the
-        // treasurer, never as both.
-        const selfCleared = Boolean(target.you_elder_approved);
+        // Three desks, three people: whoever cleared this ask as the pastor or
+        // elder cannot also release it as the treasurer. The API refuses the
+        // later step, and the button says why rather than letting the desk find
+        // out by error.
+        const selfElderCleared = Boolean(target.you_elder_approved);
         // Approving a reversed request debits the fund a second time, so the
         // option is offered only while the account still covers the ask — the
         // API enforces the same rule; this keeps the button honest.
@@ -484,17 +499,19 @@ function WithdrawalRequestsPanel({
                 </div>
                 <p className="text-moss">{target.reason}</p>
                 <p className="text-[11px] text-moss-faint">
-                  {awaitingElder
-                    ? "Waiting for an elder to clear it before the treasury releases the money."
-                    : awaitingTreasurer
-                      ? "Cleared by an elder. The treasury releases or declines it now."
-                      : canReverse
-                        ? `Released by ${target.decided_by ?? "the treasury"}. Reversing credits the fund back and removes the expense.`
-                        : isReversed
-                          ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
-                          : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: “${target.reply}”` : ""}.`}
+                  {awaitingPastor
+                    ? "Waiting for a pastor to clear it before the elder can act."
+                    : awaitingElder
+                      ? "Cleared by a pastor. Waiting for an elder before the treasury can release."
+                      : awaitingTreasurer
+                        ? "Cleared by a pastor and an elder. The treasury releases or declines it now."
+                        : canReverse
+                          ? `Released by ${target.decided_by ?? "the treasury"}. Reversing credits the fund back and removes the expense.`
+                          : isReversed
+                            ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
+                            : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
                 </p>
-                {selfCleared && (awaitingTreasurer || isReversed) && (
+                {selfElderCleared && (awaitingTreasurer || isReversed) && (
                   <p className="mt-1.5 text-[11px] font-semibold text-ember">
                     You cleared this request as its elder. The treasurer who releases the money has to be someone else.
                   </p>
@@ -508,7 +525,7 @@ function WithdrawalRequestsPanel({
                 )}
               </div>
 
-              {(awaitingElder || awaitingTreasurer || isReversed) && (
+              {(awaitingPastor || awaitingElder || awaitingTreasurer || isReversed) && (
                 <textarea
                   rows={3}
                   maxLength={255}
@@ -529,8 +546,19 @@ function WithdrawalRequestsPanel({
                   }}
                   className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
                 >
-                  {awaitingElder || awaitingTreasurer || isReversed ? "Cancel" : "Close"}
+                  {awaitingPastor || awaitingElder || awaitingTreasurer || isReversed ? "Cancel" : "Close"}
                 </button>
+
+                {awaitingPastor && (
+                  <button
+                    type="button"
+                    onClick={() => act(target.id, "pastor_approve")}
+                    disabled={busy}
+                    className="rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 disabled:opacity-60"
+                  >
+                    {busy ? "Saving…" : "Pastor Approve"}
+                  </button>
+                )}
 
                 {awaitingElder && (
                   <button
@@ -543,7 +571,7 @@ function WithdrawalRequestsPanel({
                   </button>
                 )}
 
-                {(awaitingElder || awaitingTreasurer) && (
+                {(awaitingPastor || awaitingElder || awaitingTreasurer) && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "decline", reply)}
@@ -558,9 +586,9 @@ function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy || selfCleared}
+                    disabled={busy || selfElderCleared}
                     title={
-                      selfCleared
+                      selfElderCleared
                         ? "You gave this request its elder approval. A different treasurer must release the money."
                         : undefined
                     }
@@ -574,9 +602,9 @@ function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy || selfCleared}
+                    disabled={busy || selfElderCleared}
                     title={
-                      selfCleared
+                      selfElderCleared
                         ? "You cleared this request as its elder. A different treasurer must release the money."
                         : undefined
                     }
@@ -622,7 +650,7 @@ function WithdrawalRequestsPanel({
         <div>
           {filteredRows.length} {filteredRows.length === 1 ? "request" : "requests"}
           {filteredRows.length !== rows.length ? ` (filtered from ${rows.length})` : ""} ·{" "}
-          <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => r.status === "pending" || r.status === "elder_approved").length} awaiting action</span></span>
+          <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => r.status === "pending" || r.status === "pastor_approved" || r.status === "elder_approved").length} awaiting action</span></span>
         </div>
         {/* Refresh re-reads the request roll: gives a pending withdrawal its
             answer the instant it is approved elsewhere. First in the row. */}

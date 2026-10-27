@@ -136,7 +136,7 @@ export function TreasuryNav({
     ])
       .then(([withdrawals, givings]) => {
         if (alive) {
-          const withdrawalCount = Array.isArray(withdrawals?.requests) ? withdrawals.requests.filter((r: { status: string }) => r.status === "pending" || r.status === "elder_approved").length : 0;
+          const withdrawalCount = Array.isArray(withdrawals?.requests) ? withdrawals.requests.filter((r: { status: string }) => r.status === "pending" || r.status === "pastor_approved" || r.status === "elder_approved").length : 0;
           const givingCount = Array.isArray(givings?.requests) ? givings.requests.filter((r: { status: string }) => r.status === "pending").length : 0;
           setFetchedCount(withdrawalCount + givingCount);
         }

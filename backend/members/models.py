@@ -358,6 +358,7 @@ SEED_DEPARTMENTS = (
     ('ambassadors', 'Ambassadors', 14),
     ('apm', 'Adventist Possibility Ministries', 15),
     ('chaplaincy', 'Chaplaincy Ministry', 16),
+    ('pastorate', 'Pastorate', 19),
     # The children's bands, each a department of its own — the frontend gathers
     # them under Children. Filed below the desk that leads them.
     ('beginners', 'Beginners', 20),
@@ -383,6 +384,7 @@ SEED_DEPARTMENTS = (
 #: office of its own.
 SEED_DEPARTMENT_ROLES = {
     'eldership': (('First Elder', False), ('Second Elder', False), ('Third Elder', False)),
+    'pastorate': (('Pastor', True), ('Leader', True), ('Assistant', True)),
 }
 
 #: The roles a new department starts with: its Leader and the Assistant
@@ -2500,9 +2502,11 @@ class DepartmentWithdrawalRequest(models.Model):
     """A department asks its treasurer to pay money out of its own fund.
 
     The approval travels in two steps:
-      1. An elder (or admin) blesses the request — status becomes
-         ``elder_approved``. This confirms the purpose is church-sanctioned.
-      2. The treasurer then approves (debiting the fund) or declines.
+      1. A pastor (or admin) blesses the request — status becomes
+         ``pastor_approved``.
+      2. An elder (or admin) then blesses the request — status becomes
+         ``elder_approved``.
+      3. The treasurer then approves (debiting the fund) or declines.
 
     Once approved, the treasurer may also reverse the debit — returning the
     money to the fund and marking the request ``reversed``. A reversed
@@ -2512,6 +2516,7 @@ class DepartmentWithdrawalRequest(models.Model):
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('pastor_approved', 'Pastor Approved'),
         ('elder_approved', 'Elder Approved'),
         ('approved', 'Approved'),
         ('declined', 'Declined'),
@@ -2524,7 +2529,13 @@ class DepartmentWithdrawalRequest(models.Model):
     reason = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_withdrawals_requested')
-    # Elder gate — set when an elder (or admin) blesses the request.
+    # Pastor gate — set when a pastor (or admin) blesses the request.
+    pastor_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_withdrawals_pastor_approved',
+    )
+    pastor_approved_at = models.DateTimeField(null=True, blank=True)
+    # Elder gate — set when an elder (or admin) blesses the request after pastor approval.
     elder_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='department_withdrawals_elder_approved',

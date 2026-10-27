@@ -275,7 +275,7 @@ function AdministrationContent() {
   const isRequestsDeskLead = hasAnyRole("pastor", "chaplaincy", "children_ministry", "welfare_leader", "admin");
   const isYouthLeader = hasAnyRole("youth_leader", "admin");
   const isChoirDirector = hasAnyRole("choir_director", "admin");
-  const isFinance = hasAnyRole("treasurer", "elder", "admin");
+  const isFinance = hasAnyRole("treasurer", "elder", "pastor", "admin");
   // The deaconate desk belongs to the deacons and the admin; elders and
   // clerks reach their work from the Elders' Desk. The roll counts too: a
   // deacon or deaconess seated on the deaconate keeps its rota and register

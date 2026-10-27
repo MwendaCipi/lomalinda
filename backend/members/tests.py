@@ -15285,6 +15285,8 @@ class DepartmentFundTests(APITestCase):
         MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
         self.elder = User.objects.create_user('fund.elder', 'fund.elder@example.com', 'StrongPass#2026', first_name='Eli', last_name='Elder')
         MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.pastor = User.objects.create_user('fund.pastor', 'fund.pastor@example.com', 'StrongPass#2026', first_name='Paul', last_name='Pastor')
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
         self.leader = User.objects.create_user('fund.leader', 'fund.leader@example.com', 'StrongPass#2026', first_name='Larry', last_name='Leader')
         MemberProfile.objects.create(user=self.leader, role='member', roles='member')
         self.member = User.objects.create_user('fund.member', 'fund.member@example.com', 'StrongPass#2026', first_name='Marta', last_name='Member')
@@ -15660,7 +15662,9 @@ class DepartmentFundTests(APITestCase):
         self.assertIsNone(response.data['account'])
         self.assertFalse(response.data['can_request_withdrawal'])
 
-    def test_the_leader_asks_and_the_treasurer_is_told(self):
+    def test_the_leader_asks_and_the_pastor_is_told(self):
+        """When a leader raises a withdrawal request, pastors/admins are notified
+        so the first step of approval (pastor gate) can begin."""
         account = self._fund()
         self.client.force_authenticate(self.leader)
         response = self.client.post('/api/members/departments/music/account/', {
@@ -15673,6 +15677,7 @@ class DepartmentFundTests(APITestCase):
         # Only the treasurer's answer moves money.
         account.refresh_from_db()
         self.assertEqual(account.balance, Decimal('500.00'))
+        # A notification is sent to the pastor (first approver in the chain).
         self.assertTrue(any(m.subject.startswith('Withdrawal request from') for m in mail.outbox))
 
     def test_the_treasurer_approves_and_the_fund_is_debited(self):
@@ -15681,7 +15686,13 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/departments/music/account/', {
             'amount': '200', 'reason': 'Buses to the camporee',
         }, format='json')
-        # The elder gate first: nothing reaches the treasurer uncleared.
+        # The pastor gate first: a pastor must approve before the elder can.
+        self.client.force_authenticate(self.pastor)
+        pastor_bless = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'action': 'pastor_approve',
+        }, format='json')
+        self.assertEqual(pastor_bless.status_code, status.HTTP_200_OK)
+        # Then the elder gate: nothing reaches the treasurer uncleared.
         self.client.force_authenticate(self.elder)
         bless = self.client.post('/api/members/department-withdrawals/review/', {
             'id': self._pending().id, 'action': 'elder_approve',
@@ -15713,6 +15724,11 @@ class DepartmentFundTests(APITestCase):
             'amount': '200', 'reason': 'Buses to the camporee',
         }, format='json')
         row = self._pending()
+        # Pastor gate first.
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_approve',
+        }, format='json')
         # One person wearing both hats — an elder who is also the treasurer.
         both = User.objects.create_user(
             'fund.both', 'fund.both@example.com', 'StrongPass#2026',
@@ -15756,6 +15772,10 @@ class DepartmentFundTests(APITestCase):
         self.client.force_authenticate(self.leader)
         self.client.post('/api/members/departments/music/account/', {
             'amount': '400', 'reason': 'Nearly all of it',
+        }, format='json')
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'action': 'pastor_approve',
         }, format='json')
         self.client.force_authenticate(self.elder)
         self.client.post('/api/members/department-withdrawals/review/', {
@@ -15820,6 +15840,10 @@ class DepartmentFundTests(APITestCase):
             'amount': '200', 'reason': 'Buses to the camporee',
         }, format='json')
         row = self._pending()
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_approve',
+        }, format='json')
         self.client.force_authenticate(self.elder)
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'elder_approve',
@@ -15857,6 +15881,10 @@ class DepartmentFundTests(APITestCase):
             'amount': '200', 'reason': 'Buses to the camporee',
         }, format='json')
         row = self._pending()
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_approve',
+        }, format='json')
         self.client.force_authenticate(self.elder)
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'elder_approve',

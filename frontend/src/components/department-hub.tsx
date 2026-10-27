@@ -143,6 +143,7 @@ const DEPARTMENT_STYLES: Record<string, { icon: React.ReactNode; accent: string;
   welfare: { icon: <HandHeart className="h-4 w-4" />, accent: "text-amber-800", chip: "bg-amber-50 text-amber-800" },
   dorcas: { icon: <Sparkles className="h-4 w-4" />, accent: "text-rose-800", chip: "bg-rose-50 text-rose-800" },
   development: { icon: <Landmark className="h-4 w-4" />, accent: "text-emerald-800", chip: "bg-emerald-50 text-emerald-800" },
+  pastorate: { icon: <Church className="h-4 w-4" />, accent: "text-purple-900", chip: "bg-purple-50 text-purple-900" },
 };
 
 /** A row's style, with a shared neutral look for areas the desk added. */
@@ -4049,7 +4050,7 @@ type FundWithdrawal = {
   account_description?: string;
   amount: string;
   reason: string;
-  status: "pending" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
   reply: string;
   requested_by: string;
   created_at: string;
@@ -4113,7 +4114,7 @@ type UnifiedAccountItem = {
   amount: number;
   isOutflow: boolean;
   category: "contribution" | "withdrawal";
-  status: "completed" | "pending" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "completed" | "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
   accountId?: number;
   accountName?: string;
   accountDescription?: string;
@@ -4466,6 +4467,7 @@ export function DepartmentAccountsPanel({
     const map: Record<string, string> = {
       completed: "bg-sand text-moss",
       pending: "bg-amber-50 text-amber-800",
+      pastor_approved: "bg-purple-50 text-purple-800",
       elder_approved: "bg-mist-select text-bark",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
@@ -4474,6 +4476,7 @@ export function DepartmentAccountsPanel({
     const labels: Record<string, string> = {
       completed: "Completed",
       pending: "Pending",
+      pastor_approved: "Pastor Approved",
       elder_approved: "Elder Approved",
       approved: "Approved",
       declined: "Declined",

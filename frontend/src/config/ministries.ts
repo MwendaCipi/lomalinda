@@ -158,6 +158,18 @@ export const MINISTRIES: Ministry[] = [
       { title: "Teacher Training & Growth", text: "Equipping lesson teachers and facilitators with study aids, guides, and practical discussion methods." },
     ],
   },
+  {
+    slug: "pastorate",
+    title: "Pastorate",
+    givingPurpose: "Tithe",
+    description: "The pastoral leadership of the church, guiding the flock through preaching, counselling, and spiritual oversight.",
+    department: "Pastorate",
+    sections: [
+      { title: "Preaching & Teaching", text: "Proclaiming God's Word faithfully through Sabbath sermons, midweek devotions, and Bible teaching." },
+      { title: "Pastoral Care", text: "Walking with members through life's seasons — joy, grief, illness, and spiritual struggle." },
+      { title: "Leadership & Oversight", text: "Providing spiritual direction, mentoring leaders, and guiding the church's vision and mission." },
+    ],
+  },
 ];
 
 export type CalendarEvent = {
@@ -198,6 +210,7 @@ export function getMinistryGivingPurpose(departmentOrName?: string): string {
   if (lower.includes("women") || lower.includes("awm") || lower.includes("dorcas")) return "Adventist Women Ministry";
   if (lower.includes("personal") || lower.includes("witness") || lower.includes("evangelism") || lower.includes("muslim") || lower.includes("amr")) return "Personal";
   if (lower.includes("music") || lower.includes("choir") || lower.includes("ensemble") || lower.includes("sing")) return "Choir";
+  if (lower.includes("pastor") || lower.includes("pastorate")) return "Tithe";
   if (lower.includes("chaplain")) return "Chaplaincy";
   if (lower.includes("prayer")) return "Prayer";
   if (lower.includes("worship")) return "Worship";

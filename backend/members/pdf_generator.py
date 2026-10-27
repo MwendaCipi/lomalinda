@@ -1858,6 +1858,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
     else:
         status_names = {
             "pending": "Pending",
+            "pastor_approved": "Pastor Approved",
             "elder_approved": "Elder Approved",
             "approved": "Approved",
             "declined": "Rejected",
@@ -1886,8 +1887,11 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
             details = [f"<b>{escape(str(row.get('reason') or '—'))}</b>"]
             details.append(f"Asked by {escape(str(row.get('requested_by') or '—'))}")
             # Each office's own approval, named as the office's approval —
-            # the elder's first (the gate every request passes), the
-            # treasurer's decision after it.
+            # the pastor's first (the gate every request passes), then the
+            # elder's, then the treasurer's decision.
+            if row.get("pastor_approved_by"):
+                details.append("Pastor's Approval: Approved by")
+                details.append(escape(str(row["pastor_approved_by"])))
             if row.get("elder_approved_by"):
                 # The office's phrase reads on its own line and the officer's
                 # name starts the next: the cell is only ~40 characters wide,
@@ -2050,6 +2054,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     status_names = {
         "pending": "Pending",
+        "pastor_approved": "Pastor Approved",
         "elder_approved": "Elder Approved",
         "approved": "Approved",
         "declined": "Rejected",
@@ -2064,6 +2069,12 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     amount = Decimal(str(row.get("amount") or "0"))
     balance = Decimal(str(row.get("account_balance") or "0"))
+
+    pastor_line = "—"
+    if row.get("pastor_approved_by"):
+        pastor_line = str(row["pastor_approved_by"])
+        if row.get("pastor_approved_at"):
+            pastor_line += f" · {fmt_date(row['pastor_approved_at'])}"
 
     elder_line = "—"
     if row.get("elder_approved_by"):
@@ -2096,8 +2107,10 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
             [label("Amount Requested"), value(f"KES {format_money(amount)}", "cell_bold"),
              label("Fund Balance"), value(f"KES {format_money(balance)}")],
             [label("Status"), value(status_names.get(row.get("status"), str(row.get("status") or "—"))),
-             label("Elder Approval"), value(escape(elder_line))],
+             label("Pastor Approval"), value(escape(pastor_line))],
             [label("Purpose"), value(escape(str(row.get("reason") or "—"))),
+             label("Elder Approval"), value(escape(elder_line))],
+            [label(""), value(""),
              label("Treasurer approval"), value(escape(decision_line))],
         ],
         colWidths=[3.0 * cm, 5.8 * cm, 3.0 * cm, 6.2 * cm],
