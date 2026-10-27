@@ -766,12 +766,22 @@ class AnnouncementSerializer(serializers.ModelSerializer):
 
 
 class ContributionSerializer(serializers.ModelSerializer):
+    # The purpose reads as the account the money rests in, not as the keying
+    # it arrived under: a gift keyed with a drive's name ('LOCAL CHURCH
+    # BUDGET (2)' as the drive's page reads it) is one account's giving —
+    # 'LCB' — and shows as that account, never as a second fund beside it.
+    purpose = serializers.SerializerMethodField()
+
     class Meta:
         model = Contribution
         # honoree_name/relationship name the person a gift was given FOR, so
         # a spouse's tithe reads as such on both records it lands on.
         fields = ('id', 'member', 'amount', 'currency', 'purpose', 'phone_number', 'donor_name', 'honoree_name', 'relationship', 'payment_method', 'status', 'mpesa_receipt_number', 'paid_at', 'created_at')
         read_only_fields = fields
+
+    def get_purpose(self, obj):
+        from .treasury import display_purpose
+        return display_purpose(obj.purpose)
 
 
 class MpesaRefundSerializer(serializers.ModelSerializer):

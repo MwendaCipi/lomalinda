@@ -753,7 +753,7 @@ export const clerkshipItems: RailRow[] = [
   // The clerk keeps the church's own books, so the desk carries its accounts
   // beside the minutes: the church budget and the two funds the church's
   // welfare and outreach sit in — LCB, Msamaria Mwema and Evangelism.
-  officeTab("clerkship-funding", "Funding & Accounts", Wallet, {
+  officeTab("clerkship-funding", "Funding", Wallet, {
     roles: CLERKSHIP_ROLES,
     short: "Funding",
     description: "The church funds the clerk keeps the books for, with balances and movements.",
@@ -932,7 +932,7 @@ export const deaconateViews: {
   {
     view: "calendar",
     tab: "deaconate-calendar",
-    label: "Deaconate Calendar",
+    label: "Calendar",
     short: "Calendar",
     icon: Calendar,
     description: "Communion services, foot washing and the ordinances the desk keeps.",
@@ -940,7 +940,7 @@ export const deaconateViews: {
   {
     view: "funding",
     tab: "deaconate-funding",
-    label: "Funding & Accounts",
+    label: "Funding",
     short: "Funding",
     icon: Wallet,
     description: "Local Church Budget allocations, transactions ledger, and funding requests.",

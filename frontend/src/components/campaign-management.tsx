@@ -667,7 +667,7 @@ export function CampaignManagement({
         body: JSON.stringify({
           name: form.name.trim(),
           title: form.title.trim() || form.name.trim(),
-          account_name: form.account_name.trim() || form.name.trim(),
+          account_name: form.account_name.trim(),
           description: form.description.trim(),
           is_temporary: form.is_temporary,
           is_active: form.is_active,
@@ -717,7 +717,7 @@ export function CampaignManagement({
       const payload: Record<string, unknown> = {
         name: form.name.trim(),
         title: form.title.trim() || form.name.trim(),
-        account_name: form.account_name.trim() || form.name.trim(),
+        account_name: form.account_name.trim(),
         source_account: sourceAccountId || presetAccountId || undefined,
         source_department: sourceDepartment || undefined,
         description: form.description.trim(),

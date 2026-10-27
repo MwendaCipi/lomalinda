@@ -567,7 +567,7 @@ function AdministrationContent() {
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Mail size={20} aria-hidden="true" />, label: "Messaging", description: "Letters arriving at info@sdalomalinda.or.ke, and the messages the church sends.", href: "/administration?tab=emails" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
         }
       : null,
@@ -582,7 +582,7 @@ function AdministrationContent() {
             { icon: <Sparkles size={20} aria-hidden="true" />, label: "Sharing", description: "Publish announcements and share daily thoughts with the church.", href: "/administration?tab=announcements" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
           ],
         }
       : null,
@@ -614,8 +614,8 @@ function AdministrationContent() {
             { icon: <Package size={20} aria-hidden="true" />, label: "Church Property", description: "The church's property register, and the movements of each item.", href: "/administration?tab=inventory" },
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Duty Rota", description: "The deacons' and deaconesses' duty rosters for the church's services.", href: "/administration?tab=deaconate-rota" },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=deaconate-moments" },
-            { icon: <Calendar size={20} aria-hidden="true" />, label: "Deaconate Calendar", description: "Communion services, foot washing and the ordinances the desk keeps.", href: "/administration?tab=deaconate-calendar" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The funds the deaconate's work is answered for.", href: "/administration?tab=deaconate-funding" },
+            { icon: <Calendar size={20} aria-hidden="true" />, label: "Calendar", description: "Communion services, foot washing and the ordinances the desk keeps.", href: "/administration?tab=deaconate-calendar" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding", description: "The funds the deaconate's work is answered for.", href: "/administration?tab=deaconate-funding" },
           ],
         }
       : null,
@@ -868,7 +868,7 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Eldership Funding & Accounts — the elders answer for the
+            {/* Eldership Funding — the elders answer for the
                 church's money: the desk reads every treasury account, LCB
                 and Msamaria Mwema among them, with the movements on each. */}
             {activeTab === "eldership-funding" && (isElder || isClerk || isAdmin) && (
@@ -881,7 +881,7 @@ function AdministrationContent() {
               </div>
             )}
 
-            {/* Clerkship Funding & Accounts — the clerk keeps the church's own
+            {/* Clerkship Funding — the clerk keeps the church's own
                 books: the desk reads the church budget with the two funds the
                 welfare and outreach sit in, and the movements on each. */}
             {activeTab === "clerkship-funding" && isClerk && (

@@ -104,6 +104,123 @@ def account_reference_for(purpose):
     return account.name if account else None
 
 
+def account_wordings(account):
+    """Everything people call an account by, for a search that must find it.
+
+    The account's short name and its description are the two wordings the
+    giving forms use; a drive opened on the account adds its own name and
+    reference, because a giver keys their gift with the wording the drive's
+    page read. A search that accepts the account's one name must still
+    reach a gift keyed in any of these.
+    """
+    from .models import FundraisingCampaign
+
+    wordings = [account.name, account.description]
+    for drive in FundraisingCampaign.objects.filter(source_account=account):
+        wordings.extend(w for w in (drive.name, drive.account_name) if w)
+    seen = []
+    for wording in wordings:
+        if wording and wording not in seen:
+            seen.append(wording)
+    return seen
+
+
+# The report's one name for a giving account, folded from the ledgers. The
+# known spellings answer from the map (the M-Pesa short forms, the
+# migration leftovers, the desk abbreviations); a purpose that names an
+# account the map has never heard of reads as that account.
+CANONICAL_TREASURY_NAMES = {
+    'tithe': 'Tithe',
+    'combined offering': 'Combined Offering',
+    'combined': 'Combined Offering',
+    'combined off': 'Combined Offering',
+    'combinedoff': 'Combined Offering',
+    'combinedoffer': 'Combined Offering',
+    'combinedoffering': 'Combined Offering',
+    'combined (50%)': 'Combined Offering',
+    'combined 50%': 'Combined Offering',
+    'lcb': 'Local Church Budget',
+    'local church budget': 'Local Church Budget',
+    'local church budget (lcb)': 'Local Church Budget',
+    'children': 'Children Ministry',
+    'children ministry': 'Children Ministry',
+    'childrens ministry': 'Children Ministry',
+    "children's ministry": 'Children Ministry',
+    # The youth account, spoken as the M-Pesa prompt's short form, as the
+    # migration's one-word shortening, and as the description the giving
+    # forms read — every one the same treasury account ('AYM').
+    'aym': 'AYM',
+    'youth': 'AYM',
+    'adventist youth': 'AYM',
+    'adventist youth ministry': 'AYM',
+    'adventist youth ministries': 'AYM',
+    'adventist youth ministries (ay)': 'AYM',
+    # The Sabbath School account, misspelled on the ledger with the 'h' off
+    # 'Sabbat', read plainly lowercase beside the church's own title, and
+    # filed under its M-Pesa short name — every one 'Sabbath School'.
+    'sabbath school': 'Sabbath School',
+    'sabbat school': 'Sabbath School',
+    'sabath school': 'Sabbath School',
+    'sabbath sch': 'Sabbath School',
+    'sabbath scho': 'Sabbath School',
+    'sabbathsch': 'Sabbath School',
+    'sabbat sch': 'Sabbath School',
+    'sabbat scho': 'Sabbath School',
+    'sabbatscho': 'Sabbath School',
+}
+
+
+def display_purpose(purpose):
+    """The account a giving line names, read the way the screens read it.
+
+    The on-screen lists of gifts — the treasury's givings panel, a member's
+    own record, the live feed — name the account the money rests in, not
+    the keying it arrived under: one gift can be keyed 'LCB', 'Local
+    Church Budget', or a drive's own wording ('LOCAL CHURCH BUDGET (2)'
+    as the drive's page reads it), and if the lists left each spelling
+    standing, one fund would read as several. Resolve the purpose through
+    the same reading that credits the money and show the account's own
+    name; the printed reports keep their fuller naming. A purpose no
+    account answers to keeps the words it arrived in.
+    """
+    account = account_for_purpose(purpose)
+    return account.name if account else (purpose or '').strip()
+
+
+def canonical_purpose_name(purpose):
+    """The one name a list of gifts gives the account money rests in.
+
+    One gift can be keyed in several wordings — the account's short name
+    ('LCB'), its description ('Local Church Budget'), a drive's name read
+    off its page ('LOCAL CHURCH BUDGET (2)') — and if a list left each
+    spelling standing, one fund would read as three. Resolve the purpose
+    through the same reading that credits the money, then speak the account
+    the way the desk knows it: the map keeps a family whole ('SabbathSch'
+    still reads 'Sabbath School'), the LCB account answers by its own short
+    name, and anything the church has never named keeps the words it
+    arrived in — inventing canonical spellings is guesswork.
+    """
+    stripped = (purpose or '').strip()
+    if not stripped:
+        return 'Combined Offering'
+    labelled = CANONICAL_TREASURY_NAMES.get(_folded(stripped))
+    if labelled:
+        return labelled
+    account = account_for_purpose(stripped)
+    if account is not None:
+        # A spelling the map has never met may still name a known account —
+        # a drive's own wording keyed a gift with. The account answers, so
+        # the row folds onto the account's file name — never onto a second
+        # fund beside it — and whatever wording lists know the account by
+        # reads first.
+        for wording in (account.name, account.description):
+            mapped = CANONICAL_TREASURY_NAMES.get(_folded(wording))
+            if mapped:
+                return mapped
+        return account.name
+    return stripped
+
+
 def _amount(value):
     try:
         amount = Decimal(str(value))

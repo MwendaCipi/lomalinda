@@ -5461,11 +5461,11 @@ function DepartmentDetail({
         ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }]
         : []),
       // The fund ledger and withdrawal requests unified under one desk.
-      // The deaconate names the page Funding & Accounts, as its console and
+      // The deaconate names the page Funding, as its console and
       // map pages do — behind the same desk sit its funding requests too.
       {
         key: "accounts",
-        label: isDeaconate ? "Funding & Accounts" : isMusic ? "Account" : "Account Status",
+        label: isDeaconate ? "Funding" : isMusic ? "Account" : "Account Status",
         short: isDeaconate ? "Funding" : "Account",
         icon: Wallet,
       },

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { usePageHeader } from "@/components/app-frame";
 import {
   CalendarViewToggle,
@@ -253,7 +253,6 @@ function CalendarPageContent() {
   // The list leads: a phone reads cards, a desk reads the table, and the
   // month grid is the second view anyone can switch to.
   const [view, setView] = useState<CalendarView>(() => searchParams.get("view") === "calendar" ? "calendar" : "table");
-  const [monthDate, setMonthDate] = useState(() => new Date(currentYear, currentMonth, 1));
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -261,22 +260,6 @@ function CalendarPageContent() {
   const [period, setPeriod] = useState<CalendarPeriod>("quarter");
   const [activeProgram, setActiveProgram] = useState<SabbathProgramData | null>(null);
   const [openActions, setOpenActions] = useState<string | null>(null);
-  // On a wide screen the toggles ride the page's heading row (the shell's
-  // header when signed in, the marketing heading when not); on a phone they
-  // sit in the content, because a phone spends its height on the page rather
-  // than on a parked strip of chrome.
-  const [isPc, setIsPc] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const update = () => setIsPc(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  const shiftMonth = useCallback((amount: number) => {
-    setMonthDate((selected) => new Date(selected.getFullYear(), selected.getMonth() + amount, 1));
-  }, []);
 
   // On a phone the switches give way as soon as the list starts moving —
   // the row they sit in is the page's tallest chrome, and a phone spends
@@ -322,8 +305,6 @@ function CalendarPageContent() {
   }, []);
 
   const mapUrl = churchMapHref(settings);
-  const monthYear = monthDate.getFullYear();
-  const monthIndex = monthDate.getMonth();
   /* The scroll sheet runs this month through the end of next year — the same
    * reach the list's "This year & next" grants. */
   const nextCalendarYear = currentYear + 1;
@@ -364,19 +345,10 @@ function CalendarPageContent() {
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
   }, [events, search]);
 
-  const monthRows = useMemo(
-    () =>
-      searchFiltered.filter((event) =>
-        event.date?.startsWith(`${monthYear}-${String(monthIndex + 1).padStart(2, "0")}-`)
-      ),
-    [searchFiltered, monthIndex, monthYear]
-  );
-
-  /* A phone reads the grid as one continuous sheet: this month opens it and
-   * the months after it follow downward — scrolling carries the reader into
-   * the next season without any arrows. This month through the end of next
-   * year is the sheet's length, matching what the list offers in "This year
-   * & next". */
+  /* The calendar grid: this month opens it and the months after follow
+   * downward — scrolling carries the reader into the next season, on both
+   * phone and desktop. This month through the end of next year is the
+   * sheet's length, matching what the list offers in "This year & next". */
   const calendarScrollMonths = useMemo(() => {
     const months: { year: number; month: number; events: CalendarEvent[] }[] = [];
     let year = currentYear;
@@ -398,26 +370,16 @@ function CalendarPageContent() {
     return months;
   }, [currentMonth, currentYear, searchFiltered]);
 
-  // The count under the sheet: the sheet's own month on a desk, the scroll's
-  // whole length on a phone (whose months are named by their headings).
-  const gridCount =
-    view === "calendar"
-      ? isPc
-        ? monthRows.length
-        : searchFiltered.length
-      : tableRows.length;
+  const gridCount = view === "calendar" ? searchFiltered.length : tableRows.length;
   const gridCountLabel =
     view === "calendar"
-      ? isPc
-        ? ` in ${monthNames[monthIndex]} ${monthYear}`
-        : " this year and next"
+      ? " this year and next"
       : period === "quarter"
         ? " this quarter"
         : " this year and next";
 
-  // The one cluster of controls — view, period, search and (with the grid
-  // open) the month arrows — memoised so the header-injection effect below
-  // only re-runs when a control actually changes, not on every render.
+  // The one cluster of controls — view, period and search — memoised so the
+  // header-injection effect below only re-runs when a control actually changes.
   const controls = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -431,8 +393,8 @@ function CalendarPageContent() {
             <PeriodButtons period={period} onPeriod={setPeriod} />
           </div>
         </div>
-        {/* The search keeps the row it can have: alone in list mode, beside
-            the month arrows when the grid is open. */}
+        {/* The search: filters in list mode, names a month to scroll to
+            in calendar mode. */}
         <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
           <input
             type="search"
@@ -443,51 +405,21 @@ function CalendarPageContent() {
             className="w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember"
           />
         </div>
-        {/* The month's own arrows ride the grid's row beside the search —
-            the month is named in the grid's heading, so a phone needs only
-            the two buttons. A phone needs no arrows at all in the grid:
-            there the calendar is one continuous scroll of months, and the
-            month the reader is in is named by that month's own heading. */}
-        {view === "calendar" && (
-          <div className="hidden shrink-0 items-center gap-1.5 sm:flex sm:gap-2">
-            <button
-              type="button"
-              onClick={() => shiftMonth(-1)}
-              aria-label="Previous month"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember sm:h-10 sm:w-10"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <span className="hidden min-w-28 text-center text-sm font-semibold text-bark sm:inline">
-              {monthNames[monthIndex]} {monthYear}
-            </span>
-            <button
-              type="button"
-              onClick={() => shiftMonth(1)}
-              aria-label="Next month"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sand-line bg-white text-bark hover:border-ember hover:text-ember sm:h-10 sm:w-10"
-            >
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
       </div>
     ),
-    [view, period, search, scrolled, isPc, signedIn, monthIndex, monthYear, shiftMonth]
+    [view, period, search]
   );
 
-  // Signed in on a wide screen, the controls ride the shell header beside the
-  // page's name — the space the heading leaves open. On a phone they stay in
-  // the content, so nothing is parked over the calendar.
+  // The controls ride the shell header when signed in on any screen size.
   const { setHeaderRightAction } = usePageHeader();
   useEffect(() => {
-    if (signedIn && isPc) {
+    if (signedIn) {
       setHeaderRightAction(<div className="w-full sm:w-auto">{controls}</div>);
     } else {
       setHeaderRightAction(null);
     }
     return () => setHeaderRightAction(null);
-  }, [signedIn, isPc, controls, setHeaderRightAction]);
+  }, [signedIn, controls, setHeaderRightAction]);
 
   function openProgram(row: CalendarEvent) {
     const file = row.program_file ? (row.program_file.startsWith("http") ? row.program_file : `${API_URL}${row.program_file}`) : null;
@@ -527,11 +459,9 @@ function CalendarPageContent() {
         {/* The church's letterhead, on the printed page only — what makes
             a printout of the calendar the church's own sheet. */}
         <ChurchLockup className="hidden print:flex print:mb-2" />
-        {/* Signed in on a wide screen, the controls have ridden up into the
-            shell header; on a phone they sit in the content — and give way
-            the moment the page scrolls, the same chrome-hiding the rest of
-            the fellowship reads. */}
-        {!(signedIn && isPc) && !(!isPc && scrolled) && controls}
+        {/* Controls show in-content when not signed in, or on mobile when signed in.
+            When signed in they have already been hoisted into the shell header. */}
+        {!signedIn && controls}
 
         {/* Table view — wide screens only; a phone reads the cards below. */}
         <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
@@ -648,53 +578,33 @@ function CalendarPageContent() {
           })}
         </div>
 
-        {/* The month grid. On a desk it is the one month the arrows name;
-            on a phone it is one continuous scroll — this month opens the
-            sheet and the next two years follow beneath it, so moving into
-            the next months is scrolling, not navigation. */}
-        {view === "calendar" &&
-          (isPc ? (
-            <MonthGrid
-              year={monthYear}
-              month={monthIndex}
-              events={monthRows}
-              openActions={openActions}
-              onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
-              onCloseActions={() => setOpenActions(null)}
-              renderMenu={(row, onClose) => (
-                <EventActionsMenu
-                  row={row}
-                  mapUrl={mapUrl}
-                  variant="row"
-                  onClose={onClose}
-                  onProgram={openProgram}
-                />
-              )}
-            />
-          ) : (
-            <div className="space-y-4">
-              {calendarScrollMonths.map((slot) => (
-                <MonthGrid
-                  key={`${slot.year}-${slot.month}`}
-                  year={slot.year}
-                  month={slot.month}
-                  events={slot.events}
-                  openActions={openActions}
-                  onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
-                  onCloseActions={() => setOpenActions(null)}
-                  renderMenu={(row, onClose) => (
-                    <EventActionsMenu
-                      row={row}
-                      mapUrl={mapUrl}
-                      variant="row"
-                      onClose={onClose}
-                      onProgram={openProgram}
-                    />
-                  )}
-                />
-              ))}
-            </div>
-          ))}
+        {/* The month grid — a continuous scroll of months from the current
+            month through to the end of next year, on both desktop and mobile.
+            Scrolling down moves forward in time; no arrows needed. */}
+        {view === "calendar" && (
+          <div className="space-y-4">
+            {calendarScrollMonths.map((slot) => (
+              <MonthGrid
+                key={`${slot.year}-${slot.month}`}
+                year={slot.year}
+                month={slot.month}
+                events={slot.events}
+                openActions={openActions}
+                onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
+                onCloseActions={() => setOpenActions(null)}
+                renderMenu={(row, onClose) => (
+                  <EventActionsMenu
+                    row={row}
+                    mapUrl={mapUrl}
+                    variant="row"
+                    onClose={onClose}
+                    onProgram={openProgram}
+                  />
+                )}
+              />
+            ))}
+          </div>
+        )}
 
         {loaded && view === "table" && tableRows.length === 0 && (
           <p className="px-5 py-10 text-center text-sm text-moss">No calendar entries match your filters.</p>
@@ -712,7 +622,7 @@ function CalendarPageContent() {
           // to 0 and changes nothing. On a phone the sheet's footer dips out
           // of view while the page is in motion, returning once it rests.
           style={{ marginTop: "auto" }}
-          className={`sticky bottom-0 z-20 -mx-6 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand px-6 pt-3 md:static md:mx-0 md:flex md:px-0 ${!isPc && scrolled ? "hidden" : "flex"}`}
+          className={`sticky bottom-0 z-20 -mx-6 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand px-6 pt-3 md:static md:mx-0 md:flex md:px-0 ${scrolled ? "hidden md:flex" : "flex"}`}
         >
           <p className="text-xs text-moss">
             Showing {gridCount} {gridCount === 1 ? "entry" : "entries"}{gridCountLabel}.

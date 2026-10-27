@@ -75,7 +75,7 @@ from .requests import notify_request_safely, send_membership_approval_email
 # Who signs the church's paper: the two office holders whose saved signatures
 # the receipts and reports print (see members/signatures.py).
 from .signatures import office_for, receipt_signatures, report_signatures
-from .treasury import account_for_purpose, apply_credit, credit_account, credit_contribution_lines, enrich_transaction_descriptions
+from .treasury import account_for_purpose, apply_credit, canonical_purpose_name, credit_account, credit_contribution_lines, display_purpose, enrich_transaction_descriptions
 from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
@@ -2382,7 +2382,19 @@ class AnnouncementView(generics.ListCreateAPIView):
         # mints no drive, since a drive with no goal has no progress to show.
         target = serializer.validated_data.pop('promotion_target', None)
         if serializer.validated_data.get('announcement_type') == 'promotion' and target:
-            account = (serializer.validated_data.get('support_account') or '').strip()
+            account_wording = (serializer.validated_data.get('support_account') or '').strip()
+            # The posted support call names a treasury account; link the drive
+            # to that account and carry the account's own reference, so an
+            # M-Pesa gift keyed to the drive never lands on a wording the
+            # account does not answer to.
+            account_row = None
+            if account_wording:
+                account_row = (
+                    TreasuryAccount.objects.filter(name__iexact=account_wording).first()
+                    or TreasuryAccount.objects.filter(description__iexact=account_wording).first()
+                    or account_for_purpose(account_wording)
+                )
+            account = account_row.name if account_row is not None else account_wording
             end = serializer.validated_data.get('event_date_to') or serializer.validated_data.get('event_date_from')
             name_base = (serializer.validated_data.get('title') or serializer.validated_data.get('text') or 'Fund drive')[:110]
             name = name_base
@@ -2394,6 +2406,7 @@ class AnnouncementView(generics.ListCreateAPIView):
                 name=name,
                 title=name_base,
                 account_name=account,
+                source_account=account_row,
                 description=serializer.validated_data.get('text') or '',
                 member_message=serializer.validated_data.get('text') or '',
                 target_amount=target,
@@ -4239,7 +4252,16 @@ def _get_purpose_q(purpose_param):
             q |= Q(purpose__icontains=kw)
         return ~q
     else:
-        return Q(purpose__iexact=purpose_param) | Q(purpose__icontains=purpose_param)
+        q = Q(purpose__iexact=purpose_param) | Q(purpose__icontains=purpose_param)
+        # The account read by the request reaches the rows keyed in other
+        # spellings of the same fund: its description, and the drives opened
+        # on it whose names a giver keyed their gift with.
+        account = account_for_purpose(purpose_param)
+        if account is not None:
+            from .treasury import account_wordings
+            for wording in account_wordings(account):
+                q |= Q(purpose__iexact=wording) | Q(purpose__icontains=wording)
+        return q
 
 
 def giving_window(params):
@@ -4341,7 +4363,11 @@ class PurposeContributionsView(APIView):
                 'raw_id': c.id,
                 'source': 'digital',
                 'giving_type': c.giving_type,
-                'purpose': c.purpose,
+                # The panel names the fund, not the keying: the raw wording
+                # may be the drive's name read off its page, and the desk
+                # reads one account whether the gift was keyed 'LCB',
+                # 'Local Church Budget' or the drive's own name.
+                'purpose': display_purpose(c.purpose),
                 'amount': str(c.amount),
                 'donor_name': donor_name,
                 'giver_phone': c.phone_number,
@@ -4383,7 +4409,7 @@ class PurposeContributionsView(APIView):
                 'raw_id': c.id,
                 'source': 'cash',
                 'giving_type': 'cash',
-                'purpose': c.purpose,
+                'purpose': display_purpose(c.purpose),
                 'amount': str(c.amount),
                 'donor_name': donor_name,
                 'giver_phone': c.giver_phone if c.entry_type == 'individual' else '',
@@ -4416,14 +4442,24 @@ class ContributionLiveStatsView(APIView):
             .annotate(total=Sum('amount'), count=Count('id'))
             .order_by('-total')
         )
+        # One fund, one row: keyed wordings of the same account ('LCB',
+        # 'Local Church Budget', a drive's name) fold onto the account the
+        # money rests in, the way every other list of gifts reads.
+        folded = {}
+        for row in rows:
+            label = display_purpose(row['purpose'])
+            entry = folded.setdefault(label, {'total': Decimal('0'), 'count': 0})
+            entry['total'] += Decimal(str(row['total'] or 0))
+            entry['count'] += row['count']
+        ranked = sorted(folded.items(), key=lambda item: item[1]['total'], reverse=True)
         return Response([
             {
-                'category': row['purpose'],
-                'label': row['purpose'],
-                'total': float(row['total'] or 0),
-                'count': row['count'],
+                'category': label,
+                'label': label,
+                'total': float(item['total']),
+                'count': item['count'],
             }
-            for row in rows
+            for label, item in ranked
         ])
 
 
@@ -4439,8 +4475,8 @@ class ContributionRecentView(APIView):
                 'sort_at': moment,
                 # Cash rows use negative ids so React keys stay unique across both lists.
                 'id': row.id,
-                'category': row.purpose,
-                'label': row.purpose,
+                'category': display_purpose(row.purpose),
+                'label': display_purpose(row.purpose),
                 'amount': float(row.amount),
                 'donor_name': giver_display_name(row.donor_name, member=row.member, email=row.donor_email, phone=row.phone_number),
                 'created_at': moment.isoformat(),
@@ -4449,8 +4485,8 @@ class ContributionRecentView(APIView):
             items.append({
                 'sort_at': row.created_at,
                 'id': -row.id,
-                'category': row.purpose,
-                'label': row.purpose,
+                'category': display_purpose(row.purpose),
+                'label': display_purpose(row.purpose),
                 'amount': float(row.amount),
                 'donor_name': giver_display_name(row.donor_name, email=row.giver_email, phone=row.giver_phone),
                 'created_at': row.created_at.isoformat(),
@@ -7282,7 +7318,13 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
         if source_account is None:
             account_name = str(serializer.validated_data.get('account_name') or self.request.data.get('account_name') or '').strip()
             if account_name:
-                source_account = TreasuryAccount.objects.filter(name__iexact=account_name).first()
+                # A ref may be typed exactly or spoken as the account's fuller
+                # description; both answer the same account.
+                source_account = (
+                    TreasuryAccount.objects.filter(name__iexact=account_name).first()
+                    or TreasuryAccount.objects.filter(description__iexact=account_name).first()
+                    or account_for_purpose(account_name)
+                )
 
         is_treasury = is_treasurer_or_admin(user)
         approval_status = 'approved' if is_treasury else 'pending'
@@ -7300,7 +7342,11 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
         campaign = serializer.save(
             created_by=user,
             source_account=source_account,
-            account_name=(source_account.name if source_account and not serializer.validated_data.get('account_name') else serializer.validated_data.get('account_name', '')),
+            # The drive's account reference IS the account's reference: once
+            # the account is known, no wording mints beside it — a drive never
+            # carries its own invented ref, or the M-Pesa prompt would offer a
+            # second name the account does not answer to.
+            account_name=(source_account.name if source_account is not None else serializer.validated_data.get('account_name', '')),
             approval_status=approval_status,
             reviewed_by=(user if is_treasury else None),
             reviewed_at=(timezone.now() if is_treasury else None),
@@ -7542,6 +7588,11 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('Only church treasurers or administrators can edit fund drives.')
         previous = self.get_object()
+        # A linked drive's reference is its account's own reference: an edit
+        # that retypes the ref would put a second wording on the M-Pesa prompt
+        # that the account never answers to, so the account's ref wins.
+        if serializer.validated_data.get('account_name') and previous.source_account_id is not None:
+            serializer.validated_data['account_name'] = previous.source_account.name
         next_status = serializer.validated_data.get('approval_status', previous.approval_status)
         decided = next_status != previous.approval_status and next_status in ('approved', 'rejected')
         update_fields = {}
@@ -9810,73 +9861,6 @@ def _get_saturdays_in_month(ref_date):
         if d.weekday() == 5:  # Saturday = 5
             saturdays.append(d)
     return saturdays
-
-
-# The ledgers spell the church's giving accounts in more than one wording —
-# 'LCB' beside 'Local Church Budget', 'tithe' typed beside 'Tithe', 'Combined'
-# beside 'Combined Offering', 'Children' beside 'Children Ministry', the
-# youth account as 'AYM' beside 'Adventist Youth Ministry' beside 'Adventist
-# Youth Ministries', the Sabbath School list as 'Sabbat School' beside
-# 'sabbath school' — all of it one account the same hands named differently.
-# The report keyed its rows on the raw string, so the same money read twice.
-# One name per account: the church's own short name for what it knows, and
-# the rows' arrival spelling for what it does not.
-CANONICAL_TREASURY_NAMES = {
-    'tithe': 'Tithe',
-    'combined offering': 'Combined Offering',
-    'combined': 'Combined Offering',
-    'combined off': 'Combined Offering',
-    'combinedoff': 'Combined Offering',
-    'combinedoffer': 'Combined Offering',
-    'combinedoffering': 'Combined Offering',
-    'combined (50%)': 'Combined Offering',
-    'combined 50%': 'Combined Offering',
-    'lcb': 'Local Church Budget',
-    'local church budget': 'Local Church Budget',
-    'local church budget (lcb)': 'Local Church Budget',
-    'children': 'Children Ministry',
-    'children ministry': 'Children Ministry',
-    'childrens ministry': 'Children Ministry',
-    "children's ministry": 'Children Ministry',
-    # The youth account, spoken as the M-Pesa prompt's short form, as the
-    # migration's one-word shortening, and as the description the giving
-    # forms read — every one the same treasury account ('AYM').
-    'aym': 'AYM',
-    'youth': 'AYM',
-    'adventist youth': 'AYM',
-    'adventist youth ministry': 'AYM',
-    'adventist youth ministries': 'AYM',
-    'adventist youth ministries (ay)': 'AYM',
-    # The Sabbath School account, misspelled on the ledger with the 'h' off
-    # 'Sabbat', read plainly lowercase beside the church's own title, and
-    # filed under its M-Pesa short name — every one 'Sabbath School'.
-    'sabbath school': 'Sabbath School',
-    'sabbat school': 'Sabbath School',
-    'sabath school': 'Sabbath School',
-    'sabbath sch': 'Sabbath School',
-    'sabbath scho': 'Sabbath School',
-    'sabbathsch': 'Sabbath School',
-    'sabbat sch': 'Sabbath School',
-    'sabbat scho': 'Sabbath School',
-    'sabbatscho': 'Sabbath School',
-}
-
-
-def canonical_purpose_name(purpose):
-    """The report's one name for a giving account, folded from the ledgers.
-
-    Case and stray spacing never separate an account — 'Tithe' and 'tithe'
-    were typed by the same hand — and the known alternate spellings (the
-    M-Pesa short forms, the migration leftovers, the desk abbreviations) all
-    answer to the account they name. Anything the report has never met keeps
-    the wording it arrived in: inventing canonical spellings for accounts
-    the church has not named is guesswork this chapter is not about.
-    """
-    stripped = (purpose or '').strip()
-    key = ' '.join(stripped.lower().split())
-    if not key:
-        return 'Combined Offering'
-    return CANONICAL_TREASURY_NAMES.get(key, stripped)
 
 
 def _gather_weekly_contributions(start_date, end_date):

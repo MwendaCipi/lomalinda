@@ -390,6 +390,97 @@ class ContributionTreasuryAPITests(APITestCase):
         self.assertIn('completed payment', str(response.data))
 
 
+class GivingDisplayAccountNameTests(APITestCase):
+    """The lists of gifts read the account, not the keying.
+
+    One gift of the church budget can be keyed in several wordings — 'LCB',
+    the account's description, the drive's own name read off its page — and
+    each would read as its own fund if a list left them standing ('LCB'
+    beside 'Local Church Budget' beside 'LOCAL CHURCH BUDGET (2)' is one
+    account into which money arrived three times). Every list resolves the
+    purpose through the same reading that credits the money.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user(username='desk', password='secure-password')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer')
+        self.lcb = TreasuryAccount.objects.create(
+            name='LCB', description='Local Church Budget', balance=Decimal('0.00'),
+        )
+        self.drive = FundraisingCampaign.objects.create(
+            name='LOCAL CHURCH BUDGET (2)', account_name='Local Church Budget',
+            target_amount=Decimal('50000.00'), source_account=self.lcb,
+        )
+
+    def test_the_treasurers_givings_panel_reads_the_account(self):
+        """A gift keyed by the drive's name and one keyed by the
+        description both sit in the LCB account, so the panel shows one
+        fund twice given — not three wordings of one arrival."""
+        Contribution.objects.create(
+            amount=Decimal('2000.00'), purpose='LOCAL CHURCH BUDGET (2)',
+            status='completed', paid_at=timezone.now(), payment_method='mpesa',
+            donor_name='Antony',
+        )
+        CashContribution.objects.create(
+            received_by=self.treasurer, amount=Decimal('500.00'),
+            purpose='Local Church Budget', received_on=timezone.localdate(),
+            payment_method='cash', donor_name='Grace',
+        )
+        self.client.force_authenticate(self.treasurer)
+        response = self.client.get(
+            f'/api/members/treasury/purpose-contributions/?from_date={timezone.localdate().isoformat()}&to_date={timezone.localdate().isoformat()}'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        purposes = {row['purpose'] for row in response.data}
+        self.assertEqual(purposes, {'LCB'})
+
+    def test_the_member_reads_their_gift_by_the_account(self):
+        """The member's own givings page names the account their money
+        rests in — the drive's keying is the form's wording, never the
+        member's account's."""
+        member = User.objects.create_user(username='antony', password='secure-password')
+        MemberProfile.objects.create(user=member, role='member')
+        gift = Contribution.objects.create(
+            amount=Decimal('1000.00'), purpose='LOCAL CHURCH BUDGET (2)',
+            status='completed', paid_at=timezone.now(), payment_method='mpesa',
+            member=member,
+        )
+        self.client.force_authenticate(member)
+        response = self.client.get('/api/members/contributions/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = {row['id']: row for row in response.data}
+        self.assertEqual(rows[gift.id]['purpose'], 'LCB')
+
+    def test_the_ledger_summary_and_drill_down_agree_on_the_drive_wording(self):
+        """The drive-keyed row folds into the summary's LCB row and the
+        drill-down still finds it — the same fund counted once and opened
+        whole on demand."""
+        gift = Contribution.objects.create(
+            amount=Decimal('2000.00'), purpose='LOCAL CHURCH BUDGET (2)',
+            status='completed', paid_at=timezone.now(), payment_method='mpesa',
+            donor_name='Antony',
+        )
+        self.client.force_authenticate(self.treasurer)
+        summary = self.client.get(
+            f"/api/members/treasury/ledger/?date={timezone.localdate().isoformat()}"
+        )
+        self.assertEqual(summary.status_code, status.HTTP_200_OK)
+        # The printed summary keeps its fuller naming for the account — but
+        # the drive's own wording never appears as a fund of its own.
+        rows = {row['purpose']: Decimal(row['total']) for row in summary.data['purpose_breakdown']}
+        self.assertEqual(rows.get('Local Church Budget'), Decimal('2000.00'))
+        self.assertNotIn('LOCAL CHURCH BUDGET (2)', rows)
+        self.assertNotIn('LCB', rows)
+
+        # And the drill-down the panel opens — by the account the screen
+        # read, 'LCB' — reaches the drive-keyed row just the same.
+        drill = self.client.get(
+            f"/api/members/treasury/purpose-contributions/?purpose=LCB&from_date={timezone.localdate().isoformat()}&to_date={timezone.localdate().isoformat()}"
+        )
+        self.assertEqual(drill.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['raw_id'] for row in drill.data if row['source'] == 'digital'], [gift.id])
+
+
 class MpesaPurposeReferenceTests(TestCase):
     def test_account_reference_uses_compact_purpose(self):
         self.assertEqual(account_reference_for_purpose('LCB'), 'LCB')

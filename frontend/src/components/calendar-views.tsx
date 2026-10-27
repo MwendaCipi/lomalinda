@@ -27,6 +27,7 @@ const SABBATH_COLUMN = 6;
 export type GridEvent = {
   id: number;
   date: string;
+  end_date?: string;
   title: string;
   time?: string;
   /** The area that runs it, shown in a chip's tooltip when present. */
@@ -109,11 +110,40 @@ export function MonthGrid<T extends GridEvent>({
   const weeks = Math.ceil((leadingDays + daysInMonth) / 7);
   const todayKey = localDate();
   const byDate = new Map<string, T[]>();
+
+  // Week-long / multi-day events that span whole weeks
+  // (e.g. Youth Week of Prayer, Camp Meeting, etc.)
+  const getEventDateRange = (e: T): { start: string; end: string } => {
+    const start = (e.date ?? "").slice(0, 10);
+    const end = (e.end_date ?? "").slice(0, 10) || start;
+    return { start, end };
+  };
+
+  // Map each event across its dates so days know what happens on them
   for (const event of events) {
-    const key = (event.date ?? "").slice(0, 10);
-    if (!key) continue;
-    byDate.set(key, [...(byDate.get(key) ?? []), event]);
+    const { start, end } = getEventDateRange(event);
+    if (!start) continue;
+
+    // If single day, map to start
+    if (start === end || !eEndValid(start, end)) {
+      byDate.set(start, [...(byDate.get(start) ?? []), event]);
+      continue;
+    }
+
+    // If multi-day, populate each day in range
+    const cur = new Date(start + "T00:00:00");
+    const stop = new Date(end + "T00:00:00");
+    while (cur <= stop) {
+      const dStr = cur.toISOString().slice(0, 10);
+      byDate.set(dStr, [...(byDate.get(dStr) ?? []), event]);
+      cur.setDate(cur.getDate() + 1);
+    }
   }
+
+  function eEndValid(s: string, e: string) {
+    return e >= s;
+  }
+
   const isoDay = (day: number) =>
     `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
@@ -143,69 +173,147 @@ export function MonthGrid<T extends GridEvent>({
           </tr>
         </thead>
         <tbody className="divide-y divide-sand-wash">
-          {Array.from({ length: weeks }, (_, week) => (
-            <tr key={week} className="align-top">
-              {weekdayNames.map((short, weekday) => {
-                // Days before the 1st and after the month's end borrow their
-                // number from the neighbouring month and hold nothing: the
-                // grid keeps its weeks square without inventing events.
-                const day = week * 7 + weekday - leadingDays + 1;
-                const withinMonth = day >= 1 && day <= daysInMonth;
-                const key = isoDay(day);
-                const dayEvents = withinMonth ? byDate.get(key) ?? [] : [];
-                const isToday = withinMonth && key === todayKey;
-                // A menu near the foot of the grid opens upwards, so the last
-                // weeks' events are not pushed out of the viewport.
-                const opensUpwards = week >= weeks - 2;
-                return (
-                  <td
-                    key={short}
-                    className={`h-24 w-[14.28%] border-l border-sand-wash px-2 py-2 align-top first:border-l-0 ${
-                      weekday === SABBATH_COLUMN ? "bg-sand-linen" : ""
-                    } ${isToday ? "bg-mist-tint" : ""}`}
-                  >
-                    <div
-                      className={`mb-1 text-xs font-semibold ${
-                        isToday ? "text-ember" : withinMonth ? "text-moss-dark" : "text-moss-faint"
-                      }`}
-                    >
-                      {new Date(year, month, day).getDate()}
-                    </div>
-                    <div className="space-y-1">
-                      {dayEvents.map((row) => {
-                        const actionKey = `${row.date}-${row.id}`;
-                        return (
-                          <div key={actionKey} data-calendar-action-menu className="relative">
+          {Array.from({ length: weeks }, (_, week) => {
+            const weekDates = weekdayNames.map((_, weekday) => {
+              const day = week * 7 + weekday - leadingDays + 1;
+              const withinMonth = day >= 1 && day <= daysInMonth;
+              return {
+                day,
+                weekday,
+                withinMonth,
+                iso: withinMonth ? isoDay(day) : "",
+              };
+            });
+
+            // Find events that span across the weekdays (Monday through Friday, or Sun through Sabbath, or entire week)
+            // A week event covers all valid days of this week or Mon-Fri of this week.
+            const weekdaySlots = weekDates.filter((w) => w.weekday >= 1 && w.weekday <= 5 && w.withinMonth);
+            const fullWeekEvent = events.find((ev) => {
+              const { start, end } = getEventDateRange(ev);
+              if (!start || !end || start === end) return false;
+              // Check if event covers the weekdays of this week
+              if (weekdaySlots.length === 0) return false;
+              return weekdaySlots.every((slot) => slot.iso >= start && slot.iso <= end);
+            });
+
+            const opensUpwards = week >= weeks - 2;
+
+            return (
+              <tr key={week} className="align-top">
+                {weekdayNames.map((short, weekday) => {
+                  const info = weekDates[weekday];
+                  const { day, withinMonth, iso } = info;
+                  const isToday = withinMonth && iso === todayKey;
+
+                  // If this week has a full-week program (like Youth Week of Prayer) spanning weekdays,
+                  // join Monday through Friday into one row cell, showing the name of the program.
+                  if (fullWeekEvent && weekday >= 1 && weekday <= 5) {
+                    // Only render the td on Monday (weekday === 1) with colSpan=5
+                    if (weekday === 1) {
+                      const actionKey = `week-${fullWeekEvent.id}-${week}`;
+                      return (
+                        <td
+                          key="weekdays-joined"
+                          colSpan={5}
+                          className="h-24 border-l border-sand-wash px-3 py-2 align-top bg-sand-plate/60"
+                        >
+                          <div className="flex items-center justify-between text-xs font-semibold text-moss mb-1.5">
+                            <span className="text-[11px] uppercase tracking-wider text-ember font-bold">Weekdays</span>
+                            <span className="text-[10px] text-moss-dark">
+                              {weekDates[1].withinMonth ? new Date(year, month, weekDates[1].day).getDate() : ""} –{" "}
+                              {weekDates[5].withinMonth ? new Date(year, month, weekDates[5].day).getDate() : ""}{" "}
+                              {monthNames[month]}
+                            </span>
+                          </div>
+                          <div data-calendar-action-menu className="relative mt-1">
                             <button
                               type="button"
                               aria-expanded={openActions === actionKey}
                               onClick={() => onToggleActions(actionKey)}
-                              title={`${row.title}${row.department_name ? `: ${row.department_name}` : ""}`}
-                              className="w-full rounded-md border-l-2 border-ember bg-sand-plate px-1.5 py-1 text-left transition hover:bg-sand-wash"
+                              title={`${fullWeekEvent.title}${fullWeekEvent.department_name ? `: ${fullWeekEvent.department_name}` : ""}`}
+                              className="w-full rounded-lg border-l-4 border-ember bg-white p-2.5 text-left shadow-sm transition hover:bg-sand-wash"
                             >
-                              <span className="block truncate text-[10px] font-semibold text-bark">{row.title}</span>
-                              {row.time && (
-                                <span className="block truncate text-[10px] text-moss">{clockTime(row.time)}</span>
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="block font-bold text-xs text-bark sm:text-sm">{fullWeekEvent.title}</span>
+                                {fullWeekEvent.department_name && (
+                                  <span className="shrink-0 rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold text-sage-strong">
+                                    {fullWeekEvent.department_name}
+                                  </span>
+                                )}
+                              </div>
+                              {fullWeekEvent.time && (
+                                <span className="mt-0.5 block text-[11px] text-moss">{clockTime(fullWeekEvent.time)}</span>
                               )}
                             </button>
                             {openActions === actionKey && (
                               <div
-                                className={`absolute left-0 z-30 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
+                                className={`absolute left-0 z-30 w-52 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
                                   opensUpwards ? "bottom-full mb-1" : "top-full mt-1"
                                 }`}
                               >
-                                {renderMenu(row, onCloseActions)}
+                                {renderMenu(fullWeekEvent, onCloseActions)}
                               </div>
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+                        </td>
+                      );
+                    }
+                    // For weekdays 2, 3, 4, 5: skip since Monday spans all 5 columns
+                    return null;
+                  }
+
+                  const dayEvents = withinMonth ? byDate.get(iso) ?? [] : [];
+
+                  return (
+                    <td
+                      key={short}
+                      className={`h-24 w-[14.28%] border-l border-sand-wash px-2 py-2 align-top first:border-l-0 ${
+                        weekday === SABBATH_COLUMN ? "bg-sand-linen" : ""
+                      } ${isToday ? "bg-mist-tint" : ""}`}
+                    >
+                      <div
+                        className={`mb-1 text-xs font-semibold ${
+                          isToday ? "text-ember" : withinMonth ? "text-moss-dark" : "text-moss-faint"
+                        }`}
+                      >
+                        {new Date(year, month, day).getDate()}
+                      </div>
+                      <div className="space-y-1">
+                        {dayEvents.map((row) => {
+                          const actionKey = `${row.date}-${row.id}`;
+                          return (
+                            <div key={actionKey} data-calendar-action-menu className="relative">
+                              <button
+                                type="button"
+                                aria-expanded={openActions === actionKey}
+                                onClick={() => onToggleActions(actionKey)}
+                                title={`${row.title}${row.department_name ? `: ${row.department_name}` : ""}`}
+                                className="w-full rounded-md border-l-2 border-ember bg-sand-plate px-1.5 py-1 text-left transition hover:bg-sand-wash"
+                              >
+                                <span className="block truncate text-[10px] font-semibold text-bark">{row.title}</span>
+                                {row.time && (
+                                  <span className="block truncate text-[10px] text-moss">{clockTime(row.time)}</span>
+                                )}
+                              </button>
+                              {openActions === actionKey && (
+                                <div
+                                  className={`absolute left-0 z-30 w-48 rounded-xl border border-sand-line bg-white p-2 shadow-lg ${
+                                    opensUpwards ? "bottom-full mb-1" : "top-full mt-1"
+                                  }`}
+                                >
+                                  {renderMenu(row, onCloseActions)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
