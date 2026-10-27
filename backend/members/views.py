@@ -12810,6 +12810,139 @@ def _calendar_time_from_string(value):
         return None
 
 
+# How much calendar an event claims, and when two claims collide.
+
+
+def _event_slot_bounds(event_date, event_time, end_date=None, end_time=None):
+    """The part of the calendar an event takes, as a start and an end instant.
+
+    An event given a date and no time is assumed to run through the whole day
+    it is set for — through the whole range of days where an end date is
+    given: no hour was set, so the calendar reads it as holding them all.
+    An event that carries a time occupies only its own window — the rest of
+    its day stays free — closing where end_date/end_time puts the close, and
+    closing on the hour it opens at when the desk gave no end, so two events
+    set for the same moment still collide.
+
+    Returns (start, end) with end exclusive; (None, None) when the day(s)
+    the desk typed cannot be read.
+    """
+    from datetime import datetime as dt, time as dt_time, timedelta
+    from datetime import date as dt_date
+
+    try:
+        start_day = dt_date.fromisoformat(str(event_date)[:10])
+        end_day = dt_date.fromisoformat(str(end_date)[:10]) if end_date else start_day
+    except (ValueError, TypeError):
+        return None, None
+    if end_day < start_day:
+        end_day = start_day
+    if event_time is None:
+        # The whole day(s): midnight through the midnight after the last day,
+        # so the range touches every hour it covers and yields to nothing.
+        return (
+            dt.combine(start_day, dt_time.min),
+            dt.combine(end_day + timedelta(days=1), dt_time.min),
+        )
+    start = dt.combine(start_day, event_time)
+    end = dt.combine(end_day, end_time) if end_time is not None else start
+    # A window the desk left open — or one that reads narrower than the days
+    # it spans — opens on the hour it was set at, so that hour is still
+    # bookable by another event.
+    if end <= start:
+        end = start + timedelta(seconds=1)
+    return start, end
+
+
+def _spoken_date(value):
+    # The church writes its dates day first.
+    return f"{value.day}/{value.month}/{value.year}"
+
+
+def _spoken_time(value):
+    hours = value.hour % 12 or 12
+    return f"{hours}:{value.minute:02d} {'AM' if value.hour < 12 else 'PM'}"
+
+
+def _describe_event_slot(event_date, event_time, end_date=None, end_time=None):
+    """The slot in words, for the collision notice the desk is shown."""
+    day = _spoken_date(event_date)
+    span = f"–{_spoken_date(end_date)}" if end_date and end_date != event_date else ""
+    if event_time is None:
+        return f"all of {day}{span}"
+    window = _spoken_time(event_time)
+    if end_time:
+        window = f"{window}–{_spoken_time(end_time)}"
+    return f"{window} on {day}{span}"
+
+
+def _calendar_slot_conflicts(event_date, event_time, end_date=None, end_time=None, exclude_id=None):
+    """The events already holding the slot the desk wants to file into.
+
+    The calendar is one sheet the whole church reads, so a slot is a slot
+    whoever files it: an event already set for a period — a day, a range of
+    days, or a day-and-hours window — blocks a second one. The row being
+    written is excluded here, so a saved event corrected in place is judged
+    against the rest of the calendar rather than against itself.
+    """
+    start, end = _event_slot_bounds(event_date, event_time, end_date, end_time)
+    if start is None or end is None:
+        return []
+    last_day = max(end_date or event_date, event_date, key=str)
+    first_day = event_date
+    queryset = (
+        DepartmentEvent.objects.exclude(pk=exclude_id)
+        if exclude_id is not None
+        else DepartmentEvent.objects.all()
+    )
+    # A cheap first sweep — rows whose day range touches the one being filed
+    # — then the exact hour-by-hour read in Python, so a 2 PM event beside a
+    # 9 AM one shares a day without sharing a slot.
+    candidates = queryset.filter(
+        Q(event_date__lte=last_day)
+        & (Q(end_date__gte=first_day) | Q(end_date__isnull=True, event_date__gte=first_day))
+    )
+    conflicts = []
+    for candidate in candidates:
+        other_start, other_end = _event_slot_bounds(
+            candidate.event_date, candidate.event_time, candidate.end_date, candidate.end_time
+        )
+        if other_start is None:
+            continue
+        if start < other_end and other_start < end:
+            conflicts.append(candidate)
+    return conflicts
+
+
+def _slot_conflict_response(conflicts, all_day_arrival=False):
+    """The refusal a desk gets when its slot is taken: that another event
+    exists for the period, which event occupies the slot, and which
+    department or ministry the occupant belongs to."""
+    first = conflicts[0]
+    holder = Department.objects.filter(code=first.department).first()
+    holder_name = holder.name if holder else first.department
+    where = f"the {first.unit} of {holder_name}" if first.unit else holder_name
+    detail = (
+        f'An event exists for that period already: "{first.title}" from {where} '
+        f"holds {_describe_event_slot(first.event_date, first.event_time, first.end_date, first.end_time)}."
+    )
+    if len(conflicts) > 1:
+        more = len(conflicts) - 1
+        detail += f" {more} more event{'s' if more > 1 else ''} also sit in that period."
+    if all_day_arrival or first.event_time is None:
+        detail += " An event given a date without a time reads as holding its whole day, so it shares no period with any other event."
+    return {
+        'detail': detail,
+        'conflict': {
+            'id': first.id,
+            'title': first.title,
+            'department': first.department,
+            'department_name': holder_name,
+            'unit': first.unit,
+        },
+    }
+
+
 class DepartmentEventsView(APIView):
     """A department's calendar: the stored events behind the ministry pages."""
 
@@ -12894,14 +13027,25 @@ class DepartmentEventsView(APIView):
         mode = (request.data.get('mode') or 'physical').strip()
         if mode not in ('physical', 'virtual'):
             mode = 'physical'
+        event_time = _calendar_time_from_string(request.data.get('time'))
+        end_event_time = _calendar_time_from_string(request.data.get('end_time'))
+        end_event_date = request.data.get('end_date') or None
+        # The calendar is shared: nothing may be filed onto a slot another
+        # event already holds. The desk is refused with the occupant named.
+        conflicts = _calendar_slot_conflicts(event_date, event_time, end_event_date, end_event_time)
+        if conflicts:
+            return Response(
+                _slot_conflict_response(conflicts, all_day_arrival=event_time is None),
+                status=status.HTTP_409_CONFLICT,
+            )
         event = DepartmentEvent.objects.create(
             department=target_code,
             title=title,
             unit=unit,
             event_date=event_date,
-            event_time=_calendar_time_from_string(request.data.get('time')),
-            end_date=request.data.get('end_date') or None,
-            end_time=_calendar_time_from_string(request.data.get('end_time')),
+            event_time=event_time,
+            end_date=end_event_date,
+            end_time=end_event_time,
             mode=mode,
             location=(request.data.get('location') or '').strip(),
             meeting_link=(request.data.get('meeting_link') or '').strip(),
@@ -12973,6 +13117,19 @@ class DepartmentEventsView(APIView):
             event.lead = (request.data.get('lead') or '').strip()
         if 'notes' in request.data:
             event.notes = (request.data.get('notes') or '').strip()
+        # The same rule a new event is held to: the calendar is shared, so a
+        # correction may not drive the event onto a slot another already
+        # holds. Its own row is excluded, so everything may return to where
+        # it was.
+        conflicts = _calendar_slot_conflicts(
+            event.event_date, event.event_time, event.end_date, event.end_time,
+            exclude_id=event.id,
+        )
+        if conflicts:
+            return Response(
+                _slot_conflict_response(conflicts, all_day_arrival=event.event_time is None),
+                status=status.HTTP_409_CONFLICT,
+            )
         event.save()
         return Response({'detail': 'Event saved.', 'id': event.id, 'department': event.department, 'program_file': request.build_absolute_uri(event.program_file.url) if event.program_file else None, 'program_items': event.program_items})
 

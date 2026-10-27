@@ -12623,6 +12623,104 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(res.status_code, 400)
 
 
+class CalendarSlotConflictTests(APITestCase):
+    """The church calendar is one sheet, and a slot is a slot.
+
+    An event given a date and no time is read as holding its whole day — or
+    its whole range of days, where an end date is set — so no other event
+    can share that period. An event that carries a time holds only its own
+    window: the rest of its day stays free. A second event filed into a
+    taken period is refused with the occupant named — its title and the
+    ministry whose calendar it lives on.
+    """
+
+    def setUp(self):
+        # The calendar is shared — the conflict rule is about the slot, not
+        # about who files — so one office user writes for every area.
+        self.elder = User.objects.create_user('slot.elder', 'slot.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.client.force_authenticate(self.elder)
+
+    def test_an_event_without_a_time_holds_its_whole_day(self):
+        filed = self.client.post('/api/members/departments/aym/events/', {
+            'title': 'Youth Camp', 'date': '2026-10-10', 'end_date': '2026-10-12',
+        }, format='json')
+        self.assertEqual(filed.status_code, 201)
+
+        refused = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Men Meeting', 'date': '2026-10-11', 'time': '10:00',
+        }, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn('Youth Camp', refused.data['detail'])
+        # The occupant's own ministry is named beside it.
+        self.assertIn('Adventist Youth', refused.data['detail'])
+        # The whole-day read is named, so the desk knows why a 10 AM line
+        # beside a camp that named no hour was turned away.
+        self.assertIn('whole day', refused.data['detail'])
+        self.assertFalse(DepartmentEvent.objects.filter(department='amm').exists())
+
+    def test_two_events_at_different_hours_share_a_day(self):
+        self.client.post('/api/members/departments/aym/events/', {
+            'title': 'Sunrise Run', 'date': '2026-10-10', 'time': '06:00', 'end_time': '08:00',
+        }, format='json')
+        second = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Men Sabbath', 'date': '2026-10-10', 'time': '09:30',
+        }, format='json')
+        self.assertEqual(second.status_code, 201)
+
+        # The same hour twice is still one slot: the second asking is
+        # refused, told who is already there.
+        clash = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Bible Study', 'date': '2026-10-10', 'time': '06:30',
+        }, format='json')
+        self.assertEqual(clash.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn('Sunrise Run', clash.data['detail'])
+        # Back-to-back windows share no hour, so both are kept.
+        allowed = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Bible Study', 'date': '2026-10-10', 'time': '08:00',
+        }, format='json')
+        self.assertEqual(allowed.status_code, 201)
+
+    def test_an_endless_hour_holds_the_moment_it_opens_at(self):
+        """A window the desk gives no end to reads as its own hour, so it
+        collides with another set for that same moment — and two hours set
+        apart on the same day share the day the way services do."""
+        self.client.post('/api/members/departments/aym/events/', {
+            'title': 'Choir Rehearsal', 'date': '2026-10-10', 'time': '14:00',
+        }, format='json')
+        same = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Visitation', 'date': '2026-10-10', 'time': '14:00',
+        }, format='json')
+        self.assertEqual(same.status_code, status.HTTP_409_CONFLICT)
+        later = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Bible Study', 'date': '2026-10-10', 'time': '16:00',
+        }, format='json')
+        self.assertEqual(later.status_code, 201)
+
+    def test_a_saved_event_may_be_corrected_without_clashing_with_itself(self):
+        event = DepartmentEvent.objects.create(
+            department='amm', title='Men Sabbath', event_date='2026-10-10',
+        )
+        touched = self.client.patch(f'/api/members/departments/amm/events/{event.id}/', {
+            'lead': 'Sam Okello',
+        }, format='json')
+        self.assertEqual(touched.status_code, 200)
+
+        # Driven onto a taken slot, the same correction is refused.
+        DepartmentEvent.objects.create(
+            department='aym', title='Youth Camp', event_date='2026-10-10',
+        )
+        driven = self.client.patch(f'/api/members/departments/amm/events/{event.id}/', {
+            'time': '10:00',
+        }, format='json')
+        self.assertEqual(driven.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn('Youth Camp', driven.data['detail'])
+        event.refresh_from_db()
+        self.assertIsNone(event.event_time)
+        # The refused patch's only field never landed.
+        self.assertEqual(event.lead, 'Sam Okello')
+
+
 class WelfareMinistrySeedTests(TestCase):
     """Welfare exists as a ministry of the record.
 

@@ -9,9 +9,7 @@ import { thankYouPath } from "@/lib/giving-thanks";
 import { ArrowLeft, Check, Copy, IdCard, LogIn, X } from "lucide-react";
 import { PledgeModal } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
-import { DonutChart } from "@/components/mini-charts";
 import { DriveThanksModal } from "@/components/drive-thanks-modal";
-import { pieColors } from "@/lib/brand";
 import { useGivingRefresh } from "@/hooks/use-giving-refresh";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -643,27 +641,10 @@ export default function CampaignDetailClient({ openGive = false }: { openGive?: 
             </div>
           </div>
 
-          {/* Giving by the church's own age-based departments — the reporting
-              categories the office reads. The ring carries each department's
-              share; the legend beside it names them. */}
-          <div className="rounded-3xl bg-sand-card p-6 ring-1 ring-sand-line sm:p-8">
-            <h3 className="text-base font-bold text-bark">Contribution by Department</h3>
-            <p className="mt-1 text-xs text-moss">
-              Where the drive&apos;s giving comes from, grouped by each giver&apos;s department.
-            </p>
-            <div className="mt-5">
-              <DonutChart
-                items={(campaign.department_breakdown ?? []).map((row, index) => ({
-                  label: row.department,
-                  value: Number(row.amount) || 0,
-                  color: pieColors[index % pieColors.length],
-                }))}
-                centerLabel="raised"
-                centerValue={fmtKES(campaign.total_raised)}
-                emptyLabel="No gifts recorded on this drive yet."
-              />
-            </div>
-          </div>
+          {/* The age-department ring the page used to carry — "Contribution
+              by Department" — is gone with this request: the office reads
+              its breakdown at the desk, and the drive's page answers to the
+              giver. */}
 
           {/* Ministry-group leaderboard, for drives issued by group. */}
           {campaign.top_fundraisers && campaign.top_fundraisers.length > 0 && (

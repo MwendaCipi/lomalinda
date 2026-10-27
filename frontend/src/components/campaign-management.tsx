@@ -264,6 +264,138 @@ export function CampaignManagement({
       window.removeEventListener("resize", close);
     };
   }, [openActionsId]);
+
+  /** The drive actions' menu — the rows the desk's table already
+      carries, shared with the phone's card so its popover offers the
+      same choices. The caller owns the box the menu sits in, since the
+      table anchors it to its row and the card anchors it to itself. */
+  const driveMenuBody = (c: Campaign) => (
+    <>
+      <Link
+        href={`/drives/${c.id}`}
+        onClick={closeActionsMenu}
+        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
+      >
+        <CreditCard size={13} className="inline" aria-hidden="true" /> View Card
+      </Link>
+
+      {isAdminMode && canEdit && (
+        <>
+        {c.approval_status === "pending" && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                closeActionsMenu();
+                void handleReviewCampaign(c.id, "approved");
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
+            >
+              <Check size={13} className="inline" aria-hidden="true" /> Approve Drive
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                closeActionsMenu();
+                void handleReviewCampaign(c.id, "rejected");
+              }}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+            >
+              <X size={13} className="inline" aria-hidden="true" /> Reject Drive
+            </button>
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            closeActionsMenu();
+            handleOpenEdit(c);
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+        >
+          <Pencil size={13} className="inline" aria-hidden="true" /> Edit Drive
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            closeActionsMenu();
+            setReceiptCampaign(c);
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+        >
+          <Receipt size={13} className="inline" aria-hidden="true" /> Add Receipt
+        </button>
+
+        {c.allow_personal_invitations && (
+          <button
+            type="button"
+            onClick={() => {
+              closeActionsMenu();
+              handleOpenIssueCards(c);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
+          >
+            <IdCard size={13} className="inline" aria-hidden="true" /> + Issue Invites
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            closeActionsMenu();
+            void handleCopyGivingLink(c);
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+        >
+          <Link2 size={13} className="inline" aria-hidden="true" /> Copy Giving Link
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            closeActionsMenu();
+            handleBroadcastMessage(c.id, c.title || c.name);
+          }}
+          disabled={broadcastingId === c.id || c.approval_status !== "approved"}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand disabled:opacity-50 transition-colors"
+        >
+          <Megaphone size={13} className="inline" aria-hidden="true" /> {broadcastingId === c.id ? "Sending..." : "Message Members"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            closeActionsMenu();
+            handleToggleCampaignActive(c.id, c.is_active);
+          }}
+          className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+            c.is_active
+              ? "text-red-700 hover:bg-red-50"
+              : "text-emerald-700 hover:bg-emerald-50"
+          }`}
+        >
+          {c.is_active ? <><Pause size={13} className="inline" aria-hidden="true" /> End Fund Drive</> : <><Play size={13} className="inline" aria-hidden="true" /> Reactivate Drive</>}
+        </button>
+
+        {!c.is_active && (
+          <button
+            type="button"
+            onClick={() => {
+              closeActionsMenu();
+              void handleDeleteCampaign(c);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={13} className="inline" aria-hidden="true" /> Delete Drive
+          </button>
+        )}
+          </>
+        )}
+      </>
+  );
+
   // The drive being edited — when set, the create modal opens prefilled in edit mode.
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   // The drive a manual receipt is being recorded against.
@@ -1756,128 +1888,7 @@ export function CampaignManagement({
                                           : { right: actionsMenuPos.right, top: actionsMenuPos.top }
                                       }
                                     >
-                                      <Link
-                                        href={`/drives/${c.id}`}
-                                        onClick={closeActionsMenu}
-                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
-                                      >
-                                        <CreditCard size={13} className="inline" aria-hidden="true" /> View Card
-                                      </Link>
-
-                                      {isAdminMode && canEdit && (
-                                        <>
-                                          {c.approval_status === "pending" && (
-                                            <>
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  closeActionsMenu();
-                                                  void handleReviewCampaign(c.id, "approved");
-                                                }}
-                                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
-                                              >
-                                                <Check size={13} className="inline" aria-hidden="true" /> Approve Drive
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  closeActionsMenu();
-                                                  void handleReviewCampaign(c.id, "rejected");
-                                                }}
-                                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
-                                              >
-                                                <X size={13} className="inline" aria-hidden="true" /> Reject Drive
-                                              </button>
-                                            </>
-                                          )}
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              closeActionsMenu();
-                                              handleOpenEdit(c);
-                                            }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
-                                          >
-                                            <Pencil size={13} className="inline" aria-hidden="true" /> Edit Drive
-                                          </button>
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              closeActionsMenu();
-                                              setReceiptCampaign(c);
-                                            }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
-                                          >
-                                            <Receipt size={13} className="inline" aria-hidden="true" /> Add Receipt
-                                          </button>
-
-                                          {c.allow_personal_invitations && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                closeActionsMenu();
-                                                handleOpenIssueCards(c);
-                                              }}
-                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
-                                            >
-                                              <IdCard size={13} className="inline" aria-hidden="true" /> + Issue Invites
-                                            </button>
-                                          )}
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              closeActionsMenu();
-                                              void handleCopyGivingLink(c);
-                                            }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
-                                          >
-                                            <Link2 size={13} className="inline" aria-hidden="true" /> Copy Giving Link
-                                          </button>
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              closeActionsMenu();
-                                              handleBroadcastMessage(c.id, c.title || c.name);
-                                            }}
-                                            disabled={broadcastingId === c.id || c.approval_status !== "approved"}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand disabled:opacity-50 transition-colors"
-                                          >
-                                            <Megaphone size={13} className="inline" aria-hidden="true" /> {broadcastingId === c.id ? "Sending..." : "Message Members"}
-                                          </button>
-
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              closeActionsMenu();
-                                              handleToggleCampaignActive(c.id, c.is_active);
-                                            }}
-                                            className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
-                                              c.is_active
-                                                ? "text-red-700 hover:bg-red-50"
-                                                : "text-emerald-700 hover:bg-emerald-50"
-                                            }`}
-                                          >
-                                            {c.is_active ? <><Pause size={13} className="inline" aria-hidden="true" /> End Fund Drive</> : <><Play size={13} className="inline" aria-hidden="true" /> Reactivate Drive</>}
-                                          </button>
-
-                                          {!c.is_active && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                closeActionsMenu();
-                                                void handleDeleteCampaign(c);
-                                              }}
-                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
-                                            >
-                                              <Trash2 size={13} className="inline" aria-hidden="true" /> Delete Drive
-                                            </button>
-                                          )}
-                                        </>
-                                      )}
+                                      {driveMenuBody(c)}
                                     </div>
                                   </>
                                 )}
@@ -1886,8 +1897,10 @@ export function CampaignManagement({
                           </tr>
                   )}
                   renderCard={(c) => (
-                    /* The whole card opens the drive — no actions menu here.
-                       Officers manage drives from the admin console. */
+                    /* The card's own tap opens the drive; the Actions button
+                       below carries the same menu the desk's table row
+                       offers, so the shelf on a phone has every action the
+                       desk has. */
                     <div
                       key={c.id}
                       className="flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line transition hover:-translate-y-0.5 hover:ring-ember/50 space-y-3"
@@ -1965,11 +1978,45 @@ export function CampaignManagement({
                         </div>
                       </div>
 
-                      {/* The one action: open the drive page. */}
-                      <span className="flex items-center justify-center rounded-xl bg-bark px-4 py-2.5 text-xs font-semibold text-white transition group-hover:bg-ember">
-                        Open Drive
-                      </span>
                       </Link>
+
+                      {/* The Actions popover where "Open Drive" used to sit:
+                          nothing is lost — the card's own tap still opens the
+                          drive, and the menu carries every action the desk's
+                          table row offers, in one popover. */}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleActionsMenu(c.id, e);
+                          }}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-4 py-2.5 text-xs font-semibold text-bark hover:border-ember hover:text-ember transition-colors"
+                        >
+                          <span>Actions</span>
+                          <svg className={`w-3.5 h-3.5 transition-transform ${openActionsId === c.id ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {openActionsId === c.id && actionsMenuPos && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={closeActionsMenu}
+                            />
+                            <div
+                              className="fixed z-40 w-48 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-sand-line space-y-1 text-left"
+                              style={
+                                actionsMenuPos.dropUp
+                                  ? { right: actionsMenuPos.right, bottom: actionsMenuPos.bottom }
+                                  : { right: actionsMenuPos.right, top: actionsMenuPos.top }
+                              }
+                            >
+                              {driveMenuBody(c)}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 />
