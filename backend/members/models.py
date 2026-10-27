@@ -2554,6 +2554,61 @@ class DepartmentWithdrawalRequest(models.Model):
         return f"{self.department.name} withdrawal of KES {self.amount} ({self.status})"
 
 
+class DepartmentLetterRequest(models.Model):
+    """An official requisition or formal letter sent from a department.
+
+    Workflow:
+      1. Written by a department member/leader -> status is 'pending_pastor'.
+         Pastor receives SMS/email/push notification with review link.
+      2. Pastor signs using their digital uploaded signature -> status is 'pastor_signed'.
+         Church Clerk receives SMS/email/push notification with review link.
+      3. Church Clerk signs using their digital uploaded signature -> status is 'completed'.
+         Requester receives notification and can download the fully signed
+         official letterhead PDF with both signatures and an official church stamp box.
+      Alternatively, Pastor or Clerk can decline with a reason.
+    """
+
+    STATUS_CHOICES = [
+        ('pending_pastor', 'Pending Pastor'),
+        ('pastor_signed', 'Pastor Signed'),
+        ('completed', 'Fully Signed'),
+        ('declined', 'Declined'),
+    ]
+
+    department = models.ForeignKey('Department', on_delete=models.CASCADE, related_name='letter_requests')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_letters_requested')
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_pastor', db_index=True)
+
+    pastor_signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_letters_pastor_signed',
+    )
+    pastor_signed_at = models.DateTimeField(null=True, blank=True)
+
+    clerk_signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_letters_clerk_signed',
+    )
+    clerk_signed_at = models.DateTimeField(null=True, blank=True)
+
+    reply = models.CharField(max_length=255, blank=True, default='')
+    declined_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_letters_declined',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.department.name} letter: {self.title} ({self.status})"
+
+
+
 class Expenditure(models.Model):
     CATEGORY_CHOICES = [
         ('operations', 'Church Operations'),

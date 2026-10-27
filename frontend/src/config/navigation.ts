@@ -723,6 +723,12 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
  * Management.
  */
 export const clerkshipItems: RailRow[] = [
+  officeTab("users", "User Management", Users, {
+    roles: CLERKSHIP_ROLES,
+    aliasTabs: ["members"],
+    short: "Members",
+    description: "The church register: users, profiles and their assigned roles.",
+  }),
   officeTab("clerk-requests", "Requests", UserPlus, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["transfers"],

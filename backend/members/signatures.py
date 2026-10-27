@@ -36,7 +36,9 @@ RECEIPT_OFFICES = (
 SIGNING_OFFICES = (
     ('head_deacon', 'Head Deacon'),
     ('treasurer', 'Treasurer'),
+    ('clerk', 'Church Clerk'),
     ('first_elder', 'First Elder'),
+    ('pastor', 'Pastor'),
 )
 
 OFFICE_LABELS = dict(SIGNING_OFFICES)
@@ -171,3 +173,16 @@ def receipt_signatures():
 def report_signatures():
     """Signatures keyed by office code, for the A4 reports' ruled slots."""
     return {entry['code']: entry for entry in signatories()}
+
+
+def user_signature_entry(user, office_title=None):
+    """Signature entry for a specific user."""
+    if not user:
+        return None
+    profile = getattr(user, 'member_profile', None)
+    return {
+        'office': office_title or (office_for(profile) if profile else ''),
+        'name': signer_name(profile),
+        'image': signature_bytes(profile),
+    }
+

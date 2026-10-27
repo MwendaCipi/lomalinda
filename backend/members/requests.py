@@ -105,13 +105,11 @@ def request_audience(kind='', audience=''):
         # The whole congregation prays: every active account is told.
         return User.objects.filter(is_active=True).distinct()
     if kind == 'prayer' and audience == 'pastor':
-        wanted = set(PASTOR_ROLE_CODES)
+        wanted = set(PASTOR_ROLE_CODES) | {ADMIN_ROLE} | set(CLERK_ROLE_CODES)
     elif kind == 'prayer' and audience == 'elders':
-        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | DESK_EXTRA_ROLE_CODES.get('prayer', set())
+        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | {ADMIN_ROLE} | DESK_EXTRA_ROLE_CODES.get('prayer', set())
     else:
-        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES)
-        if kind in JOIN_OR_TRANSFER_KINDS:
-            wanted.add(ADMIN_ROLE)
+        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES) | {ADMIN_ROLE}
         wanted |= DESK_EXTRA_ROLE_CODES.get(kind, set())
     audience_ids = set()
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
@@ -276,38 +274,71 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
         push_request_notification(kind, subject, body, desk_link, audience)
     except Exception:
         pass
+
+    # And SMS directly to the officers' phones
+    try:
+        from . import sms
+
+        sms_text = f"{church_name}: New {label} from {context_common['user_name']}. Review: {full_link}"
+        for user in listeners:
+            phone = getattr(getattr(user, 'member_profile', None), 'phone_number', '')
+            if phone:
+                try:
+                    sms.send(phone, sms_text)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     return sent
 
 
-def send_membership_approval_email(user, *, church_name, name=None):
+def send_membership_approval_email(user, *, church_name, name=None, phone=None):
     """Tell a member their join request was approved, so they can sign in.
 
     ``name`` is what the join form collected. The account itself may carry no
     name yet — plenty of people register and let the office fill the profile in
     — and greeting the person who typed their name a moment ago as "friend" is
-    the one thing this letter must not do.
+    the one thing this letter must not do. Also sends SMS with the sign-in link.
     """
-    address = (getattr(user, 'email', '') or '').strip()
-    if not address:
-        return False
+    recipient = (name or '').strip() or recipient_name(user)
+    login_link = f'{settings.FRONTEND_URL}/login'
     context = {
-        'name': (name or '').strip() or recipient_name(user),
+        'name': recipient,
         'church': church_name,
-        'link': f'{settings.FRONTEND_URL}/login',
+        'link': login_link,
     }
     body = render_message(membership_approval_template(), context)
-    try:
-        send_mail(
-            f'Your request to join {church_name} has been approved',
-            body,
-            sender_for(IDENTITY),
-            [address],
-            connection=connection_for(IDENTITY),
-            fail_silently=True,
-        )
-        return True
-    except Exception:
-        return False
+    address = (getattr(user, 'email', '') or '').strip()
+    email_sent = False
+    if address:
+        try:
+            send_mail(
+                f'Your request to join {church_name} has been approved',
+                body,
+                sender_for(IDENTITY),
+                [address],
+                connection=connection_for(IDENTITY),
+                fail_silently=True,
+            )
+            email_sent = True
+        except Exception:
+            pass
+
+    # Send SMS notification with login link
+    phone_number = phone or getattr(getattr(user, 'member_profile', None), 'phone_number', '')
+    if phone_number:
+        try:
+            from . import sms
+            sms_text = (
+                f"{church_name}: Hello {recipient}, your request to join has been approved! "
+                f"Your account is now active. Sign in here: {login_link}"
+            )
+            sms.send(phone_number, sms_text)
+        except Exception:
+            pass
+
+    return email_sent
 
 
 def notify_request_safely(kind, request_id, **kwargs):

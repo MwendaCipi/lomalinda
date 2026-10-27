@@ -9,7 +9,7 @@ from rest_framework import serializers
 from .models import (
     Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, ChildDedicationRequest, ChurchBudget,
     ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification,
-    CashContribution, ChurchSettings, Contribution, ContributionTreasury, Department, EnrollmentRequest, FundraisingCampaign, GivingRequest, GIFT_RELATIONSHIP_CHOICES, Invitation,
+    CashContribution, ChurchSettings, Contribution, ContributionTreasury, Department, DepartmentLetterRequest, EnrollmentRequest, FundraisingCampaign, GivingRequest, GIFT_RELATIONSHIP_CHOICES, Invitation,
     DutyRota, InKindContribution, InventoryItem, InventoryMovement, MemberProfile, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PrayerRequest,
     ProfileChangeRequest, Profession,
     giver_display_name,
@@ -380,6 +380,13 @@ class EnrollmentAdminSerializer(serializers.ModelSerializer):
 
     def get_has_account(self, obj):
         return obj.user_id is not None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.user and instance.user.is_active and data.get('status') in ('pending', 'verification_pending'):
+            data['status'] = 'approved'
+        return data
+
 
 
 IMAGE_SUFFIX_PATTERN = re.compile(r'\.(png|jpe?g|gif|webp|avif|bmp|heic|heif)$', re.IGNORECASE)
@@ -2361,3 +2368,55 @@ class DutyRotaSerializer(serializers.ModelSerializer):
                 if isinstance(officer, dict) and officer.get('member_id') not in accounts:
                     officer.pop('member_id', None)
         return team
+
+
+class DepartmentLetterRequestSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_code = serializers.CharField(source='department.code', read_only=True)
+    requested_by_name = serializers.SerializerMethodField()
+    pastor_name = serializers.SerializerMethodField()
+    clerk_name = serializers.SerializerMethodField()
+    declined_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DepartmentLetterRequest
+        fields = (
+            'id', 'department', 'department_name', 'department_code',
+            'requested_by', 'requested_by_name',
+            'title', 'content', 'status',
+            'pastor_signed_by', 'pastor_name', 'pastor_signed_at',
+            'clerk_signed_by', 'clerk_name', 'clerk_signed_at',
+            'reply', 'declined_by', 'declined_by_name',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = (
+            'id', 'department', 'requested_by', 'status',
+            'pastor_signed_by', 'pastor_signed_at',
+            'clerk_signed_by', 'clerk_signed_at',
+            'reply', 'declined_by', 'created_at', 'updated_at',
+        )
+
+    def get_requested_by_name(self, obj):
+        if not obj.requested_by:
+            return '—'
+        full = f"{obj.requested_by.first_name} {obj.requested_by.last_name}".strip()
+        return full or obj.requested_by.username
+
+    def get_pastor_name(self, obj):
+        if not obj.pastor_signed_by:
+            return None
+        full = f"{obj.pastor_signed_by.first_name} {obj.pastor_signed_by.last_name}".strip()
+        return full or obj.pastor_signed_by.username
+
+    def get_clerk_name(self, obj):
+        if not obj.clerk_signed_by:
+            return None
+        full = f"{obj.clerk_signed_by.first_name} {obj.clerk_signed_by.last_name}".strip()
+        return full or obj.clerk_signed_by.username
+
+    def get_declined_by_name(self, obj):
+        if not obj.declined_by:
+            return None
+        full = f"{obj.declined_by.first_name} {obj.declined_by.last_name}".strip()
+        return full or obj.declined_by.username
+

@@ -132,14 +132,34 @@ export function MemberHome() {
   // itself if it ever gets a 403, so this gate is a courtesy, not the wall.
   const keepsTheBooks = hasAny(["treasurer", "admin"]);
 
+  const isChurchStaff =
+    isChurchOffice ||
+    keepsTheBooks ||
+    hasAny([
+      "chaplaincy",
+      "welfare_leader",
+      "children_ministry",
+      "head_deacon",
+      "head_deaconess",
+      "youth_leader",
+      "choir_director",
+    ]);
+
   // ── The quick tiles ─────────────────────────────────────────────────
-  // The four everyday actions, beside the week's announcements. Requests is
-  // the Fellowship page for everyone who taps it — an administrator asks
-  // for prayer the way a member does, from the same four forms. The desk
-  // that *answers* those asks keeps its own row on the rail, carrying the
-  // count of what is still waiting on it.
+  // The four everyday actions, beside the week's announcements. For church
+  // staff, Requests links straight to the received requests desk so they can
+  // answer incoming member asks; for general members, it opens the request forms.
   const quickTiles: Tile[] = dashboardTiles.map((key) => {
     const dest = destinationOf(key);
+    if (key === "requests" && isChurchStaff) {
+      const isClerkOnly = hasAny(["clerk"]) && !hasAny(["admin", "elder", "pastor"]);
+      return {
+        href: isClerkOnly ? "/administration?tab=clerk-requests" : "/administration?tab=requests",
+        label: "Requests",
+        desc: "Review and answer incoming church and pastoral requests.",
+        icon: dest.icon,
+      };
+    }
     return {
       href: dest.href,
       label: dest.label,

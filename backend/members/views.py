@@ -46,7 +46,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
 from chat.realtime import broadcast_announcement_response
@@ -105,7 +105,7 @@ from .meetings import (
     recipient_name,
     render_message,
 )
-from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, DutyRotaSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for, IMAGE_SUFFIX_PATTERN
+from .serializers import AnnouncementSerializer, AnnouncementResponseSerializer, BoardMeetingSerializer, BoardMeetingAgendaSerializer, BusinessMeetingSerializer, BusinessMeetingAgendaSerializer, CampaignCardAssignmentSerializer, CashContributionSerializer, ChildDedicationRequestSerializer, ChurchBudgetSerializer, ChurchCorrespondenceSerializer, ChurchEventSerializer, ChurchFinancialReportSerializer, ChurchNotificationSerializer, ChurchSettingsSerializer, ContributionInitiateSerializer, MemberEmailSerializer, ContributionTreasurySerializer, ContributionSerializer, DepartmentLetterRequestSerializer, EnrollmentAdminSerializer, EnrollmentCompleteSerializer, EnrollmentRequestSerializer, DutyRotaSerializer, ExpenditureSerializer, FundraisingCampaignSerializer, InKindContributionSerializer, InventoryItemSerializer, InventoryMovementSerializer, InvitationAcceptSerializer, InvitationSerializer, MembershipRemovalRequestSerializer, MembershipTransferRequestSerializer, MpesaRefundSerializer, PrayerRequestSerializer, ProfileChangeRequestSerializer, ProfessionSerializer, RegisterSerializer, SabbathEventSerializer, SupportSubmissionSerializer, TestimonySerializer, TreasuryAccountSerializer, TreasuryAccountTransactionSerializer, UserDetailSerializer, VisitationRequestSerializer, WeeklyMeetingSerializer, ChildrenGroupSerializer, ChildRecordSerializer, PathfinderSerializer, usable_email, receipt_email_for, IMAGE_SUFFIX_PATTERN
 
 
 # Django 5.1 removed User.objects.make_random_password, so temporary passwords
@@ -818,6 +818,16 @@ def is_pastor_or_admin(user):
     return bool(profile and profile.has_role('pastor', 'admin'))
 
 
+def is_clerk_or_admin(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    return bool(profile and profile.has_role('clerk', 'admin'))
+
+
+
 
 def user_has_role(user, *codes):
     """True if the user's member profile holds any of the given role codes."""
@@ -1321,14 +1331,16 @@ class EnrollmentDecisionView(APIView):
                 message=message,
             )
             if decision == 'approved':
-                # The in-app notice only reaches someone who signs in; the email
-                # is what tells them the door is open in the first place. The
-                # name comes from the join form, since the account may not have
-                # one yet.
+                # Mark any other pending enrollment requests for this person as approved
+                EnrollmentRequest.objects.filter(
+                    Q(user=user) | Q(email__iexact=enrollment.email)
+                ).exclude(pk=enrollment.pk).update(status='approved')
+                # The notice reaches the member via both email and SMS with direct login link
                 send_membership_approval_email(
                     user,
                     church_name=current_church_name(),
                     name=enrollment.first_name,
+                    phone=enrollment.phone_number,
                 )
         return Response(EnrollmentAdminSerializer(enrollment).data, status=status.HTTP_200_OK)
 
@@ -8931,6 +8943,18 @@ class UserActivationView(APIView):
                     "You can sign in again with your usual password."
                 ),
             )
+            # When an account is approved/activated, mark any pending join requests as approved
+            # so they no longer show in unapproved requests.
+            EnrollmentRequest.objects.filter(
+                Q(user=target_user) | Q(email__iexact=target_user.email),
+                status__in=['pending', 'verification_pending'],
+            ).update(status='approved')
+            send_membership_approval_email(
+                target_user,
+                church_name=current_church_name(),
+                name=target_user.first_name,
+                phone=target_profile.phone_number,
+            )
 
         serializer = UserDetailSerializer(target_user)
         data = dict(serializer.data)
@@ -14069,11 +14093,12 @@ class DepartmentAccountView(APIView):
         )
 
         is_deaconate = target.code == 'deaconate'
-        # The ask lands with the pastor's office and administration for pastor approval
+        # The ask lands with the pastor's office, clerk, and administration for pastor approval
         audience = User.objects.filter(
-            Q(member_profile__role__in=['pastor', 'admin']) |
+            Q(member_profile__role__in=['pastor', 'admin', 'clerk']) |
             Q(member_profile__roles__contains='pastor') |
-            Q(member_profile__roles__contains='admin'),
+            Q(member_profile__roles__contains='admin') |
+            Q(member_profile__roles__contains='clerk'),
             is_active=True,
         ).distinct()
         desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests'
@@ -14095,7 +14120,7 @@ class DepartmentAccountView(APIView):
 
 
 def _notify_withdrawal_audience(audience, subject, body, link, sms_text=None):
-    """Notify officers across in-app, email, and SMS channels."""
+    """Notify officers across in-app, email, SMS, and push notification channels."""
     ChurchNotification.objects.bulk_create([
         ChurchNotification(user=person, title=subject, message=body, link=link)
         for person in audience
@@ -14117,6 +14142,12 @@ def _notify_withdrawal_audience(audience, subject, body, link, sms_text=None):
                 sms.send(phone, text)
             except Exception:
                 logger.exception("Withdrawal notice SMS failed for %s.", phone)
+    try:
+        from .push import push_to_user
+        for person in audience:
+            push_to_user(person, title=subject, body=text, link=link)
+    except Exception:
+        pass
 
 
 def _withdrawal_review_row(row):
@@ -14308,7 +14339,7 @@ class DepartmentWithdrawalReviewView(APIView):
                     vendor_payee=giver_display_name('', member=row.requested_by),
                     receipt_number=f"WD-{row.id}",
                     expenditure_date=timezone.localdate(),
-                    notes=f"Approved withdrawal request #{row.id} for {row.department.name}. {reply}".strip(),
+                    notes=(reply or "").strip(),
                     recorded_by=request.user,
                 )
                 row.status = 'approved'
@@ -14539,6 +14570,233 @@ class WithdrawalRequestPdfView(APIView):
         filename = f'Withdrawal_Request_{row.id}.pdf'
         response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
+
+
+class DepartmentLetterListCreateView(APIView):
+    """List or create official department letters.
+
+    A department member/leader writes a letter -> status becomes 'pending_pastor'.
+    Pastor signs -> status becomes 'pastor_signed'.
+    Clerk signs -> status becomes 'completed' (fully signed and ready to download for stamping).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        dept_code = (request.query_params.get('department') or '').strip().lower()
+        status_filter = (request.query_params.get('status') or '').strip()
+        user = request.user
+        is_pastor = is_pastor_or_admin(user)
+        is_clerk = is_clerk_or_admin(user)
+        is_elder = is_elder_or_admin(user)
+
+        qs = DepartmentLetterRequest.objects.select_related(
+            'department', 'requested_by', 'pastor_signed_by', 'clerk_signed_by', 'declined_by'
+        ).order_by('-created_at')
+
+        if dept_code:
+            qs = qs.filter(department__code=dept_code)
+        elif not (is_pastor or is_clerk or is_elder):
+            user_depts = DepartmentMembership.objects.filter(member=user).values_list('department_id', flat=True)
+            qs = qs.filter(Q(requested_by=user) | Q(department_id__in=user_depts))
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        serializer = DepartmentLetterRequestSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        dept_code = (request.data.get('department') or '').strip()
+        title = str(request.data.get('title') or '').strip()
+        content = str(request.data.get('content') or '').strip()
+
+        if not dept_code:
+            return Response({'detail': 'Specify the department for this letter.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not title:
+            return Response({'title': 'Provide a letter title or subject.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not content:
+            return Response({'content': 'Provide the letter content or body.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        dept = Department.objects.filter(code=dept_code).first()
+        if not dept:
+            dept = Department.objects.filter(pk=dept_code).first() if str(dept_code).isdigit() else None
+        if not dept:
+            return Response({'detail': f'Department "{dept_code}" not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        row = DepartmentLetterRequest.objects.create(
+            department=dept,
+            requested_by=request.user,
+            title=title[:200],
+            content=content,
+            status='pending_pastor',
+        )
+
+        # Notify Pastor and Administration (SMS, email, push, in-app)
+        pastor_audience = User.objects.filter(
+            Q(member_profile__role__in=['pastor', 'admin']) |
+            Q(member_profile__roles__contains='pastor') |
+            Q(member_profile__roles__contains='admin'),
+            is_active=True,
+        ).distinct()
+
+        desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests'
+        subject = f'Official Letter for Signature: {dept.name}'
+        requester_name = giver_display_name('', member=request.user)
+        body = (
+            f"{requester_name} has submitted an official letter for {dept.name}: \"{title}\". "
+            f"Awaiting your pastoral signature: {desk_link}"
+        )
+        sms_text = (
+            f"SDA Loma Linda: {requester_name} submitted a letter for {dept.name} ({title[:30]}). "
+            f"Review & sign: {desk_link}"
+        )
+        _notify_withdrawal_audience(pastor_audience, subject, body, desk_link, sms_text)
+
+        serializer = DepartmentLetterRequestSerializer(row)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class DepartmentLetterReviewView(APIView):
+    """Pastor and Clerk signing workflow for official department letters."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        row = DepartmentLetterRequest.objects.select_related(
+            'department', 'requested_by', 'pastor_signed_by', 'clerk_signed_by'
+        ).filter(pk=pk).first()
+        if not row:
+            return Response({'detail': 'Letter request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        action = request.data.get('action')
+        reply = str(request.data.get('reply') or '').strip()[:255]
+
+        if action == 'pastor_sign':
+            if not is_pastor_or_admin(request.user):
+                return Response({'detail': 'Only the church pastor or administrator can sign as pastor.'}, status=status.HTTP_403_FORBIDDEN)
+            if row.status != 'pending_pastor':
+                return Response({'detail': 'This letter is not currently awaiting pastor signature.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            row.status = 'pastor_signed'
+            row.pastor_signed_by = request.user
+            row.pastor_signed_at = timezone.now()
+            row.save(update_fields=['status', 'pastor_signed_by', 'pastor_signed_at'])
+
+            # Notify Clerk and Administration to sign
+            clerk_audience = User.objects.filter(
+                Q(member_profile__role__in=['clerk', 'admin']) |
+                Q(member_profile__roles__contains='clerk') |
+                Q(member_profile__roles__contains='admin'),
+                is_active=True,
+            ).distinct()
+            desk_link = f'{settings.FRONTEND_URL}/administration?tab=correspondence'
+            subject = f'Pastor Signed: Letter from {row.department.name} awaiting Clerk signature'
+            pastor_name = giver_display_name('', member=request.user)
+            body = (
+                f"{pastor_name} has signed the letter \"{row.title}\" for {row.department.name}. "
+                f"It is now ready for the Church Clerk's signature: {desk_link}"
+            )
+            sms_text = (
+                f"SDA Loma Linda: Letter for {row.department.name} ({row.title[:30]}) "
+                f"was signed by Pastor. Review & sign: {desk_link}"
+            )
+            _notify_withdrawal_audience(clerk_audience, subject, body, desk_link, sms_text)
+
+            serializer = DepartmentLetterRequestSerializer(row)
+            return Response(serializer.data)
+
+        elif action == 'clerk_sign':
+            if not is_clerk_or_admin(request.user):
+                return Response({'detail': 'Only the church clerk or administrator can sign as clerk.'}, status=status.HTTP_403_FORBIDDEN)
+            if row.status != 'pastor_signed':
+                return Response({'detail': 'This letter must be signed by the pastor before the clerk can sign.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            row.status = 'completed'
+            row.clerk_signed_by = request.user
+            row.clerk_signed_at = timezone.now()
+            row.save(update_fields=['status', 'clerk_signed_by', 'clerk_signed_at'])
+
+            # Notify the requester that the letter is fully signed and ready to download
+            requester = row.requested_by
+            if requester:
+                download_link = f'{settings.FRONTEND_URL}/my-areas?area={row.department.code}&view=requests'
+                subject = f'Letter Fully Signed: {row.title}'
+                body = (
+                    f"Your official letter \"{row.title}\" for {row.department.name} has been signed "
+                    f"by both Pastor and Clerk! You can now download it from the Requests desk for stamping: {download_link}"
+                )
+                sms_text = (
+                    f"SDA Loma Linda: Your letter for {row.department.name} ({row.title[:30]}) "
+                    f"is fully signed! Download for stamping: {download_link}"
+                )
+                _notify_withdrawal_audience([requester], subject, body, download_link, sms_text)
+
+            serializer = DepartmentLetterRequestSerializer(row)
+            return Response(serializer.data)
+
+        elif action == 'decline':
+            if not is_pastor_or_admin(request.user) and not is_clerk_or_admin(request.user):
+                return Response({'detail': 'Only pastors, clerks or admins can decline letters.'}, status=status.HTTP_403_FORBIDDEN)
+
+            row.status = 'declined'
+            row.declined_by = request.user
+            row.reply = reply
+            row.save(update_fields=['status', 'declined_by', 'reply'])
+
+            requester = row.requested_by
+            if requester:
+                subject = f'Letter Declined: {row.title}'
+                body = (
+                    f"Your letter \"{row.title}\" for {row.department.name} was declined. "
+                    f"Reason: {reply or 'Not specified'}"
+                )
+                _notify_withdrawal_audience([requester], subject, body, '', body)
+
+            serializer = DepartmentLetterRequestSerializer(row)
+            return Response(serializer.data)
+
+        return Response({'detail': 'Invalid action. Choose pastor_sign, clerk_sign, or decline.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DepartmentLetterPdfView(APIView):
+    """Generate and download the official letterhead PDF for a department letter."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        row = DepartmentLetterRequest.objects.select_related(
+            'department', 'requested_by', 'pastor_signed_by', 'clerk_signed_by', 'declined_by'
+        ).filter(pk=pk).first()
+        if not row:
+            return Response({'detail': 'Letter request not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user = request.user
+        can_view = (
+            user.pk == row.requested_by_id or
+            is_pastor_or_admin(user) or
+            is_clerk_or_admin(user) or
+            is_elder_or_admin(user) or
+            DepartmentMembership.objects.filter(department=row.department, member=user).exists()
+        )
+        if not can_view:
+            return Response({'detail': 'You do not have permission to view this letter.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from .signatures import user_signature_entry
+        from .pdf_generator import generate_department_letter_pdf
+
+        pastor_sig = user_signature_entry(row.pastor_signed_by, "Church Pastor") if row.pastor_signed_by else None
+        clerk_sig = user_signature_entry(row.clerk_signed_by, "Church Clerk") if row.clerk_signed_by else None
+
+        serializer = DepartmentLetterRequestSerializer(row)
+        church_name = current_church_name()
+        pdf_bytes = generate_department_letter_pdf(serializer.data, church_name, pastor_sig, clerk_sig)
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        filename = f"Letter_{row.department.code}_{row.id}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
 
 
 class DeaconateRequestView(APIView):

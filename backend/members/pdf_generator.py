@@ -2142,6 +2142,147 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     return buffer.getvalue()
 
 
+def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=None, clerk_sig=None) -> bytes:
+    """The official department letter / requisition on church letterhead.
+
+    Carries:
+      - Loma Linda SDA letterhead and title
+      - Ref: LL/LTR/{id:04d} and date
+      - Department & Requester info header
+      - Letter Title (RE: ...)
+      - Letter Body formatted formally
+      - Signatures & Stamp:
+          - Pastor (with signature image, name, date)
+          - Clerk (with signature image, name, date)
+          - Official church stamp placeholder box
+    """
+    church_name = pdf_church_name(church_name)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1.8 * cm,
+        leftMargin=1.8 * cm,
+        topMargin=2.0 * cm,
+        bottomMargin=2.2 * cm,
+    )
+
+    st = get_pdf_styles()
+    story = []
+
+    # Title header
+    ref_no = f"LL/LTR/{letter_record.get('id', 0):04d}"
+    story.append(Paragraph("OFFICIAL CHURCH CORRESPONDENCE", st["title_big"]))
+
+    created_date = letter_record.get('created_at')
+    date_str = ""
+    if hasattr(created_date, 'strftime'):
+        date_str = created_date.strftime('%d %B %Y')
+    elif created_date:
+        date_str = str(created_date)[:10]
+
+    story.append(Paragraph(
+        f"Ref: <b>{ref_no}</b> &nbsp;&middot;&nbsp; Date: <b>{date_str}</b>",
+        st["meta"],
+    ))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
+    story.append(Spacer(1, 10))
+
+    # Details table (Department, Written By, Status)
+    dept_name = str(letter_record.get("department_name") or letter_record.get("department") or "—")
+    author_name = str(letter_record.get("requested_by_name") or letter_record.get("requested_by") or "—")
+    status_str = str(letter_record.get("status") or "—").replace("_", " ").title()
+
+    def label(text):
+        return Paragraph(f"<b>{escape(text)}</b>", st["cell"])
+
+    def value(text, style="cell"):
+        return Paragraph(text or "—", st[style])
+
+    info_table = Table(
+        [
+            [label("Department:"), value(escape(dept_name)),
+             label("Status:"), value(escape(status_str), "cell_bold")],
+            [label("Written By:"), value(escape(author_name)),
+             label("Reference:"), value(escape(ref_no))],
+        ],
+        colWidths=[2.8 * cm, 6.0 * cm, 2.8 * cm, 5.8 * cm],
+    )
+    info_table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f4ee")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f4ee")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dfdbd1")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 14))
+
+    # Letter Title / Subject
+    title_text = str(letter_record.get("title") or "Letter").strip()
+    subject_style = ParagraphStyle(
+        "LetterSubject",
+        parent=st["cell_bold"],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor("#26352f"),
+        spaceAfter=10,
+    )
+    story.append(Paragraph(f"RE: {escape(title_text).upper()}", subject_style))
+    story.append(Spacer(1, 6))
+
+    # Letter Content / Body
+    body_style = ParagraphStyle(
+        "LetterBody",
+        parent=st["cell"],
+        fontName="Helvetica",
+        fontSize=10,
+        leading=16,
+        textColor=colors.HexColor("#1f2937"),
+        spaceAfter=8,
+    )
+    content_raw = str(letter_record.get("content") or "").strip()
+    paragraphs = content_raw.split("\n\n") if "\n\n" in content_raw else content_raw.split("\n")
+    for p in paragraphs:
+        cleaned = p.strip()
+        if cleaned:
+            story.append(Paragraph(escape(cleaned).replace("\n", "<br />"), body_style))
+            story.append(Spacer(1, 4))
+
+    story.append(Spacer(1, 16))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#dfdbd1")))
+    story.append(Spacer(1, 10))
+
+    # Signatures & Stamp slots
+    letter_slots = (
+        ('pastor', "Church Pastor", "Pastoral Approval"),
+        ('clerk', "Church Clerk", "Church Office / Secretariat"),
+        (None, "Official Church Stamp", "Affix Rubber Stamp Here"),
+    )
+    letter_signatures = {}
+    if pastor_sig:
+        letter_signatures['pastor'] = pastor_sig
+    if clerk_sig:
+        letter_signatures['clerk'] = clerk_sig
+
+    story.append(SignatureSlotsFlowable(
+        height=3.8 * cm,
+        signatures=letter_signatures,
+        slots=letter_slots,
+    ))
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+
 def _spoken_hour(clk):
     """A stored ``HH:MM`` hour spoken as a programme says it — ``8:15 PM``."""
     match = re.match(r'^(\d{1,2}):(\d{2})$', str(clk or '').strip())
