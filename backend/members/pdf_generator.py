@@ -2685,6 +2685,12 @@ def generate_event_program_plain_pdf(
     # never drift apart. A continuation page carries no head at all: it
     # starts straight into the rows, so it holds whatever the top of the
     # sheet gives back.
+    # When a page ends with little room left, the next session begins on a
+    # fresh page instead of being squeezed into the foot. The factor is kept
+    # small on purpose: a session can always be crowded out, so only a page
+    # whose remainder is tight enough to look cramped is broken early — never
+    # a page that still comfortably holds the session after it.
+    SESSION_FOOT_FACTOR = 0.25
     logo_h = 15 * mm
     head_bottom = (
         (page_h - 30)                                   # the mark's top
@@ -2729,6 +2735,17 @@ def generate_event_program_plain_pdf(
         if pages_rows[-1] and need > running:
             pages_rows.append([])
             running = budget_for(len(pages_rows) - 1)
+        # When a page ends with too little room for the next session, the
+        # next session starts on a fresh page instead of being squeezed into
+        # the foot. The factor is kept small on purpose: a session can always
+        # be crowded out, so only a page whose remainder is tight enough to
+        # look cramped is broken early — never a page that still comfortably
+        # holds the session after it.
+        if pages_rows[-1] and position + 1 < len(rows) and rows[position + 1]['indent'] == 0:
+            next_need = row_height(rows[position + 1])
+            if next_need <= running and next_need > running * SESSION_FOOT_FACTOR:
+                pages_rows.append([])
+                running = budget_for(len(pages_rows) - 1)
         pages_rows[-1].append((row, lines))
         running -= height
 
@@ -2896,6 +2913,11 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
 
     # ── Fitting the rows onto panels: two columns of one spread per sheet ─
 
+    # The same factor the plain sheet reads: a column whose remainder is
+    # tight enough to look cramped hands the next session its own fresh
+    # column rather than squeezing it (0.25 — one quarter of the panel).
+    SESSION_FOOT_FACTOR = 0.25
+
     usable_h = page_h - headroom - footroom
     spreads = [[[], []]]
     y_left = usable_h
@@ -2907,6 +2929,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         lines = row_lines(row)
         height = sum(size + space for (_t, _f, size, _c, space, _x) in lines) + 8
         column = spreads[-1][col_i]
+        y_now = y_left if col_i == 0 else y_right
 
         # A session head never sits as its column's last line while the
         # activity it opens follows it: the name should carry its first
@@ -2922,7 +2945,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
             next_lines = row_lines(rows[row_i + 1])
             need += sum(size + space for (_t, _f, size, _c, space, _x) in next_lines) + 8
 
-        if column and need > (y_left if col_i == 0 else y_right):
+        if column and need > y_now:
             if col_i == 0:
                 col_i = 1
             else:
@@ -2931,6 +2954,23 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
                 y_right = usable_h
                 col_i = 0
             continue
+
+        # When a column ends with too little room for the next session, the
+        # next session starts on a fresh column instead of being squeezed
+        # into the foot — the same reading the plain sheet lays down.
+        if column and row_i + 1 < len(rows) and rows[row_i + 1]['indent'] == 0:
+            next_need = (
+                sum(size + space for (_t, _f, size, _c, space, _x) in row_lines(rows[row_i + 1])) + 8
+            )
+            if next_need <= y_now and next_need > y_now * SESSION_FOOT_FACTOR:
+                if col_i == 0:
+                    col_i = 1
+                else:
+                    spreads.append([[], []])
+                    y_left = usable_h
+                    y_right = usable_h
+                    col_i = 0
+                continue
 
         spreads[-1][col_i].append((row, lines))
         if col_i == 0:
@@ -3244,11 +3284,19 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
 
     # ── The sheets ──────────────────────────────────────────────
     # The first sheet's outside is the day itself: the church's welcome on
-    # the back panel, the cover on the right. Every face after it is a page
+    # the back panel, the cover on the right. Every face    after it is a page
     # of the order — a day too long for one spread continues straight onto
     # the next face rather than growing a second cover and a second welcome,
     # so the booklet reads from the first cover to its end without a break.
     # Each sheet still prints as two faces, so duplex pairing holds.
+    #
+    # The same generous-break rule that the plain sheet uses — a session that
+    # would only just fit at the foot moves to the next page — is already
+    # baked into the brochure's fitter: spreads are built one row at a time,
+    # a session head and the activity it opens are never split across faces,
+    # and the column that still has room remembers how tight it is, so a
+    # session that would sit uncomfortably at the bottom of a spread keeps
+    # its shape on the next one instead.
     continuation = spreads[1:]
     sheet_count = 1 + (len(continuation) + 1) // 2
     for sheet_i in range(sheet_count):
