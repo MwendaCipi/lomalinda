@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
-import { AnnouncementCommentModal } from "@/components/announcement-comment-modal";
+import { AnnouncementInlineComments } from "@/components/announcement-comment-modal";
 import { GiveMethodModal } from "@/components/give-method-modal";
 import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
@@ -94,8 +94,10 @@ export default function AnnouncementsPage() {
   // the card keeps three buttons (Give Now, Pledge, Comment) instead of the
   // old inline combo of Pledge / In-kind / Give Money.
   const [methodFor, setMethodFor] = useState<FeedItem | null>(null);
-  // Every card can be commented on: its Comment button opens this thread.
-  const [commentFor, setCommentFor] = useState<FeedItem | null>(null);
+  // Comments on announcements appear inline beneath the card.
+  const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
+  const toggleComment = (id: number) =>
+    setExpandedComments((prev) => ({ ...prev, [id]: !prev[id] }));
   // A drive's money gift still leaves for the giving page with its purpose
   // named; the other cards open the money modal in place.
   const router = useRouter();
@@ -397,14 +399,19 @@ export default function AnnouncementsPage() {
                                   </button>
                                 );
                               }
+                              const isExpanded = Boolean(expandedComments[item.id]);
                               return (
                                 <button
                                   key="comment"
                                   type="button"
-                                  onClick={() => setCommentFor(item)}
-                                  className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                  onClick={() => toggleComment(item.id)}
+                                  className={`rounded-full border px-2.5 py-2 text-xs font-bold transition ${
+                                    isExpanded
+                                      ? "border-ember bg-sand text-ember"
+                                      : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
+                                  }`}
                                 >
-                                  Comment
+                                  {isExpanded ? "Hide comments" : "Comment"}
                                 </button>
                               );
                             })}
@@ -413,17 +420,25 @@ export default function AnnouncementsPage() {
                       )}
 
                       {/* A card with nothing to give still carries the one
-                          Comment button at its foot — the thread is the same
-                          one a giving card's Comment opens. */}
+                          Comment button at its foot — expanding the thread inline. */}
                       {!supportGives && !isDrive && (
                         <div className="mt-3 border-t border-sand-line pt-3">
-                          <button
-                            type="button"
-                            onClick={() => setCommentFor(item)}
-                            className="rounded-full border border-sand-mute bg-white px-4 py-1.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
-                          >
-                            Comment
-                          </button>
+                          {(() => {
+                            const isExpanded = Boolean(expandedComments[item.id]);
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => toggleComment(item.id)}
+                                className={`rounded-full border px-4 py-1.5 text-xs font-bold transition ${
+                                  isExpanded
+                                    ? "border-ember bg-sand text-ember"
+                                    : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
+                                }`}
+                              >
+                                {isExpanded ? "Hide comments" : "Comment"}
+                              </button>
+                            );
+                          })()}
                         </div>
                       )}
 
@@ -433,6 +448,11 @@ export default function AnnouncementsPage() {
                           reaches it. The card keeps the confirmation. */}
                       {pledgeDone.includes(item.id) && (
                         <p className="mt-2 text-xs font-semibold text-sage-strong">Thank you. Your pledge has been recorded.</p>
+                      )}
+
+                      {/* Inline comments thread expanded directly beneath the card */}
+                      {expandedComments[item.id] && (
+                        <AnnouncementInlineComments announcementId={item.id} title={item.title} />
                       )}
                     </>
                   );
@@ -490,14 +510,6 @@ export default function AnnouncementsPage() {
           setMethodFor(null);
           if (item) setInKindFor(item);
         }}
-      />
-
-      {/* A comment on any card opens this box: the thread above, a
-          500-character composer beneath. */}
-      <AnnouncementCommentModal
-        open={Boolean(commentFor)}
-        onClose={() => setCommentFor(null)}
-        announcement={commentFor}
       />
     </main>
   );

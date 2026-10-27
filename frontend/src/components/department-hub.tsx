@@ -1095,10 +1095,14 @@ function eventHasProgram(event: DeptEvent) {
   return Boolean(event.program_file) || parseProgramItems(event.program_items).length > 0;
 }
 
-/** The row's time: a range when the event finishes on the day it starts. */
+/** The row's time: a range when the event finishes on the day it starts.
+    An empty "To" date counts as finishing that day — the form's default,
+    a single-day event that only reads its hours — so the end time it holds
+    belongs beside the start. */
 function eventTimeRange(event: DeptEvent) {
   const start = clockTime(event.time);
-  const end = event.end_date === event.date ? clockTime(event.end_time) : "";
+  const sameDay = !event.end_date || event.end_date === event.date;
+  const end = sameDay ? clockTime(event.end_time) : "";
   if (start && end) return `${start} – ${end}`;
   return start || end;
 }
@@ -4892,6 +4896,7 @@ type DeptSubTab =
   | "baptismal-class"
   | "daily-word"
   | "announcements"
+  | "sharing"
   // The deaconate desk's two panels that live in the console desk and ride
   // this desk's structure when it opens from the map (see the panels block).
   | "inventory"
@@ -5048,7 +5053,7 @@ function DepartmentDetail({
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
   const officeViewBlocked =
-    (subTab === "baptismal-class" || subTab === "daily-word" || subTab === "announcements") &&
+    (subTab === "baptismal-class" || subTab === "daily-word" || subTab === "announcements" || subTab === "sharing") &&
     !canOpenOfficeViews;
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // The members view holds the roll *and* the asks to join it, so the desk
@@ -5514,6 +5519,8 @@ function DepartmentDetail({
   // those same names, so the desk reads the same chip it would there.
   const eldershipChip = useMemo(() => {
     switch (subTab) {
+      case "rota":
+        return "rota";
       case "calendar":
         return "calendar";
       case "moments":
@@ -5523,16 +5530,17 @@ function DepartmentDetail({
       case "baptismal-class":
         return "baptismal-class";
       case "announcements":
-        return "announcements";
+      case "sharing":
+        return "sharing";
       default:
-        return "members";
+        return "calendar";
     }
   }, [subTab]);
   const handleEldershipChip = useCallback(
     (key: string) => {
       const view = eldershipViews.find((candidate) => candidate.key === key);
       if (!view) return;
-      if (key === "members" || key === "calendar" || key === "baptismal-class") {
+      if (key === "calendar" || key === "baptismal-class") {
         // A view of this desk. On the map the address bar names it too, so a
         // reload lands where the reader stood; on the console the desk is one
         // department of the directory, so the press walks to it instead.
@@ -6792,7 +6800,7 @@ function DepartmentDetail({
                         <p className="px-3 py-2 text-sm font-semibold text-bark">{event.title}</p>
                         <p className="px-3 pb-2 text-xs text-moss">
                           {dayFirst(event.date)}
-                          {event.time ? ` · ${clockTime(event.time)}` : ""}
+                          {event.time ? ` · ${eventTimeRange(event)}` : ""}
                           {event.location ? ` · ${event.location}` : ""}
                         </p>
                         {/* A row from another ministry's calendar names it, so
@@ -7075,7 +7083,7 @@ function DepartmentDetail({
           structure every other view of this desk keeps. The rota filters and
           the register's search stay the panels' own: no desk above hosts them
           here, so `filtersHosted` is deliberately unset. */}
-      {(subTab === "inventory" || subTab === "rota") && isDeaconate && (
+      {((subTab === "inventory" && isDeaconate) || (subTab === "rota" && (isDeaconate || department.code === "eldership"))) && (
         <div className="h-full min-h-0">
           <DeaconateManager initialTab={subTab} desk="deaconate" embedded />
         </div>
@@ -7127,14 +7135,14 @@ function DepartmentDetail({
           <DailyWordPanel />
         </div>
       )}
-      {subTab === "announcements" && canOpenOfficeViews && (
+      {(subTab === "announcements" || subTab === "sharing") && canOpenOfficeViews && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
           <div className="mb-4 shrink-0">
             <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
-              <Megaphone className="h-4 w-4 text-ember" aria-hidden="true" /> Announcements
+              <Sparkles className="h-4 w-4 text-ember" aria-hidden="true" /> Sharing
             </h3>
             <p className="mt-0.5 text-xs text-moss">
-              The notices published to the church family, the same board the announcements desk keeps.
+              Notices published to the church family, and the daily devotional thought.
             </p>
           </div>
           {/* The desk page holds still at every width, so the board needs a

@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { ArrowUpRight, Download, Megaphone, X } from "lucide-react";
+import { ArrowUpRight, Download, Megaphone, Send, Sparkles, X } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { localDate, dayFirst } from "@/lib/dates";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
@@ -332,6 +332,90 @@ export function AnnouncementManager({
   const [showCreateModal, setShowCreateModal] = useState(composerOnly);
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  type DailyWordRow = {
+    id: number;
+    date: string;
+    text: string;
+    author_name: string;
+  };
+
+  const [todayThought, setTodayThought] = useState<DailyWordRow | null>(null);
+  const [showThoughtModal, setShowThoughtModal] = useState(false);
+  const [thoughtDraft, setThoughtDraft] = useState("");
+  const [savingThought, setSavingThought] = useState(false);
+
+  // The fetch itself answers; the states move only in the promise callbacks
+  // below, so the mount effect never setStates synchronously (the react
+  // compiler forbids it): an `undefined` result means the fetch could not
+  // read the word and the panel keeps whatever it was showing.
+  const fetchDailyWord = useCallback(async (): Promise<DailyWordRow | null | undefined> => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      if (!token) return undefined;
+      const res = await fetch(`${API_URL}/api/members/daily-word/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return undefined;
+      const data = (await res.json()) as { today?: DailyWordRow | null };
+      return data.today ?? null;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDailyWord().then((row) => {
+      if (row !== undefined && !cancelled) setTodayThought(row);
+    });
+    const handleUpdate = () => {
+      void fetchDailyWord().then((row) => {
+        if (row !== undefined && !cancelled) setTodayThought(row);
+      });
+    };
+    window.addEventListener("daily-word-updated", handleUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("daily-word-updated", handleUpdate);
+    };
+  }, [fetchDailyWord]);
+
+  const handleSaveThought = async () => {
+    const text = thoughtDraft.trim();
+    if (!text || savingThought) return;
+    setSavingThought(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const res = await fetch(`${API_URL}/api/members/daily-word/`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.text || "The thought could not be shared.");
+      showAlert("Shared", "Today's thought is with the church.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+      setShowThoughtModal(false);
+      setThoughtDraft("");
+      await fetchDailyWord().then((row) => {
+        if (row !== undefined) setTodayThought(row);
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("daily-word-updated"));
+      }
+    } catch (error) {
+      showAlert("Could not share", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSavingThought(false);
+    }
+  };
 
   const [form, setForm] = useState({
     title: "",
@@ -1227,6 +1311,95 @@ export function AnnouncementManager({
     return renderComposerForm(false);
   }
 
+  function renderThoughtModal() {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-bark/60 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="thought-modal-title"
+      >
+        <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-sand-line">
+          {/* Header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-5 py-4">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded-xl bg-ember/10 p-2 text-ember">
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 id="thought-modal-title" className="text-base font-bold text-bark">
+                  Share a Thought
+                </h2>
+                <p className="text-xs text-moss">
+                  Today&apos;s devotional thought for the congregation.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowThoughtModal(false)}
+              className="rounded-xl p-2 text-moss hover:bg-sand hover:text-bark transition"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {todayThought && (
+              <div className="rounded-xl border border-sand-line bg-sand-linen p-3.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-ember">
+                  <span>Currently Live for Today</span>
+                  {todayThought.author_name && <span>— {todayThought.author_name}</span>}
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-xs text-bark">{todayThought.text}</p>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="thought-text" className="block text-xs font-semibold text-bark">
+                {todayThought ? "Update Today's Thought" : "Write Today's Thought"}
+              </label>
+              <p className="mt-0.5 text-[11px] text-moss">
+                A daily word of faith, encouragement, or scripture reflection. Posting replaces any previous thought for today.
+              </p>
+              <textarea
+                id="thought-text"
+                rows={5}
+                value={thoughtDraft}
+                onChange={(e) => setThoughtDraft(e.target.value)}
+                placeholder="Share a short devotional thought or verse reflection for today..."
+                className="mt-2 w-full rounded-xl border border-sand-line bg-white p-3 text-xs leading-5 text-bark placeholder:text-moss-faint focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember"
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-sand-line bg-sand px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setShowThoughtModal(false)}
+              disabled={savingThought}
+              className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark hover:bg-sand transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSaveThought()}
+              disabled={savingThought || !thoughtDraft.trim()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-50"
+            >
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{savingThought ? "Sharing…" : todayThought ? "Update Thought" : "Share with Church"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (composerOnly) {
     // Communicate mode: the compose fields alone — the host modal supplies
     // the frame, the heading, and the close button. The buttons come along,
@@ -1266,6 +1439,36 @@ export function AnnouncementManager({
 
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
+        {todayThought && (
+          <div className="shrink-0 border-b border-sand-line bg-sand-linen/60 px-4 py-3 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-ember" aria-hidden="true" />
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-bark">
+                    <span>Thought of the Day</span>
+                    {todayThought.author_name && (
+                      <span className="font-normal text-moss text-[11px]">— {todayThought.author_name}</span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-moss-dark line-clamp-2 sm:line-clamp-1">
+                    {todayThought.text}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setThoughtDraft(todayThought.text);
+                  setShowThoughtModal(true);
+                }}
+                className="shrink-0 self-end sm:self-center rounded-lg border border-sand-line bg-white px-2.5 py-1 text-xs font-semibold text-bark hover:border-ember transition"
+              >
+                Edit thought
+              </button>
+            </div>
+          </div>
+        )}
         {/* The announcement board is cards at every width — a bulletin reads as
             a bulletin, not as a ledger row. */}
         <RecordList
@@ -1390,25 +1593,41 @@ export function AnnouncementManager({
             <span className="text-xs text-moss sm:text-sm">
               Showing <strong className="text-bark">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                setMessage("");
-                setShowCreateModal(true);
-              }}
-              className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Add Announcement</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setThoughtDraft(todayThought?.text ?? "");
+                  setShowThoughtModal(true);
+                }}
+                className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-line bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:bg-sand-linen sm:px-3.5"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                <span>Share a Thought</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMessage("");
+                  setShowCreateModal(true);
+                }}
+                className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>Add Announcement</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Add Announcement Modal */}
       {showCreateModal && renderComposerOverlay()}
+
+      {/* Share a Thought Modal (Daily Word) */}
+      {showThoughtModal && renderThoughtModal()}
     </section>
   );
 }

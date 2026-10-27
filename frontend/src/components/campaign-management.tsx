@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   Receipt,
+  Trash2,
   User,
   Users,
   X,
@@ -30,6 +31,20 @@ import { densityCellPad } from "@/lib/table-density";
 import { AddReceiptModal } from "./add-receipt-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+const GIVING_ACTION_OPTIONS = [
+  { value: "give_now", label: "Give now" },
+  { value: "pledge", label: "Pledge" },
+  { value: "in_kind", label: "Support (in-kind)" },
+  { value: "comment", label: "Comment" },
+];
+
+const SHARING_CHANNEL_OPTIONS = [
+  { value: "site", label: "On the Site" },
+  { value: "email", label: "Through Email" },
+  { value: "sms", label: "Through SMS" },
+  { value: "phone", label: "Phone Push" },
+];
 
 interface Campaign {
   id: number;
@@ -158,6 +173,7 @@ export function CampaignManagement({
     account_name: "",
     description: "",
     is_temporary: true,
+    is_active: true,
     target_amount: "",
     start_date: todayStr,
     end_date: "",
@@ -186,6 +202,17 @@ export function CampaignManagement({
   const [comboboxSearch, setComboboxSearch] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [issuingCards, setIssuingCards] = useState(false);
+
+  // Announcement option during drive creation
+  const [postAsAnnouncement, setPostAsAnnouncement] = useState(true);
+  const [announcementChannels, setAnnouncementChannels] = useState<string[]>(["site", "email"]);
+  const [givingActions, setGivingActions] = useState<string[]>(["give_now", "pledge", "in_kind", "comment"]);
+  const [announcementIsPopup, setAnnouncementIsPopup] = useState(false);
+  const [announcementCustomText, setAnnouncementCustomText] = useState("");
+
+  // Ended drives selection for deletion
+  const [selectedEndedIds, setSelectedEndedIds] = useState<number[]>([]);
+  const [isDeletingEnded, setIsDeletingEnded] = useState(false);
 
   // Actions menu state. The menu renders `fixed` at coordinates captured from
   // its button, because an `absolute` menu is clipped by the table wrapper's
@@ -434,6 +461,7 @@ export function CampaignManagement({
       account_name: "",
       description: "",
       is_temporary: true,
+      is_active: true,
       target_amount: "",
       start_date: todayStr,
       end_date: "",
@@ -444,6 +472,11 @@ export function CampaignManagement({
       allow_personal_invitations: false,
     });
     setDriveAttachment(null);
+    setPostAsAnnouncement(true);
+    setAnnouncementChannels(["site", "email"]);
+    setGivingActions(["give_now", "pledge", "in_kind", "comment"]);
+    setAnnouncementIsPopup(false);
+    setAnnouncementCustomText("");
     setSourceAccountId(presetAccountId);
     setEditingCampaign(null);
     setShowCreateModal(false);
@@ -459,6 +492,7 @@ export function CampaignManagement({
       account_name: campaign.account_name || "",
       description: campaign.description || "",
       is_temporary: campaign.is_temporary ?? true,
+      is_active: campaign.is_active ?? true,
       target_amount: campaign.target_amount ? String(campaign.target_amount) : "",
       start_date: campaign.start_date || todayStr,
       end_date: campaign.end_date || "",
@@ -504,6 +538,7 @@ export function CampaignManagement({
           account_name: form.account_name.trim() || form.name.trim(),
           description: form.description.trim(),
           is_temporary: form.is_temporary,
+          is_active: form.is_active,
           target_amount: numericTarget,
           start_date: form.start_date || todayStr,
           end_date: form.end_date || null,
@@ -555,6 +590,7 @@ export function CampaignManagement({
         source_department: sourceDepartment || undefined,
         description: form.description.trim(),
         is_temporary: form.is_temporary,
+        is_active: true,
         target_amount: numericTarget,
         start_date: form.start_date || todayStr,
         end_date: form.end_date || null,
@@ -565,6 +601,15 @@ export function CampaignManagement({
         message_frequency: "once",
         allow_personal_invitations: form.allow_personal_invitations,
       };
+      if (postAsAnnouncement) {
+        payload.post_as_announcement = true;
+        payload.sharing_option = announcementChannels.join(",");
+        payload.giving_actions = JSON.stringify(givingActions);
+        payload.is_popup = announcementIsPopup;
+        if (announcementCustomText.trim()) {
+          payload.announcement_text = announcementCustomText.trim();
+        }
+      }
       let body: BodyInit;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (driveAttachment) {
@@ -629,14 +674,17 @@ export function CampaignManagement({
   }
 
   /**
-   * Copy a drive's direct giving link.
+   * Copy a drive's direct giving link with year.
    *
-   * `/drives/<id>/money` opens the drive and raises the M-Pesa prompt on
+   * `/drives/<id>/<year>/money` opens the drive and raises the M-Pesa prompt on
    * arrival, so a link dropped into a WhatsApp group or a bulletin lands the
    * giver in the act of giving rather than on a page they still have to act on.
    */
   async function handleCopyGivingLink(campaign: Campaign) {
-    const url = `${window.location.origin}/drives/${campaign.id}/money`;
+    const yearCode = campaign.start_date
+      ? campaign.start_date.slice(2, 4)
+      : String(new Date().getFullYear()).slice(2, 4);
+    const url = `${window.location.origin}/drives/${campaign.id}/${yearCode}/money`;
     try {
       await navigator.clipboard.writeText(url);
       showAlert(
@@ -646,6 +694,70 @@ export function CampaignManagement({
       );
     } catch {
       showAlert("Copy the link", url, "info");
+    }
+  }
+
+  async function handleDeleteCampaign(campaign: Campaign) {
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete the ended fund drive "${campaign.title || campaign.name}"? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/members/campaigns/${campaign.id}/`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not delete fund drive.");
+      }
+      showAlert(
+        "Fund Drive Deleted",
+        `"${campaign.title || campaign.name}" was permanently removed.`,
+        "success"
+      );
+      setSelectedEndedIds((prev) => prev.filter((id) => id !== campaign.id));
+      fetchCampaigns(token);
+    } catch (err) {
+      showAlert("Delete Failed", err instanceof Error ? err.message : "Failed to delete fund drive", "error");
+    }
+  }
+
+  async function handleDeleteSelectedEnded() {
+    if (selectedEndedIds.length === 0) return;
+    if (
+      !confirm(
+        `Are you sure you want to permanently delete the ${selectedEndedIds.length} selected ended fund drive(s)? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    setIsDeletingEnded(true);
+    try {
+      for (const id of selectedEndedIds) {
+        await fetch(`${API_URL}/api/members/campaigns/${id}/`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+      showAlert(
+        "Drives Deleted",
+        `Successfully deleted ${selectedEndedIds.length} ended fund drive(s).`,
+        "success"
+      );
+      setSelectedEndedIds([]);
+      fetchCampaigns(token);
+    } catch (err) {
+      showAlert("Delete Error", err instanceof Error ? err.message : "Error deleting selected drives", "error");
+    } finally {
+      setIsDeletingEnded(false);
     }
   }
 
@@ -961,9 +1073,128 @@ export function CampaignManagement({
               </span>
             </label>
 
-            {/* No broadcast block: the description above is what the drive
-                broadcasts, when the office asks it to. */}
+            {editingCampaign && (
+              <div className="flex items-center justify-between rounded-2xl border border-sand-line bg-sand-plate p-4">
+                <div>
+                  <span className="block text-xs font-bold text-bark">Drive Status</span>
+                  <span className="block text-[11px] text-moss">
+                    {form.is_active
+                      ? "Active: visible in Fund Drives and accepting member contributions."
+                      : "Ended: marked as concluded. Toggle to Active to reopen."}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, is_active: !prev.is_active }))}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
+                    form.is_active
+                      ? "bg-mist-soft text-sage-bright border border-sage/20 hover:bg-mist"
+                      : "bg-alert-film text-brick border border-brick/20 hover:bg-red-100"
+                  }`}
+                >
+                  <span className={`inline-block h-2 w-2 rounded-full ${form.is_active ? "bg-sage-bright" : "bg-brick"}`} />
+                  {form.is_active ? "Active" : "Ended (Reactivate)"}
+                </button>
+              </div>
+            )}
 
+            {!editingCampaign && (
+              <div className="rounded-2xl border border-sand-line bg-sand/30 p-4 space-y-3.5">
+                <label className="flex items-start gap-2.5 text-xs font-semibold text-bark cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={postAsAnnouncement}
+                    onChange={(e) => setPostAsAnnouncement(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sage"
+                  />
+                  <div>
+                    <span>Publish as Church Announcement & Broadcast</span>
+                    <span className="block text-[11px] font-normal text-moss">
+                      Posts this fund drive into the church sharing & announcements feed and dispatches notifications across chosen channels.
+                    </span>
+                  </div>
+                </label>
+
+                {postAsAnnouncement && (
+                  <div className="space-y-3 pt-2.5 border-t border-sand-line/70">
+                    <div>
+                      <span className="block text-xs font-semibold text-bark">Broadcast channels</span>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {SHARING_CHANNEL_OPTIONS.map((channel) => {
+                          const active = announcementChannels.includes(channel.value);
+                          return (
+                            <button
+                              key={channel.value}
+                              type="button"
+                              onClick={() =>
+                                setAnnouncementChannels((prev) =>
+                                  active ? prev.filter((c) => c !== channel.value) : [...prev, channel.value]
+                                )
+                              }
+                              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                                active
+                                  ? "border-ember bg-ember text-white"
+                                  : "border-sand-mute bg-white text-bark hover:border-ember"
+                              }`}
+                            >
+                              <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${active ? "border-white/70 bg-white/20" : "border-sand-mute bg-white"}`}>
+                                {active && <Check size={10} className="text-white" />}
+                              </span>
+                              {channel.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="block text-xs font-semibold text-bark">Giving actions on announcement</span>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {GIVING_ACTION_OPTIONS.map((action) => {
+                          const active = givingActions.includes(action.value);
+                          return (
+                            <button
+                              key={action.value}
+                              type="button"
+                              onClick={() =>
+                                setGivingActions((prev) =>
+                                  active ? prev.filter((a) => a !== action.value) : [...prev, action.value]
+                                )
+                              }
+                              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                                active
+                                  ? "border-sage bg-sage text-white"
+                                  : "border-sand-mute bg-white text-bark hover:border-sage"
+                              }`}
+                            >
+                              <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${active ? "border-white/70 bg-white/20" : "border-sand-mute bg-white"}`}>
+                                {active && <Check size={10} className="text-white" />}
+                              </span>
+                              {action.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <label className="flex items-start gap-2.5 text-xs font-medium text-bark cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={announcementIsPopup}
+                        onChange={(e) => setAnnouncementIsPopup(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sage"
+                      />
+                      <div>
+                        <span>Pop up automatically to users</span>
+                        <span className="block text-[11px] font-normal text-moss">
+                          Pop up as a prompt on member devices upon signing in.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
             </div>
 
             {/* The always-visible answer row at the foot — the requests modals' pattern. */}
@@ -1345,6 +1576,46 @@ export function CampaignManagement({
               </div>
             ) : (
               <>
+                {isAdminMode && canEdit && (() => {
+                  const endedDrives = filteredCampaigns.filter((c) => !c.is_active);
+                  if (endedDrives.length === 0) return null;
+                  const allEndedSelected = endedDrives.every((c) => selectedEndedIds.includes(c.id));
+                  return (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-sand-plate border border-sand-line p-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="select-all-ended"
+                          checked={allEndedSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedEndedIds(endedDrives.map((d) => d.id));
+                            } else {
+                              setSelectedEndedIds([]);
+                            }
+                          }}
+                          className="h-4 w-4 rounded accent-red-600 cursor-pointer"
+                        />
+                        <label htmlFor="select-all-ended" className="text-xs font-semibold text-bark cursor-pointer">
+                          Select all ended fund drives ({endedDrives.length})
+                        </label>
+                      </div>
+
+                      {selectedEndedIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSelectedEnded()}
+                          disabled={isDeletingEnded}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 disabled:opacity-60 transition"
+                        >
+                          <Trash2 size={13} aria-hidden="true" />
+                          {isDeletingEnded ? "Deleting..." : `Delete Selected (${selectedEndedIds.length})`}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */}
                 <RecordList
                   rows={filteredCampaigns}
@@ -1372,14 +1643,31 @@ export function CampaignManagement({
                   renderRow={(c) => (
                           <tr key={c.id} className="transition hover:bg-sand-plate">
                             <td className={`px-5 ${rowDrive} align-middle`}>
-                              <Link
-                                href={`/drives/${c.id}`}
-                                className="group block"
-                              >
-                                <div className="font-bold text-bark group-hover:text-ember transition-colors text-sm">
-                                  {c.title || c.name}
-                                </div>
-                              </Link>
+                              <div className="flex items-center gap-3">
+                                {isAdminMode && canEdit && !c.is_active && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedEndedIds.includes(c.id)}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedEndedIds((prev) =>
+                                        e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id)
+                                      );
+                                    }}
+                                    title="Select ended drive for deletion"
+                                    aria-label={`Select ${c.title || c.name}`}
+                                    className="h-4 w-4 rounded accent-red-600 cursor-pointer shrink-0"
+                                  />
+                                )}
+                                <Link
+                                  href={`/drives/${c.id}`}
+                                  className="group block min-w-0"
+                                >
+                                  <div className="font-bold text-bark group-hover:text-ember transition-colors text-sm truncate">
+                                    {c.title || c.name}
+                                  </div>
+                                </Link>
+                              </div>
                             </td>
                             <td className={`px-4 ${rowDrive} align-middle whitespace-nowrap`}>
                               <code className="rounded-md bg-sand px-2 py-1 font-mono text-xs font-bold text-ember border border-sand-line">
@@ -1525,17 +1813,18 @@ export function CampaignManagement({
                                             <Receipt size={13} className="inline" aria-hidden="true" /> Add Receipt
                                           </button>
 
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              closeActionsMenu();
-                                              if (c.allow_personal_invitations) handleOpenIssueCards(c);
-                                              else void handleCopyGeneralLink(c);
-                                            }}
-                                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
-                                          >
-                                            <IdCard size={13} className="inline" aria-hidden="true" /> {c.allow_personal_invitations ? "+ Issue Invites" : "Copy General Link"}
-                                          </button>
+                                          {c.allow_personal_invitations && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                closeActionsMenu();
+                                                handleOpenIssueCards(c);
+                                              }}
+                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-ember hover:bg-sand transition-colors"
+                                            >
+                                              <IdCard size={13} className="inline" aria-hidden="true" /> + Issue Invites
+                                            </button>
+                                          )}
 
                                           <button
                                             type="button"
@@ -1574,6 +1863,19 @@ export function CampaignManagement({
                                           >
                                             {c.is_active ? <><Pause size={13} className="inline" aria-hidden="true" /> End Fund Drive</> : <><Play size={13} className="inline" aria-hidden="true" /> Reactivate Drive</>}
                                           </button>
+
+                                          {!c.is_active && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                closeActionsMenu();
+                                                void handleDeleteCampaign(c);
+                                              }}
+                                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                                            >
+                                              <Trash2 size={13} className="inline" aria-hidden="true" /> Delete Drive
+                                            </button>
+                                          )}
                                         </>
                                       )}
                                     </div>
@@ -1586,11 +1888,39 @@ export function CampaignManagement({
                   renderCard={(c) => (
                     /* The whole card opens the drive — no actions menu here.
                        Officers manage drives from the admin console. */
-                    <Link
+                    <div
                       key={c.id}
-                      href={`/drives/${c.id}`}
                       className="flex flex-col justify-between rounded-3xl bg-white p-4 shadow-sm ring-1 ring-sand-line transition hover:-translate-y-0.5 hover:ring-ember/50 space-y-3"
                     >
+                      {isAdminMode && canEdit && !c.is_active && (
+                        <div className="flex items-center justify-between border-b border-sand-line pb-2" onClick={(e) => e.stopPropagation()}>
+                          <label className="flex items-center gap-2 text-xs font-medium text-bark cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedEndedIds.includes(c.id)}
+                              onChange={(e) => {
+                                setSelectedEndedIds((prev) =>
+                                  e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id)
+                                );
+                              }}
+                              className="h-4 w-4 rounded accent-red-600"
+                            />
+                            <span>Select to delete</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleDeleteCampaign(c);
+                            }}
+                            className="text-xs font-semibold text-red-600 hover:text-red-800"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                      <Link href={`/drives/${c.id}`} className="block space-y-3">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -1639,7 +1969,8 @@ export function CampaignManagement({
                       <span className="flex items-center justify-center rounded-xl bg-bark px-4 py-2.5 text-xs font-semibold text-white transition group-hover:bg-ember">
                         Open Drive
                       </span>
-                    </Link>
+                      </Link>
+                    </div>
                   )}
                 />
               </>

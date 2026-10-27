@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, FileText, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
+import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, FileText, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, Sparkles, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnnouncementManager } from "@/components/announcement-manager";
@@ -550,7 +550,8 @@ function AdministrationContent() {
           description: "The church's leadership, announcements, accounts and the requests members send.",
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
-            { icon: <Megaphone size={20} aria-hidden="true" />, label: "Announcements", description: "Publish Sabbath & weekly public announcements and track pledges.", href: "/administration?tab=announcements" },
+            { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Duty Rota", description: "The deacons', deaconesses' and pulpit duty rosters.", href: "/administration?tab=deaconate-rota" },
+            { icon: <Sparkles size={20} aria-hidden="true" />, label: "Sharing", description: "Publish announcements and share daily thoughts with the church.", href: "/administration?tab=announcements" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding & Accounts", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },

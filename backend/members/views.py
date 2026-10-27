@@ -2212,6 +2212,76 @@ class ChurchEventDetailView(generics.RetrieveUpdateDestroyAPIView):
         serializer.save()
 
 
+def dispatch_announcement_broadcast(announcement, request=None, schema_name=None):
+    """Handle Site / SMS / Email / Push broadcast for an announcement."""
+    sharing_raw = (announcement.sharing_option or '').lower()
+    channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
+    send_email = any(c in ('email', 'all') for c in channels) or sharing_raw in ('email', 'all')
+    send_sms = any(c in ('sms', 'all') for c in channels) or sharing_raw in ('sms', 'all')
+    send_push = any(c in ('phone', 'all') for c in channels) or sharing_raw in ('phone', 'all')
+    show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
+
+    announcement.published = show_site
+    announcement.save(update_fields=['published'])
+
+    if not schema_name:
+        schema_name = getattr(connection, 'schema_name', None)
+        if not schema_name and request and hasattr(request, 'tenant'):
+            schema_name = getattr(request.tenant, 'schema_name', None)
+
+    if send_email:
+        if announcement_broadcasts_run_inline():
+            try:
+                send_announcement_emails(announcement)
+            except Exception:
+                logger.exception('Announcement email broadcast failed')
+        else:
+            threading.Thread(
+                target=dispatch_announcement_emails_safely,
+                args=(announcement.id, schema_name),
+                name=f'announcement-email-{announcement.id}',
+                daemon=True,
+            ).start()
+
+    if send_push:
+        try:
+            from .push import vapid_keys_ready
+
+            if vapid_keys_ready():
+                threading.Thread(
+                    target=_push_announcement_safely,
+                    args=(announcement.id, schema_name),
+                    name=f'announcement-push-{announcement.id}',
+                    daemon=True,
+                ).start()
+        except Exception:
+            pass
+
+    if send_sms:
+        try:
+            for u in announcement_recipients(announcement):
+                ChurchNotification.objects.create(
+                    user=u,
+                    title=f"SMS Announcement: {announcement.title}",
+                    message=announcement.text or announcement.title,
+                )
+        except Exception:
+            pass
+        if sms.configured():
+            if sms_broadcasts_run_inline():
+                try:
+                    send_announcement_sms(announcement)
+                except Exception:
+                    logger.exception('Announcement SMS broadcast failed')
+            else:
+                threading.Thread(
+                    target=dispatch_announcement_sms_safely,
+                    args=(announcement.id, schema_name),
+                    name=f'announcement-sms-{announcement.id}',
+                    daemon=True,
+                ).start()
+
+
 class AnnouncementView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
 
@@ -2329,96 +2399,7 @@ class AnnouncementView(generics.ListCreateAPIView):
 
         # Leadership was already established by CanManageAnnouncements.
         announcement = serializer.save()
-
-        # Handle Site / SMS / Email broadcast
-        sharing_raw = (announcement.sharing_option or '').lower()
-        channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
-        send_email = any(c in ('email', 'all') for c in channels) or sharing_raw in ('email', 'all')
-        send_sms = any(c in ('sms', 'all') for c in channels) or sharing_raw in ('sms', 'all')
-        # ``phone`` is the web-push channel: a device notification rather than
-        # an inbox letter. ``all`` carries every channel, push included.
-        send_push = any(c in ('phone', 'all') for c in channels) or sharing_raw in ('phone', 'all')
-        show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
-
-        # Publish strictly by channel choice: an announcement that goes out on
-        # the site is visible; email/SMS-only ones stay off the site.
-        announcement.published = show_site
-        announcement.save(update_fields=['published'])
-
-        schema_name = getattr(connection, 'schema_name', None)
-        if not schema_name and hasattr(self.request, 'tenant'):
-            schema_name = getattr(self.request.tenant, 'schema_name', None)
-
-        if send_email:
-            # The broadcast takes a real-time pause between messages (a pace
-            # mail hosts accept), so it runs in a background thread and the
-            # officer posting never waits on it — or trips gunicorn's worker
-            # timeout when the congregation is large. In development and the
-            # test suite the send runs inline: tests assert on mail.outbox,
-            # which a thread cannot reach before the assertion runs.
-            if announcement_broadcasts_run_inline():
-                try:
-                    send_announcement_emails(announcement)
-                except Exception:
-                    logger.exception('Announcement email broadcast failed')
-            else:
-                threading.Thread(
-                    target=dispatch_announcement_emails_safely,
-                    args=(announcement.id, schema_name),
-                    name=f'announcement-email-{announcement.id}',
-                    daemon=True,
-                ).start()
-
-        # Phone/browser push: every device of the audience that enabled it,
-        # when the officer chose the Phone channel for this post. Runs off the
-        # request cycle like the email broadcast; a failure is a log line,
-        # never a broken announcement. Without VAPID keys (fresh installs,
-        # the test suite) there is nothing to wake and no thread either.
-        if send_push:
-            try:
-                from .push import vapid_keys_ready
-
-                if vapid_keys_ready():
-                    threading.Thread(
-                        target=_push_announcement_safely,
-                        args=(announcement.id, schema_name),
-                        name=f'announcement-push-{announcement.id}',
-                        daemon=True,
-                    ).start()
-            except Exception:
-                pass
-
-        if send_sms:
-            try:
-                # The same accounts the email reaches — see
-                # announcement_recipients(): the approved roster for everyone,
-                # member accounts for a members-only post, the named
-                # offices and groups for an audience.
-                for u in announcement_recipients(announcement):
-                    ChurchNotification.objects.create(
-                        user=u,
-                        title=f"SMS Announcement: {announcement.title}",
-                        message=announcement.text or announcement.title,
-                    )
-            except Exception:
-                pass
-            # That in-app bell is not a text message. Until now this branch
-            # wrote notices and stopped, so an officer choosing "Through SMS"
-            # reached nobody's phone; the real send is here, paced and off the
-            # request cycle exactly like the email broadcast.
-            if sms.configured():
-                if sms_broadcasts_run_inline():
-                    try:
-                        send_announcement_sms(announcement)
-                    except Exception:
-                        logger.exception('Announcement SMS broadcast failed')
-                else:
-                    threading.Thread(
-                        target=dispatch_announcement_sms_safely,
-                        args=(announcement.id, schema_name),
-                        name=f'announcement-sms-{announcement.id}',
-                        daemon=True,
-                    ).start()
+        dispatch_announcement_broadcast(announcement, self.request)
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -7313,10 +7294,59 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
             approval_status=approval_status,
             reviewed_by=(user if is_treasury else None),
             reviewed_at=(timezone.now() if is_treasury else None),
+            is_active=True,
         )
         # Giving accounts are treasury accounts now; a drive is offered in the
         # giving form when the treasurer links it to an account, not by minting
         # a giving-purpose row for its name (the old behaviour retired).
+
+        # Announcement option: create linked announcement and broadcast if requested
+        post_as_announcement = str(self.request.data.get('post_as_announcement', '')).lower() in ('true', '1', 'yes')
+        if post_as_announcement:
+            import json
+            sharing_opt = str(self.request.data.get('sharing_option') or 'site').strip()
+            giving_actions = self.request.data.get('giving_actions')
+            if isinstance(giving_actions, str):
+                try:
+                    giving_actions = json.loads(giving_actions)
+                except Exception:
+                    giving_actions = [x.strip() for x in giving_actions.split(',') if x.strip()]
+            if not isinstance(giving_actions, list) or not giving_actions:
+                giving_actions = ['give_now', 'pledge', 'in_kind', 'comment']
+
+            ann_audience = self.request.data.get('announcement_audience') or self.request.data.get('audience')
+            if isinstance(ann_audience, str):
+                try:
+                    ann_audience = json.loads(ann_audience)
+                except Exception:
+                    ann_audience = [x.strip() for x in ann_audience.split(',') if x.strip()]
+            if not isinstance(ann_audience, list):
+                ann_audience = []
+
+            is_popup = str(self.request.data.get('is_popup', '')).lower() in ('true', '1', 'yes')
+            ann_title = str(self.request.data.get('announcement_title') or campaign.title or campaign.name)[:160]
+            ann_text = str(self.request.data.get('announcement_text') or campaign.description or ann_title)
+
+            announcement = Announcement.objects.create(
+                title=ann_title,
+                text=ann_text,
+                announcement_type='promotion',
+                support_account=campaign.account_name or (campaign.source_account.name if campaign.source_account else ''),
+                campaign=campaign,
+                giving_actions=giving_actions,
+                sharing_option=sharing_opt,
+                is_popup=is_popup,
+                audience=ann_audience,
+                visibility='all',
+                event_date_from=campaign.start_date,
+                event_date_to=campaign.end_date,
+                attachment=campaign.attachment,
+            )
+            if campaign.approval_status == 'approved':
+                dispatch_announcement_broadcast(announcement, self.request)
+            else:
+                announcement.published = False
+                announcement.save(update_fields=['published'])
 
         if campaign.approval_status != 'approved':
             treasurers = User.objects.filter(
@@ -7511,6 +7541,10 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
                 'reviewed_at': timezone.now(),
             }
         campaign = serializer.save(**update_fields)
+        if decided and next_status == 'approved':
+            for ann in campaign.announcements.filter(published=False):
+                dispatch_announcement_broadcast(ann, self.request)
+
         # The desk that raised the drive hears the answer either way — posted
         # or kept off — the same way a withdrawal ask hears its treasurer's
         # reply. Without this the leader submits into silence and never learns
@@ -10538,6 +10572,120 @@ def can_manage_deaconate(user):
     ).exists()
 
 
+def tell_elders_of_property_request(row, raised_by):
+    """Carry a register ask to the eldership: bell and email, the way the
+    buy/repair asks have always travelled.
+
+    The ask lands with the church's offices — the people who answer for the
+    church's money — and the clerk rides along: the register and the
+    correspondence are the clerk's hands. Best effort in both directions:
+    an unanswered bell never fails the save that raised it.
+    """
+    audience_ids = set(
+        User.objects.filter(
+            Q(member_profile__role__in=['admin', 'pastor', 'elder']) | Q(member_profile__role='clerk'),
+            is_active=True,
+        ).values_list('id', flat=True)
+    )
+    audience_ids.discard(raised_by.id)
+    audience = User.objects.filter(id__in=audience_ids, is_active=True)
+    desk_link = f'{settings.FRONTEND_URL}/administration?tab=requests'
+    asks = {
+        'buy': f'the purchase of {row.item_name}',
+        'repair': f'repairs to {row.item_name}',
+        'add': f'the registration of {row.item_name} in the property register',
+        'use': f'The {row.get_kind_display().lower()} of {row.item_name}',
+        'stock': f'An addition to {row.item_name}',
+        'movement': f'A movement of {row.item_name}',
+        'remove': f'The removal of {row.item_name}',
+    }
+    subject = f'Property request from the deaconate: {row.item_name}'
+    body = (
+        f"{raised_by.get_full_name() or raised_by.get_username()} has asked for {asks.get(row.kind, asks['buy'])}"
+        + (f" ({row.quantity} {row.get_kind_display().lower().replace(' of', '')})" if row.kind in ('use', 'stock') and row.quantity else '')
+        + f". Open the requests desk to respond: {desk_link}"
+    )
+    ChurchNotification.objects.bulk_create([
+        ChurchNotification(user=person, title=subject, message=body, link=desk_link)
+        for person in audience
+    ])
+    try:
+        send_mail(
+            subject, body, settings.DEFAULT_FROM_EMAIL,
+            [u.email for u in audience if u.email],
+            fail_silently=True,
+        )
+    except Exception:
+        pass
+
+
+def apply_property_decision(row, approved):
+    """Do the register work an eldership answer stands behind.
+
+    A property ask is not paper older than the register it names: approving
+    a use checks the items out of the store (or takes them off the count
+    where they are being consumed), approving a stock addition raises the
+    count, approving a movement or a removal applies it, and a new row's
+    reading moves either way — out of pending into the register, or behind
+    its Rejected badge. Returns an error sentence when the item the ask
+    waited on has gone away while it waited, so the reviewer's alert says
+    what was (not) done instead of pretending; the answer always saves.
+    """
+    item = row.item
+    if row.kind in ('buy', 'repair'):
+        return ''
+    if item is None:
+        if row.kind == 'remove' and approved:
+            return f'"{row.item_name}" was already gone from the register, so there was nothing more to remove.'
+        return f'"{row.item_name}" left the register while this request waited, so the answer ran on paper alone.'
+
+    today = timezone.localdate()
+    if row.kind == 'add':
+        item.review_status = 'approved' if approved else 'rejected'
+        item.save(update_fields=['review_status'])
+        return ''
+    if not approved:
+        # An unanswered ask leaves the register exactly as it stood.
+        return ''
+    if row.kind == 'use':
+        used = row.quantity or item.quantity
+        if (row.details or {}).get('shared', 'reusable') == 'consumed':
+            item.quantity = max(0, item.quantity - used)
+            item.last_inspected_on = today
+            item.save(update_fields=['quantity', 'last_inspected_on'])
+            return f'{used} of "{row.item_name}" are taken off the count; {item.quantity} remain.'
+        movement = InventoryMovement.objects.create(
+            item=item, recorded_by=row.reviewed_by, action='check_out',
+            moved_by=(row.details or {}).get('custodian') or row.requested_by.get_full_name() or row.requested_by.get_username(),
+            destination=row.purpose or '',
+            notes=f'Approved for use by the eldership. Request #{row.id} — {row.purpose}',
+            state_after='in_use',
+        )
+        item.apply_movement(movement)
+        return f'"{row.item_name}" checked out to {movement.moved_by}.'
+    if row.kind == 'stock':
+        item.quantity = item.quantity + (row.quantity or 0)
+        item.last_inspected_on = today
+        item.save(update_fields=['quantity', 'last_inspected_on'])
+        return f'{row.quantity or 0} item(s) added; "{row.item_name}" now counts {item.quantity}.'
+    if row.kind == 'movement':
+        details = row.details or {}
+        movement = InventoryMovement.objects.create(
+            item=item, recorded_by=row.reviewed_by,
+            moved_by=details.get('moved_by') or row.requested_by.get_full_name() or row.requested_by.get_username(),
+            destination=details.get('destination') or '',
+            notes=details.get('notes') or f'Approved movement. Request #{row.id}',
+            state_after=details.get('state_after') or ('in_use' if details.get('action') == 'check_out' else 'good'),
+        )
+        item.apply_movement(movement)
+        return f'"{row.item_name}" {movement.get_action_display().lower()} applied.'
+    if row.kind == 'remove':
+        name = item.name
+        item.delete()
+        return f'"{name}" is off the register; its movement lines went with it.'
+    return ''
+
+
 class InventoryItemListCreateView(APIView):
     """The deaconate property register: list the items, register a new one."""
 
@@ -10558,12 +10706,30 @@ class InventoryItemListCreateView(APIView):
         serializer = InventoryItemSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        item = serializer.save(registered_by=request.user)
+        # The desk saves its row the moment it types it in — the register
+        # never loses what it was told — but a new row waits for an elder to
+        # read it: raised on the requests desk with the row pinned to it, its
+        # badge Pending until the answer comes back.
+        item = serializer.save(registered_by=request.user, review_status='pending')
+        ask = DeaconateRequest.objects.create(
+            requested_by=request.user, kind='add', item=item,
+            item_name=item.name[:200], quantity=item.quantity,
+            note=str(request.data.get('notes') or '').strip()[:1000],
+        )
+        tell_elders_of_property_request(ask, request.user)
         return Response(InventoryItemSerializer(item).data, status=status.HTTP_201_CREATED)
 
 
 class InventoryMovementCreateView(APIView):
-    """Log a movement or condition change and bring its item in line with it."""
+    """Log a movement or condition change and bring its item in line with it.
+
+    A condition report goes straight on the item — an officer walks the room,
+    sees two tables with loose brackets, and the register says so the moment
+    they write it. Anything that carries the church's things across a door is
+    an ask, not an act: a check-out or check-in raised here goes to the
+    eldership as a movement request, and the register does not move until an
+    elder answers it.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -10582,16 +10748,35 @@ class InventoryMovementCreateView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        with transaction.atomic():
-            movement = serializer.save(item=item, recorded_by=request.user)
-            item.apply_movement(movement)
+        if serializer.validated_data.get('action') == 'state_change':
+            with transaction.atomic():
+                movement = serializer.save(item=item, recorded_by=request.user)
+                item.apply_movement(movement)
 
-        # Re-read through the annotated queryset so the row we hand back counts
-        # the movement just recorded instead of the count from before it.
-        item = InventoryItem.objects.annotate(movement_count=Count('movements')).get(pk=item.pk)
-        payload = InventoryItemSerializer(item).data
-        payload['movement'] = InventoryMovementSerializer(movement).data
-        return Response(payload, status=status.HTTP_201_CREATED)
+            # Re-read through the annotated queryset so the row we hand back counts
+            # the movement just recorded instead of the count from before it.
+            item = InventoryItem.objects.annotate(movement_count=Count('movements')).get(pk=item.pk)
+            payload = InventoryItemSerializer(item).data
+            payload['movement'] = InventoryMovementSerializer(movement).data
+            return Response(payload, status=status.HTTP_201_CREATED)
+
+        ask = DeaconateRequest.objects.create(
+            requested_by=request.user, kind='movement', item=item,
+            item_name=item.name[:200], quantity=item.quantity,
+            purpose=serializer.validated_data.get('destination') or '',
+            details={
+                'action': serializer.validated_data.get('action') or '',
+                'moved_by': serializer.validated_data.get('moved_by') or '',
+                'destination': serializer.validated_data.get('destination') or '',
+                'notes': serializer.validated_data.get('notes') or '',
+            },
+            note=serializer.validated_data.get('notes') or '',
+        )
+        tell_elders_of_property_request(ask, request.user)
+        return Response({
+            'status': 'pending',
+            'detail': 'The movement is with the eldership: the register moves when an elder answers it.',
+        }, status=status.HTTP_201_CREATED)
 
 
 class InventoryItemDetailView(APIView):
@@ -10612,12 +10797,55 @@ class InventoryItemDetailView(APIView):
                 {'detail': 'Only church officers can remove church property.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+    def patch(self, request, pk):
+        """An officer corrects a row the register already holds.
+
+        The desk edits one field set at a time — a tag typed in, a room the
+        item moved into, a quantity — so a partial write is the shape it
+        asks for, and what it does not name is left as it stands. The edit
+        gate is the one the registration takes, the same hands that keep
+        the register honest.
+        """
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers can edit church property.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         item = InventoryItem.objects.filter(pk=pk).first()
         if item is None:
             return Response({'detail': 'Property item not found.'}, status=status.HTTP_404_NOT_FOUND)
-        name = item.name
-        item.delete()
-        return Response({'detail': f'"{name}" has been removed from the property register.'})
+        serializer = InventoryItemSerializer(item, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        """Raise the removal ask, not the removal.
+
+        The register is the desk's ledger, but the item leaving it is the
+        eldership's call — sold, written off or never the church's to have
+        — so a delete here raises a removal request pinned to the row and
+        the register does not move until an elder answers it.
+        """
+        if not can_manage_deaconate(request.user):
+            return Response(
+                {'detail': 'Only church officers can remove church property.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        item = InventoryItem.objects.filter(pk=pk).first()
+        if item is None:
+            return Response({'detail': 'Property item not found.'}, status=status.HTTP_404_NOT_FOUND)
+        ask = DeaconateRequest.objects.create(
+            requested_by=request.user, kind='remove', item=item,
+            item_name=item.name[:200], quantity=item.quantity,
+            note=str(request.data.get('note') or request.data.get('reason') or '').strip()[:1000],
+        )
+        tell_elders_of_property_request(ask, request.user)
+        return Response({
+            'status': 'pending',
+            'detail': 'The removal is with the eldership: when an elder approves it, the row leaves the register.',
+        })
 
 
 def _officer_key(item):
@@ -14089,13 +14317,19 @@ class WithdrawalRequestPdfView(APIView):
 
 
 class DeaconateRequestView(APIView):
-    """The deaconate's asks of the office: to buy an item, or to repair one.
+    """The deaconate's asks of the office, about the church's property.
 
-    POST raises one — the deaconate's leadership only (the desk's own
-    ``can_manage_department`` gate, so the Head Deacon, the Head Deaconess
-    and the office). GET reads this member's own asks; the review desk
-    reads them all at DeaconateRequestReviewView.
+    A buy or a repair arrives by name alone. A use, a stock addition or a
+    removal pins itself to the register row it would act on (``item``), so
+    the elders' answer can apply it: each carries what it is (quantity,
+    purpose, and for a use whether the items come back), and only its
+    approving changes the register. POST raises one — the deaconate's
+    leadership only (the desk's own ``can_manage_department`` gate). GET
+    reads this member's own asks; the review desk reads them all at
+    DeaconateRequestReviewView.
     """
+
+    REGISTER_ASK_KINDS = ('use', 'stock', 'remove')
 
     permission_classes = [IsAuthenticated]
 
@@ -14103,10 +14337,12 @@ class DeaconateRequestView(APIView):
         rows = DeaconateRequest.objects.filter(requested_by=request.user)
         return Response({
             'requests': [
-                {
-                    'id': row.id,
+                {                    'id': row.id,
                     'kind': row.kind,
                     'item_name': row.item_name,
+                    'quantity': row.quantity,
+                    'purpose': row.purpose,
+                    'details': row.details,
                     'note': row.note,
                     'status': row.status,
                     'reply': row.reply,
@@ -14124,58 +14360,76 @@ class DeaconateRequestView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         kind = str(request.data.get('kind')) or 'buy'
-        if kind not in ('buy', 'repair'):
-            return Response({'kind': 'Ask to buy an item or to repair one.'}, status=status.HTTP_400_BAD_REQUEST)
-        item_name = str(request.data.get('item_name') or '').strip()
-        if len(item_name) < 2:
-            return Response({'item_name': 'Name the item — at least two characters.'}, status=status.HTTP_400_BAD_REQUEST)
-        row = DeaconateRequest.objects.create(
-            requested_by=request.user,
-            kind=kind,
-            item_name=item_name[:200],
-            note=str(request.data.get('note') or '').strip()[:1000],
-        )
+        if kind in self.REGISTER_ASK_KINDS:
+            item = InventoryItem.objects.filter(pk=request.data.get('item_id')).first()
+            if item is None:
+                return Response({'item_id': 'Point the request at a register row.'}, status=status.HTTP_400_BAD_REQUEST)
+            row = self._raise_register_ask(request.user, kind, item, request.data)
+        elif kind in ('buy', 'repair'):
+            item_name = str(request.data.get('item_name') or '').strip()
+            if len(item_name) < 2:
+                return Response({'item_name': 'Name the item — at least two characters.'}, status=status.HTTP_400_BAD_REQUEST)
+            row = DeaconateRequest.objects.create(
+                requested_by=request.user,
+                kind=kind,
+                item_name=item_name[:200],
+                note=str(request.data.get('note') or '').strip()[:1000],
+            )
+        else:
+            return Response({'kind': 'Ask to buy an item, repair one, or raise an ask the register holds.'}, status=status.HTTP_400_BAD_REQUEST)
+        # One save carries the whole ask: the row is built with its item,
+        # quantity and details before it touches the ledger, so an invalid
+        # ask never half-lands.
+        row.save()
         # The ask lands with the church's offices — the people who answer
         # for the church's money. The clerk rides along: the register and
         # the correspondence are the clerk's hands.
-        audience_ids = set(
-            User.objects.filter(
-                Q(member_profile__role__in=['admin', 'pastor', 'elder']) | Q(member_profile__role='clerk'),
-                is_active=True,
-            ).values_list('id', flat=True)
-        )
-        audience_ids.discard(request.user.id)
-        audience = User.objects.filter(id__in=audience_ids, is_active=True)
-        desk_link = f'{settings.FRONTEND_URL}/administration?tab=requests'
-        ask = 'repairs to' if kind == 'repair' else 'the purchase of'
-        subject = f'Property request from the deaconate: {row.item_name}'
-        body = (
-            f"{request.user.get_full_name() or request.user.get_username()} has asked for "
-            f"{ask} {row.item_name}. Open the requests desk to respond: {desk_link}"
-        )
-        ChurchNotification.objects.bulk_create([
-            ChurchNotification(user=person, title=subject, message=body, link=desk_link)
-            for person in audience
-        ])
-        try:
-            send_mail(
-                subject, body, settings.DEFAULT_FROM_EMAIL,
-                [u.email for u in audience if u.email],
-                fail_silently=True,
-            )
-        except Exception:
-            pass
+        tell_elders_of_property_request(row, request.user)
         return Response({'id': row.id, 'status': row.status, 'detail': 'Your request has been sent.'}, status=status.HTTP_201_CREATED)
+
+    def _raise_register_ask(self, raised_by, kind, item, data):
+        """Pin an ask to its register row, reading its shape out of the form."""
+        row = DeaconateRequest(requested_by=raised_by, kind=kind, item=item, item_name=item.name[:200])
+        row.note = str(data.get('note') or data.get('reason') or '').strip()[:1000]
+        row.details = {}
+        if kind == 'use':
+            shared = 'consumed' if str(data.get('shared') or 'reusable') == 'consumed' else 'reusable'
+            row.details = {
+                'shared': shared,
+                'custodian': str(data.get('custodian') or '').strip()[:160] if shared == 'reusable' else '',
+            }
+            try:
+                used = int(data.get('quantity'))
+            except (TypeError, ValueError):
+                used = 0
+            if used < 1 or used > item.quantity:
+                raise ValidationError({'quantity': f'The church holds {item.quantity} of "{item.name}" — ask up to that.'})
+            row.quantity = used
+            row.purpose = str(data.get('purpose') or '').strip()[:255]
+            if len(row.purpose) < 2:
+                raise ValidationError({'purpose': 'What are the items for?'})
+        if kind == 'stock':
+            try:
+                added = int(data.get('quantity'))
+            except (TypeError, ValueError):
+                added = 0
+            if added < 1:
+                raise ValidationError({'quantity': 'How many items are being added?'})
+            row.quantity = added
+        return row
 
 
 class DeaconateRequestReviewView(APIView):
-    """The office's answer to the deaconate's property asks.
+    """The eldership's answer to the deaconate's property asks.
 
     GET reads the ledger for whoever answers requests today (the offices;
     the deaconate's leadership may read the state of their own asks).
     PATCH answers one — approve or decline, with a note the desk reads
-    back. Approving records the decision; the purchase or repair itself
-    stays the treasurer's ledger's business.
+    back. For the register asks the answer is the act: approving applies
+    the use, the stock addition, the movement or the removal the moment it
+    saves, and a declined new row keeps its place behind its Rejected
+    badge; a buy or a repair stays paper, the purchase being the
+    treasurer's ledger's business.
     """
 
     permission_classes = [IsAuthenticated]
@@ -14184,13 +14438,20 @@ class DeaconateRequestReviewView(APIView):
         profile = department_office_profile(request.user)
         if not profile and not can_manage_department(request.user, 'deaconate'):
             return Response({'requests': []})
-        rows = DeaconateRequest.objects.select_related('requested_by', 'reviewed_by')
+        rows = DeaconateRequest.objects.select_related('requested_by', 'reviewed_by', 'item')
         return Response({
             'requests': [
                 {
                     'id': row.id,
                     'kind': row.kind,
                     'item_name': row.item_name,
+                    # What the ask act-on: its row, the count it moves and the
+                    # shape it would change, so the review desk reads a use
+                    # with its purpose and a movement with its direction.
+                    'item_id': row.item_id,
+                    'quantity': row.quantity,
+                    'purpose': row.purpose,
+                    'details': row.details,
                     'note': row.note,
                     'status': row.status,
                     'reply': row.reply,
@@ -14218,19 +14479,28 @@ class DeaconateRequestReviewView(APIView):
         decision = str(request.data.get('status') or '')
         if decision not in ('approved', 'rejected'):
             return Response({'detail': 'Answer with approved or rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+        approved = decision == 'approved'
+        applied = apply_property_decision(row, approved)
         row.status = decision
         row.reply = str(request.data.get('reply') or '').strip()[:500]
         row.reviewed_by = request.user
         row.reviewed_at = timezone.now()
         row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
-        approved = decision == 'approved'
         verb = 'approved' if approved else 'declined'
         title = f'Your {row.get_kind_display().lower()} request for {row.item_name} was {verb}'
-        message = row.reply or (
-            'The office has approved it — take the next step with the treasurer.'
-            if approved
-            else 'The office could not take it on this time.'
-        )
+        if row.reply:
+            message = row.reply
+        elif applied:
+            # The approval did the thing; the desk reads what it did, applied.
+            message = applied
+        elif approved:
+            message = (
+                'The eldership has approved it; the register takes it from here.'
+                if row.kind in ('add', 'use', 'stock', 'movement', 'remove')
+                else 'The office has approved it — take the next step with the treasurer.'
+            )
+        else:
+            message = 'The office could not take it on this time.'
         ChurchNotification.objects.create(
             user=row.requested_by,
             title=title,

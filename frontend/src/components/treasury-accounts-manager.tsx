@@ -1098,17 +1098,34 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       return () => setHeaderRightAction(null);
     }
     setHeaderRightAction(
-      <input
-        type="text"
-        placeholder="Search by description, account..."
-        value={accountSearch}
-        onChange={(e) => setAccountSearch(e.target.value)}
-        className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60"
-        aria-label="Search church accounts"
-      />
+      <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:flex-1 sm:justify-end">
+        <input
+          type="text"
+          placeholder="Search by description, account..."
+          value={accountSearch}
+          onChange={(e) => setAccountSearch(e.target.value)}
+          className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60 sm:flex-none"
+          aria-label="Search church accounts"
+        />
+        {/* Refresh rides the top band on a phone, at the search row's far
+            right — the bottom bar is left to the writes it guards, and a
+            gift made on the go (M-Pesa, the giving desk) still shows the
+            moment a hand taps this. The wider screens keep it in the foot,
+            first in the row the actions begin. */}
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={fetchAccounts}
+          disabled={loading}
+          className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:hidden"
+          aria-label="Refresh treasury accounts"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
     );
     return () => setHeaderRightAction(null);
-  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter, withdrawalFrom, withdrawalTo]);
+  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter, withdrawalFrom, withdrawalTo, loading]);
 
   /**
    * Publish a statement from the desk the treasurer is already sitting at.
@@ -1570,7 +1587,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           free for the table and its search; Expenses brings its own footer, so
           this bar steps aside for it. ── */}
       {view === "accounts" && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+        /* A phone reads this bar as two rows — the words the ledger keeps
+           above the buttons that act — and one row on the wider screens,
+           as it always read. */
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
             <span>
               Total liquidity:{" "}
@@ -1587,12 +1607,13 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
               {/* Refreshing re-reads the books without leaving the desk: a gift
                   made on the go (M-Pesa, the giving desk) shows up the moment
                   the treasurer taps this, first in the row so the hand finds
-                  it where the action buttons begin. */}
+                  it where the action buttons begin. On a phone it lives at
+                  the top band instead, beside the search it clears into. */}
               <button
                 type="button"
                 onClick={fetchAccounts}
                 disabled={loading}
-                className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
+                className="h-9 hidden sm:inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
                 aria-label="Refresh treasury accounts"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />

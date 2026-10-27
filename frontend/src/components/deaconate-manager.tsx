@@ -16,6 +16,7 @@ import {
   Eye,
   Images,
   MessageCircle,
+  Pencil,
   Phone,
   Plus,
   Printer,
@@ -389,14 +390,9 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   const [showAddModal, setShowAddModal] = useState(false);
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-  // The desk's ask of the office: to buy an item, or to repair one. Raised
-  // by the desk's leadership, answered at the requests desk.
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestKind, setRequestKind] = useState<"buy" | "repair">("buy");
-  const [requestItem, setRequestItem] = useState("");
-  const [requestNote, setRequestNote] = useState("");
-  const [sendingRequest, setSendingRequest] = useState(false);
-
+  // The row being edited, when the register modal is rewriting an item the
+  // register already holds — null when it is registering a fresh one.
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [newItem, setNewItem] = useState(emptyItemForm);
   const [movementForm, setMovementForm] = useState(emptyMovementForm);
 
@@ -943,38 +939,125 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     [inventory, searchQuery, categoryFilter, stateFilter]
   );
 
-  const registerItem = async (e: React.FormEvent) => {
+  const saveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = newItem.name.trim();
     if (!name || saving) return;
 
     setSaving(true);
     try {
-      const res = await apiFetch("/inventory/", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          tag_number: newItem.tagNo.trim(),
-          category: newItem.category,
-          location: newItem.location.trim(),
-          quantity: Math.max(1, Number(newItem.quantity) || 1),
-          state: newItem.state,
-          notes: newItem.notes.trim(),
-        }),
-      });
+      const res = await apiFetch(
+        editingItem ? `/inventory/${editingItem.id}/` : "/inventory/",
+        {
+          method: editingItem ? "PATCH" : "POST",
+          body: JSON.stringify({
+            name,
+            tag_number: newItem.tagNo.trim(),
+            category: newItem.category,
+            location: newItem.location.trim(),
+            quantity: Math.max(1, Number(newItem.quantity) || 1),
+            state: newItem.state,
+            notes: newItem.notes.trim(),
+          }),
+        },
+      );
       if (!res.ok) {
-        showAlert("Property not saved", firstErrorMessage(await res.json().catch(() => null)) || "The item could not be registered.", "error");
+        showAlert("Property not saved", firstErrorMessage(await res.json().catch(() => null)) || "The item could not be saved.", "error");
         return;
       }
+      const wasEdit = editingItem !== null;
       setShowAddModal(false);
+      setEditingItem(null);
       setNewItem(emptyItemForm);
       await loadInventory();
-      showAlert("Property Added", `"${name}" has been registered in the inventory.`, "success");
+      showAlert(
+        wasEdit ? "Property Updated" : "Property Added",
+        wasEdit
+          ? `"${name}" has been updated in the inventory.`
+          : `"${name}" has been registered in the inventory.`,
+        "success",
+      );
     } catch {
       showAlert("Property not saved", "Check your connection and try again.", "error");
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Sit an existing row in the register form: the same modal the Add button
+      opens, carrying the item's own fields so the desk corrects rather than
+      retypes, saving against the row it came from. */
+  const openEditItem = (item: InventoryItem) => {
+    setSelectedItem(null);
+    setOpenActionMenuId(null);
+    setEditingItem(item);
+    setNewItem({
+      name: item.name,
+      tagNo: item.tag_number,
+      category: item.category,
+      location: item.location,
+      quantity: item.quantity,
+      state: item.state,
+      notes: item.notes,
+    });
+    setShowAddModal(true);
+  };
+
+  /** The paper register the desk prints and signs its church property off on.
+      The whole inventory prints — not just what the filters are showing —
+      so the sheet counts everything the church holds. */
+  const printInventory = () => {
+    if (inventory.length === 0) {
+      showAlert("Nothing to print", "The property register holds no items yet.", "info");
+      return;
+    }
+    const esc = (text: string) =>
+      String(text ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    const body = inventory
+      .map(
+        (item) =>
+          `<tr>` +
+          `<td class="mono">${esc(item.tag_number) || "—"}</td>` +
+          `<td><strong>${esc(item.name)}</strong>${item.notes ? `<span class="note">${esc(item.notes)}</span>` : ""}</td>` +
+          `<td>${esc(item.category_display)}</td>` +
+          `<td>${esc(item.location) || "—"}</td>` +
+          `<td class="center">${item.quantity}</td>` +
+          `<td>${esc(item.state_display)}</td>` +
+          `<td>${item.assigned_to ? esc(item.assigned_to) : "In Store"}</td>` +
+          `</tr>`,
+      )
+      .join("");
+    const printedOn = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    const html = `<!doctype html><html><head><meta charset="utf-8" /><title>Property Inventory — ${printedOn}</title><style>` +
+      `body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#26352f;padding:28px 32px;}` +
+      `h1{font-size:18px;margin:0 0 2px;}` +
+      `.sub{font-size:11px;color:#617068;margin:0 0 18px;}` +
+      `table{width:100%;border-collapse:collapse;font-size:11px;}` +
+      `th{text-align:left;background:#26352f;color:#fff;padding:6px 8px;}` +
+      `td{border-bottom:1px solid #e5e0d5;padding:6px 8px;vertical-align:top;}` +
+      `.mono{font-family:monospace;font-weight:700;color:#c25718;}` +
+      `.center{text-align:center;font-weight:700;}` +
+      `.note{display:block;font-style:italic;color:#617068;}` +
+      `.count{margin-top:14px;font-size:11px;color:#617068;}` +
+      `</style></head><body>` +
+      `<h1>Property Inventory</h1>` +
+      `<p class="sub">The deaconate's register of the church's property — printed ${printedOn}</p>` +
+      `<table><thead><tr><th>Tag / Serial</th><th>Property</th><th>Category</th><th>Location / Room</th><th>Qty</th><th>Condition</th><th>Custody</th></tr></thead>` +
+      `<tbody>${body}</tbody></table>` +
+      `<p class="count">${inventory.length} ${inventory.length === 1 ? "item" : "items"} registered</p>` +
+      `</body></html>`;
+    const win = window.open("", "_blank", "width=980,height=720");
+    if (!win) {
+      showAlert("Print blocked", "Allow pop-ups for this site to print the inventory.", "error");
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
   };
 
   const recordMovement = async (e: React.FormEvent) => {
@@ -1013,33 +1096,6 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
 
   /** Raise a buy/repair ask of the office; the desk's leadership only —
       the endpoint refuses anyone else, so the button rides for managers. */
-  const sendPropertyRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const item = requestItem.trim();
-    if (item.length < 2 || sendingRequest) return;
-    setSendingRequest(true);
-    try {
-      const res = await apiFetch("/deaconate-requests/", {
-        method: "POST",
-        body: JSON.stringify({ kind: requestKind, item_name: item, note: requestNote.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showAlert("Request not sent", data.detail || firstErrorMessage(data) || "The request could not be sent.", "error");
-        return;
-      }
-      setShowRequestModal(false);
-      setRequestItem("");
-      setRequestNote("");
-      setRequestKind("buy");
-      showAlert("Request sent", data.detail || "The office has your property request.", "success");
-    } catch {
-      showAlert("Request not sent", "Check your connection and try again.", "error");
-    } finally {
-      setSendingRequest(false);
-    }
-  };
-
   const scheduleRota = async (e: React.FormEvent) => {
     e.preventDefault();
     // The form asks for the day, the time and the officers on it — the title
@@ -1320,7 +1376,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   );
 
   const inventoryEmpty = inventory.length === 0
-    ? "No property items registered yet. Use Add Church Property to record the first one."
+    ? "No property items registered yet. Use Add Property to record the first one."
     : "No property items match these filters.";
 
   // Same for a duty role already on an edited officer — a part the desk
@@ -1391,6 +1447,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       {openActionMenuId === item.id && (
                         <div className={`absolute right-0 z-50 w-48 rounded-xl border border-sand-line bg-white py-1 shadow-lg ${actionDropUp ? "bottom-full mb-1" : "mt-1"}`}>
                           <button
+                            onClick={() => openEditItem(item)}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-ember" />
+                            Edit
+                          </button>
+                          <button
                             onClick={() => {
                               setSelectedItem(item);
                               setMovementForm(emptyMovementForm);
@@ -1436,6 +1499,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   {item.notes && <p className="text-[11px] italic text-moss">{item.notes}</p>}
                   <div className="flex flex-wrap gap-2 border-t border-sand-line/60 pt-2">
                     <button
+                      onClick={() => openEditItem(item)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark hover:bg-sand"
+                    >
+                      <Pencil className="h-3 w-3 text-ember" />
+                      Edit
+                    </button>
+                    <button
                       onClick={() => {
                         setSelectedItem(item);
                         setMovementForm(emptyMovementForm);
@@ -1444,7 +1514,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark hover:bg-sand"
                     >
                       <ArrowRightLeft className="h-3 w-3 text-ember" />
-                      Item Movement
+                      Movement
                     </button>
                     <button
                       onClick={() => { void removeInventoryItem(item); }}
@@ -1464,18 +1534,19 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
             <p className="hidden text-[11px] text-moss sm:block">
               {filteredInventory.length} of {inventory.length} {inventory.length === 1 ? "item" : "items"} shown
             </p>
-            <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
-                onClick={() => setShowRequestModal(true)}
-                className="rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand"
+                onClick={printInventory}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-ember bg-white px-3 py-2 text-xs font-semibold text-ember transition hover:bg-sand"
               >
-                Send request
+                <Printer className="h-3.5 w-3.5" />
+                Print Inventory
               </button>
               <button
-                onClick={() => { setNewItem(emptyItemForm); setShowAddModal(true); }}
+                onClick={() => { setEditingItem(null); setNewItem(emptyItemForm); setShowAddModal(true); }}
                 className="flex-1 sm:flex-none rounded-xl bg-bark px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember"
               >
-                + Add Church Property
+                + Add Property
               </button>
             </div>
           </div>
@@ -1901,101 +1972,17 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         </div>
       )}
 
-      {/* MODAL: SEND PROPERTY REQUEST (buy / repair) */}
-      {showRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
-            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
-              <h3 className="font-bold text-base text-bark">Send a Property Request</h3>
-              <button onClick={() => setShowRequestModal(false)} className="text-moss hover:text-bark">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="mt-2 text-[11px] text-moss">
-              Ask the offices to buy an item or to repair one. The answer comes back to the desk.
-            </p>
-            <form onSubmit={sendPropertyRequest} className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
-              <div>
-                <label className="font-bold text-bark">Request type</label>
-                <div className="mt-1 grid grid-cols-2 gap-2">
-                  {([
-                    { value: "buy", label: "Buy an item" },
-                    { value: "repair", label: "Repair an item" },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setRequestKind(option.value)}
-                      aria-pressed={requestKind === option.value}
-                      className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                        requestKind === option.value
-                          ? "bg-bark text-white shadow-sm"
-                          : "border border-sand-line bg-white text-moss hover:border-ember hover:text-bark"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="font-bold text-bark">Item *</label>
-                <input
-                  type="text"
-                  required
-                  minLength={2}
-                  placeholder={requestKind === "repair" ? "e.g. Sony Projector 4K, the sanctuary one" : "e.g. Two cordless microphones"}
-                  value={requestItem}
-                  onChange={(e) => setRequestItem(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 font-medium text-bark"
-                />
-              </div>
-              <div>
-                <label className="font-bold text-bark">Details</label>
-                <textarea
-                  rows={3}
-                  placeholder="What is needed and why: quantity, quote, room…"
-                  value={requestNote}
-                  onChange={(e) => setRequestNote(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
-                />
-              </div>
-              </div>
-
-              {/* The always-visible answer row at the foot — the requests modals' pattern. */}
-              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowRequestModal(false)}
-                  className="rounded-xl border border-sand-line px-4 py-2 font-semibold text-moss transition hover:bg-sand"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={sendingRequest || requestItem.trim().length < 2}
-                  className="rounded-xl bg-ember px-4 py-2 font-semibold text-white transition hover:bg-ember-dark disabled:opacity-50"
-                >
-                  {sendingRequest ? "Sending..." : "Send request"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* MODAL: ADD PROPERTY ITEM */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
             <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
-              <h3 className="font-bold text-base text-bark">Register Church Property</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-moss hover:text-bark">
+              <h3 className="font-bold text-base text-bark">{editingItem ? "Edit Property" : "Register Property"}</h3>
+              <button onClick={() => { setEditingItem(null); setShowAddModal(false); }} className="text-moss hover:text-bark">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <form onSubmit={registerItem} className="flex min-h-0 flex-1 flex-col">
+            <form onSubmit={saveItem} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 text-xs">
               <div>
                 <label className="font-bold text-bark">Property Name *</label>
@@ -2087,7 +2074,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-6 pb-5 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setEditingItem(null); setShowAddModal(false); }}
                   className="rounded-xl border border-sand-line px-4 py-2 text-xs font-bold text-bark"
                 >
                   Cancel
@@ -2097,7 +2084,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   disabled={saving}
                   className="rounded-xl bg-bark px-4 py-2 text-xs font-bold text-white shadow disabled:opacity-60"
                 >
-                  {saving ? "Saving..." : "Save Property Item"}
+                  {saving ? "Saving..." : editingItem ? "Save Changes" : "Save Property Item"}
                 </button>
               </div>
             </form>

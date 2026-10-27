@@ -2184,9 +2184,9 @@ class InventoryItemSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'tag_number', 'category', 'category_display', 'location', 'quantity',
             'state', 'state_display', 'assigned_to', 'checked_out_at', 'notes',
-            'last_inspected_on', 'movement_count', 'created_at',
+            'last_inspected_on', 'movement_count', 'created_at', 'review_status',
         )
-        read_only_fields = ('id', 'created_at')
+        read_only_fields = ('id', 'created_at', 'review_status')
 
     def validate_name(self, value):
         name = (value or '').strip()

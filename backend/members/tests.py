@@ -70,7 +70,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -3700,6 +3700,35 @@ class FundDriveApprovalTests(APITestCase):
         res = self.client.post('/api/members/campaigns/', payload, format='json')
         self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
         self.assertEqual(res.data['approval_status'], 'approved')
+        self.assertTrue(res.data['is_active'])
+
+    def test_treasurer_creates_drive_with_post_as_announcement(self):
+        self.client.force_authenticate(self.treasurer)
+        payload = self._payload(
+            name='Building Drive 2026',
+            post_as_announcement=True,
+            sharing_option='site,email',
+            giving_actions=['give_now', 'pledge', 'comment'],
+            is_popup=True,
+        )
+        res = self.client.post('/api/members/campaigns/', payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED, res.data)
+        drive_id = res.data['id']
+        drive = FundraisingCampaign.objects.get(id=drive_id)
+        ann = Announcement.objects.filter(campaign=drive).first()
+        self.assertIsNotNone(ann)
+        self.assertEqual(ann.announcement_type, 'promotion')
+        self.assertTrue(ann.published)
+        self.assertEqual(ann.sharing_option, 'site,email')
+        self.assertEqual(ann.giving_actions, ['give_now', 'pledge', 'comment'])
+        self.assertTrue(ann.is_popup)
+
+    def test_treasurer_can_delete_ended_drive(self):
+        drive = self._pending_drive(is_active=False)
+        self.client.force_authenticate(self.treasurer)
+        res = self.client.delete(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(FundraisingCampaign.objects.filter(id=drive.id).exists())
 
 
 
@@ -6396,7 +6425,18 @@ class DeaconateInventoryAPITests(APITestCase):
         self.assertEqual(clash.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('tag_number', clash.data)
 
-    def test_check_out_takes_custody_and_check_in_returns_it(self):
+    def test_a_movement_is_an_ask_until_an_elder_answers_it(self):
+        """Check-out and check-in do not move the register on their own.
+
+        The desk raises the movement; the item holds exactly where it was —
+        state, custody, its audit trail untouched — until an elder answers,
+        and the answer applies what it blessed.
+        """
+        deacon = User.objects.create_user('deacon.john', 'deacon.john@example.com', 'DeaconPass#2026')
+        MemberProfile.objects.create(user=deacon, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=deacon)
+
+        self.client.force_authenticate(deacon)
         item_id = self._register().data['id']
 
         checked_out = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
@@ -6407,24 +6447,53 @@ class DeaconateInventoryAPITests(APITestCase):
         }, format='json')
 
         self.assertEqual(checked_out.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(checked_out.data['state'], 'in_use')
-        self.assertEqual(checked_out.data['assigned_to'], 'Head Deacon John')
-        self.assertEqual(checked_out.data['location'], 'Fellowship Hall for Youth Rally')
-        self.assertEqual(checked_out.data['movement_count'], 1)
-        self.assertEqual(checked_out.data['movement']['action_display'], 'Check Out')
-        self.assertEqual(InventoryMovement.objects.count(), 1)
+        self.assertEqual(checked_out.data['status'], 'pending')
+        item = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(item.state, 'good')
+        self.assertEqual(item.assigned_to, '')
+        self.assertEqual(InventoryMovement.objects.count(), 0)
+        ask = DeaconateRequest.objects.filter(kind='movement').order_by('-id').first()
+        self.assertEqual(ask.item_id, item_id)
+        self.assertEqual(ask.details['moved_by'], 'Head Deacon John')
 
-        returned = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
+        # An elder answers, and the movement is the eldership's own now.
+        self.client.force_authenticate(self.elder)
+        answered = self.client.patch(
+            f'/api/members/deaconate-requests/{ask.id}/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answered.status_code, status.HTTP_200_OK)
+        self.assertEqual(answered.data['status'], 'approved')
+        item = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(item.state, 'in_use')
+        self.assertEqual(item.assigned_to, 'Head Deacon John')
+        self.assertEqual(item.location, 'Fellowship Hall for Youth Rally')
+        self.assertEqual(item.movement_count if hasattr(item, 'movement_count') else InventoryMovement.objects.count(), 1)
+
+        # The return is an ask too, and its answer restores the store.
+        self.client.force_authenticate(deacon)
+        self.client.post(f'/api/members/inventory/{item_id}/movements/', {
             'action': 'check_in',
             'moved_by': 'Head Deacon John',
         }, format='json')
-        self.assertEqual(returned.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(returned.data['state'], 'good')
-        self.assertEqual(returned.data['assigned_to'], '')
-        self.assertIsNone(returned.data['checked_out_at'])
-        self.assertEqual(returned.data['movement_count'], 2)
+        ask = DeaconateRequest.objects.filter(kind='movement').order_by('-id').first()
+        self.client.force_authenticate(self.elder)
+        returned = self.client.patch(
+            f'/api/members/deaconate-requests/{ask.id}/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(returned.status_code, status.HTTP_200_OK)
+        item = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(item.state, 'good')
+        self.assertEqual(item.assigned_to, '')
+        self.assertIsNone(item.checked_out_at)
+        self.assertEqual(InventoryMovement.objects.count(), 2)
 
-    def test_state_change_records_the_reported_condition(self):
+    def test_a_condition_report_goes_straight_on_the_item(self):
+        """Walking the room and reporting the state is not an ask: the
+        desks' condition change is the register's own work and stays
+        immediate — only what moves items across doors goes to the eldership.
+        """
         item_id = self._register().data['id']
 
         response = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
@@ -6440,18 +6509,25 @@ class DeaconateInventoryAPITests(APITestCase):
         # A condition report never moves the item out of its location.
         self.assertEqual(response.data['location'], 'Main Sanctuary Stage')
         self.assertEqual(response.data['assigned_to'], '')
+        self.assertFalse(DeaconateRequest.objects.filter(kind='movement').exists())
 
-    def test_state_change_needs_the_new_condition(self):
+    def test_state_change_still_records_the_reported_condition(self):
+        """The old direct path for condition reports keeps its read in the
+        list: the state sticks, the count stays a condition-only ask.
+        (Kept by `test_a_condition_report_goes_straight_on_the_item` above;
+        this one checks the same click from the older shape of caller.)
+        """
         item_id = self._register().data['id']
 
         response = self.client.post(f'/api/members/inventory/{item_id}/movements/', {
             'action': 'state_change',
-            'moved_by': 'Deaconess Mary',
+            'state_after': 'needs_repair',
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('state_after', response.data)
         self.assertEqual(InventoryMovement.objects.count(), 0)
+        self.assertFalse(DeaconateRequest.objects.filter(kind='movement').exists())
 
     def test_plain_members_can_read_but_not_write_the_register(self):
         """The register is on the website; reading it is every member's due.
@@ -6488,25 +6564,59 @@ class DeaconateInventoryAPITests(APITestCase):
             status.HTTP_403_FORBIDDEN,
         )
 
-    def test_an_officer_removes_an_item_and_its_movement_lines(self):
-        """An item entered by mistake, sold or written off leaves the register.
+    def test_a_removal_is_an_ask_until_an_elder_answers_it(self):
+        """The register loses a row only on the eldership's word.
 
-        The movement lines go with it: an audit line about a row that is no
-        longer there is a line about nothing.
+        Asking takes nothing away; the row stands with everything already
+        recorded on it until an elder reads the ask, and the approval is
+        what carries it (and its movement lines) off the register.
         """
+        desk = User.objects.create_user('deacon.john2', 'deacon.john2@example.com', 'DeaconPass#2026')
+        MemberProfile.objects.create(user=desk, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=desk)
+        self.client.force_authenticate(desk)
         item_id = self._register().data['id']
-        self.client.post(f'/api/members/inventory/{item_id}/movements/', {
-            'action': 'check_out',
-            'moved_by': 'Head Deacon John',
-            'destination': 'Parish hall',
-        }, format='json')
-        self.assertEqual(InventoryMovement.objects.count(), 1)
 
-        removed = self.client.delete(f'/api/members/inventory/{item_id}/')
+        asked = self.client.delete(f'/api/members/inventory/{item_id}/', format='json')
 
-        self.assertEqual(removed.status_code, status.HTTP_200_OK)
-        self.assertIn('Yamaha Digital Piano P-125', removed.data['detail'])
-        self.assertEqual(self.client.get('/api/members/inventory/').data, [])
+        self.assertEqual(asked.status_code, status.HTTP_200_OK)
+        self.assertEqual(asked.data['status'], 'pending')
+        self.assertTrue(InventoryItem.objects.filter(pk=item_id).exists())
+        ask = DeaconateRequest.objects.filter(kind='remove').order_by('-id').first()
+        self.assertEqual(ask.item_id, item_id)
+
+        # A rejection leaves the item standing exactly as it waited.
+        self.client.force_authenticate(self.member)
+        declined = self.client.patch(
+            f'/api/members/deaconate-requests/{ask.id}/',
+            {'status': 'rejected'}, format='json',
+        )
+        self.assertEqual(declined.status_code, status.HTTP_403_FORBIDDEN)
+        self.client.force_authenticate(self.elder)
+        declined = self.client.patch(
+            f'/api/members/deaconate-requests/{ask.id}/',
+            {'status': 'rejected'}, format='json',
+        )
+        self.assertEqual(declined.status_code, status.HTTP_200_OK)
+        self.assertTrue(InventoryItem.objects.filter(pk=item_id).exists())
+
+        # And a second ask, approved, takes the row (with its audit lines) off.
+        self.client.force_authenticate(desk)
+        asked = self.client.delete(f'/api/members/inventory/{item_id}/', format='json')
+        ask = DeaconateRequest.objects.filter(kind='remove', status='pending').order_by('-id').first()
+        self.client.force_authenticate(self.elder)
+        approval = self.client.patch(
+            f'/api/members/deaconate-requests/{ask.id}/',
+            {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(approval.status_code, status.HTTP_200_OK)
+        self.assertFalse(InventoryItem.objects.filter(pk=item_id).exists())
+        # A paper trail about the removal keeps its row and its item's name
+        # behind it, only pointed at nothing — history is not quietly
+        # rewritten, just unburdened of the row it has done with.
+        ask.refresh_from_db()
+        self.assertIsNone(ask.item)
+        self.assertEqual(ask.item_name, 'Yamaha Digital Piano P-125')
         self.assertEqual(InventoryMovement.objects.count(), 0)
 
     def test_plain_members_cannot_remove_items(self):
@@ -6522,6 +6632,248 @@ class DeaconateInventoryAPITests(APITestCase):
         response = self.client.delete('/api/members/inventory/99999999/')
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_an_officer_edits_a_row_and_the_edit_sticks(self):
+        """A tag typed in, a room the item moved into, a quantity — the desk
+        corrects a row at a recess, without re-registering it.
+
+        The partial write is what the desk sends: fields it does not name
+        stay as they stood, and the edit does not move the row out of its
+        eldership reading — a register row waiting for review waits on.
+        """
+        item_id = self._register().data['id']
+
+        edited = self.client.patch(f'/api/members/inventory/{item_id}/', {
+            'name': 'Yamaha Digital Piano P-145',
+            'location': 'Fellowship Hall Store',
+            'quantity': 2,
+        }, format='json')
+
+        self.assertEqual(edited.status_code, status.HTTP_200_OK)
+        self.assertEqual(edited.data['name'], 'Yamaha Digital Piano P-145')
+        self.assertEqual(edited.data['location'], 'Fellowship Hall Store')
+        self.assertEqual(edited.data['quantity'], 2)
+        # Nothing the desk does not name moves — neither the label the
+        # register keeps nor the elders' reading of the row.
+        self.assertEqual(edited.data['tag_number'], 'AV-PNO-01')
+        self.assertEqual(edited.data['review_status'], 'pending')
+        row = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(row.name, 'Yamaha Digital Piano P-145')
+        self.assertEqual(row.quantity, 2)
+
+    def test_an_edit_cannot_take_another_items_tag(self):
+        item_id = self._register().data['id']
+        self._register(name='Second piano', tag_number='AV-PNO-02')
+
+        response = self.client.patch(f'/api/members/inventory/{item_id}/', {
+            'tag_number': 'av-pno-02',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tag_number', response.data)
+
+    def test_plain_members_cannot_edit_rows(self):
+        item_id = self._register().data['id']
+        self.client.force_authenticate(self.member)
+
+        response = self.client.patch(f'/api/members/inventory/{item_id}/', {
+            'name': 'Renamed by a bystander',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            InventoryItem.objects.filter(pk=item_id, name='Renamed by a bystander').exists()
+        )
+
+    def test_editing_an_unknown_item_reports_not_found(self):
+        response = self.client.patch('/api/members/inventory/99999999/', {
+            'name': 'Nowhere',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class DeaconatePropertyReviewFlowTests(APITestCase):
+    """The desk saves its rows and asks the eldership at the same time.
+
+    A new register row waits behind its Pending badge until an elder reads
+    it on the requests desk; a use, a stock addition or a removal goes to
+    the same desk as an ask. Only the elder's answer moves the register: a
+    consumption comes off the count where the desk says the items are being
+    consumed, reusable items check out to whoever signed for them until
+    they come back, and a stocked count rises. A refusal leaves everything
+    exactly as it waited.
+    """
+
+    def setUp(self):
+        self.elder = User.objects.create_user('pyd.elder', 'pyd.elder@example.com', 'ElderPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.member = User.objects.create_user('pyd.member', 'pyd.member@example.com', 'MemberPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.desk = User.objects.create_user('pyd.deacon', 'pyd.deacon@example.com', 'DeaconPass#2026')
+        MemberProfile.objects.create(user=self.desk, role='member', roles='member')
+        # The deaconate desk: the Head Deacon as leadership, the same seat
+        # ``can_manage_department`` reads for every property ask.
+        deaconate, _ = Department.objects.get_or_create(code='deaconate', defaults={'name': 'Deaconate', 'is_active': True})
+        DepartmentRole.objects.get_or_create(department=deaconate, name='Leader')
+        DepartmentAssignment.objects.get_or_create(
+            department=deaconate, member=self.desk,
+            defaults={'role': DepartmentRole.objects.get(department=deaconate, name='Leader'), 'kind': 'leader'},
+        )
+
+    def _register(self, **overrides):
+        self.client.force_authenticate(self.desk)
+        payload = {
+            'name': 'Campus Folding Chairs',
+            'tag_number': 'FUR-CHA-01',
+            'category': 'furniture',
+            'location': 'Store',
+            'quantity': 1,
+            'state': 'good',
+        }
+        payload.update(overrides)
+        return self.client.post('/api/members/inventory/', payload, format='json')
+
+    def _latest_pending(self):
+        return DeaconateRequest.objects.order_by('-id').first()
+
+    def _respond(self, decision, reply=''):
+        self.client.force_authenticate(self.elder)
+        ask = self._latest_pending()
+        return self.client.patch(
+            f'/api/members/deaconate-requests/{ask.id}/',
+            {'status': decision, 'reply': reply}, format='json',
+        )
+
+    def test_registering_an_item_waits_for_the_elders_reading(self):
+        """The row is on the register the moment the desk saves it — badge
+        Pending — and lands on the requests desk where an elder's answer
+        moves it into the register or behind its Rejected badge.
+        """
+        created = self._register()
+
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.data['review_status'], 'pending')
+        ask = self._latest_pending()
+        self.assertEqual(ask.kind, 'add')
+        self.assertEqual(ask.item_id, created.data['id'])
+        self.assertTrue(DeaconateRequest.objects.filter(item_id=created.data['id']).exists())
+
+        answer = self._respond('approved')
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        self.assertEqual(InventoryItem.objects.get(pk=created.data['id']).review_status, 'approved')
+
+    def test_a_refused_registration_keeps_its_row_behind_its_badge(self):
+        item_id = self._register().data['id']
+
+        answer = self._respond('rejected', 'Tag belongs to the primary school, not the church.')
+
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        row = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(row.review_status, 'rejected')
+        listed = self.client.get('/api/members/inventory/')
+        self.assertIn(item_id, [line['id'] for line in listed.data])
+        ask = self._latest_pending()
+        self.assertEqual(ask.reply, 'Tag belongs to the primary school, not the church.')
+
+    def test_a_reusable_use_checks_out_to_the_signer(self):
+        """Chairs borrowed for a wedding come back: approving the use puts
+        them into the hands of whoever the request names, In Use, and the
+        register reads them back when the desk raises the return.
+        """
+        item_id = self._register().data['id']
+        self.client.force_authenticate(self.desk)
+
+        asked = self.client.post('/api/members/deaconate-requests/', {
+            'kind': 'use', 'item_id': item_id, 'quantity': 1,
+            'purpose': 'Wedding decorating, tent and canopy setup',
+            'shared': 'reusable', 'custodian': 'Youth Leader Nancy',
+        }, format='json')
+        self.assertEqual(asked.status_code, status.HTTP_201_CREATED)
+
+        answer = self._respond('approved')
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        item = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(item.state, 'in_use')
+        self.assertEqual(item.assigned_to, 'Youth Leader Nancy')
+        # Nothing is consumed: the count is what it was before the ask.
+        self.assertEqual(item.quantity, 1)
+        self.assertEqual(InventoryMovement.objects.count(), 1)
+
+    def test_a_consumed_use_takes_the_items_off_the_count(self):
+        item_id = self._register(quantity=5).data['id']
+        self.client.force_authenticate(self.desk)
+
+        asked = self.client.post('/api/members/deaconate-requests/', {
+            'kind': 'use', 'item_id': item_id, 'quantity': 2,
+            'purpose': 'Vespers refreshments — dispensed cups',
+            'shared': 'consumed',
+        }, format='json')
+        self.assertEqual(asked.status_code, status.HTTP_201_CREATED)
+
+        answer = self._respond('approved')
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        item = InventoryItem.objects.get(pk=item_id)
+        self.assertEqual(item.quantity, 3)
+        # No custody: consumed items take nobody's name.
+        self.assertEqual(item.assigned_to, '')
+
+    def test_a_use_cannot_ask_for_more_than_the_register_holds(self):
+        item_id = self._register(quantity=2).data['id']
+        self.client.force_authenticate(self.desk)
+
+        asked = self.client.post('/api/members/deaconate-requests/', {
+            'kind': 'use', 'item_id': item_id, 'quantity': 3,
+            'purpose': 'Campus setup', 'shared': 'reusable',
+        }, format='json')
+
+        self.assertEqual(asked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('quantity', asked.data)
+        self.assertFalse(DeaconateRequest.objects.filter(kind='use').exists())
+
+    def test_a_stock_addition_is_applied_on_approval(self):
+        """Ten chairs donated on Sabbath catch-up day raise the count when
+        an elder signs the addition — and a refusal leaves the count.
+        """
+        item_id = self._register(quantity=5).data['id']
+        self.client.force_authenticate(self.desk)
+        asked = self.client.post('/api/members/deaconate-requests/', {
+            'kind': 'stock', 'item_id': item_id, 'quantity': 10,
+            'note': 'Ten chairs donated by the youth club on Saturday.',
+        }, format='json')
+        self.assertEqual(asked.status_code, status.HTTP_201_CREATED)
+
+        answer = self._respond('approved')
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        self.assertEqual(InventoryItem.objects.get(pk=item_id).quantity, 15)
+
+    def test_a_declined_ask_leaves_the_register_exactly_as_it_stood(self):
+        item_id = self._register(quantity=5).data['id']
+        self.client.force_authenticate(self.desk)
+        self.client.post('/api/members/deaconate-requests/', {
+            'kind': 'stock', 'item_id': item_id, 'quantity': 10,
+            'note': 'Addition typed in the wrong slot.',
+        }, format='json')
+
+        answer = self._respond('rejected')
+
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        self.assertEqual(InventoryItem.objects.get(pk=item_id).quantity, 5)
+
+    def test_the_congregation_cannot_use_the_register_its_own(self):
+        """The property asks — buy, use, stock or removal — stay the desk's
+        own asks; a plain member has reading rights and nothing else.
+        """
+        item_id = self._register().data['id']
+        self.client.force_authenticate(self.member)
+
+        raised = self.client.post('/api/members/deaconate-requests/', {
+            'kind': 'use', 'item_id': item_id, 'quantity': 1,
+            'purpose': 'A picnic the members made up themselves',
+        }, format='json')
+
+        self.assertEqual(raised.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(DeaconateRequest.objects.filter(kind='use').exists())
 
 
 class DutyRotaAPITests(APITestCase):

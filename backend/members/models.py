@@ -687,18 +687,23 @@ class DepartmentMessage(models.Model):
 
 
 class DeaconateRequest(models.Model):
-    """The deaconate's own ask to the office: to buy an item, or to repair one.
+    """The deaconate's ask of the office, about the church's property.
 
-    The desk keeps the church's property register; when the register needs a
-    new entry or an old one needs work, the deaconate's leadership raises a
-    request here instead of a phone call. It lands with the church's offices
-    — the people who answer for the church's money — and the answer, with
-    its note, is what the desk reads back.
+    Buying and repairing arrive by name alone; the rest of the desk's asks
+    carry the register row they act on (``item``), what it should change to,
+    and the office's answer is not just a note — ``approve_item_request``
+    applies it: the item is registered, the stock is added, the items go
+    out or come back, the row leaves the register.
     """
 
     KIND_CHOICES = [
         ('buy', 'Buy an item'),
         ('repair', 'Repair an item'),
+        ('add', 'Register property'),
+        ('use', 'Use of items'),
+        ('stock', 'Stock added'),
+        ('movement', 'Item movement'),
+        ('remove', 'Remove item'),
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -710,6 +715,19 @@ class DeaconateRequest(models.Model):
     )
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='buy')
     item_name = models.CharField(max_length=200, help_text="The property to buy, or the item that needs repair")
+    # For register asks: the row the request would act on. SET_NULL keeps the
+    # request readable after an approved removal takes the item away — only
+    # the remover's item evaporates, not the paper trail about it.
+    item = models.ForeignKey(
+        'InventoryItem', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='property_requests',
+    )
+    quantity = models.PositiveIntegerField(null=True, blank=True, help_text="The items the ask moves: used, added, or counted off")
+    purpose = models.CharField(max_length=255, blank=True, default='', help_text="Why the desk asks; what the items are for")
+    # The shape the ask changes, where a field of its own would serve one ask
+    # alone: a movement carries its action, who moves it and where; a use
+    # carries whether the items come back and who holds them meanwhile.
+    details = models.JSONField(default=dict, blank=True, help_text="Movement or use shape the elders' answer should apply")
     note = models.TextField(blank=True, help_text="What is needed and why — quantity, quote, room")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     reply = models.TextField(blank=True, help_text="The answer the office sends back to the desk")
@@ -2590,6 +2608,15 @@ class InventoryItem(models.Model):
     location = models.CharField(max_length=160, blank=True, default='')
     quantity = models.PositiveIntegerField(default=1)
     state = models.CharField(max_length=30, choices=STATE_CHOICES, default='good')
+    # A new row waits for an elder to read it under Requests: the register
+    # shows it with the badge either way, and the elder's answer moves it out
+    # of pending (a refusal leaves it standing behind its Rejected badge).
+    review_status = models.CharField(
+        max_length=12,
+        choices=[('pending', 'Pending review'), ('approved', 'Approved'), ('rejected', 'Rejected')],
+        default='approved',
+        help_text="Elders' reading of a new row: pending until the requests desk answers it",
+    )
     # Custody: who holds it while it is out of the store, and since when.
     assigned_to = models.CharField(max_length=160, blank=True, default='')
     checked_out_at = models.DateField(null=True, blank=True)

@@ -2142,14 +2142,13 @@ def _spoken_hour(clk):
 
 
 def _spoken_range(start, end):
-    """Two hours the way a programme prints them: the meridiem said once when
-    both ends of the run sit in the same half of the day — ``8:00 – 10:00 AM``.
-    An hourless entry prints as the one hour it carries, or nothing at all."""
+    """Two hours the way a programme prints them: each end carries its own
+    meridiem, so a run that crosses midday reads straight — ``8:00 AM - 12:00 PM``
+    — and no reader is left carrying the first half of the day. An hourless
+    entry prints as the one hour it carries, or nothing at all."""
     first, second = _spoken_hour(start), _spoken_hour(end)
     if first and second:
-        if first[-2:] == second[-2:]:
-            return f'{first[:-3]} – {second}'
-        return f'{first} – {second}'
+        return f'{first} - {second}'
     return first or second
 
 
@@ -2234,13 +2233,21 @@ PROGRAM_ROW_INDENT = 14
 
 #: The measure both of a programme's papers give the hour: a column of its
 #: own at the row's left edge, wide enough for the widest range a day can
-#: say. Every name begins where the column ends — so the names run down
-#: the page in one line, and the people carrying a row sit level with that
-#: row's own name instead of hanging wherever its hour happened to stop.
-PROGRAM_TIME_COL = 112
+#: say — both ends of a run carrying their own meridiem, ``11:00 AM -
+#: 12:00 PM``. Every name begins where the column ends — so the names run
+#: down the page in one line, and the people carrying a row sit level with
+#: that row's own name instead of hanging wherever its hour happened to stop.
+PROGRAM_TIME_COL = 128
 
 #: The air left between the hour and the name it opens.
 PROGRAM_TIME_GAP = 8
+
+#: How much farther a facilitator's line sits in from the name that carries
+#: the row: the people under a session or activity read a step in from it,
+#: on both of a programme's papers. The step is taken off the line's own
+#: width — never off the hour's column, and nothing on the page pushed out
+#: left — so the names keep the level they were set at.
+PROGRAM_PEOPLE_INDENT = 14
 
 #: The ink a role is written in — the one part of a row allowed to say
 #: what it says more quietly than the name beside it.
@@ -2656,11 +2663,14 @@ def generate_event_program_plain_pdf(
             lines.append((piece, font, size, DARK, 2.5, name_x))
         for name, role in row['people']:
             # The bullet is written in the row's own font, at the row's own
-            # name size and level: time, name and the people carrying it
-            # read with one weight, so nothing in the row shouts louder —
-            # only the role is allowed to answer more quietly.
+            # name size — but a step in from it, so the people under a row
+            # read farther from the name's level than a continuation of it
+            # would. The step narrows the line's own measure, so a wrap
+            # never carries them past the sheet's margin.
             bullet = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
-            lines.extend(_people_entries(bullet, font, GREY, ACTIVITY_SIZE, width, name_x))
+            lines.extend(_people_entries(bullet, font, GREY, ACTIVITY_SIZE,
+                                         width - PROGRAM_PEOPLE_INDENT,
+                                         name_x + PROGRAM_PEOPLE_INDENT))
         return lines
 
     def row_height(row):
@@ -2869,8 +2879,13 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         for piece in wrap(title, font, size, width):
             lines.append((piece, font, size, DARK, 2.5, name_x))
         for name, role in row['people']:
+            # The same step in the plain sheet takes — the people sit farther
+            # from the name's level than the name's own line, measured off
+            # the line's own width so the panel's margin holds them.
             text = f'\u2022 {name}' + (f' \u2013 {role}' if role else '')
-            lines.extend(_people_entries(text, font, GREY, ACTIVITY_SIZE, width, name_x))
+            lines.extend(_people_entries(text, font, GREY, ACTIVITY_SIZE,
+                                         width - PROGRAM_PEOPLE_INDENT,
+                                         name_x + PROGRAM_PEOPLE_INDENT))
         return lines
 
     def row_height(row):

@@ -751,20 +751,21 @@ export const clerkshipItems: RailRow[] = [
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "members" | "baptismal-class" | "leaders" | "calendar" | "announcements" | "requests" | "moments" | "funding";
+  key: "rota" | "baptismal-class" | "leaders" | "calendar" | "sharing" | "requests" | "moments" | "funding";
   label: string;
   short?: string;
   icon: LucideIcon;
   href: string;
   description: string;
 }[] = [
-  // The desk's roll: everyone the elders answer for, with the asks to join it.
+  // The duty rota: the deacons', deaconesses' and pulpit rosters the elders oversee.
   {
-    key: "members",
-    label: "Members",
-    icon: Users,
-    href: "/my-areas?area=eldership&view=members",
-    description: "The elders' roll, with each member's area and the asks to join it.",
+    key: "rota",
+    label: "Duty Rota",
+    short: "Rota",
+    icon: ClipboardList,
+    href: "/administration?tab=deaconate-rota",
+    description: "The deacons' and deaconesses' duty rosters for the church's services.",
   },
   // The baptismal class: who the elders are preparing for the font, their
   // walk from studying to baptism, kept by the desk itself.
@@ -792,14 +793,14 @@ export const eldershipViews: {
     href: "/my-areas?area=eldership&view=calendar",
     description: "The church's calendar, with the gatherings the elders keep.",
   },
+  // Notices published to the church family, and the daily devotional thought.
   {
-    key: "announcements",
-    label: "Announcements",
-    // The strip's longest name, shortened for the four-a-row phone grid.
-    short: "Announce",
-    icon: Megaphone,
+    key: "sharing",
+    label: "Sharing",
+    short: "Sharing",
+    icon: Sparkles,
     href: "/administration?tab=announcements",
-    description: "Notices and updates shared with the church family.",
+    description: "Publish announcements and share a daily thought with the church.",
   },
   {
     key: "requests",

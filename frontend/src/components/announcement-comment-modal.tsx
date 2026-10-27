@@ -277,3 +277,163 @@ export function AnnouncementCommentModal({ open, onClose, announcement }: Announ
     </div>
   );
 }
+
+export function AnnouncementInlineComments({
+  announcementId,
+}: {
+  announcementId: number;
+  title?: string;
+}) {
+  const [feed, setFeed] = useState<CommentsFeed | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    // The thread loads here; `loading` starts true, and the thread is
+    // remounted per announcement, so no reset is owed on the way in — and the
+    // react compiler forbids a synchronous setState here regardless.
+    let cancelled = false;
+    loadThread(announcementId)
+      .then((data) => {
+        if (!cancelled) setFeed(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Comments could not be loaded.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [announcementId]);
+
+  useAnnouncementCommentsSocket(announcementId, {
+    onResponse: (response) => {
+      setFeed((prev) => {
+        if (!prev) return prev;
+        if (prev.comments.some((line) => line.id === response.id)) return prev;
+        return {
+          ...prev,
+          comments: [
+            ...prev.comments,
+            {
+              id: response.id,
+              username: response.username,
+              respondent_name: response.respondent_name,
+              response_text: response.response_text,
+              response_choice: response.response_choice,
+              created_at: response.created_at,
+            },
+          ],
+          count: prev.count + 1,
+        };
+      });
+    },
+  });
+
+  async function submit() {
+    const text = draft.trim().slice(0, COMMENT_MAX);
+    if (!text || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const token = window.localStorage.getItem("access_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API_URL}/api/members/announcements/${announcementId}/action/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action_type: "respond", response_text: text }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "Your comment could not be posted.");
+      }
+      setDraft("");
+      const fresh = await loadThread(announcementId);
+      setFeed(fresh);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Your comment could not be posted.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const lines = (feed?.comments ?? []).filter(isComment);
+
+  return (
+    <div className="mt-3 rounded-2xl border border-sand-line bg-sand/30 p-3.5 sm:p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-ember">
+          Comments ({lines.length})
+        </span>
+      </div>
+
+      <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+        {loading ? (
+          <p className="text-xs text-moss py-2">Loading comments…</p>
+        ) : error && !feed ? (
+          <p className="text-xs text-red-600 py-2">{error}</p>
+        ) : lines.length === 0 ? (
+          <p className="text-xs text-moss py-2">No comments yet — be the first to add one.</p>
+        ) : (
+          lines.map((line) => (
+            <div key={line.id} className="rounded-xl border border-sand-line bg-white p-2.5 shadow-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-ember">
+                  {line.username || line.respondent_name || "Guest"}
+                </span>
+                <time className="text-[10px] text-moss" suppressHydrationWarning>
+                  {new Date(line.created_at).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </time>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-bark">
+                {line.response_text?.trim() || line.response_choice}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="pt-2 border-t border-sand-line/70">
+        <textarea
+          rows={2}
+          value={draft}
+          maxLength={COMMENT_MAX}
+          onChange={(event) => setDraft(event.target.value.slice(0, COMMENT_MAX))}
+          placeholder="Write a comment..."
+          className="w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none placeholder:text-moss focus:border-ember"
+        />
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <span className="text-[10px] tabular-nums text-moss" aria-live="polite">
+            {draft.length}/{COMMENT_MAX}
+          </span>
+          <div className="flex items-center gap-2">
+            {error && feed && (
+              <span className="text-[11px] text-red-600 truncate max-w-[200px]" role="alert">
+                {error}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!draft.trim() || sending}
+              className="rounded-full bg-ember px-3.5 py-1 text-xs font-bold text-white transition hover:bg-ember-dark disabled:opacity-50"
+            >
+              {sending ? "Posting…" : "Post"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

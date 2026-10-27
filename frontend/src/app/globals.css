@@ -433,6 +433,20 @@ body {
     overflow: hidden;
     height: 100%;
   }
+
+  /* A SweetAlert modal stamps `swal2-height-auto` on the document — height
+     auto !important, meant for pages the document scrolls — and the shell's
+     height chain then grows to the content: the lists that scroll inside it
+     fit at once and their read position clamps to the top, so opening a
+     dialog slides the record the reader was on out from under them. These
+     desks keep their viewport height while a modal is up; the desk's own
+     scrollers are the only hands on the reading position. */
+  html.swal2-height-auto:has(.app-shell[data-scroll-mode="panel"]),
+  html.swal2-height-auto:has(.app-shell[data-scroll-mode="pinned"]),
+  body.swal2-height-auto:has(.app-shell[data-scroll-mode="panel"]),
+  body.swal2-height-auto:has(.app-shell[data-scroll-mode="pinned"]) {
+    height: 100% !important;
+  }
 }
 
 @media (max-width: 767px) {
@@ -440,6 +454,13 @@ body {
   body:has(.app-shell[data-scroll-mode="pinned"]) {
     overflow: hidden;
     height: 100%;
+  }
+
+  /* The same SweetAlert stamp, on a phone's pinned desks — the ledger and
+     the desks it serves. */
+  html.swal2-height-auto:has(.app-shell[data-scroll-mode="pinned"]),
+  body.swal2-height-auto:has(.app-shell[data-scroll-mode="pinned"]) {
+    height: 100% !important;
   }
 
   /* Panel pages lay out in normal flow on a phone: the shell's flex height
