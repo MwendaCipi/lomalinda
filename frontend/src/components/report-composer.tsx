@@ -128,9 +128,13 @@ const fetchSuggestions = async (
   }
 };
 
-/** The statement as a page, downloaded with the viewer's own credentials —
- *  a plain link would carry no token, and a draft's PDF belongs to the desk. */
-const downloadStatementPdf = async (reportId: number, title: string) => {
+/** Open the statement PDF in the browser's own viewer (new tab on desktop,
+ *  direct download on mobile — a fetch-then-popup is blocked by mobile
+ *  browsers because the gesture is already spent by the time the response
+ *  arrives). The blob URL is never revoked: the browser's Save button
+ *  re-reads it after the tab finishes loading, and revoking it early turns
+ *  that into a connection error. The URL dies with the page. */
+const previewStatementPdf = async (reportId: number, title: string) => {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   try {
     const res = await fetch(`${API_URL}/api/members/reports/${reportId}/pdf/`, {
@@ -146,13 +150,17 @@ const downloadStatementPdf = async (reportId: number, title: string) => {
     }
     const blob = await res.blob();
     const blobUrl = window.URL.createObjectURL(blob);
+    const touchScreen = window.matchMedia?.("(pointer: coarse)")?.matches;
+    const opened = !touchScreen && window.open(blobUrl, "_blank");
+    if (opened) return;
+    // Mobile fallback: mount the anchor before clicking — required by mobile
+    // browsers before they will honour the `download` attribute.
     const a = document.createElement("a");
     a.href = blobUrl;
     a.download = `Financial_Report_${title.replace(/[^\w-]+/g, "_")}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    window.URL.revokeObjectURL(blobUrl);
   } catch {
     await showAlert(
       "Could not prepare the PDF",
@@ -257,46 +265,46 @@ export function ReportComposer({
     // answer, not a dependency.
   }, [draft.period_start, draft.period_end]);
 
-  /** Anything the desk has changed since the form opened: what the download
+  /** Anything the desk has changed since the form opened: what the preview
    *  would not carry until the statement is saved. */
   const dirty = useMemo(() => {
     const initial = report ? draftFromReport(report) : initialDraft ?? blankDraft();
     return (Object.keys(initial) as (keyof Draft)[]).some((key) => draft[key] !== initial[key]);
   }, [draft, report, initialDraft]);
 
-  /** The period's PDF, from the saved statement. */
-  const downloadStatement = async () => {
+  /** The period's PDF, opened in the browser's own viewer. */
+  const previewStatement = async () => {
     if (report) {
       if (dirty) {
         const answer = await showAlert(
           "Unsaved corrections",
-          "Download the statement as it is saved. Your corrections stay on screen until you save them.",
+          "Preview the statement as it is saved. Your corrections stay on screen until you save them.",
           "info",
-          { confirmButtonText: "Download", showCancelButton: true, cancelButtonText: "Keep editing" }
+          { confirmButtonText: "Preview", showCancelButton: true, cancelButtonText: "Keep editing" }
         );
         if (!answer.isConfirmed) return;
       }
       setDownloading(true);
-      await downloadStatementPdf(report.id, report.title);
+      await previewStatementPdf(report.id, report.title);
       setDownloading(false);
       return;
     }
     if (dirty) {
       await showAlert(
         "The statement is not saved yet",
-        "Post the report first, then download the PDF. The page is printed from the saved statement.",
+        "Post the report first, then preview the PDF. The page is generated from the saved statement.",
         "info"
       );
       return;
     }
     // A fresh form with nothing changed: the figures are the ledger's own, so
-    // posting it here is what "download" means — the PDF can only be printed
+    // posting it here is what "preview" means — the PDF can only be viewed
     // from a saved statement.
     const answer = await showAlert(
       "Post this statement?",
-      "A report is downloaded from the church's records, so this one will be posted first, then the PDF downloads.",
+      "A report is previewed from the church's records, so this one will be posted first, then the PDF opens.",
       "info",
-      { confirmButtonText: "Post & download", showCancelButton: true, cancelButtonText: "Not now" }
+      { confirmButtonText: "Post & preview", showCancelButton: true, cancelButtonText: "Not now" }
     );
     if (!answer.isConfirmed) return;
     setDownloading(true);
@@ -322,7 +330,7 @@ export function ReportComposer({
         return;
       }
       const saved = await res.json();
-      await downloadStatementPdf(saved.id, saved.title ?? draft.title);
+      await previewStatementPdf(saved.id, saved.title ?? draft.title);
       setDownloading(false);
       onSaved();
     } catch {
@@ -581,12 +589,12 @@ export function ReportComposer({
             </button>
             <button
               type="button"
-              onClick={downloadStatement}
+              onClick={previewStatement}
               disabled={downloading}
               className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute px-4 py-2 text-sm font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
             >
               <Download className="h-4 w-4" />
-              {downloading ? "Preparing…" : "Download report"}
+              {downloading ? "Preparing…" : "Preview report"}
             </button>
             <button
               type="submit"
