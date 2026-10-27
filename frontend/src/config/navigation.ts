@@ -263,6 +263,21 @@ export const destinations = {
     area: "fellowship",
     match: ["/calendar"],
   },
+  /**
+   * Prayer Cells — the fellowship's small companies of prayer, kept by the
+   * Personal Ministries desk. Members read the register here and ask to join
+   * one; the desk that owns the church's week forms the cells and keeps
+   * their rolls (and each cell's own group chat) on its strip.
+   */
+  prayerCells: {
+    href: "/prayer-cells",
+    label: "Prayer Cells",
+    short: "Cells",
+    description: "The church's prayer cells — find one and ask to join it.",
+    icon: HandHeart,
+    area: "fellowship",
+    match: ["/prayer-cells"],
+  },
   materials: {
     href: "/materials",
     label: "Materials",
@@ -1107,6 +1122,7 @@ export const railEntries: RailEntry[] = [
       page("calendar"),
       page("moments"),
       page("testimonies"),
+      page("prayerCells"),
       page("requests"),
     ],
   },

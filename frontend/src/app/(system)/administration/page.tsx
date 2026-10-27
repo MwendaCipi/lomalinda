@@ -734,7 +734,13 @@ function AdministrationContent() {
                 // every other use of ?view= (the treasury's) leaves the hub
                 // on its roll.
                 initialTab={
-                  searchView === "pulpit-team" ? "pulpit-team" : searchView === "duties" ? "duties" : undefined
+                  searchView === "pulpit-team"
+                    ? "pulpit-team"
+                    : searchView === "duties"
+                      ? "duties"
+                      : searchView === "prayer_cells"
+                        ? "prayer_cells"
+                        : undefined
                 }
                 directoryHeading={{ label: "Administration", description: "The church's offices, ministries and departments, with each leader and assistant." }}
               />

@@ -2998,3 +2998,102 @@ def giver_display_name(donor_name, *, member=None, email='', phone=''):
         if name:
             return name
     return ''
+
+
+class PrayerCell(models.Model):
+    """A prayer cell under Personal Ministries.
+
+    A cell is a small company of members who pray together — a name, who
+    leads it, and who is in it. The desk that owns the church's week owns
+    these too: the Personal Ministries leader forms cells and keeps their
+    membership, members ask to join from the fellowship's own Prayer Cells
+    page, and every cell gets a group chat the moment it is formed (see
+    ``chat.services.ensure_cell_rooms``), kept in step as its membership
+    moves.
+    """
+
+    name = models.CharField(max_length=120, unique=True)
+    description = models.CharField(max_length=240, blank=True)
+    leader = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='led_prayer_cells',
+    )
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='prayer_cells_created',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('name',)
+
+    def __str__(self):
+        return self.name
+
+
+class PrayerCellMember(models.Model):
+    """One member's place in a prayer cell."""
+
+    cell = models.ForeignKey(PrayerCell, on_delete=models.CASCADE, related_name='memberships')
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='prayer_cell_memberships',
+    )
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='prayer_cell_members_added',
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('created_at', 'id')
+        constraints = [
+            models.UniqueConstraint(fields=('cell', 'member'), name='uniq_member_per_prayer_cell'),
+        ]
+
+    def __str__(self):
+        return f"{self.member.get_username()} — {self.cell.name}"
+
+
+class PrayerCellJoinRequest(models.Model):
+    """A member's ask to join a prayer cell.
+
+    Raised from the fellowship's Prayer Cells page; the cell's leadership —
+    the Personal Ministries leader above all — answers here. Approving puts
+    the member in the cell and into its chat room; the optional ``reply`` is
+    what the requester reads back.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Declined'),
+    ]
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='prayer_cell_join_requests',
+    )
+    cell = models.ForeignKey(PrayerCell, on_delete=models.CASCADE, related_name='join_requests')
+    note = models.TextField(blank=True, help_text="An optional word from the member about why they are asking")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reply = models.TextField(blank=True, help_text="The answer the desk sends back to the member")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='prayer_cell_join_requests_reviewed',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('-created_at',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=('member', 'cell'),
+                condition=models.Q(status='pending'),
+                name='uniq_open_prayer_cell_request',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.member.get_username()} → {self.cell.name} ({self.get_status_display()})"

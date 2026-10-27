@@ -232,6 +232,45 @@ def ensure_member_rooms(user):
     return rooms
 
 
+def ensure_cell_room(cell):
+    """A prayer cell's group chat, made the moment the cell is formed.
+
+    A cell formed by the Personal Ministries desk is a company that talks, so
+    its room stands with it: keyed ``cell:<id>`` so one room serves one cell
+    forever, titled as the cell is, and kept in step with the cell's
+    membership — a member added joins, and one removed leaves, the next time
+    the room is touched.
+    """
+    conversation, _created = Conversation.objects.get_or_create(
+        kind=Conversation.KIND_GROUP,
+        key=f'cell:{cell.id}',
+        defaults={'title': cell.name, 'created_by': cell.created_by},
+    )
+    changed = []
+    if conversation.title != cell.name:
+        conversation.title = cell.name
+        changed.append('title')
+    if changed:
+        conversation.save(update_fields=changed)
+    everyone = {row for row in cell.memberships.values_list('member_id', flat=True)}
+    existing = {participant.member_id: participant for participant in conversation.participants.all()}
+    for member_id in everyone - existing.keys():
+        Participant.objects.get_or_create(
+            conversation=conversation,
+            member_id=member_id,
+            defaults={'is_moderator': member_id == cell.leader_id},
+        )
+    for member_id, participant in existing.items():
+        if member_id not in everyone:
+            participant.delete()
+            continue
+        moderator = member_id == cell.leader_id
+        if participant.is_moderator != moderator:
+            participant.is_moderator = moderator
+            participant.save(update_fields=['is_moderator'])
+    return conversation
+
+
 def open_dm(member_a, member_b):
     """The direct message between two members, made if this is the first."""
     if member_a.id == member_b.id:

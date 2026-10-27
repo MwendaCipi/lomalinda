@@ -45,8 +45,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
-
-from .models import Announcement, AnnouncementResponse, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -14620,3 +14619,365 @@ class PathfinderDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Pathfinder.objects.all()
     serializer_class = PathfinderSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+# ── Prayer cells ─────────────────────────────────────────────────────────────
+#
+# The Personal Ministries desk keeps the church's prayer cells (see the
+# PrayerCell register): members raise their asks on the fellowship's page,
+# and the desk forms cells, seats members in them and answers the asks.
+# Every cell's group chat is ensured here — ``chat.services.ensure_cell_room``
+# creates it the moment a cell is written and keeps its participants in step
+# with the cell's roll.
+
+CELL_DESK = 'personal_ministries'
+
+
+def cell_can_manage(user):
+    """Who keeps the prayer cells: the Personal Ministries desk and the office."""
+    return can_manage_department(user, CELL_DESK)
+
+
+def cell_member_name(user):
+    """How a cell member reads on a list: their name, or their username."""
+    if user is None:
+        return ''
+    name = f"{user.first_name} {user.last_name}".strip()
+    return name or user.get_username()
+
+
+def cell_updates_room(cell):
+    """Rewrite the cell's chat room to match the cell's roll."""
+    from chat.services import ensure_cell_room
+
+    ensure_cell_room(cell)
+
+
+def cell_json(row):
+    """One cell as the fellowship's page and the desk's panel read it."""
+    from chat.models import Conversation
+
+    memberships = row.memberships.select_related('member').order_by('created_at', 'id')
+    room = Conversation.objects.filter(key=f'cell:{row.id}').only('id').first()
+    return {
+        'id': row.id,
+        'name': row.name,
+        'description': row.description,
+        'leader': (
+            {'id': row.leader_id, 'name': cell_member_name(row.leader)}
+            if row.leader_id else None
+        ),
+        'members': [
+            {
+                'member_id': membership.member_id,
+                'name': cell_member_name(membership.member),
+                'created_at': membership.created_at,
+            }
+            for membership in memberships
+        ],
+        'is_active': row.is_active,
+        'created_at': row.created_at,
+        'room_id': room.id if room else None,
+    }
+
+
+class PrayerCellsView(APIView):
+    """The church's prayer cells.
+
+    GET reads the register — every active cell with its roll — together with
+    the member's own open asks and whether this reader keeps the desk. POST
+    forms a cell (the desk alone), and forming one forms its chat room too.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = PrayerCell.objects.filter(is_active=True).prefetch_related('memberships__member')
+        my_cells = set(
+            PrayerCellMember.objects.filter(member=request.user).values_list('cell_id', flat=True)
+        )
+        my_requests = PrayerCellJoinRequest.objects.filter(member=request.user).select_related('cell')
+        return Response({
+            'cells': [cell_json(row) for row in rows],
+            'my_cells': sorted(my_cells),
+            'my_requests': [
+                {
+                    'id': row.id,
+                    'cell_id': row.cell_id,
+                    'cell_name': row.cell.name,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'created_at': row.created_at,
+                }
+                for row in my_requests
+            ],
+            'can_manage': cell_can_manage(request.user),
+        })
+
+    def post(self, request):
+        if not cell_can_manage(request.user):
+            return Response({'detail': 'The Personal Ministries desk forms the cells.'}, status=status.HTTP_403_FORBIDDEN)
+        name = str(request.data.get('name') or '').strip()
+        if len(name) < 3:
+            return Response({'name': 'Give the cell a name of at least three characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if PrayerCell.objects.filter(name__iexact=name).exists():
+            return Response({'name': 'A prayer cell by that name already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+        leader_id = request.data.get('leader_id')
+        leader = None
+        if leader_id is not None:
+            leader = User.objects.filter(pk=leader_id).first()
+            if leader is None:
+                return Response({'leader_id': 'Unknown member.'}, status=status.HTTP_400_BAD_REQUEST)
+        cell = PrayerCell.objects.create(
+            name=name,
+            description=str(request.data.get('description') or '').strip()[:240],
+            leader=leader,
+            created_by=request.user,
+        )
+        # The cell is formed: so is the room its members talk in.
+        cell_updates_room(cell)
+        return Response(cell_json(cell), status=status.HTTP_201_CREATED)
+
+
+class PrayerCellDetailView(APIView):
+    """One cell, kept by the desk: renamed, its leader set, its roll edited."""
+    permission_classes = [IsAuthenticated]
+
+    def _cell(self, pk):
+        cell = PrayerCell.objects.filter(pk=pk, is_active=True).first()
+        if cell is None:
+            return None
+        return cell
+
+    def patch(self, request, pk):
+        cell = self._cell(pk)
+        if cell is None:
+            return Response({'detail': 'Unknown prayer cell.'}, status=status.HTTP_404_NOT_FOUND)
+        if not cell_can_manage(request.user):
+            return Response({'detail': 'The Personal Ministries desk keeps the cells.'}, status=status.HTTP_403_FORBIDDEN)
+        updates = []
+        name = operation_name = request.data.get('name')
+        if 'name' in request.data:
+            name = str(name or '').strip()
+            if len(name) < 3:
+                return Response({'name': 'Give the cell a name of at least three characters.'}, status=status.HTTP_400_BAD_REQUEST)
+            if PrayerCell.objects.filter(name__iexact=name).exclude(pk=cell.pk).exists():
+                return Response({'name': 'A prayer cell by that name already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+            cell.name = name
+            updates.append('name')
+        if 'description' in request.data:
+            cell.description = str(request.data.get('description') or '').strip()[:240]
+            updates.append('description')
+        if 'leader_id' in request.data:
+            leader_id = request.data.get('leader_id')
+            if leader_id in (None, ''):
+                cell.leader = None
+            else:
+                leader = User.objects.filter(pk=leader_id).first()
+                if leader is None:
+                    return Response({'leader_id': 'Unknown member.'}, status=status.HTTP_400_BAD_REQUEST)
+                cell.leader = leader
+            updates.append('leader')
+        if updates:
+            cell.save(update_fields=updates)
+        if 'leader_id' in request.data:
+            # The leader's moderator flag rides the room sync.
+            cell_updates_room(cell)
+        return Response(cell_json(cell))
+
+    def delete(self, request, pk):
+        """Retire the cell from the register; its chat room stands as history."""
+        cell = self._cell(pk)
+        if cell is None:
+            return Response({'detail': 'Unknown prayer cell.'}, status=status.HTTP_404_NOT_FOUND)
+        if not cell_can_manage(request.user):
+            return Response({'detail': 'The Personal Ministries desk keeps the cells.'}, status=status.HTTP_403_FORBIDDEN)
+        cell.is_active = False
+        cell.save(update_fields=['is_active'])
+        return Response({'detail': 'The cell is retired from the register.'})
+
+
+class PrayerCellMembersView(APIView):
+    """The cell's roll, kept by the desk.
+
+    POST seats a member (an added member lands in the cell's chat room on
+    the way); DELETE unseats one, and the room follows.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        cell = PrayerCell.objects.filter(pk=pk, is_active=True).first()
+        if cell is None:
+            return Response({'detail': 'Unknown prayer cell.'}, status=status.HTTP_404_NOT_FOUND)
+        if not cell_can_manage(request.user):
+            return Response({'detail': 'The Personal Ministries desk keeps the cells.'}, status=status.HTTP_403_FORBIDDEN)
+        member = User.objects.filter(pk=request.data.get('member_id')).first()
+        if member is None:
+            return Response({'member_id': 'Unknown member.'}, status=status.HTTP_400_BAD_REQUEST)
+        _, created = PrayerCellMember.objects.get_or_create(
+            cell=cell, member=member, defaults={'added_by': request.user},
+        )
+        if created:
+            cell_updates_room(cell)
+        return Response(cell_json(cell))
+
+    def delete(self, request, pk, member_id):
+        cell = PrayerCell.objects.filter(pk=pk, is_active=True).first()
+        if cell is None:
+            return Response({'detail': 'Unknown prayer cell.'}, status=status.HTTP_404_NOT_FOUND)
+        if not cell_can_manage(request.user):
+            return Response({'detail': 'The Personal Ministries desk keeps the cells.'}, status=status.HTTP_403_FORBIDDEN)
+        removed, _ = PrayerCellMember.objects.filter(cell=cell, member_id=member_id).delete()
+        if removed:
+            cell_updates_room(cell)
+        return Response(cell_json(cell))
+
+
+class PrayerCellJoinRequestView(APIView):
+    """A member's ask to join a prayer cell.
+
+    GET reads the member's own asks; POST raises one against a cell. A
+    member already in the cell has no ask to raise, and one open ask per
+    cell stands at a time.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = PrayerCellJoinRequest.objects.filter(member=request.user).select_related('cell')
+        return Response({
+            'requests': [
+                {
+                    'id': row.id,
+                    'cell_id': row.cell_id,
+                    'cell_name': row.cell.name,
+                    'cell_active': row.cell.is_active,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'created_at': row.created_at,
+                    'reviewed_at': row.reviewed_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def post(self, request, pk):
+        cell = PrayerCell.objects.filter(pk=pk, is_active=True).first()
+        if cell is None:
+            return Response({'detail': 'Unknown prayer cell.'}, status=status.HTTP_404_NOT_FOUND)
+        if PrayerCellMember.objects.filter(cell=cell, member=request.user).exists():
+            return Response({'detail': 'You are already in this cell.'}, status=status.HTTP_400_BAD_REQUEST)
+        if PrayerCellJoinRequest.objects.filter(member=request.user, cell=cell, status='pending').exists():
+            return Response({'detail': 'Your ask is already waiting with this cell.'}, status=status.HTTP_400_BAD_REQUEST)
+        row = PrayerCellJoinRequest.objects.create(
+            member=request.user,
+            cell=cell,
+            note=str(request.data.get('note') or '').strip()[:500],
+        )
+        # The ask lands with the Personal Ministries desk's leadership and the
+        # office, who answer join asks from the same office rule.
+        from .requests import request_audience
+
+        audience_ids = {
+            member_id for member_id in DepartmentAssignment.objects.filter(
+                department__code=CELL_DESK, department__is_active=True, member__is_active=True,
+            ).values_list('member_id', flat=True)
+        }
+        audience_ids.update(request_audience('join').values_list('id', flat=True))
+        audience_ids.discard(request.user.id)
+        audience = User.objects.filter(id__in=audience_ids, is_active=True)
+        desk_link = f'{settings.FRONTEND_URL}/administration?tab=leaders&dept=personal_ministries&view=prayer_cells'
+        subject = f'New prayer cell request for {cell.name}'
+        body = (
+            f"{request.user.get_full_name() or request.user.get_username()} has asked to join "
+            f"the prayer cell \"{cell.name}\". Open the Personal Ministries desk to respond: {desk_link}"
+        )
+        ChurchNotification.objects.bulk_create([
+            ChurchNotification(user=person, title=subject, message=body, link=desk_link)
+            for person in audience
+        ])
+        try:
+            from .push import push_to_user, vapid_keys_ready
+
+            if vapid_keys_ready():
+                for person in audience:
+                    push_to_user(person, title=subject, body=body, link=desk_link)
+        except Exception:
+            pass
+        return Response({'id': row.id, 'status': row.status, 'detail': 'Your request has been sent.'}, status=status.HTTP_201_CREATED)
+
+
+class PrayerCellJoinRequestReviewView(APIView):
+    """The desk's answer to a join-into-a-cell ask.
+
+    Visible to the Personal Ministries desk and the office; approving seats
+    the member in the cell — and, through the room sync, in its chat.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _visible(self, user):
+        if cell_can_manage(user):
+            return PrayerCellJoinRequest.objects.filter().select_related('member', 'cell')
+        return PrayerCellJoinRequest.objects.none()
+
+    def get(self, request, cell_id=None):
+        if cell_id is not None:
+            cell = PrayerCell.objects.filter(pk=cell_id).first()
+            if cell is None:
+                return Response({'detail': 'Unknown prayer cell.'}, status=status.HTTP_404_NOT_FOUND)
+        rows = self._visible(request.user)
+        if cell_id is not None:
+            rows = rows.filter(cell_id=cell_id)
+        return Response({
+            'can_review': cell_can_manage(request.user),
+            'requests': [
+                {
+                    'id': row.id,
+                    'cell_id': row.cell_id,
+                    'cell_name': row.cell.name,
+                    'member_id': row.member_id,
+                    'member_name': cell_member_name(row.member),
+                    'member_email': row.member.email or '',
+                    'note': row.note,
+                    'status': row.status,
+                    'reply': row.reply,
+                    'created_at': row.created_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def patch(self, request, pk):
+        row = PrayerCellJoinRequest.objects.select_related('member', 'cell').filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'Unknown request.'}, status=status.HTTP_404_NOT_FOUND)
+        if not cell_can_manage(request.user):
+            return Response({'detail': 'The Personal Ministries desk answers these.'}, status=status.HTTP_403_FORBIDDEN)
+        if row.status != 'pending':
+            return Response({'detail': 'This ask has already been answered.'}, status=status.HTTP_400_BAD_REQUEST)
+        decision = str(request.data.get('status') or '')
+        if decision not in ('approved', 'rejected'):
+            return Response({'detail': 'Answer with approved or rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            row.status = decision
+            row.reply = str(request.data.get('reply') or '').strip()[:500]
+            row.reviewed_by = request.user
+            row.reviewed_at = timezone.now()
+            row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
+            if decision == 'approved':
+                PrayerCellMember.objects.get_or_create(
+                    cell=row.cell, member=row.member, defaults={'added_by': request.user},
+                )
+        if decision == 'approved':
+            cell_updates_room(row.cell)
+        approved = decision == 'approved'
+        ChurchNotification.objects.create(
+            user=row.member,
+            title=f'Your request to join "{row.cell.name}" was {"approved" if approved else "declined"}',
+            message=row.reply or (
+                'Welcome to the cell — you are in it, and its chat is open.'
+                if approved
+                else 'Thank you for asking. The desk could not take you into this cell this time.'
+            ),
+            link=            f'{settings.FRONTEND_URL}/prayer-cells',
+        )
+        return Response({'id': row.id, 'status': row.status, 'reply': row.reply})

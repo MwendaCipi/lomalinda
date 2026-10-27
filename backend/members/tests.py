@@ -18421,3 +18421,146 @@ class DepartmentMessageTests(APITestCase):
         self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(DepartmentMessage.objects.exists())
 
+
+class PrayerCellFlowTests(APITestCase):
+    """The fellowship's prayer cells: asks raised, desk answered, room formed.
+
+    A member asks to join a cell on the fellowship page; the Personal
+    Ministries desk (or the office) answers, and the member seated joins the
+    cell's own group chat — the room is the cell's: made when the cell is
+    formed and kept in step as its roll moves.
+    """
+
+    def setUp(self):
+        from chat.models import Conversation
+        from .models import PrayerCell, PrayerCellMember, PrayerCellJoinRequest
+
+        self.Conversation = Conversation
+        self.PrayerCell = PrayerCell
+        self.PrayerCellMember = PrayerCellMember
+        self.PrayerCellJoinRequest = PrayerCellJoinRequest
+
+        self.pm = Department.objects.get(code='personal_ministries')
+        pm_leader_role = DepartmentRole.objects.get(department=self.pm, name='Leader')
+        self.leader = User.objects.create_user(
+            'cell.lead', 'cell.lead@example.com', 'CellLead#2026',
+            first_name='Cara', last_name='Leader',
+        )
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        DepartmentAssignment.objects.create(
+            department=self.pm, role=pm_leader_role, member=self.leader, kind='leader',
+        )
+        self.member = User.objects.create_user(
+            'cell.plain', 'cell.plain@example.com', 'MemberPass#2026',
+            first_name='Peter', last_name='Plain',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.other = User.objects.create_user(
+            'cell.other', 'cell.other@example.com', 'MemberPass#2026',
+        )
+        MemberProfile.objects.create(user=self.other, role='member', roles='member')
+
+    def _form_cell(self):
+        from chat.services import ensure_cell_room
+
+        cell = self.PrayerCell.objects.create(
+            name='Oasis', description='Friday prayers', leader=self.leader, created_by=self.leader,
+        )
+        self.PrayerCellMember.objects.create(cell=cell, member=self.leader, added_by=self.leader)
+        ensure_cell_room(cell)
+        return cell
+
+    def test_desk_forms_a_cell_and_its_room_is_created(self):
+        self.client.force_authenticate(self.leader)
+        response = self.client.post(
+            '/api/members/prayer-cells/',
+            {'name': 'Kesha Friday', 'description': 'All-night prayers'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        cell = self.PrayerCell.objects.get(name='Kesha Friday')
+        self.assertTrue(
+            self.Conversation.objects.filter(kind='group', key=f'cell:{cell.id}').exists(),
+            'A formed cell must have its group chat.',
+        )
+
+    def test_a_plain_member_cannot_form_a_cell(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post('/api/members/prayer-cells/', {'name': 'Rogue'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(self.PrayerCell.objects.filter(name='Rogue').exists())
+
+    def test_member_raises_an_ask_and_the_desk_answers_it(self):
+        cell = self._form_cell()
+        self.client.force_authenticate(self.member)
+        raised = self.client.post(
+            f'/api/members/prayer-cells/{cell.id}/requests/',
+            {'note': 'I would love to pray with the group'}, format='json',
+        )
+        self.assertEqual(raised.status_code, status.HTTP_201_CREATED, raised.data)
+        # One open ask per cell stands.
+        duplicate = self.client.post(f'/api/members/prayer-cells/{cell.id}/requests/', format='json')
+        self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # The member already in the cell has no ask to raise.
+        self.client.force_authenticate(self.leader)
+        seated = self.client.post(f'/api/members/prayer-cells/{cell.id}/requests/', format='json')
+        self.assertEqual(seated.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # The desk sees the ask and approves it.
+        queue = self.client.get('/api/members/prayer-cells/requests/')
+        self.assertEqual(queue.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(queue.data['requests']), 1)
+        request_id = queue.data['requests'][0]['id']
+        answered = self.client.patch(
+            f'/api/members/prayer-cells/requests/{request_id}/',
+            {'status': 'approved', 'reply': 'Welcome to the fellowship of prayer'}, format='json',
+        )
+        self.assertEqual(answered.status_code, status.HTTP_200_OK, answered.data)
+        self.assertTrue(self.PrayerCellMember.objects.filter(cell=cell, member=self.member).exists())
+
+        # And the room: the member is in it, and the leader moderates.
+        room = self.Conversation.objects.filter(kind='group', key=f'cell:{cell.id}').first()
+        self.assertIsNotNone(room)
+        self.assertTrue(room.participants.filter(member=self.member).exists())
+        self.assertTrue(room.participants.filter(member=self.leader, is_moderator=True).exists())
+
+    def test_rejecting_the_ask_leaves_the_member_out_of_the_cell_and_its_room(self):
+        cell = self._form_cell()
+        self.PrayerCellJoinRequest.objects.create(member=self.member, cell=cell)
+        self.client.force_authenticate(self.leader)
+        row = self.PrayerCellJoinRequest.objects.filter(cell=cell, member=self.member).first()
+        response = self.client.patch(
+            f'/api/members/prayer-cells/requests/{row.id}/',
+            {'status': 'rejected'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(self.PrayerCellMember.objects.filter(cell=cell, member=self.member).exists())
+        room = self.Conversation.objects.filter(kind='group', key=f'cell:{cell.id}').first()
+        self.assertIsNotNone(room)
+        self.assertFalse(room.participants.filter(member=self.member).exists())
+
+    def test_adding_and_removing_a_member_moves_the_room_with_the_roll(self):
+        cell = self._form_cell()
+        room = self.Conversation.objects.filter(kind='group', key=f'cell:{cell.id}').first()
+        self.assertIsNotNone(room)
+        self.client.force_authenticate(self.leader)
+        added = self.client.post(
+            f'/api/members/prayer-cells/{cell.id}/members/',
+            {'member_id': self.member.id}, format='json',
+        )
+        self.assertEqual(added.status_code, status.HTTP_200_OK, added.data)
+        self.assertTrue(room.participants.filter(member=self.member).exists())
+
+        removed = self.client.delete(f'/api/members/prayer-cells/{cell.id}/members/{self.member.id}/')
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertFalse(room.participants.filter(member=self.member).exists())
+
+    def test_only_the_desk_edits_the_cells(self):
+        cell = self._form_cell()
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f'/api/members/prayer-cells/{cell.id}/',
+            {'name': 'Hijacked'}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(self.PrayerCell.objects.filter(name='Hijacked').exists())

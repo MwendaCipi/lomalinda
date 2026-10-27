@@ -324,6 +324,9 @@ function CalendarPageContent() {
   const mapUrl = churchMapHref(settings);
   const monthYear = monthDate.getFullYear();
   const monthIndex = monthDate.getMonth();
+  /* The scroll sheet runs this month through the end of next year — the same
+   * reach the list's "This year & next" grants. */
+  const nextCalendarYear = currentYear + 1;
 
   const tableRows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -350,17 +353,67 @@ function CalendarPageContent() {
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
   }, [currentMonth, currentYear, events, search, period]);
 
-  const monthRows = useMemo(() => {
+  const searchFiltered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return events
-      .filter((event) => event.date?.startsWith(`${monthYear}-${String(monthIndex + 1).padStart(2, "0")}-`))
       .filter((event) => {
         if (!needle) return true;
         const hay = `${event.date} ${weekdayLabel(event.date)} ${event.title} ${event.department_name} ${event.lead ?? ""} ${event.unit ?? ""} ${event.location ?? ""}`;
         return hay.toLowerCase().includes(needle);
       })
       .sort((a, b) => `${a.date} ${a.time ?? ""} ${a.title}`.localeCompare(`${b.date} ${b.time ?? ""} ${b.title}`));
-  }, [events, monthIndex, monthYear, search]);
+  }, [events, search]);
+
+  const monthRows = useMemo(
+    () =>
+      searchFiltered.filter((event) =>
+        event.date?.startsWith(`${monthYear}-${String(monthIndex + 1).padStart(2, "0")}-`)
+      ),
+    [searchFiltered, monthIndex, monthYear]
+  );
+
+  /* A phone reads the grid as one continuous sheet: this month opens it and
+   * the months after it follow downward — scrolling carries the reader into
+   * the next season without any arrows. This month through the end of next
+   * year is the sheet's length, matching what the list offers in "This year
+   * & next". */
+  const calendarScrollMonths = useMemo(() => {
+    const months: { year: number; month: number; events: CalendarEvent[] }[] = [];
+    let year = currentYear;
+    let month = currentMonth;
+    while (true) {
+      const key = `${year}-${String(month + 1).padStart(2, "0")}-`;
+      months.push({
+        year,
+        month,
+        events: searchFiltered.filter((event) => event.date?.startsWith(key)),
+      });
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+      if (year > nextCalendarYear) break;
+    }
+    return months;
+  }, [currentMonth, currentYear, searchFiltered]);
+
+  // The count under the sheet: the sheet's own month on a desk, the scroll's
+  // whole length on a phone (whose months are named by their headings).
+  const gridCount =
+    view === "calendar"
+      ? isPc
+        ? monthRows.length
+        : searchFiltered.length
+      : tableRows.length;
+  const gridCountLabel =
+    view === "calendar"
+      ? isPc
+        ? ` in ${monthNames[monthIndex]} ${monthYear}`
+        : " this year and next"
+      : period === "quarter"
+        ? " this quarter"
+        : " this year and next";
 
   // The one cluster of controls — view, period, search and (with the grid
   // open) the month arrows — memoised so the header-injection effect below
@@ -369,14 +422,8 @@ function CalendarPageContent() {
     () => (
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         {/* The two switches share one row, split evenly and drawn to the
-            same height — one line on a phone, its own line there. Signed in
-            they are the page's top chrome, so on a phone they give way as
-            soon as the list starts scrolling; the public page keeps them
-            (they sit below its heading, where hiding them would strand
-            them). */}
-        <div
-          className={`${signedIn && !isPc && scrolled ? "hidden" : "flex"} w-full items-stretch gap-1.5 sm:w-auto sm:flex-1 sm:gap-3`}
-        >
+            same height — one line on a phone, its own line there. */}
+        <div className="flex w-full items-stretch gap-1.5 sm:w-auto sm:flex-1 sm:gap-3">
           <div className="min-w-0 flex-1 [&>div]:h-full [&>div]:w-full">
             <CalendarViewToggle view={view} onChange={setView} />
           </div>
@@ -398,9 +445,11 @@ function CalendarPageContent() {
         </div>
         {/* The month's own arrows ride the grid's row beside the search —
             the month is named in the grid's heading, so a phone needs only
-            the two buttons. */}
+            the two buttons. A phone needs no arrows at all in the grid:
+            there the calendar is one continuous scroll of months, and the
+            month the reader is in is named by that month's own heading. */}
         {view === "calendar" && (
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="hidden shrink-0 items-center gap-1.5 sm:flex sm:gap-2">
             <button
               type="button"
               onClick={() => shiftMonth(-1)}
@@ -479,9 +528,10 @@ function CalendarPageContent() {
             a printout of the calendar the church's own sheet. */}
         <ChurchLockup className="hidden print:flex print:mb-2" />
         {/* Signed in on a wide screen, the controls have ridden up into the
-            shell header; everywhere else they sit here in the content — the
-            month arrows among them, beside the search when the grid is open. */}
-        {!(signedIn && isPc) && controls}
+            shell header; on a phone they sit in the content — and give way
+            the moment the page scrolls, the same chrome-hiding the rest of
+            the fellowship reads. */}
+        {!(signedIn && isPc) && !(!isPc && scrolled) && controls}
 
         {/* Table view — wide screens only; a phone reads the cards below. */}
         <div className={`${view === "table" ? "hidden md:block" : "hidden"} overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line bg-white`}>
@@ -598,26 +648,53 @@ function CalendarPageContent() {
           })}
         </div>
 
-        {/* The selected month, with only its own events in their calendar days. */}
-        {view === "calendar" && (
-          <MonthGrid
-            year={monthYear}
-            month={monthIndex}
-            events={monthRows}
-            openActions={openActions}
-            onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
-            onCloseActions={() => setOpenActions(null)}
-            renderMenu={(row, onClose) => (
-              <EventActionsMenu
-                row={row}
-                mapUrl={mapUrl}
-                variant="row"
-                onClose={onClose}
-                onProgram={openProgram}
-              />
-            )}
-          />
-        )}
+        {/* The month grid. On a desk it is the one month the arrows name;
+            on a phone it is one continuous scroll — this month opens the
+            sheet and the next two years follow beneath it, so moving into
+            the next months is scrolling, not navigation. */}
+        {view === "calendar" &&
+          (isPc ? (
+            <MonthGrid
+              year={monthYear}
+              month={monthIndex}
+              events={monthRows}
+              openActions={openActions}
+              onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
+              onCloseActions={() => setOpenActions(null)}
+              renderMenu={(row, onClose) => (
+                <EventActionsMenu
+                  row={row}
+                  mapUrl={mapUrl}
+                  variant="row"
+                  onClose={onClose}
+                  onProgram={openProgram}
+                />
+              )}
+            />
+          ) : (
+            <div className="space-y-4">
+              {calendarScrollMonths.map((slot) => (
+                <MonthGrid
+                  key={`${slot.year}-${slot.month}`}
+                  year={slot.year}
+                  month={slot.month}
+                  events={slot.events}
+                  openActions={openActions}
+                  onToggleActions={(key) => setOpenActions(openActions === key ? null : key)}
+                  onCloseActions={() => setOpenActions(null)}
+                  renderMenu={(row, onClose) => (
+                    <EventActionsMenu
+                      row={row}
+                      mapUrl={mapUrl}
+                      variant="row"
+                      onClose={onClose}
+                      onProgram={openProgram}
+                    />
+                  )}
+                />
+              ))}
+            </div>
+          ))}
 
         {loaded && view === "table" && tableRows.length === 0 && (
           <p className="px-5 py-10 text-center text-sm text-moss">No calendar entries match your filters.</p>
@@ -632,12 +709,13 @@ function CalendarPageContent() {
           // when the page is too short to scroll (inline: space-y-4's
           // margin-top outranks mt-auto in the cascade). The scroller is a
           // flex column only when signed in; in block layout auto computes
-          // to 0 and changes nothing.
+          // to 0 and changes nothing. On a phone the sheet's footer dips out
+          // of view while the page is in motion, returning once it rests.
           style={{ marginTop: "auto" }}
-          className={`sticky bottom-0 z-20 -mx-6 flex flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand px-6 pt-3 md:static md:mx-0 md:px-0`}
+          className={`sticky bottom-0 z-20 -mx-6 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-sand px-6 pt-3 md:static md:mx-0 md:flex md:px-0 ${!isPc && scrolled ? "hidden" : "flex"}`}
         >
           <p className="text-xs text-moss">
-            Showing {view === "calendar" ? monthRows.length : tableRows.length} {(view === "calendar" ? monthRows.length : tableRows.length) === 1 ? "entry" : "entries"}{view === "calendar" ? ` in ${monthNames[monthIndex]} ${monthYear}` : period === "quarter" ? " this quarter" : " this year and next"}.
+            Showing {gridCount} {gridCount === 1 ? "entry" : "entries"}{gridCountLabel}.
           </p>
           <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember print:hidden">
             <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print

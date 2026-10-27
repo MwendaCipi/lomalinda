@@ -95,6 +95,7 @@ import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles
 import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
+import { PrayerCellsDesk } from "@/components/prayer-cells";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { MessageComposeModal, MessagingPanel } from "@/components/messages-desk";
@@ -1217,13 +1218,11 @@ function ProgramEditorModal({
   // otherwise a lookup finds the hidden twin and the walk lands nowhere.
   const uid = isPage ? "d" : "m";
   // The programme as it stands. A programme that does not exist yet opens
-  // on one blank session waiting to be named — the desk goes straight to
-  // typing, and "Add session" is a click made only for a second part of the
-  // day; an existing programme opens as it stood.
+  // empty: the desk names the day only by pressing Add session, and the
+  // sheet carries nothing until that click — no default session is assumed
+  // on their behalf; an existing programme opens as it stood.
   const initialItems = parseProgramItems(event.program_items);
-  const [items, setItems] = useState<ProgramItem[]>(
-    initialItems.length > 0 ? initialItems : [{ start: "", end: "", title: "", participants: [], parts: [] }],
-  );
+  const [items, setItems] = useState<ProgramItem[]>(initialItems);
   // Every session starts folded: the sheet opens on the day as a list of
   // its parts, and a part unfolds only when the desk reaches for it — so a
   // programme never lands with one card thrown open halfway down it, and a
@@ -2170,7 +2169,7 @@ function ProgramEditorModal({
               </div>
             )}
             {!uploadedProgramBlock && !valid && (
-              <p className="text-xs text-moss">Name a session — the sheet grows here as it is typed.</p>
+              <p className="text-xs text-moss">Add session to begin — the sheet grows here as the day is typed.</p>
             )}
             {/* The letterhead sheet, at the reading column's foot — under what
                 it reads, where the eye ends. A saved programme opens its PDF
@@ -4887,6 +4886,7 @@ type DeptSubTab =
   | "moments"
   | "messaging"
   | "meetings"
+  | "prayer_cells"
   | "pulpit-team"
   | "duties"
   | "singing_groups"
@@ -5476,6 +5476,9 @@ function DepartmentDetail({
       // rota the deaconate keeps its duty on (see DeaconateManager's pulpit
       // desk).
       ...(keepsTheWeek ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
+      // The prayer cells — the little companies of prayer registered under
+      // this desk, with their rolls and their asks riding one panel.
+      ...(keepsTheWeek ? [{ key: "prayer_cells", label: "Prayer Cells", short: "Cells", icon: Handshake }] : []),
       // The eldership's own three, gated to the roles that hold them.
       ...(canOpenOfficeViews
         ? [
@@ -7064,6 +7067,15 @@ function DepartmentDetail({
       {subTab === "pulpit-team" && keepsTheWeek && (
         <div className="h-full min-h-0">
           <DeaconateManager initialTab="rota" desk="pulpit" embedded filtersHosted />
+        </div>
+      )}
+
+      {/* The prayer cells — the desk's own register: the asks waiting with
+          it, the cells it forms, and the members in each. Every cell's chat
+          room follows its roll on the server, so the desk never opens chat. */}
+      {subTab === "prayer_cells" && keepsTheWeek && (
+        <div className="h-full min-h-0 overflow-y-auto">
+          <PrayerCellsDesk />
         </div>
       )}
 

@@ -154,10 +154,13 @@ export function FinancialReportsPanel() {
     setReports((rows) => rows.filter((row) => row.id !== report.id));
   };
 
-  /** The statement as a page: fetched with the viewer's own credentials, so
-   *  a draft hands out its PDF only to the desk that owns it — a plain link
-   *  would carry no token and could never tell the desk from a stranger. */
-  const downloadPdf = async (report: Report) => {
+  /** Open the statement PDF in the browser's own viewer (new tab on desktop,
+   *  direct download on mobile — a fetch-then-popup is blocked by mobile
+   *  browsers because the gesture is already spent by the time the response
+   *  arrives). The blob URL is never revoked: the browser's Save button
+   *  re-reads it after the tab finishes loading, and revoking it early turns
+   *  that into a connection error. The URL dies with the page. */
+  const previewPdf = async (report: Report) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     try {
       const res = await fetch(`${API_URL}/api/members/reports/${report.id}/pdf/`, {
@@ -173,13 +176,17 @@ export function FinancialReportsPanel() {
       }
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
+      const touchScreen = window.matchMedia?.("(pointer: coarse)")?.matches;
+      const opened = !touchScreen && window.open(blobUrl, "_blank");
+      if (opened) return;
+      // Mobile fallback: mount the anchor before clicking — required by mobile
+      // browsers before they will honour the `download` attribute.
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = `Financial_Report_${report.title.replace(/[^\w-]+/g, "_")}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(blobUrl);
     } catch {
       await showAlert(
         "Could not prepare the PDF",
@@ -305,10 +312,10 @@ export function FinancialReportsPanel() {
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => downloadPdf(report)}
+                    onClick={() => previewPdf(report)}
                     className="ml-auto inline-flex items-center gap-1.5 text-xs font-semibold text-ember transition hover:text-bark"
                   >
-                    <Download className="h-3.5 w-3.5" /> Download PDF
+                    <Download className="h-3.5 w-3.5" /> Preview PDF
                   </button>
                 )}
               </div>
@@ -417,10 +424,10 @@ export function FinancialReportsPanel() {
         >
           <button
             type="button"
-            onClick={() => { setOpenMenu(null); void downloadPdf(openMenu.report); }}
+            onClick={() => { setOpenMenu(null); void previewPdf(openMenu.report); }}
             className="flex w-full items-center gap-2 px-4 py-2 text-xs text-bark hover:bg-sand"
           >
-            <Download size={12} aria-hidden="true" /> Download PDF
+            <Download size={12} aria-hidden="true" /> Preview PDF
           </button>
           <button
             type="button"
