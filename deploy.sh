@@ -100,6 +100,15 @@ DUTY_CRON="0 16 * * * TZ=Africa/Nairobi cd ${PROJECT_DIR}/backend && venv/bin/py
 crontab -l 2>/dev/null | grep -F 'send_duty_reminders' > /dev/null \
   || fail "the duty-reminder cron entry could not be installed."
 
+echo "⏰ Ensuring the board-meeting reminder cron is installed..."
+# Board members are sent an SMS first, then email reminder at 4:00 pm EAT the day
+# before the meeting. The command stamps each line as it rings, so a re-run a
+# minute later sends nothing. Idempotent in the same shape as the duty line.
+BOARD_CRON="0 16 * * * TZ=Africa/Nairobi cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send_board_meeting_reminders >> /var/log/loma_linda_board_reminders.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'send_board_meeting_reminders' || true; echo "$BOARD_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'send_board_meeting_reminders' > /dev/null \
+  || fail "the board-meeting reminder cron entry could not be installed."
+
 echo "⏰ Ensuring the Emails-desk mailbox poller is installed..."
 # info@ is read by polling IMAP (Zoho keeps the domain's MX, so no inbound
 # provider can receive for this address) — without this entry the desk deploys

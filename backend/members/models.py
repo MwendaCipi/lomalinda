@@ -2000,7 +2000,7 @@ def format_clock(value):
 
 
 class ChurchSettings(models.Model):
-    church_name = models.CharField(max_length=160, default='SDA Church Loma Linda, Meru')
+    church_name = models.CharField(max_length=160, default='SDA Church Loma Linda')
     district = models.CharField(max_length=160, blank=True, help_text='NEKF district name, e.g. "Meru Central"')
     field = models.CharField(max_length=160, blank=True, default='North East Kenya Field', help_text='SDA Field name, e.g. "North East Kenya Field"')
     conference = models.CharField(max_length=160, blank=True, default='East Africa Division', help_text='SDA Conference/Division name')

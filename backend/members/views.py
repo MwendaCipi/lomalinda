@@ -155,7 +155,7 @@ def render_receipt_message(template, donor_name, amount_display, purpose, extra=
 
 
 def receipt_email_signature():
-    return "Warm regards,\nTreasury,\nSDA Church Loma Linda, Meru"
+    return "Warm regards,\nTreasury,\nSDA Church Loma Linda"
 
 
 def receipt_summary(*, account, amount, payment_channel, receipt_ref, date_display):

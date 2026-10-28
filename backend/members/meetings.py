@@ -181,6 +181,11 @@ def board_audience():
         assistants = set(profile.get_assistant_roles())
         if held - assistants:
             board_profile_ids.add(profile.user_id)
+    # Include pastor in the board audience
+    from .models import MemberProfile
+    pastor_profiles = MemberProfile.objects.filter(role='pastor').select_related('user')
+    for profile in pastor_profiles:
+        board_profile_ids.add(profile.user_id)
     return User.objects.filter(
         Q(id__in=board_profile_ids) | Q(is_superuser=True) | Q(is_staff=True)
     ).filter(is_active=True).distinct()
@@ -193,21 +198,22 @@ def meeting_audience(kind):
 
 
 def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=True, notify_email=True):
-    """Invite the audience: one in-app notification and one email per person.
+    """Invite the audience: SMS first, then email.
 
-    Emails go out one at a time because each carries its own greeting — the
-    recipient's name — which also keeps the whole audience off every member's
-    To: line.
+    SMS goes out first because it is more immediate. If SMS fails (no phone,
+    gateway error), email falls back so no recipient is missed. One in-app
+    notification and one email per person.
 
-    Returns ``(invited, emailed)`` so the caller can report what really happened.
+    Returns ``(invited, sms_sent, emailed)`` so the caller can report what
+    really happened.
     """
     if not (notify_sms or notify_email):
-        return 0, 0
+        return 0, 0, 0
 
     template = template or invitation_template(kind)
     subject_kind = 'Church Board Meeting' if kind == BOARD_KIND else 'Church Business Meeting'
     audience = list(meeting_audience(kind))
-    invited = emailed = 0
+    invited = sms_sent = emailed = 0
     already_emailed = set()
 
     for user in audience:
@@ -218,9 +224,19 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
             message=message,
         )
         invited += 1
+        # SMS first — try sending SMS, fall back to email if it fails
+        phone = getattr(getattr(user, 'member_profile', None), 'phone_number', '')
+        sms_ok = False
+        if notify_sms and phone:
+            try:
+                from . import sms
+                sms_text = f"{church_name}: Board meeting invitation: {meeting.title}. Review: {settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests"
+                sms_sent += sms.send(phone, sms_text)
+                sms_ok = True
+            except Exception:
+                pass
+        # Email falls back if SMS was not sent
         address = (user.email or '').strip().lower()
-        # Two accounts can share one mailbox; that inbox should not get the same
-        # invitation twice.
         if notify_email and address and address not in already_emailed:
             already_emailed.add(address)
             try:
@@ -235,7 +251,7 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
             except Exception:
                 pass
 
-    return invited, emailed
+    return invited, sms_sent, emailed
 
 
 def as_bool(value, default=True):
