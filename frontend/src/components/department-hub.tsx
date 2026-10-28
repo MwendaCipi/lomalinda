@@ -1477,6 +1477,67 @@ function ProgramEditorModal({
     setDraggingId(null);
     setDragOverId(null);
   };
+  // ── The drag carries its view with it ─────────────────────────────────────
+  // A browser will not scroll while a card is carried over it, so the sheet
+  // does the sliding itself: while the grip is held, a document-level ear
+  // reads where the cursor rides, and whatever can truthfully slide under
+  // it — the sheet's own scroll box first, else the page — is pushed along
+  // when the cursor works at an edge. The push eases in as the cursor
+  // closes on the rim, and keeps walking once the pointer stills, since
+  // only movement feeds dragover while the wish to reach beyond does not.
+  const dragRide = useRef<{ box: Window | HTMLElement | null; speed: number }>({ box: null, speed: 0 });
+  useEffect(() => {
+    if (!draggingId) return;
+    let raf = 0;
+    let last = performance.now();
+    const RIM = 96;       // how close to an edge the wish to reach begins
+    const TOP_SPEED = 18; // the slide's own pace, px a frame, at the rim
+    /** The deepest box the hand is over that truly slides — one whose
+        content stands taller than its frame and that is set to move — the
+        sheet's scroll panel before the page beneath it. */
+    const nearestRide = (node: EventTarget | null): HTMLElement | null => {
+      let el = node instanceof Element ? node : null;
+      while (el) {
+        if (el instanceof HTMLElement) {
+          const style = window.getComputedStyle(el);
+          if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(style.overflowY)) return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const take = (event: DragEvent) => {
+      const box = nearestRide(event.target);
+      const frame = box
+        ? box.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight, height: window.innerHeight };
+      const rim = Math.min(RIM, frame.height / 3);
+      const fromTop = event.clientY - frame.top;
+      const fromBottom = frame.bottom - event.clientY;
+      let speed = 0;
+      if (fromTop >= 0 && fromTop < rim) speed = -TOP_SPEED * (1 - fromTop / rim);
+      else if (fromBottom >= 0 && fromBottom < rim) speed = TOP_SPEED * (1 - fromBottom / rim);
+      dragRide.current = { box: box ?? window, speed };
+    };
+    const walk = () => {
+      const now = performance.now();
+      const { box, speed } = dragRide.current;
+      if (speed !== 0 && box) {
+        const step = speed * ((now - last) / 16.7);
+        if (box === window) window.scrollBy(0, step);
+        else (box as HTMLElement).scrollTop += step;
+      }
+      last = now;
+      raf = requestAnimationFrame(walk);
+    };
+    document.addEventListener("dragover", take as unknown as EventListener, true);
+    raf = requestAnimationFrame(walk);
+    return () => {
+      document.removeEventListener("dragover", take as unknown as EventListener, true);
+      cancelAnimationFrame(raf);
+      dragRide.current = { box: null, speed: 0 };
+    };
+  }, [draggingId]);
   /** Only the grip begins a drag — pulling words out of a field is the
       field's own business, and a drag that starts there once moved the card
       with it — but what the cursor carries is the card itself, not the
@@ -1525,9 +1586,10 @@ function ProgramEditorModal({
     event.preventDefault();
     event.stopPropagation();
   };
-  /** Two activities trade places — and the hours stay with the slot, so
-      the dragged card takes up the other's time and the other takes its
-      back. The cards move; the timeline keeps climbing. */
+  /** Two activities trade places — each keeping its own length, and
+      trading start hours: the card set down begins where the one it met
+      began, and the one met takes the hour the card left behind. A length
+      travels with its activity, so nothing is compressed by the move. */
   const swapParts = (from: { session: number; part: number }, to: { session: number; part: number }) => {
     if (from.session === to.session && from.part === to.part) return;
     setItems((current) => {
@@ -1538,18 +1600,43 @@ function ProgramEditorModal({
       const dragged = next[from.session].parts[from.part];
       const target = next[to.session].parts[to.part];
       if (!dragged || !target) return current;
-      next[from.session].parts[from.part] = {
-        start: dragged.start,
-        end: dragged.end,
-        title: target.title,
-        participants: target.participants,
-      };
-      next[to.session].parts[to.part] = {
-        start: target.start,
-        end: target.end,
-        title: dragged.title,
-        participants: dragged.participants,
-      };
+      const movedStart = hourMinutes(dragged.start);
+      const movedEnd = hourMinutes(dragged.end);
+      const metStart = hourMinutes(target.start);
+      const metEnd = hourMinutes(target.end);
+      if (movedStart !== null && metStart !== null) {
+        // An hour the activity never named as its end stays unnamed — a new
+        // slot takes its hour as it came, start with no far side.
+        const movedLength = Math.max(0, (movedEnd ?? movedStart) - movedStart);
+        const metLength = Math.max(0, (metEnd ?? metStart) - metStart);
+        next[from.session].parts[from.part] = {
+          start: minuteHour(metStart),
+          end: movedEnd === null ? "" : minuteHour(metStart + movedLength),
+          title: target.title,
+          participants: target.participants,
+        };
+        next[to.session].parts[to.part] = {
+          start: minuteHour(movedStart),
+          end: metEnd === null ? "" : minuteHour(movedStart + metLength),
+          title: dragged.title,
+          participants: dragged.participants,
+        };
+      } else {
+        // One side names no hour to begin from: the cards trade what they
+        // hold and each keeps the hours it brought.
+        next[from.session].parts[from.part] = {
+          start: dragged.start,
+          end: dragged.end,
+          title: target.title,
+          participants: target.participants,
+        };
+        next[to.session].parts[to.part] = {
+          start: target.start,
+          end: target.end,
+          title: dragged.title,
+          participants: dragged.participants,
+        };
+      }
       return next;
     });
   };
