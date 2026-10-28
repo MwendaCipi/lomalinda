@@ -1,18 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import {
-  ArrowUpRight,
-  Download,
-  Megaphone,
-  Send,
-  Sparkles,
-  X,
-  RotateCcw,
-  RotateCw,
-} from "lucide-react";
 import { showAlert } from "@/lib/alerts";
-import { ArrowUpRight, Download, Megaphone, Send, Sparkles, X, RotateCcw, RotateCw } from "lucide-react";
+import { ArrowUpRight, Download, Megaphone, Send, Sparkles, X } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { localDate, dayFirst } from "@/lib/dates";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
@@ -340,7 +330,93 @@ export function AnnouncementManager({
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(composerOnly);
+  // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  type DailyWordRow = {
+    id: number;
+    date: string;
+    text: string;
+    author_name: string;
+  };
+
+  const [todayThought, setTodayThought] = useState<DailyWordRow | null>(null);
+  const [showThoughtModal, setShowThoughtModal] = useState(false);
+  const [thoughtDraft, setThoughtDraft] = useState("");
+  const [savingThought, setSavingThought] = useState(false);
+
+  // The fetch itself answers; the states move only in the promise callbacks
+  // below, so the mount effect never setStates synchronously (the react
+  // compiler forbids it): an `undefined` result means the fetch could not
+  // read the word and the panel keeps whatever it was showing.
+  const fetchDailyWord = useCallback(async (): Promise<DailyWordRow | null | undefined> => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      if (!token) return undefined;
+      const res = await fetch(`${API_URL}/api/members/daily-word/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return undefined;
+      const data = (await res.json()) as { today?: DailyWordRow | null };
+      return data.today ?? null;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDailyWord().then((row) => {
+      if (row !== undefined && !cancelled) setTodayThought(row);
+    });
+    const handleUpdate = () => {
+      void fetchDailyWord().then((row) => {
+        if (row !== undefined && !cancelled) setTodayThought(row);
+      });
+    };
+    window.addEventListener("daily-word-updated", handleUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("daily-word-updated", handleUpdate);
+    };
+  }, [fetchDailyWord]);
+
+  const handleSaveThought = async () => {
+    const text = thoughtDraft.trim();
+    if (!text || savingThought) return;
+    setSavingThought(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const res = await fetch(`${API_URL}/api/members/daily-word/`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.text || "The thought could not be shared.");
+      showAlert("Shared", "Today's thought is with the church.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+      setShowThoughtModal(false);
+      setThoughtDraft("");
+      await fetchDailyWord().then((row) => {
+        if (row !== undefined) setTodayThought(row);
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("daily-word-updated"));
+      }
+    } catch (error) {
+      showAlert("Could not share", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSavingThought(false);
+    }
+  };
+
   const [form, setForm] = useState({
     title: "",
     text: "",
@@ -561,12 +637,6 @@ export function AnnouncementManager({
     setShowCreateModal(false);
   }
 
-useEffect(() => {
-  return () => {
-    restoreBodyScroll?.();
-  };
-}, []);
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!form.sharing_option || !form.sharing_option.trim()) {
@@ -693,12 +763,8 @@ useEffect(() => {
 
       const successText = editingId ? "Announcement updated." : "Announcement posted successfully.";
       showAlert(editingId ? "Announcement Updated" : "Announcement Posted", successText, "success");
-      if (typeof window !== "undefined") {
-        void fetchAnnouncements();
-      }
       resetAndCloseModal();
       fetchAnnouncements();
-      preventBodyScroll();
     } catch (error) {
       const errorText = error instanceof Error ? error.message : "Unable to save the announcement.";
       setMessage(errorText);
