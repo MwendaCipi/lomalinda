@@ -14821,7 +14821,11 @@ class DepartmentLetterReviewView(APIView):
                 Q(member_profile__roles__contains='admin'),
                 is_active=True,
             ).distinct()
-            desk_link = _letter_desk_link(row.department)
+            # The clerk's page in Clerkship (Letter Approvals) holds every
+            # letter in the church, so this notice hands over the one place
+            # that answers for them all rather than this desk's own view:
+            # wherever the letter was written, the second pen is found here.
+            desk_link = f'{settings.FRONTEND_URL}/administration?tab=clerk-letters'
             subject = f'Pastor Signed: Letter from {row.department.name} awaiting Clerk signature'
             pastor_name = giver_display_name('', member=request.user)
             body = (

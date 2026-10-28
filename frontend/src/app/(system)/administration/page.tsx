@@ -11,6 +11,7 @@ import { RoleRightsManager } from "@/components/role-rights-manager";
 import { MeetingsManager } from "@/components/meetings-manager";
 import { UserManagement } from "@/components/user-management";
 import { CorrespondenceManager } from "@/components/correspondence-manager";
+import { DepartmentLettersPanel } from "@/components/department-letters";
 import { DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { TransferManagement } from "@/components/transfer-management";
@@ -81,6 +82,7 @@ const ADMIN_GATE_KEY = "admin_gate_profile";
  */
 const ADMIN_LOADING_LABELS: Record<string, string> = {
   users: "the member roster",
+  "clerk-users": "the member roster",
   leaders: "church departments",
   meetings: "meetings",
   board: "meetings",
@@ -88,6 +90,7 @@ const ADMIN_LOADING_LABELS: Record<string, string> = {
   announcements: "announcements",
   requests: "requests",
   transfers: "membership transfers",
+  "clerk-letters": "the letters awaiting signature",
   accounts: "treasury accounts",
   expenditures: "expenditure records",
   budget: "the church budget",
@@ -319,12 +322,18 @@ function AdministrationContent() {
       ? "accounts"
       : searchTab === "transfers"
         ? "clerk-requests"
+      // The clerk's register has a tab of its own (the rail's Clerkship row
+      // opens it), so Administration's own register keeps `?tab=users` and
+      // the two never paint each other's heading and strip. "members" is
+      // what that desk was called before, and still answers.
+      : searchTab === "members"
+        ? "clerk-users"
       : searchTab === "role-management"
         ? "users"
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "leaders", "leadership", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "clerk-users", "clerk-letters", "leaders", "leadership", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -437,7 +446,11 @@ function AdministrationContent() {
     );
     return () => setCustomToggles(null);
   }, [activeTab, treasuryTab, isFinance, setCustomToggles, router]);
-  // The console's own pages draw the Administration strip.
+  // The console's own pages draw the Administration strip. The clerk's
+  // register is deliberately not among them: it answers to `clerk-users`
+  // (see the rail's Clerkship row), so opening Clerkship never meets
+  // Administration's heading and toggles, and opening Administration never
+  // reads as Clerkship — the address bar alone says which door was used.
   const consoleTab =
     activeTab === "users" ||
     activeTab === "roles" ||
@@ -563,8 +576,11 @@ function AdministrationContent() {
           icon: <ClipboardList size={16} aria-hidden="true" />,
           description: "Join requests, meetings' minutes, letters, messages and church funds.",
           cards: [
-            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=users" },
+            // The clerk's register rides its own tab, so this card opens
+            // Clerkship rather than Administration's identical-looking one.
+            { icon: <Users size={20} aria-hidden="true" />, label: "User Management", description: "The church register: users, profiles and their assigned roles.", href: "/administration?tab=clerk-users" },
             { icon: <UserPlus size={20} aria-hidden="true" />, label: "Requests", description: "New members, ministry joins and membership transfers waiting on an answer.", href: "/administration?tab=clerk-requests", badge: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers },
+            { icon: <FileText size={20} aria-hidden="true" />, label: "Letter Approvals", description: "Letters from every desk awaiting the clerk's signature, and the signed sheets to download.", href: "/administration?tab=clerk-letters" },
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Mail size={20} aria-hidden="true" />, label: "Messaging", description: "Letters arriving at info@sdalomalinda.or.ke, and the messages the church sends.", href: "/administration?tab=emails" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
@@ -688,7 +704,7 @@ function AdministrationContent() {
             )}
 
             {/* Church Clerk Approval Notice */}
-            {["users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "clerkship-funding", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
+            {["users", "clerk-users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "clerkship-funding", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Church Clerk Access:</span>
@@ -702,7 +718,7 @@ function AdministrationContent() {
                 clerk's. An elder holds every desk but not the register, the
                 roles or the settings, so a link that names one of them
                 answers plainly instead of drawing a blank panel. */}
-            {["users", "roles", "leadership", "settings"].includes(activeTab) && !canSeeConsole && (
+            {["users", "clerk-users", "roles", "leadership", "settings"].includes(activeTab) && !canSeeConsole && (
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="mx-auto max-w-xl p-10 text-center">
                   <h1 className="text-2xl font-semibold text-bark">Administration access required</h1>
@@ -713,7 +729,7 @@ function AdministrationContent() {
             )}
 
             {/* Users (Members) View */}
-            {activeTab === "users" && (isClerk || isAdmin) && <UserManagement />}
+            {(activeTab === "users" || activeTab === "clerk-users") && (isClerk || isAdmin) && <UserManagement />}
 
             {activeTab === "roles" && (isClerk || isAdmin) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
@@ -791,6 +807,18 @@ function AdministrationContent() {
             )}
 
             {activeTab === "correspondence" && isClerk && <CorrespondenceManager />}
+
+            {/* Letter Approvals — every letter the church writes, on the one
+                page the clerk's pen answers to: sign with the signature kept
+                on the profile, send it back with a reason, or take the
+                finished sheet down for the stamp. The list is the page's own
+                (no desk's ledger shares the room), so it keeps its full
+                height rather than the desks' capped card. */}
+            {activeTab === "clerk-letters" && (isClerk || isAdmin) && (
+              <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar p-4 sm:p-6">
+                <DepartmentLettersPanel scope="all" canCompose={false} scrollList={false} />
+              </div>
+            )}
 
             {/* Join Requests — the console's own door on both kinds of join
                 ask: a new member whose account waits on approval, and a

@@ -19016,10 +19016,11 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertEqual(blessed.data['status'], 'pastor_signed')
         self.assertEqual(blessed.data['pastor_name'], 'Paul Pastor')
 
-        # The clerk is the next pen, told the same way, at the same view.
+        # The clerk is the next pen, told at the page that holds every
+        # letter the church is waiting on — Clerkship's Letter Approvals.
         clerk_notice = self._notices('Pastor Signed:')
         self.assertEqual(len(clerk_notice), 1)
-        self.assertIn('/my-areas?area=music&view=accounts', clerk_notice[0].body)
+        self.assertIn('/administration?tab=clerk-letters', clerk_notice[0].body)
 
         # A pen already put down cannot be put down twice.
         again = self._sign(self.pastor, 'pastor_sign', pk)

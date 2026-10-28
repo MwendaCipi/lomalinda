@@ -717,13 +717,24 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
 
 /**
  * Clerkship — the clerk's desk. The pages are ordered by the work a clerk
- * reaches for most: answering arrivals and transfers, then the writing the
- * clerk does — the letters and the church's messages — and after that the
- * less frequent meeting, register and accounts work. Profiles open from User
+ * reaches for most: answering arrivals and transfers, then the signatures
+ * waiting on the clerk's own pen (every letter the church writes passes the
+ * pastor first and then the clerk), then the writing the clerk does — the
+ * correspondence and the church's messages — and after that the less
+ * frequent meeting, register and accounts work. Profiles open from User
  * Management.
  */
 export const clerkshipItems: RailRow[] = [
-  officeTab("users", "User Management", Users, {
+  // The clerk's register answers to a tab of its own — Administration keeps
+  // `?tab=users` as its first toggle. When both doors shared that one
+  // address, the console could not tell which of them was used: opening
+  // Clerkship arrived on Administration's heading and strip, and the two
+  // read as one place (they have traded places more than once). One address
+  // each settles it — the page renders the same register either way, and
+  // the URL alone now says whose strip and heading belong to it.
+  // `members` is the tab the clerk's register used to carry; the rail still
+  // answers to it so a link saved then lands on this row.
+  officeTab("clerk-users", "User Management", Users, {
     roles: CLERKSHIP_ROLES,
     aliasTabs: ["members"],
     short: "Members",
@@ -734,6 +745,20 @@ export const clerkshipItems: RailRow[] = [
     aliasTabs: ["transfers"],
     short: "Requests",
     description: "New members, ministry joins and membership transfers waiting on an answer.",
+  }),
+  // Every letter the church writes — from any desk — waits first for the
+  // pastor's pen and then the clerk's, and this is the one page that holds
+  // them all: the desks' own letters views show only their own paper, so
+  // without it the clerk would chase a signature desk by desk. It offers
+  // the two things the clerk does with paper — sign (or send it back with
+  // a reason) and download the finished sheet for the stamp — and writes
+  // none of its own, the way the pastorate's Letter Approvals page does.
+  // The short name is "Approvals", not "Letters": the Correspondences row
+  // beside it already reads "Letters" in a narrow strip.
+  officeTab("clerk-letters", "Letter Approvals", FileText, {
+    roles: CLERKSHIP_ROLES,
+    short: "Approvals",
+    description: "Letters from every desk awaiting the church clerk's signature, and the signed sheets to download.",
   }),
   officeTab("correspondence", "Correspondences", FileText, {
     roles: CLERKSHIP_ROLES,

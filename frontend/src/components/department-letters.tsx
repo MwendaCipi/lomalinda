@@ -93,12 +93,22 @@ export function DepartmentLettersPanel({
   // desk that writes: there, the button and the compose modal simply are not
   // offered, and the empty state says where the letter comes from.
   canCompose = true,
+  // Which letters this copy reads. A desk's own panel answers for its desk
+  // (`department.code`); an office's page — the Clerkship's Letter Approvals
+  // — reads every letter in the church, because the clerk's pen is the
+  // second one on all of them. The server decides what that reader may see.
+  scope = "department",
+  // The desk's panel caps its list so the ledger below it keeps its room;
+  // an office's whole page gives the list the page instead.
+  scrollList = true,
   className = "shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm",
 }: {
   /** The area whose letters these are — the panel is always read for one desk. */
-  department: { code: string; label: string };
+  department?: { code: string; label: string };
   /** Whether this reader's desk may raise a letter of its own. */
   canCompose?: boolean;
+  scope?: "department" | "all";
+  scrollList?: boolean;
   className?: string;
 }) {
   const { me } = useHeaderData();
@@ -114,6 +124,10 @@ export function DepartmentLettersPanel({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+  // Writing is only ever offered where a desk reads its own letters: a letter
+  // must belong to a department, and an office's page over every desk names
+  // none to write under.
+  const offerCompose = canCompose && scope === "department" && Boolean(department);
   // The letter being signed, and whose signature it is waiting for.
   const [signing, setSigning] = useState<{ row: LetterRow; action: "pastor_sign" | "clerk_sign" | "decline" } | null>(null);
   const [savingSignature, setSavingSignature] = useState(false);
@@ -124,14 +138,15 @@ export function DepartmentLettersPanel({
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`${API_URL}/api/members/department-letters/?department=${encodeURIComponent(department.code)}`, {
+    const query = scope === "all" ? "" : `?department=${encodeURIComponent(department?.code ?? "")}`;
+    fetch(`${API_URL}/api/members/department-letters/${query}`, {
       headers: authHeaders(),
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setLetters(Array.isArray(data) ? data : []))
       .catch(() => setLetters([]))
       .finally(() => setLoading(false));
-  }, [department.code]);
+  }, [department?.code, scope]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -150,7 +165,7 @@ export function DepartmentLettersPanel({
       const response = await fetch(`${API_URL}/api/members/department-letters/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ department: department.code, title: title.trim(), content: content.trim() }),
+        body: JSON.stringify({ department: department?.code ?? "", title: title.trim(), content: content.trim() }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || data.title || data.content || "The letter could not be sent.");
@@ -250,10 +265,12 @@ export function DepartmentLettersPanel({
         <div className="min-w-0">
           <h2 className="text-xs font-bold uppercase tracking-wide text-bark">Letters</h2>
           <p className="truncate text-[11px] text-moss">
-            Written here, signed by the pastor then the clerk, and returned fully signed for stamping.
+            {scope === "all"
+              ? "Every letter the church writes — the pastor's signature first, then the clerk's, then back to its writer for the stamp."
+              : "Written here, signed by the pastor then the clerk, and returned fully signed for stamping."}
           </p>
         </div>
-        {canCompose && (
+        {offerCompose && (
           <button
             type="button"
             onClick={openCompose}
@@ -265,7 +282,7 @@ export function DepartmentLettersPanel({
         )}
       </header>
 
-      <div className={`custom-hover-scrollbar overflow-y-auto ${letters.length > 0 ? "max-h-64" : ""}`}>
+      <div className={`custom-hover-scrollbar overflow-y-auto ${scrollList && letters.length > 0 ? "max-h-64" : ""}`}>
         {loading ? (
           <p className="px-4 py-6 text-center text-xs text-moss">Loading the letters…</p>
         ) : letters.length === 0 ? (
@@ -275,9 +292,11 @@ export function DepartmentLettersPanel({
             </span>
             <p className="mt-2 text-sm font-semibold text-bark">No letters yet</p>
             <p className="mt-0.5 max-w-sm text-xs text-moss">
-              {canCompose
-                ? "Write one and it goes to the pastor for signature, then the clerk, and comes back here fully signed."
-                : "Letters written on this desk arrive here to be signed or sent back with a reason — this desk writes none of its own."}
+              {scope === "all"
+                ? "Letters from every desk arrive here for the pastor's signature, then the clerk's — sign, send back with a reason, or read the signed sheet."
+                : canCompose
+                  ? "Write one and it goes to the pastor for signature, then the clerk, and comes back here fully signed."
+                  : "Letters written on this desk arrive here to be signed or sent back with a reason — this desk writes none of its own."}
             </p>
           </div>
         ) : (
@@ -292,6 +311,9 @@ export function DepartmentLettersPanel({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-bark">{row.title}</p>
                       <p className="mt-0.5 truncate text-[11px] text-moss">
+                        {/* A page over every desk must name the desk: the same
+                            title could belong to any of them. */}
+                        {scope === "all" ? `${row.department_name} · ` : ""}
                         {row.requested_by_name} · {dayFirst(row.created_at)}
                       </p>
                     </div>
