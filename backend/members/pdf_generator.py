@@ -824,15 +824,29 @@ def generate_treasury_pdf(
         if isinstance(names, list):
             claimed_lower.update(names)
 
+    # A week holds a purpose's four payment buckets and no total of its own
+    # (only the month-wide map carries one), so asking a week for its 'total'
+    # answered 0 and the whole Offering Summary read empty. Sum the buckets
+    # the way the spreadsheet's page does, and fold the purposes' spellings
+    # — 'CampOffering' keys as it arrived; the row is read 'Camp Offering' —
+    # so one fund does not fall through the rows because of its spacing.
+    PAYMENT_BUCKETS = ('mpesa', 'bank_transfer', 'cheque', 'cash')
+
+    def _folded(name):
+        return ''.join(str(name or '').lower().split())
+
+    def _purpose_total(buckets):
+        return sum(float(buckets.get(b, 0) or 0) for b in PAYMENT_BUCKETS)
+
+    def _fold_matches(key, names):
+        folded = _folded(key)
+        return any(folded == _folded(name) for name in names)
+
     def _get_week_sum(sat, names):
         if not sat or not weekly_data:
             return 0.0
         wp = weekly_data.get(sat, {})
-        total = 0.0
-        for k, v in wp.items():
-            if k.lower() in names:
-                total += float(v.get('total', 0))
-        return total
+        return sum(_purpose_total(v) for k, v in wp.items() if _fold_matches(k, names))
 
     # --- Trust Funds Table ---
     trust_header = [Paragraph('Trust Funds', st["header"])]
@@ -905,7 +919,7 @@ def generate_treasury_pdf(
                 w_amt = round(_get_week_sum(sat, COMBINED_PURPOSES) / 2.0, 2)
             elif names == "others_residual":
                 wp = weekly_data.get(sat, {}) if sat else {}
-                w_amt = sum(float(v.get('total', 0)) for k, v in wp.items() if k.lower() not in claimed_lower)
+                w_amt = sum(_purpose_total(v) for k, v in wp.items() if not _fold_matches(k, claimed_lower))
             elif not names:
                 w_amt = 0.0
             else:

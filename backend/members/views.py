@@ -10178,10 +10178,20 @@ class TreasurySpreadsheetView(APIView):
             """
             return sum(float(buckets.get(name, 0) or 0) for name in ('mpesa', 'bank_transfer', 'cheque', 'cash'))
 
+        # Purposes fold their spellings against the rows: 'CampOffering'
+        # keys as it arrived and the row is read 'Camp Offering', so one fund
+        # does not fall through the rows because of its spacing.
+        def _folded(name):
+            return ''.join(str(name or '').lower().split())
+
+        def _fold_matches(key, names):
+            folded = _folded(key)
+            return any(folded == _folded(name) for name in names)
+
         def _week_sum(week_purposes, purpose_names):
             total = 0.0
             for k, v in week_purposes.items():
-                if k.lower() in purpose_names:
+                if _fold_matches(k, purpose_names):
                     total += _purpose_total(v)
             return total
 
@@ -10218,7 +10228,7 @@ class TreasurySpreadsheetView(APIView):
             others = sum(
                 _purpose_total(v)
                 for k, v in week_purposes.items()
-                if k.lower() not in claimed_lower
+                if not _fold_matches(k, claimed_lower)
             )
             ws[f'{col}35'] = others
 
