@@ -5161,9 +5161,16 @@ class ResendContributionReceiptView(APIView):
             # desk was handed: a split payment lists every account its lines
             # name and thanks the giver for the statement's full figure —
             # the letter re-cut from the same rows the receipt paper reads.
+            # A split also uses the split template (the {distribution}
+            # placeholder carries the account lines), exactly as the first
+            # receipt did — the generic single-gift template here used to
+            # name the accounts inline but never show what went to each.
             from .treasury import ContributionSiblings
 
-            grouped = ContributionSiblings(contribution).rows()
+            grouped = [
+                line for line in ContributionSiblings(contribution).rows()
+                if line.status == 'completed'
+            ] or ContributionSiblings(contribution).rows()
             account_names = []
             for line in grouped:
                 if line.purpose and line.purpose not in account_names:
@@ -5171,7 +5178,21 @@ class ResendContributionReceiptView(APIView):
             total_amount = sum((line.amount for line in grouped), Decimal('0'))
             account_display = ' / '.join(account_names)
             amount_display = f"KES {total_amount:,.2f}"
-            receipt_message = render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, account_display)
+            distribution = '\n'.join(
+                f"{line.purpose}: {line.currency} {line.amount:,.2f}" for line in grouped
+            )
+            receipt_template = (
+                church_settings.split_receipt_message
+                if len(grouped) > 1 and church_settings.split_receipt_message
+                else church_settings.default_receipt_message
+            )
+            receipt_message = render_receipt_message(
+                receipt_template,
+                donor_name,
+                amount_display,
+                account_display,
+                extra={'distribution': distribution} if len(grouped) > 1 else None,
+            )
             # A copy arrives with its paper — the same slip the first letter
             # carried, re-cut from the ledger rows.
             attachment = contribution_receipt_attachment(contribution) if send_email else None
@@ -5245,14 +5266,52 @@ class ResendContributionReceiptView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            amount_display = f"KES {cash.amount:,.2f}"
-            body = (
-                f"{render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, cash.purpose)}\n\n"
-                f"{receipt_summary(account=cash.purpose, amount=amount_display, payment_channel='Cash', receipt_ref=receipt_ref, date_display=cash.received_on)}\n\n"
-                f"{receipt_email_signature()}"
-            )
+            # A split cash entry re-tells the whole payment on resend too:
+            # its sibling rows share the payment_group the desk entry was
+            # split into, so the letter lists each account's line beneath the
+            # total, on the split template — never one loose account's part.
+            cash_grouped = list(CashContribution.objects.filter(
+                payment_group=cash.payment_group).order_by('id')
+            ) if cash.payment_group else [cash]
+            cash_total = sum((line.amount for line in cash_grouped), Decimal('0'))
+            amount_display = f"KES {cash_total:,.2f}"
+            if len(cash_grouped) > 1:
+                cash_account_names = []
+                for line in cash_grouped:
+                    if line.purpose and line.purpose not in cash_account_names:
+                        cash_account_names.append(line.purpose)
+                cash_display = ' / '.join(cash_account_names)
+                cash_distribution = '\n'.join(
+                    f"{line.purpose}: {line.amount:,.2f}" for line in cash_grouped
+                )
+                cash_template = (
+                    church_settings.split_receipt_message
+                    if church_settings.split_receipt_message
+                    else church_settings.default_receipt_message
+                )
+                cash_message = render_receipt_message(
+                    cash_template, donor_name, amount_display, cash_display,
+                    extra={'distribution': cash_distribution},
+                )
+                cash_summary = ''
+            else:
+                cash_display = cash.purpose
+                cash_message = render_receipt_message(
+                    church_settings.default_receipt_message, donor_name,
+                    amount_display, cash.purpose,
+                )
+                cash_summary = receipt_summary(
+                    account=cash.purpose, amount=amount_display,
+                    payment_channel='Cash', receipt_ref=receipt_ref,
+                    date_display=cash.received_on,
+                )
+            body_parts = [f"{cash_message}\n\n"]
+            if cash_summary:
+                body_parts.append(f"{cash_summary}\n\n")
+            body_parts.append(receipt_email_signature())
+            body = ''.join(body_parts)
             delivery = _deliver_receipt_message(
-                subject=f"Receipt Copy — {cash.purpose}",
+                subject=f"Receipt Copy — {cash_display}",
                 body=body,
                 email=email if send_email else '',
                 phone=phone if send_sms else '',
