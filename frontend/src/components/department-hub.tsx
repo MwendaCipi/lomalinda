@@ -5613,18 +5613,19 @@ function DepartmentDetail({
         : []),
       // Music sings in more than one voice: the choir's own roll and the
       // groups registered under it each get a view beside the roll. The desk
-      // names each of its views one word — Choir, Groups, Events, Account —
+      // names each of its views one word — Choir, Groups, Events, Requests —
       // so its strip reads the same in a hand as on a desk.
       ...(isMusic ? [{ key: "choir", label: "Choir", icon: Music }] : []),
       ...(isMusic ? [{ key: "singing_groups", label: "Groups", icon: MicVocal }] : []),
-      // The choir's own outbox — one box to write in, one list kept so a
+      // The choir's outbox — one box to write in, one list kept so a
       // sent message can be read or typed again. Messages go to the people
       // on the Choir roll; the rest of the Music desk (its groups, the
-      // week, Account Status) keeps its own pages, so this toggle sits with
-      // the choir only. It rides the same view and the same endpoint as every
+      // week) keeps its own pages, so this toggle sits with the choir only. It
+      // rides the same view and the same endpoint as every
       // desk's Messaging panel (the desk's code names the log row), so the
-      // panel stays where it is and this toggle is all that opens it.
-      ...(isMusic ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }] : []),
+      // panel stays where it is and this toggle is all that opens it — and
+      // the desk's own staffed views are the chips `areaHasMessaging` below
+      // draws for it.
       // Music's own duties — who sings and plays on a Sabbath — sit beside
       // the groups, rostered on the same rota panel the deaconate and the
       // pulpit team keep (see DeaconateManager's music desk).
@@ -5675,11 +5676,8 @@ function DepartmentDetail({
       // paper. The Pastorate is the one desk without it — its three approval
       // pages (Treasury, Letters, Spiritual) are the church's asks of that
       // office, and the pastor does not raise fund requests, so the ledger
-      // would be a second door to pages this desk already names. Music keeps
-      // Account Status rather than Requests because the choir's own people are
-      // on Messaging now and Requests would sit beside it as a near-duplicate
-      // for the same roll.
-      ...(isPastorate || isMusic
+      // would be a second door to pages this desk already names.
+      ...(isPastorate
         ? []
         : [{ key: "accounts", label: "Requests", short: "Requests", icon: Wallet }]),
       // Only the ministry that keeps the church's week carries its panel.
