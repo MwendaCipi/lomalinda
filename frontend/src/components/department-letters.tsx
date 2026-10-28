@@ -89,10 +89,16 @@ const STATUS: Record<LetterRow["status"], { label: string; className: string }> 
 
 export function DepartmentLettersPanel({
   department,
+  // A desk whose work is the signature — the pastorate's — is never also the
+  // desk that writes: there, the button and the compose modal simply are not
+  // offered, and the empty state says where the letter comes from.
+  canCompose = true,
   className = "shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm",
 }: {
   /** The area whose letters these are — the panel is always read for one desk. */
   department: { code: string; label: string };
+  /** Whether this reader's desk may raise a letter of its own. */
+  canCompose?: boolean;
   className?: string;
 }) {
   const { me } = useHeaderData();
@@ -247,14 +253,16 @@ export function DepartmentLettersPanel({
             Written here, signed by the pastor then the clerk, and returned fully signed for stamping.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCompose}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
-        >
-          <PenLine className="h-3.5 w-3.5" />
-          Write letter
-        </button>
+        {canCompose && (
+          <button
+            type="button"
+            onClick={openCompose}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            Write letter
+          </button>
+        )}
       </header>
 
       <div className={`custom-hover-scrollbar overflow-y-auto ${letters.length > 0 ? "max-h-64" : ""}`}>
@@ -267,7 +275,9 @@ export function DepartmentLettersPanel({
             </span>
             <p className="mt-2 text-sm font-semibold text-bark">No letters yet</p>
             <p className="mt-0.5 max-w-sm text-xs text-moss">
-              Write one and it goes to the pastor for signature, then the clerk, and comes back here fully signed.
+              {canCompose
+                ? "Write one and it goes to the pastor for signature, then the clerk, and comes back here fully signed."
+                : "Letters written on this desk arrive here to be signed or sent back with a reason — this desk writes none of its own."}
             </p>
           </div>
         ) : (

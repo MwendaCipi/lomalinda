@@ -465,17 +465,26 @@ export function MyAreas() {
                 // eldership's Event Calendar and Baptismal class are two — so
                 // the desk opens on the view the link named rather than always
                 // on its roll.
-                // `view=accounts` is the Requests view — the letters a
-                // signature is waiting on link straight to it from the SMS
-                // that told the signer about them.
+                // `view=accounts` is the Requests view of an ordinary desk —
+                // the letters a signature is waiting on link straight to it
+                // from the SMS that told the signer about them. The pastorate
+                // has no such page: its three are named by their own keys, and
+                // a notice still carrying the old `view=requests` lands on its
+                // letters, which is where the desk opens anyway.
                 initialTab={
-                  openView === "requests" || openView === "accounts"
+                  openView === "treasury-approvals" ||
+                  openView === "letter-approvals" ||
+                  openView === "spiritual"
                     ? openView
-                    : openView === "baptismal-class"
-                      ? "baptismal-class"
-                      : openView === "rota"
-                        ? "rota"
-                        : "calendar"
+                    : openView === "requests"
+                      ? "letter-approvals"
+                      : openView === "accounts"
+                        ? "accounts"
+                        : openView === "baptismal-class"
+                          ? "baptismal-class"
+                          : openView === "rota"
+                            ? "rota"
+                            : "calendar"
                 }
                 onBack={showMap}
               />

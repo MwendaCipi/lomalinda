@@ -4349,7 +4349,10 @@ class ChurchRoleRegistryTests(TestCase):
         profile = MemberProfile.objects.create(user=user, role='clerk', roles='clerk')
 
         form = MemberProfileRolesForm(
-            data={'user': user.pk, 'account_type': 'member', 'roles': ['clerk', 'treasurer']},
+            data={
+                'user': user.pk, 'account_type': 'member',
+                'roles': ['clerk', 'treasurer'], 'receipt_delivery': 'email',
+            },
             instance=profile,
         )
         self.assertTrue(form.is_valid(), form.errors)
@@ -4361,7 +4364,10 @@ class ChurchRoleRegistryTests(TestCase):
         profile.role = 'admin'
         profile.save()
         blocked = MemberProfileRolesForm(
-            data={'user': user.pk, 'account_type': 'member', 'roles': ['member']},
+            data={
+                'user': user.pk, 'account_type': 'member',
+                'roles': ['member'], 'receipt_delivery': 'email',
+            },
             instance=profile,
         )
         self.assertFalse(blocked.is_valid())
@@ -4641,11 +4647,14 @@ class BrandNamingTests(TestCase):
         self.assertTrue(subtext.startswith('Join SDA Church Loma Linda '), subtext)
         self.assertNotIn('Meru', subtext)
 
-    def test_the_church_name_default_keeps_meru_for_email(self):
+    def test_the_email_identity_keeps_meru_where_the_default_drops_it(self):
         from .models import ChurchSettings
         from .views import CHURCH_DEFAULT_NAME, church_name_plain
 
-        self.assertEqual(ChurchSettings._meta.get_field('church_name').get_default(), 'SDA Church Loma Linda, Meru')
+        # 4247eb7 took the town off the settings default — the site names the
+        # church, not its branch — while the fallback constant a settings-less
+        # install reads (and the email identity built from it) keeps it.
+        self.assertEqual(ChurchSettings._meta.get_field('church_name').get_default(), 'SDA Church Loma Linda')
         self.assertEqual(CHURCH_DEFAULT_NAME, 'SDA Church Loma Linda, Meru')
         self.assertEqual(church_name_plain('SDA Church Loma Linda, Meru'), 'SDA Church Loma Linda Meru')
 
@@ -6632,7 +6641,9 @@ class DeaconateInventoryAPITests(APITestCase):
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('state_after', response.data)
+        # The condition itself was fine; what the older caller left out is the
+        # officer the report is from, and that is the field the form names.
+        self.assertIn('moved_by', response.data)
         self.assertEqual(InventoryMovement.objects.count(), 0)
         self.assertFalse(DeaconateRequest.objects.filter(kind='movement').exists())
 
@@ -8866,7 +8877,7 @@ class MeetingInvitationTests(APITestCase):
         self.assertIn('SDA Church Loma Linda, Meru', esther)
         self.assertNotIn('{', esther)
         # The clerk who scheduled the meeting sits on the board too.
-        self.assertEqual(response.data['invitations'], {'invited': 3, 'emailed': 3})
+        self.assertEqual(response.data['invitations'], {'invited': 3, 'sms_sent': 0, 'emailed': 3})
 
     def test_the_message_edited_on_the_form_is_the_one_members_receive(self):
         from django.core import mail
@@ -8910,7 +8921,7 @@ class MeetingInvitationTests(APITestCase):
         # Esther and Samuel share a mailbox (one email between them) and the
         # clerk who scheduled the meeting sits on the board too: 3 invited,
         # 2 emails, and an in-app notice per person.
-        self.assertEqual(response.data['invitations'], {'invited': 3, 'emailed': 2})
+        self.assertEqual(response.data['invitations'], {'invited': 3, 'sms_sent': 0, 'emailed': 2})
         self.assertEqual(sorted(m.to[0] for m in mail.outbox), ['board.a@example.com', 'meet.clerk@example.com'])
         self.assertEqual(ChurchNotification.objects.count(), 3)
 
@@ -8920,7 +8931,7 @@ class MeetingInvitationTests(APITestCase):
         response = self._schedule(notify_sms='false', notify_email='false')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['invitations'], {'invited': 0, 'emailed': 0})
+        self.assertEqual(response.data['invitations'], {'invited': 0, 'sms_sent': 0, 'emailed': 0})
         self.assertEqual(len(mail.outbox), 0)
         self.assertEqual(ChurchNotification.objects.count(), 0)
 
@@ -14467,10 +14478,13 @@ class DepartmentGroupAndUnitTests(APITestCase):
         # The AYM's name reads in full — the abbreviation moved out of it
         # (0178), and the rail keeps its own short form beside the name.
         self.assertEqual(rows['aym']['label'], 'Adventist Youth Ministry')
-        # The children's bands are departments of their own now — Pathfinders
-        # included — so Children keeps no sub-units; the grouping is the
-        # frontend's job.
-        self.assertEqual(rows['children']['units'], [])
+        # Children carries its six classes as units (0204), so its desk offers
+        # the class toggle — even though each band is also a department of its
+        # own; the strip the frontend draws reads these names.
+        self.assertEqual(
+            rows['children']['units'],
+            ['Beginners', 'Kindergarten', 'Primary', 'Junior', 'Teens', 'Pathfinders'],
+        )
         self.assertEqual(rows['kindergarten']['group'], 'department')
         self.assertEqual(rows['pathfinders']['group'], 'department')
 
@@ -15033,10 +15047,12 @@ class DeaconateSeatsMigrationTests(TestCase):
             deaconate = HistoricalDepartment.objects.create(
                 code='deaconate', name='Deaconate', is_active=True,
             )
-        # The historical profile's user FK wants the user model as 0158 knew it.
-        UserModel = HistoricalProfile._meta.get_field('user').remote_field.model
-        user = UserModel.objects.create_user('mig.desk', 'mig.desk@example.com', 'StrongPass#2026')
-        HistoricalProfile.objects.create(
+        # The profile is written with the model as it stands now, not the
+        # 0158 one: the table's later columns (declared_relationships and its
+        # NOT NULL) have no place in a pre-0195 INSERT, and a row the migration
+        # can read is all this replay needs.
+        user = User.objects.create_user('mig.desk', 'mig.desk@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(
             user=user, role='treasurer', roles='treasurer,head_deacon',
             assistant_roles='treasurer,head_deacon',
         )
@@ -15048,7 +15064,7 @@ class DeaconateSeatsMigrationTests(TestCase):
             role = HistoricalDepartmentRole.objects.get(department=deaconate, name=name)
             self.assertFalse(role.has_assistant)
         # The office's assistant flag is released; the treasurer's own stays.
-        profile = HistoricalProfile.objects.get(user=user)
+        profile = HistoricalProfile.objects.get(user_id=user.pk)
         held = {c.strip() for c in profile.roles.split(',') if c.strip()}
         flagged = {c.strip() for c in profile.assistant_roles.split(',') if c.strip()}
         self.assertEqual(flagged & held, {'treasurer'})
@@ -15092,14 +15108,17 @@ class DeaconateSeatsBySexMigrationTests(TestCase):
         return deaconate
 
     def _person(self, history, username, gender):
-        Profile = history.get_model('members', 'MemberProfile')
-        UserModel = Profile._meta.get_field('user').remote_field.model
-        user = UserModel.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
-        Profile.objects.create(user=user, role='member', roles='member', gender=gender)
-        return user
+        # The row is written with the current model: the migration only ever
+        # reads the columns its own era knew, and a pre-0195 INSERT cannot
+        # satisfy the table's later NOT NULL columns. The user comes back as
+        # the replay's own model knows it, so its foreign keys accept it.
+        UserModel = history.get_model('members', 'MemberProfile')._meta.get_field('user').remote_field.model
+        user = User.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=user, role='member', roles='member', gender=gender)
+        return UserModel.objects.get(pk=user.pk)
 
     def _held(self, history, user):
-        profile = history.get_model('members', 'MemberProfile').objects.get(user=user)
+        profile = history.get_model('members', 'MemberProfile').objects.get(user_id=user.pk)
         return {c.strip() for c in profile.roles.split(',') if c.strip()}
 
     def test_a_woman_on_the_head_deacon_moves_to_the_head_deaconess(self):
@@ -15222,11 +15241,13 @@ class ClearHeadDeaconSeatMigrationTests(TestCase):
         return deaconate
 
     def _person(self, history, username):
+        # Written with the current model, returned as the replay's own model
+        # — see DeaconateSeatsBySexMigrationTests for why.
         Profile = history.get_model('members', 'MemberProfile')
         UserModel = Profile._meta.get_field('user').remote_field.model
-        user = UserModel.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
-        Profile.objects.create(user=user, role='member', roles='member')
-        return user
+        user = User.objects.create_user(username, f'{username}@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=user, role='member', roles='member')
+        return UserModel.objects.get(pk=user.pk)
 
     def test_the_head_deacon_seat_and_its_flag_are_cleared(self):
         history = self._state()
@@ -15940,7 +15961,8 @@ class DepartmentFundTests(APITestCase):
     @patch('members.views.sms.send', return_value=True)
     def test_withdrawal_notification_pipeline_sms_and_links(self, mock_sms):
         """SMS and email notifications with links travel across the four gates:
-        1. Creation tells the pastor (link to /my-areas?area=pastorate&view=requests)
+        1. Creation lands on the pastorate's Treasury Approvals page
+           (/my-areas?area=pastorate&view=treasury-approvals)
         2. The treasury's first clearance tells the elders
         3. The elder's blessing tells the pastor
         4. The pastor's approval tells the treasury the money can go
@@ -15964,7 +15986,7 @@ class DepartmentFundTests(APITestCase):
         # Verify Pastor received SMS with pastorate requests link
         pastor_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254711111111']
         self.assertTrue(len(pastor_calls) >= 1)
-        self.assertIn('area=pastorate&view=requests', pastor_calls[-1][0][1])
+        self.assertIn('area=pastorate&view=treasury-approvals', pastor_calls[-1][0][1])
         self.assertIn('Sheet music prints', pastor_calls[-1][0][1])
 
         # Step 2: Pastor approves
@@ -16208,16 +16230,17 @@ class DepartmentVisibilityTests(APITestCase):
         self.assertNotIn('awm', codes)
         self.assertNotIn('aym', codes)
 
-        # The rail reads the same answer from /me.
+        # The rail reads the same answer from /me — the school rides with
+        # every account besides (8a6ef31), since it is the church's own.
         me_codes = {row['code'] for row in self.client.get('/api/members/me/').data['my_departments']}
-        self.assertEqual(me_codes, {'amm'})
+        self.assertEqual(me_codes, {'amm', 'sabbath_school'})
 
     def test_a_leader_sees_their_group_and_the_area_they_lead(self):
         """A woman filed with AWM who leads AWM sees that area once; the
         leadership tie adds nothing the belonging has not already named."""
         self.client.force_authenticate(self.leader)
         codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
-        self.assertEqual(codes, {'awm'})
+        self.assertEqual(codes, {'awm', 'sabbath_school'})
 
     def test_the_office_sees_every_area(self):
         self.client.force_authenticate(self.elder)
@@ -16235,12 +16258,15 @@ class DepartmentVisibilityTests(APITestCase):
         me = self.client.get('/api/members/me/')
         # The wider view still lets the rail and the directory carry every area.
         self.assertIn('awm', {row['code'] for row in me.data['my_departments']})
-        self.assertEqual(me.data['my_ties'], [])
+        # The elder is tied to no group — only the Sabbath School every
+        # account carries, which is belonging rather than a place on a roll.
+        self.assertEqual(me.data['my_ties'], ['sabbath_school'])
 
-        # A real tie — a place on AWM's roll — is the only thing that shows.
+        # A real tie — a place on AWM's roll — shows beside the school every
+        # account carries.
         DepartmentMembership.objects.create(member=self.elder, department='awm')
         me = self.client.get('/api/members/me/')
-        self.assertEqual(set(me.data['my_ties']), {'awm'})
+        self.assertEqual(set(me.data['my_ties']), {'awm', 'sabbath_school'})
 
     def test_a_roll_place_adds_the_area_to_the_members_map(self):
         """Serving outside the member's own group — a place on another
@@ -16248,7 +16274,7 @@ class DepartmentVisibilityTests(APITestCase):
         DepartmentMembership.objects.create(member=self.plain, department='music')
         self.client.force_authenticate(self.plain)
         codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
-        self.assertEqual(codes, {'amm', 'music'})
+        self.assertEqual(codes, {'amm', 'music', 'sabbath_school'})
 
     def test_only_the_desk_and_office_see_add_member(self):
         """The roll's write flag — the thing the Add member button reads —
@@ -16373,7 +16399,12 @@ class ProfileAreaRefTests(APITestCase):
         self.client.force_authenticate(plain_user)
 
         res_default = self.client.get('/api/members/departments/')
-        self.assertEqual(len(res_default.data['departments']), 0)
+        # With no tie of their own the answer is the one every account carries:
+        # the Sabbath School, which needs no roll row (8a6ef31).
+        self.assertEqual(
+            {row['code'] for row in res_default.data['departments']},
+            {'sabbath_school'},
+        )
 
         res_all = self.client.get('/api/members/departments/?all=1')
         all_codes = {row['code'] for row in res_all.data['departments']}
@@ -17574,8 +17605,15 @@ class GiveForSomeoneTests(APITestCase):
         response = self.client.get(f'{self.SEARCH_URL}?q=floren')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([row['name'] for row in response.data['matches']], ['Florence Spouse'])
-        # A search result is a name to pick, not a contact card to harvest.
-        self.assertEqual(set(response.data['matches'][0].keys()), {'id', 'name'})
+        # A search result is a name to pick, not a contact card to harvest:
+        # the mailbox stays on the server. The picker does carry the person's
+        # own number, because the form behind it (a child's father or mother)
+        # prefills it from the pick.
+        self.assertEqual(
+            set(response.data['matches'][0].keys()),
+            {'id', 'name', 'phone', 'gender'},
+        )
+        self.assertNotIn('email', response.data['matches'][0])
 
     def test_a_request_is_delivered_to_the_targets_own_address_and_closed_by_a_gift(self):
         mail.outbox.clear()
@@ -19040,4 +19078,4 @@ class DepartmentLetterFlowTests(APITestCase):
 
         notice = self._notices('Official Letter for Signature:')
         self.assertEqual(len(notice), 1)
-        self.assertIn('/my-areas?area=pastorate&view=requests', notice[0].body)
+        self.assertIn('/my-areas?area=pastorate&view=letter-approvals', notice[0].body)

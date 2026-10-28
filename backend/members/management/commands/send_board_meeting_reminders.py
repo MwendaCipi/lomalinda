@@ -90,7 +90,7 @@ class Command(BaseCommand):
                     sms_text = (
                         f"{church_name}: Reminder - Board meeting \"{meeting.title}\" "
                         f"tomorrow ({meeting.meeting_date}). Please attend. "
-                        f"{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests"
+                        f"{settings.FRONTEND_URL}/my-areas?area=pastorate&view=letter-approvals"
                     )
                     try:
                         from . import sms

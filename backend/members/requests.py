@@ -105,11 +105,16 @@ def request_audience(kind='', audience=''):
         # The whole congregation prays: every active account is told.
         return User.objects.filter(is_active=True).distinct()
     if kind == 'prayer' and audience == 'pastor':
-        wanted = set(PASTOR_ROLE_CODES) | {ADMIN_ROLE} | set(CLERK_ROLE_CODES)
+        wanted = set(PASTOR_ROLE_CODES)
     elif kind == 'prayer' and audience == 'elders':
-        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | {ADMIN_ROLE} | DESK_EXTRA_ROLE_CODES.get('prayer', set())
+        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | DESK_EXTRA_ROLE_CODES.get('prayer', set())
     else:
-        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES) | {ADMIN_ROLE}
+        wanted = set(ELDER_ROLE_CODES) | set(CLERK_ROLE_CODES) | set(PASTOR_ROLE_CODES)
+        # The administrators are deliberately noise-reduced to the two doors
+        # that decide membership itself — everything else is the elders' and
+        # the clerk's to answer.
+        if kind in JOIN_OR_TRANSFER_KINDS:
+            wanted.add(ADMIN_ROLE)
         wanted |= DESK_EXTRA_ROLE_CODES.get(kind, set())
     audience_ids = set()
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):

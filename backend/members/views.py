@@ -7817,7 +7817,7 @@ class BoardMeetingView(generics.ListCreateAPIView):
 
         # Invite the church board, using the message the secretary edited on the
         # form when there is one, and the church's configured template otherwise.
-        invited, emailed = broadcast_invitation(
+        invited, sms_sent, emailed = broadcast_invitation(
             meeting,
             BOARD_KIND,
             current_church_name(),
@@ -7828,7 +7828,7 @@ class BoardMeetingView(generics.ListCreateAPIView):
 
         serializer = self.get_serializer(meeting)
         data = dict(serializer.data)
-        data['invitations'] = {'invited': invited, 'emailed': emailed}
+        data['invitations'] = {'invited': invited, 'sms_sent': sms_sent, 'emailed': emailed}
         return Response(data, status=status.HTTP_201_CREATED)
 
 
@@ -7910,7 +7910,7 @@ class BusinessMeetingView(generics.ListCreateAPIView):
 
         create_agendas(request, meeting, BusinessMeetingAgenda)
 
-        invited, emailed = broadcast_invitation(
+        invited, sms_sent, emailed = broadcast_invitation(
             meeting,
             BUSINESS_KIND,
             current_church_name(),
@@ -7921,7 +7921,7 @@ class BusinessMeetingView(generics.ListCreateAPIView):
 
         serializer = self.get_serializer(meeting)
         data = dict(serializer.data)
-        data['invitations'] = {'invited': invited, 'emailed': emailed}
+        data['invitations'] = {'invited': invited, 'sms_sent': sms_sent, 'emailed': emailed}
         return Response(data, status=status.HTTP_201_CREATED)
 
 
@@ -10758,6 +10758,10 @@ def apply_property_decision(row, approved):
         details = row.details or {}
         movement = InventoryMovement.objects.create(
             item=item, recorded_by=row.reviewed_by,
+            # The action is what makes the answer read as custody rather than
+            # a condition note: without it the item is marked in use while
+            # nobody's name is put on it, and the line prints no verb.
+            action=details.get('action') or '',
             moved_by=details.get('moved_by') or row.requested_by.get_full_name() or row.requested_by.get_username(),
             destination=details.get('destination') or '',
             notes=details.get('notes') or f'Approved movement. Request #{row.id}',
@@ -10768,6 +10772,10 @@ def apply_property_decision(row, approved):
     if row.kind == 'remove':
         name = item.name
         item.delete()
+        # The ask keeps its story and loses its pointer: the row it named is
+        # gone, so nothing later tries to save a request pointing at a row
+        # that no longer exists.
+        row.item = None
         return f'"{name}" is off the register; its movement lines went with it.'
     return ''
 
@@ -14163,7 +14171,7 @@ class DepartmentAccountView(APIView):
             Q(member_profile__roles__contains='treasurer'),
             is_active=True,
         ).distinct()
-        desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests'
+        desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=treasury-approvals'
         subject = f'Funding request from {target.name}' if is_deaconate else f'Withdrawal request from {target.name}'
         account_name = account.description or account.name
         requester_name = giver_display_name('', member=request.user)
@@ -14685,11 +14693,10 @@ def _letter_desk_link(department):
 
     A letter waits on its own department's Requests view — the page that now
     carries the desk's letters and its fund asks together. The Pastorate is
-    the one desk whose Requests chip is something else (the church's asks of
-    that office), so a letter written by the pastorate links to that chip
-    instead, where the desk draws its Letters tab.
+    the one desk whose Requests chip is gone: its three pages are named
+    directly, and a letter written by that desk waits on Letter Approvals.
     """
-    view = 'requests' if department.code == 'pastorate' else 'accounts'
+    view = 'letter-approvals' if department.code == 'pastorate' else 'accounts'
     return f'{settings.FRONTEND_URL}/my-areas?area={department.code}&view={view}'
 
 
@@ -15087,12 +15094,20 @@ class DeaconateRequestReviewView(APIView):
         if decision not in ('approved', 'rejected'):
             return Response({'detail': 'Answer with approved or rejected.'}, status=status.HTTP_400_BAD_REQUEST)
         approved = decision == 'approved'
-        applied = apply_property_decision(row, approved)
+        # The answer stands on the row first, and the register moves after it,
+        # in one transaction: the movement lines an approval writes carry the
+        # officer who gave it (``recorded_by``), and a removal takes the item
+        # this row points at, so the pointer is written once it is gone.
+        had_item = row.item_id is not None
         row.status = decision
         row.reply = str(request.data.get('reply') or '').strip()[:500]
         row.reviewed_by = request.user
         row.reviewed_at = timezone.now()
-        row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
+        with transaction.atomic():
+            row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
+            applied = apply_property_decision(row, approved)
+            if had_item and row.item_id is None:
+                row.save(update_fields=['item'])
         verb = 'approved' if approved else 'declined'
         title = f'Your {row.get_kind_display().lower()} request for {row.item_name} was {verb}'
         if row.reply:

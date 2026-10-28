@@ -230,7 +230,7 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
         if notify_sms and phone:
             try:
                 from . import sms
-                sms_text = f"{church_name}: Board meeting invitation: {meeting.title}. Review: {settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests"
+                sms_text = f"{church_name}: Board meeting invitation: {meeting.title}. Review: {settings.FRONTEND_URL}/my-areas?area=pastorate&view=letter-approvals"
                 sms_sent += sms.send(phone, sms_text)
                 sms_ok = True
             except Exception:

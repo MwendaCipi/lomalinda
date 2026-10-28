@@ -35,7 +35,6 @@ import {
   Handshake,
   Heart,
   HeartPulse,
-  Inbox,
   Landmark,
   Droplets,
   GripVertical,
@@ -4911,7 +4910,11 @@ type DeptSubTab =
   // this desk's structure when it opens from the map (see the panels block).
   | "inventory"
   | "rota"
-  | "requests";
+  // The pastorate's three pages — what the treasury asks to release, what
+  // waits on the pastor's signature, and the church's spiritual asks.
+  | "treasury-approvals"
+  | "letter-approvals"
+  | "spiritual";
 
 /**
  * The month a search names, as an index into the year's wall: "mar",
@@ -4939,71 +4942,14 @@ function monthIndexForQuery(raw: string, year: number): number | null {
   return null;
 }
 
-type PastorateRequestKind = "letters" | "withdrawals" | "prayer" | "visitation" | "dedication" | "all";
-
-function PastorateRequestsDesk({ department }: { department: { code: string; label: string } }) {
-  // Letters first: a letter awaiting the pastor's signature is the ask that
-  // cannot wait on the reader finding a tab, and the notification that told
-  // them about it lands on this desk.
-  const [tab, setTab] = useState<PastorateRequestKind>("letters");
-
-  const tabs: { key: PastorateRequestKind; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { key: "letters", label: "Letters", icon: FileText },
-    { key: "withdrawals", label: "Fund Withdrawals", icon: Wallet },
-    { key: "prayer", label: "Prayer Requests", icon: HandHeart },
-    { key: "visitation", label: "Visitations", icon: Users },
-    { key: "dedication", label: "Child Dedications", icon: Baby },
-    { key: "all", label: "All Church Requests", icon: ClipboardList },
-  ];
-
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-sand-line bg-sand/20 px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {tabs.map((item) => {
-            const active = tab === item.key;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setTab(item.key)}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                  active
-                    ? "bg-white text-bark shadow-xs ring-1 ring-sand-line"
-                    : "text-moss hover:bg-white/60 hover:text-bark"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1">
-        {tab === "letters" && (
-          <div className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
-            <DepartmentLettersPanel department={department} className="shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm" />
-          </div>
-        )}
-        {tab === "withdrawals" && <WithdrawalRequestsPanel statusFilter="all" />}
-        {tab === "prayer" && <RequestsAdminManager initialTab="prayer" />}
-        {tab === "visitation" && <RequestsAdminManager initialTab="visitation" />}
-        {tab === "dedication" && <RequestsAdminManager initialTab="dedication" />}
-        {tab === "all" && <RequestsAdminManager initialTab="all" />}
-      </div>
-    </div>
-  );
-}
-
 function DepartmentDetail({
   department,
   onChanged,
   // A desk opens on its calendar: the events are what the reader came for;
-  // the roll is one toggle away beneath it.
-  initialTab = department.code === "pastorate" ? "requests" : "calendar",
+  // the roll is one toggle away beneath it. The pastorate opens on its
+  // letters instead — a signature waiting is the ask that cannot wait on
+  // the reader finding a chip.
+  initialTab = department.code === "pastorate" ? "letter-approvals" : "calendar",
   onBack,
   embedded = false,
 }: {
@@ -5426,11 +5372,12 @@ function DepartmentDetail({
           </div>
         ) : null
       );
-    } else if (!(isDeaconate && (subTab === "inventory" || subTab === "rota")) && subTab !== "requests") {
+    } else if (!(isDeaconate && (subTab === "inventory" || subTab === "rota")) && subTab !== "spiritual") {
       // The deaconate's property and rota panels are the console desk's own:
       // they write their own search (and rota filters) to this slot from
       // inside themselves, so leaving it to them is what keeps those
-      // controls alive under this desk's structure.
+      // controls alive under this desk's structure. The requests manager
+      // behind Spiritual is its own writer of the slot for the same reason.
       setHeaderRightAction(null);
     }
     return () => setHeaderRightAction(null);
@@ -5531,17 +5478,25 @@ function DepartmentDetail({
       ...(areaHasMessaging(department.code)
         ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }]
         : []),
+      // The pastorate's three pages: the money the treasury wants released,
+      // the letters waiting on the pastor's pen, and the church's spiritual
+      // asks — prayer, visitation and the rest. They replace the single
+      // Requests chip this desk used to carry.
       ...(isPastorate
-        ? [{ key: "requests", label: "Requests", short: "Requests", icon: Inbox }]
+        ? [
+            { key: "treasury-approvals", label: "Treasury Approvals", short: "Treasury", icon: Wallet },
+            { key: "letter-approvals", label: "Letter Approvals", short: "Letters", icon: FileText },
+            { key: "spiritual", label: "Spiritual", short: "Spiritual", icon: HandHeart },
+          ]
         : []),
       // The desk's asks, gathered under one name: the letters it writes on
       // the church's letterhead and the money it asks of the treasury. It was
       // called Account Status (Account on Music, Funding on the Deaconate) —
       // a name for the ledger alone, on a page that has always held the
-      // requests too. The Pastorate is the one desk without it: its own
-      // Requests chip is the church's asks of that office, and the pastor
+      // requests too. The Pastorate is the one desk without it: its three
+      // approval pages are the church's asks of that office, and the pastor
       // does not raise fund requests, so the ledger would be a second door to
-      // a page this desk already names.
+      // pages this desk already names.
       ...(isPastorate
         ? []
         : [{ key: "accounts", label: "Requests", short: "Requests", icon: Wallet }]),
@@ -7253,9 +7208,31 @@ function DepartmentDetail({
           </div>
         </div>
       )}
-      {subTab === "requests" && isPastorate && (
+      {/* The pastorate's three pages. The letters come first in the strip's
+          order because a signature waiting is the ask that cannot wait; the
+          pastor writes none of them — they arrive here to be signed or sent
+          back with a reason. */}
+      {subTab === "treasury-approvals" && isPastorate && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
-          <PastorateRequestsDesk department={department} />
+          <div className="min-h-0 flex-1">
+            <WithdrawalRequestsPanel statusFilter="all" />
+          </div>
+        </div>
+      )}
+      {subTab === "letter-approvals" && isPastorate && (
+        <div className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
+          <DepartmentLettersPanel
+            department={department}
+            canCompose={false}
+            className="shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm"
+          />
+        </div>
+      )}
+      {subTab === "spiritual" && isPastorate && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
+          <div className="min-h-0 flex-1">
+            <RequestsAdminManager initialTab="all" />
+          </div>
         </div>
       )}
 
