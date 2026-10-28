@@ -481,6 +481,17 @@ def send_contribution_receipt(contribution, receipt_email=''):
     """
     if contribution.receipt_sent_at or contribution.status != 'completed':
         return
+    # One gift spread over several accounts is receipted once, as one letter
+    # listing the whole breakdown — never fragment by fragment. A row with
+    # ledger siblings is handed to the grouped sender; the group calls back
+    # here only when the group turns out to be a single payment after all.
+    if contribution.payment_group:
+        sibling_count = Contribution.objects.filter(
+            payment_group=contribution.payment_group, status='completed',
+        ).count()
+        if sibling_count > 1:
+            send_grouped_contribution_receipts(contribution.payment_group)
+            return
 
     church_settings = ChurchSettings.objects.get_or_create(pk=1)[0]
     local_now = timezone.localtime()
@@ -539,6 +550,12 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
     split template carries the whole gift's amount with the account-by-account
     distribution beneath it. The group is marked receipted together, so a
     resend after a failure retells the whole gift, never a fragment.
+
+    Because the letter already reads the breakdown, its Receipt Summary is
+    not printed again on a split: the distribution is the account line, and
+    the receipt paper (the attachment) carries the rest. A single-account
+    letter keeps its summary — there it is the only place the channel,
+    reference and date are named.
     """
     lines = list(Contribution.objects.filter(payment_group=group).order_by('id'))
     completed = [row for row in lines if row.status == 'completed']
@@ -569,7 +586,6 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
     date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
     receipt_reference = first.mpesa_receipt_number or first.paystack_reference or str(first.id)
     account_list = ' / '.join(row.purpose for row in completed)
-    summary = receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
     email = (
         usable_email(first.donor_email)
         or (usable_email(first.member.email) if first.member else '')
@@ -578,9 +594,11 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
     # One slip prints the whole split — the same itemised paper the member
     # page downloads — and rides the email the letter goes in.
     attachment = contribution_receipt_attachment(first) if email else None
+    # The split letter already reads its breakdown (the {distribution} lines
+    # and the itemised attachment), so its Receipt Summary stays off — it
+    # would only repeat the account list a second way.
     body = (
         f"{receipt_message}\n\n"
-        f"{summary}\n\n"
         f"{receipt_email_signature()}"
     )
     delivery = _deliver_receipt_message(
@@ -697,6 +715,9 @@ def send_grouped_cash_receipt(rows, *, send_sms=True, send_email=True):
             'email_sent': False, 'sms_sent': False,
             'sms_configured': sms.configured(),
         }
+    if len(rows) == 1:
+        # A group of one is not a split gift — it keeps the ordinary receipt.
+        return send_cash_receipt(rows[0], send_sms=send_sms, send_email=send_email)
     first = rows[0]
     settings_obj = ChurchSettings.objects.get_or_create(pk=1)[0]
     donor_name = giver_display_name(
@@ -712,9 +733,11 @@ def send_grouped_cash_receipt(rows, *, send_sms=True, send_email=True):
         extra={'distribution': distribution},
     )
     account_list = ' / '.join(row.purpose for row in rows)
+    # The split letter already reads its breakdown — the {distribution} lines
+    # the message carries — so its Receipt Summary stays off: it would only
+    # repeat the account list a second way.
     body = (
         f"{message}\n\n"
-        f"{receipt_summary(account=account_list, amount=amount_display, payment_channel=first.get_payment_method_display(), receipt_ref=first.receipt_number or f'CASH-{first.id}', date_display=first.received_on)}\n\n"
         f"{receipt_email_signature()}"
     )
     # As above: the desk's own channel tick governs a split receipt, not the
@@ -5148,16 +5171,20 @@ class ResendContributionReceiptView(APIView):
             total_amount = sum((line.amount for line in grouped), Decimal('0'))
             account_display = ' / '.join(account_names)
             amount_display = f"KES {total_amount:,.2f}"
-            summary = receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))
             receipt_message = render_receipt_message(church_settings.default_receipt_message, donor_name, amount_display, account_display)
             # A copy arrives with its paper — the same slip the first letter
             # carried, re-cut from the ledger rows.
             attachment = contribution_receipt_attachment(contribution) if send_email else None
-            body = (
-                f"{receipt_message}\n\n"
-                f"{summary}\n\n"
-                f"{receipt_email_signature()}"
-            )
+            # A split copy already reads every account its lines name (and
+            # rides the itemised slip), so its Receipt Summary stays off; a
+            # single-account copy keeps it — there it is the only place the
+            # channel, reference and date are named.
+            body = f"{receipt_message}\n\n"
+            if len(grouped) == 1:
+                body += (
+                    f"{receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
+                )
+            body += receipt_email_signature()
             delivery = _deliver_receipt_message(
                 subject=f"Receipt Copy — {account_display}",
                 body=body,
@@ -6334,7 +6361,8 @@ class AssignContributionAccountView(APIView):
         # split payment thanks the giver for everything they gave.
         from .treasury import ContributionSiblings
 
-        total_amount = sum((row.amount for row in ContributionSiblings(contribution).rows()), Decimal('0'))
+        payment_lines = ContributionSiblings(contribution).rows()
+        total_amount = sum((row.amount for row in payment_lines), Decimal('0'))
         amount_display = f"{contribution.currency} {total_amount:,.2f}"
         account_list = ' / '.join(account_names)
         # The treasurer's message is already the words they wrote (the modal
@@ -6348,15 +6376,21 @@ class AssignContributionAccountView(APIView):
         )
         reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
         date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
-        summary = receipt_summary(account=account_list, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=reference, date_display=date_display)
+        # A split's letter already reads the whole figure against the account
+        # list it names (and rides the itemised slip), so its Receipt Summary
+        # stays off; a single-account letter keeps it — there it is the only
+        # place the channel, reference and date are named.
+        summary = (
+            receipt_summary(account=account_list, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=reference, date_display=date_display)
+            if len(payment_lines) == 1 else ''
+        )
         # The assign press thanks the giver and hands them the paper in the
         # same act — the slip cut from the ledger rows just credited.
         attachment = contribution_receipt_attachment(contribution) if email else None
-        body = (
-            f"{receipt_message}\n\n"
-            f"{summary}\n\n"
-            f"{receipt_email_signature()}"
-        )
+        body = f"{receipt_message}\n\n"
+        if summary:
+            body += f"{summary}\n\n"
+        body += receipt_email_signature()
         delivery = _deliver_receipt_message(
             subject=f"Giving receipt — {account_list}",
             body=body,

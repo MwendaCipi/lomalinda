@@ -9177,6 +9177,8 @@ class SplitGivingTests(APITestCase):
         self.assertIn('Tithe: KES 2,000.00', body)
         self.assertIn('Local Church Budget: KES 1,000.00', body)
         self.assertIn('Combined Offering: KES 500.00', body)
+        # The distribution is the breakdown; the summary would repeat it.
+        self.assertNotIn('Receipt Summary:', body)
         self.assertIn(' / ', mock_deliver.call_args.kwargs['subject'])
         # Every line of the group counts as receipted together.
         self.assertTrue(all(row.receipt_sent_at for row in Contribution.objects.all()))
