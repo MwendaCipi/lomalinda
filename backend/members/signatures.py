@@ -153,21 +153,37 @@ def signatories(codes=None):
 
 
 def receipt_signatures():
-    """The one signature a giving receipt prints: the treasurer's.
+    """The signatures a giving receipt prints: the treasurer's and the
+    pastor's, side by side.
 
-    A slip is the treasurer's word for the money handed over, so it carries
-    their pen alone, centred on the paper, rather than a pair of columns. The
-    first elder stays listed as a fallback for the church where that seat is
-    vacant — a treasurer who also holds the elder's office is answered by the
-    senior office (see ``office_holder``), so without the fallback that church
-    would print a receipt with nobody's signature at all.
+    A slip is the treasurer's word for the money handed over, and — since
+    every paper the church prints answers to the pastor as well — the
+    pastor's pen rides beside it. The first elder stays listed as a fallback
+    for the church where the treasurer's (or the pastor's) seat stands
+    vacant — a treasurer who also holds the elder's office answers only as
+    the senior office (see ``office_holder``), so without the fallback that
+    church would print a receipt with nobody's signature at all.
     """
-    entries = signatories(tuple(code for code, _label in RECEIPT_OFFICES))
-    # The signature that was actually drawn answers for the slip: a treasurer
-    # seat filled by someone who has not signed yet must not hide the pen the
-    # church does have (the officer who holds both offices signs as the elder).
-    drawn = [entry for entry in entries if entry.get('image')]
-    return (drawn or entries)[:1]
+    entries = signatories(('treasurer', 'pastor', 'first_elder'))
+    by_code = {entry['code']: entry for entry in entries}
+
+    # The issuing office, one pen and never two: the treasurer's drawn pen
+    # answers for the slip; with the seat held but no pen under it, a drawn
+    # elder's pen steps in (the officer who holds both offices signs as the
+    # senior one). With no pen drawn anywhere, an undrawn treasurer keeps
+    # his named line, and a vacant seat leaves the elder's line there.
+    issuer = by_code.get('treasurer')
+    if not (issuer and issuer.get('image')):
+        elder = by_code.get('first_elder')
+        if elder and elder.get('image'):
+            issuer = elder
+        elif issuer is None:
+            issuer = elder
+    # The church's own rule: the pastor answers on every paper the church
+    # prints, so the receipt carries the pastor's slot beside the issuer's
+    # wherever the office is held.
+    pastor = by_code.get('pastor')
+    return [entry for entry in (issuer, pastor) if entry]
 
 
 def report_signatures():

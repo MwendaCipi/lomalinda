@@ -218,9 +218,10 @@ def _to_eat(dt):
 def _thermal_signatures(c, y, width, margin, signatures):
     """The office signatures at the foot of a thermal receipt.
 
-    When one signature is provided (e.g. Treasurer), it is centred horizontally
-    on the receipt with generous breathing space. If multiple are provided,
-    they are arranged in two columns.
+    The treasurer's pen and the pastor's — every paper the church prints
+    answers to the pastor. When one signature is provided it is centred
+    horizontally on the receipt with generous breathing space; two (the
+    common case now) sit in two columns.
     Returns the ``y`` the caller continues from.
     """
     entries = list(signatures or ())[:2]
@@ -622,9 +623,10 @@ def generate_treasury_pdf(
             story.append(p_table)
             story.append(Spacer(1, 20))
 
-        # The sign-off block names the three offices the report answers to —
+        # The sign-off block names the four offices the report answers to —
         # prepared by the Treasurer, witnessed by the Head Deacon, verified by
-        # the Elder — and checks the saved signatures too: each office's
+        # the Elder, and countersigned by the Pastor, as every paper answers
+        # to the pastor — and checks the saved signatures too: each office's
         # uploaded pen prints on its line, the same way the summary's sign-off
         # does, and the rules stand where an office has no signature on file
         # yet.
@@ -632,8 +634,9 @@ def generate_treasury_pdf(
             signature_cell("<b>Prepared by: Treasurer</b>", offices.get("treasurer"), "Name: ______________________"),
             signature_cell("<b>Witnessed by: Head Deacon</b>", offices.get("head_deacon"), "Name: ______________________"),
             signature_cell("<b>Verified by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
+            signature_cell("<b>Countersigned by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
         ]]
-        sig_table = Table(sig_data, colWidths=[6.0 * cm, 6.0 * cm, 6.0 * cm])
+        sig_table = Table(sig_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
         sig_table.setStyle(TableStyle([
             ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
             ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dfdbd1")),
@@ -772,13 +775,14 @@ def generate_treasury_pdf(
     story.append(cash_table)
     story.append(Spacer(1, 8))
 
-    # --- Signatures: Treasurer, Deacon, Elder ---
+    # --- Signatures: Treasurer, Deacon, Elder, Pastor ---
     sig_data = [[
         signature_cell("<b>Signed By:</b>", offices.get("treasurer"), "Name: ______________________"),
         signature_cell("Deacon", None, "Name: ______________________"),
         signature_cell("Elder", offices.get("first_elder"), "Name: ______________________"),
+        signature_cell("<b>Countersigned by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
     ]]
-    sig_table = Table(sig_data, colWidths=[6.0 * cm, 6.0 * cm, 6.0 * cm])
+    sig_table = Table(sig_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
     sig_table.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dfdbd1")),
@@ -1101,9 +1105,11 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
     story.append(Paragraph(note_text, st["meta"]))
     story.append(Spacer(1, 15))
 
-    # The statement is the treasurer's word to the member, so the office
-    # signs it where it is printed: their saved signature on its line.
+    # The statement is the treasurer's word to the member, countersigned by
+    # the pastor as every paper the church prints answers to the pastor: both
+    # saved signatures on their lines.
     treasurer = (signatures or {}).get("treasurer") or {}
+    pastor = (signatures or {}).get("pastor") or {}
     name_line = (
         f"<b>Church Treasurer Name:</b> {escape(treasurer['name'])}"
         if treasurer.get("name")
@@ -1115,13 +1121,22 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
         treasurer_cell.extend([Paragraph("<b>Signature:</b>", st["cell"]), signature_image])
     else:
         treasurer_cell.append(Paragraph("<b>Signature:</b> ___________________________", st["cell"]))
+    pastor_name_line = (
+        f"<b>Church Pastor Name:</b> {escape(pastor['name'])}"
+        if pastor.get("name")
+        else "<b>Church Pastor Name:</b> ___________________________"
+    )
+    pastor_cell = [Paragraph(pastor_name_line, st["cell"])]
+    pastor_image = _signature_flowable(pastor.get("image"), 5.2 * cm, 1.0 * cm)
+    if pastor_image:
+        pastor_cell.extend([Paragraph("<b>Signature:</b>", st["cell"]), pastor_image])
+    else:
+        pastor_cell.append(Paragraph("<b>Signature:</b> ___________________________", st["cell"]))
     sign_data = [
-        [
-            treasurer_cell,
-            Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d')}", st["cell"]),
-        ]
+        [treasurer_cell, pastor_cell],
+        [Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d')}", st["cell"]), Paragraph("", st["cell"])],
     ]
-    sign_table = Table(sign_data, colWidths=[12.0 * cm, 6.0 * cm])
+    sign_table = Table(sign_data, colWidths=[9.0 * cm, 9.0 * cm])
     story.append(KeepTogether([sign_table]))
 
     doc.build(story, canvasmaker=NumberedCanvas)
@@ -1590,8 +1605,9 @@ def generate_financial_report_pdf(church_name, report, signatures=None) -> bytes
     the sentence under the table says how the total is read, so the paper
     teaches the same arithmetic the app does.
 
-    The statement is signed at its foot: the treasurer who prepared it and
-    the first elder who authorises it, their saved signatures on the line.
+    The statement is signed at its foot: the treasurer who prepared it, the
+    first elder who authorises it, and the pastor's countersignature every
+    paper carries — their saved signatures on the lines.
     """
     church_name = pdf_church_name(church_name)
 
@@ -1731,17 +1747,21 @@ class SignatureSlotsFlowable(Flowable):
     """
 
     #: (office code or None, slot title, hint under it) — the withdrawal
-    #: paper's three: authorised, issued, received.
+    #: paper's four: authorised, issued, received, and the pastor whose pen
+    #: answers on every paper the church prints.
     SLOTS = (
         ('first_elder', "Authorizing Officer", "Elder / Church Office"),
         ('treasurer', "Issued By", "Treasury Office"),
         (None, "Received By", "Department Representative"),
+        ('pastor', "Countersigned By", "Church Pastor"),
     )
 
-    #: A financial statement answers to two offices: prepared, authorised.
+    #: A financial statement answers to three offices: prepared, authorised,
+    #: and the pastor's countersignature every paper carries.
     STATEMENT_SLOTS = (
         ('treasurer', "Prepared By", "Treasury Office"),
         ('first_elder', "Authorizing Officer", "Church Office"),
+        ('pastor', "Countersigned By", "Church Pastor"),
     )
 
     def __init__(self, height=3.9 * cm, signatures=None, slots=None):
@@ -2027,8 +2047,8 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     The treasury desk's per-request Print: the same request the queue shows,
     set alone on its own page with the amount spelled out, so the department's
     representative can carry it to the treasury, sign for the money and file
-    it. It closes with the three signature slots — the authorizing officer,
-    the one issuing, and the receiver.
+    it. It closes with the four signature slots — the authorizing officer,
+    the one issuing, the receiver, and the pastor's countersignature.
     """
     church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
