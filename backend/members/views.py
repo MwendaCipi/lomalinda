@@ -8544,6 +8544,47 @@ class ProfileChangeDecisionView(APIView):
         return Response({'detail': 'Your details were kept as they are.', 'status': 'kept'})
 
 
+class NameChangeDecisionView(APIView):
+    """Approve or refuse a proposed name change. Only the member decides."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        decision = str(request.data.get('decision') or '').strip().lower()
+        if decision not in ('approve', 'keep'):
+            return Response({'detail': 'Choose "approve" or "keep".'}, status=status.HTTP_400_BAD_REQUEST)
+
+        proposal = (
+            ProfileChangeRequest.objects
+            .filter(member=request.user, status='pending')
+            .order_by('-proposed_at')
+            .first()
+        )
+        if not proposal:
+            return Response({'detail': 'You have no proposed profile changes waiting.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if proposal.change_type != 'name':
+            return Response({'detail': 'This proposal is not a name change.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        member = proposal.member
+        if decision == 'approve':
+            first_name = proposal.changes.get('first_name')
+            last_name = proposal.changes.get('last_name')
+            if first_name:
+                member.first_name = first_name
+            if last_name:
+                member.last_name = last_name
+            member.save(update_fields=['first_name', 'last_name'])
+            proposal.status = 'approved'
+            proposal.decided_at = timezone.now()
+            proposal.save(update_fields=['status', 'decided_at'])
+            return Response({'detail': 'Name updated. Thank you for confirming your details.', 'status': 'approved'})
+
+        proposal.status = 'rejected'
+        proposal.save(update_fields=['status'])
+        return Response({'detail': 'Name change rejected.'})
+
+
 class DisfellowshipView(APIView):
     """Toggle disfellowship status on a member. Clerks/admins only."""
     permission_classes = [IsAuthenticated]
