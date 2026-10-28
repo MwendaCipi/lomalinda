@@ -153,18 +153,17 @@ def signatories(codes=None):
 
 
 def receipt_signatures():
-    """The signatures a giving receipt prints: the treasurer's and the
-    pastor's, side by side.
+    """The signature a giving receipt prints: the treasurer's alone.
 
-    A slip is the treasurer's word for the money handed over, and — since
-    every paper the church prints answers to the pastor as well — the
-    pastor's pen rides beside it. The first elder stays listed as a fallback
-    for the church where the treasurer's (or the pastor's) seat stands
-    vacant — a treasurer who also holds the elder's office answers only as
-    the senior office (see ``office_holder``), so without the fallback that
-    church would print a receipt with nobody's signature at all.
+    A slip is the treasurer's word for the money handed over; the pastor's
+    pen no longer rides beside it on the thermal receipt. The first elder
+    stays listed as a fallback for the church where the treasurer's seat
+    stands vacant — a treasurer who also holds the elder's office answers
+    only as the senior office (see ``office_holder``), so without the
+    fallback that church would print a receipt with nobody's signature at
+    all.
     """
-    entries = signatories(('treasurer', 'pastor', 'first_elder'))
+    entries = signatories(('treasurer', 'first_elder'))
     by_code = {entry['code']: entry for entry in entries}
 
     # The issuing office, one pen and never two: the treasurer's drawn pen
@@ -179,11 +178,7 @@ def receipt_signatures():
             issuer = elder
         elif issuer is None:
             issuer = elder
-    # The church's own rule: the pastor answers on every paper the church
-    # prints, so the receipt carries the pastor's slot beside the issuer's
-    # wherever the office is held.
-    pastor = by_code.get('pastor')
-    return [entry for entry in (issuer, pastor) if entry]
+    return [entry for entry in (issuer,) if entry]
 
 
 def report_signatures():

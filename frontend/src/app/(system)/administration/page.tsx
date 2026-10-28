@@ -816,7 +816,7 @@ function AdministrationContent() {
                 height rather than the desks' capped card. */}
             {activeTab === "clerk-letters" && (isClerk || isAdmin) && (
               <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar p-4 sm:p-6">
-                <DepartmentLettersPanel scope="all" canCompose={false} scrollList={false} />
+                <DepartmentLettersPanel scope="all" scrollList={false} />
               </div>
             )}
 

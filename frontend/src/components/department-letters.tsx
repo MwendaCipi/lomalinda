@@ -4,17 +4,20 @@
  * The desk's letters — the paper an area writes, and the two pens it must
  * pass before it is worth anything.
  *
- * A letter is written here (title and body), printed on the church's own
+ * A letter is written (title and body), printed on the church's own
  * letterhead, and sent to the pastor. The pastor signs it with the signature
  * kept on their profile, the church clerk signs after them, and it then comes
  * back to whoever wrote it as a fully signed sheet, ready to carry to the
- * stamp. The screen therefore shows three things and no more: the letter and
- * whose turn it is on, the button the current signer needs, and the PDF —
- * viewed while it travels, downloaded once both signatures are on it.
+ * stamp. The register shows the letter and whose turn it is on, the button
+ * the current signer needs, and the PDF — viewed while it travels, downloaded
+ * once both signatures are on it.
  *
- * The server owns every step: it decides who may sign, that the pastor must
- * sign before the clerk, and what the PDF carries. This panel only asks the
- * server what it may do, and shows the answer.
+ * Writing is not a button on this register: the modal lives with the desk's
+ * own buttons (see the hub's bottom bar), and a copy of it is exported here
+ * for them (`WriteLetterModal`). The server owns every step: it decides who
+ * may sign, that the pastor must sign before the clerk, and what the PDF
+ * carries. This panel only asks the server what it may do, and shows the
+ * answer.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -87,12 +90,132 @@ const STATUS: Record<LetterRow["status"], { label: string; className: string }> 
   declined: { label: "Declined", className: "bg-red-50 text-red-700" },
 };
 
+/**
+ * The compose form, as a modal — the desk's Write Letter button opens it.
+ *
+ * Kept beside the register it writes into: the paper is the same (title and
+ * body, the two things a letter is made of), the endpoint is the same, and
+ * the notice the desk hears is the same. `onSent` lets the desk refresh
+ * whatever carried the letters before — a fresh copy of the register reads
+ * the new row the moment its writer closes the modal.
+ */
+export function WriteLetterModal({
+  open,
+  department,
+  onClose,
+  onSent,
+}: {
+  open: boolean;
+  department: { code: string; label: string };
+  onClose: () => void;
+  onSent?: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [sending, setSending] = useState(false);
+
+  if (!open) return null;
+
+  const send = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSending(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/department-letters/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ department: department?.code ?? "", title: title.trim(), content: content.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || data.title || data.content || "The letter could not be sent.");
+      onClose();
+      onSent?.();
+      showAlert(
+        "Letter sent",
+        "It is on the church letterhead with the pastor now — the clerk signs after them, and it comes back to you fully signed.",
+        "success"
+      );
+    } catch (error) {
+      showAlert("Could not send the letter", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <form
+        onSubmit={send}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Write a letter"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-sand-line px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-bark">Write a letter</h3>
+            <p className="mt-0.5 text-xs text-moss">
+              It goes on the church letterhead to the pastor, then the clerk, and comes back to you fully signed.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1 text-moss transition hover:bg-sand hover:text-bark"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <label className="block text-sm font-medium text-bark">
+            Title *
+            <input
+              required
+              maxLength={200}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="e.g. Request for choir robes"
+              autoFocus
+              className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+            />
+          </label>
+          <label className="block text-sm font-medium text-bark">
+            Letter *
+            <textarea
+              required
+              rows={9}
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder="Write the letter here — the body as it should read on the page…"
+              className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm leading-relaxed outline-none focus:border-ember"
+            />
+          </label>
+        </div>
+
+        <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={sending || !title.trim() || !content.trim()}
+            className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+          >
+            {sending ? "Sending…" : "Send for signature"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function DepartmentLettersPanel({
   department,
-  // A desk whose work is the signature — the pastorate's — is never also the
-  // desk that writes: there, the button and the compose modal simply are not
-  // offered, and the empty state says where the letter comes from.
-  canCompose = true,
   // Which letters this copy reads. A desk's own panel answers for its desk
   // (`department.code`); an office's page — the Clerkship's Letter Approvals
   // — reads every letter in the church, because the clerk's pen is the
@@ -101,14 +224,16 @@ export function DepartmentLettersPanel({
   // The desk's panel caps its list so the ledger below it keeps its room;
   // an office's whole page gives the list the page instead.
   scrollList = true,
+  // Bump to make the panel read again — a letter written in the desk's own
+  // modal (the footer's Write Letter button) lands in the register this way.
+  version = 0,
   className = "shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm",
 }: {
   /** The area whose letters these are — the panel is always read for one desk. */
   department?: { code: string; label: string };
-  /** Whether this reader's desk may raise a letter of its own. */
-  canCompose?: boolean;
   scope?: "department" | "all";
   scrollList?: boolean;
+  version?: number;
   className?: string;
 }) {
   const { me } = useHeaderData();
@@ -120,14 +245,6 @@ export function DepartmentLettersPanel({
 
   const [letters, setLetters] = useState<LetterRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [composing, setComposing] = useState(false);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [sending, setSending] = useState(false);
-  // Writing is only ever offered where a desk reads its own letters: a letter
-  // must belong to a department, and an office's page over every desk names
-  // none to write under.
-  const offerCompose = canCompose && scope === "department" && Boolean(department);
   // The letter being signed, and whose signature it is waiting for.
   const [signing, setSigning] = useState<{ row: LetterRow; action: "pastor_sign" | "clerk_sign" | "decline" } | null>(null);
   const [savingSignature, setSavingSignature] = useState(false);
@@ -150,38 +267,7 @@ export function DepartmentLettersPanel({
 
   useEffect(() => {
     void Promise.resolve().then(load);
-  }, [load]);
-
-  const openCompose = () => {
-    setTitle("");
-    setContent("");
-    setComposing(true);
-  };
-
-  const send = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSending(true);
-    try {
-      const response = await fetch(`${API_URL}/api/members/department-letters/`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ department: department?.code ?? "", title: title.trim(), content: content.trim() }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || data.title || data.content || "The letter could not be sent.");
-      setComposing(false);
-      showAlert(
-        "Letter sent",
-        "It is on the church letterhead with the pastor now — the clerk signs after them, and it comes back to you fully signed.",
-        "success"
-      );
-      load();
-    } catch (error) {
-      showAlert("Could not send the letter", error instanceof Error ? error.message : "Try again.", "error");
-    } finally {
-      setSending(false);
-    }
-  };
+  }, [load, version]);
 
   /** The pen this reader may put on this letter, or null — the server's rule, read here. */
   const signActionFor = (row: LetterRow): "pastor_sign" | "clerk_sign" | "decline" | null => {
@@ -261,7 +347,7 @@ export function DepartmentLettersPanel({
 
   return (
     <section className={className}>
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line bg-sand/20 px-4 py-2.5">
+      <header className="flex items-center justify-between gap-2 border-b border-sand-line bg-sand/20 px-4 py-2.5">
         <div className="min-w-0">
           <h2 className="text-xs font-bold uppercase tracking-wide text-bark">Letters</h2>
           <p className="truncate text-[11px] text-moss">
@@ -270,16 +356,6 @@ export function DepartmentLettersPanel({
               : "Written here, signed by the pastor then the clerk, and returned fully signed for stamping."}
           </p>
         </div>
-        {offerCompose && (
-          <button
-            type="button"
-            onClick={openCompose}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
-          >
-            <PenLine className="h-3.5 w-3.5" />
-            Write letter
-          </button>
-        )}
       </header>
 
       <div className={`custom-hover-scrollbar overflow-y-auto ${scrollList && letters.length > 0 ? "max-h-64" : ""}`}>
@@ -294,9 +370,7 @@ export function DepartmentLettersPanel({
             <p className="mt-0.5 max-w-sm text-xs text-moss">
               {scope === "all"
                 ? "Letters from every desk arrive here for the pastor's signature, then the clerk's — sign, send back with a reason, or read the signed sheet."
-                : canCompose
-                  ? "Write one and it goes to the pastor for signature, then the clerk, and comes back here fully signed."
-                  : "Letters written on this desk arrive here to be signed or sent back with a reason — this desk writes none of its own."}
+                : "Letters written on this desk arrive here to be signed or sent back with a reason."}
             </p>
           </div>
         ) : (
@@ -386,79 +460,6 @@ export function DepartmentLettersPanel({
           </ul>
         )}
       </div>
-
-      {/* Compose — title and body, the two things a letter is made of. */}
-      {composing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <form
-            onSubmit={send}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Write a letter"
-            className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
-          >
-            <div className="flex items-start justify-between gap-3 border-b border-sand-line px-5 py-4">
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-bark">Write a letter</h3>
-                <p className="mt-0.5 text-xs text-moss">
-                  It goes on the church letterhead to the pastor, then the clerk, and comes back to you fully signed.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setComposing(false)}
-                aria-label="Close"
-                className="rounded-lg p-1 text-moss transition hover:bg-sand hover:text-bark"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-              <label className="block text-sm font-medium text-bark">
-                Title *
-                <input
-                  required
-                  maxLength={200}
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="e.g. Request for choir robes"
-                  autoFocus
-                  className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                />
-              </label>
-              <label className="block text-sm font-medium text-bark">
-                Letter *
-                <textarea
-                  required
-                  rows={9}
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
-                  placeholder="Write the letter here — the body as it should read on the page…"
-                  className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm leading-relaxed outline-none focus:border-ember"
-                />
-              </label>
-            </div>
-
-            <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-5 py-3">
-              <button
-                type="button"
-                onClick={() => setComposing(false)}
-                className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={sending || !title.trim() || !content.trim()}
-                className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-              >
-                {sending ? "Sending…" : "Send for signature"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* Sign — the letter on the table, the signature that will go on it, and the pen. */}
       {signing && (

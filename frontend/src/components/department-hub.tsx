@@ -92,7 +92,7 @@ import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SectionNav, SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
-import { DepartmentLettersPanel } from "./department-letters";
+import { DepartmentLettersPanel, WriteLetterModal } from "./department-letters";
 import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles-combobox";
 import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
@@ -5190,6 +5190,9 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  // The Write Letter button at the foot of the roll opens the church-letterhead
+  // compose modal over the desk — the desk is the one the letter will carry.
+  const [showWriteLetter, setShowWriteLetter] = useState(false);
   // The Message button at the foot of the roll opens the composer over the
   // desk — the roll on screen is the roll the send addresses.
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -5570,24 +5573,6 @@ function DepartmentDetail({
     setHeaderRightAction,
   ]);
 
-  // The deaconate's Team view rides the *section's* strip, not a strip of its
-  // own, so the roll's second Add Member takes that strip's right edge — a PC
-  // convenience beside the one in the footer, pointing at the same modal, and
-  // never the only way to reach it (a phone keeps the footer's).
-  useEffect(() => {
-    if (department.code !== "deaconate" || subTab !== "members" || !canManageRoll) return;
-    setTogglesRightAction(
-      <button
-        type="button"
-        onClick={() => setShowAddMember(true)}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep"
-      >
-        <UserPlus className="h-3.5 w-3.5" /> Add Member
-      </button>
-    );
-    return () => setTogglesRightAction(null);
-  }, [department.code, subTab, canManageRoll, setTogglesRightAction]);
-
   // The desk's own views — the roll (and its fellowships), the calendar, the
   // fund, the week — ride the shell's header band, exactly as the console's
   // other desks place their toggles, so every desk reads one strip in one
@@ -5600,6 +5585,12 @@ function DepartmentDetail({
       (n) => n.toLowerCase() !== "ambassadors"
     );
     return [
+      // The Event Calendar opens the desk — it was made the view a ministry
+      // or department shows first, and it now reads first in the strip as
+      // well: the first chip a reader meets is the one the desk is showing.
+      // A desk that runs as units still reads its roll beside it; the roll
+      // chips follow, one step down the strip instead of leading it.
+      { key: "calendar", label: isMusic ? "Events" : "Event Calendar", short: "Events", icon: CalendarDays },
       // A department that runs as units reads one at a time — the roll and
       // the calendar follow the toggle — so the units ride the strip beside
       // the views: All Members, then the desk's own fellowships.
@@ -5643,7 +5634,6 @@ function DepartmentDetail({
       // The join asks no longer carry a view of their own: they ride the
       // members list, where the desk filters to them and answers from the
       // row (see MembersFilterButton).
-      { key: "calendar", label: isMusic ? "Events" : "Event Calendar", short: "Events", icon: CalendarDays },
       // Moments — every ministry and department keeps its door to the
       // church's wall of days, except the two office record desks (Treasury
       // and Clerkship), whose work is books rather than the church's days.
@@ -6910,6 +6900,19 @@ function DepartmentDetail({
                     <Plus className="h-3.5 w-3.5" /> Add Child
                   </button>
                 )}
+                {/* A letter written on the church's letterhead: the modal
+                    opens here, at the desk's foot, and leaves for the
+                    pastor's signature — the pastorate writes none, its
+                    Letters view is where the pen lands. */}
+                {!isPastorate && (
+                  <button
+                    type="button"
+                    onClick={() => setShowWriteLetter(true)}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  >
+                    <PenLine className="h-3.5 w-3.5" /> Write Letter
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowAddMember(true)}
@@ -6955,30 +6958,37 @@ function DepartmentDetail({
                 >
                   <Phone className="h-3.5 w-3.5" /> Contact leader
                 </button>
+                {/* The same door to the letterhead the desk's leaders get: any
+                    person on the roll may raise a letter for their desk. */}
+                {!isPastorate && (
+                  <button
+                    type="button"
+                    onClick={() => setShowWriteLetter(true)}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  >
+                    <PenLine className="h-3.5 w-3.5" /> Write Letter
+                  </button>
+                )}
               </div>
             ) : null}
           </div>
         </div>
       )}
 
-      {/* The Requests view: the letters the desk writes on the church's
-          letterhead — which leave for the pastor's signature, then the
-          clerk's, and come back here fully signed — over the fund ledger and
-          the money it asks for. The letters sit first because they are the
-          desk's own paper; the ledger keeps the room beneath them, at the
-          height it always had. */}
+      {/* The Requests view: the fund ledger and the money the desk asks for,
+          full width. The letters the desk writes are the Write Letter button
+          at the desk's foot — the modal opens from the buttons panel, not a
+          panel of their own riding the ledger. */}
       {subTab === "accounts" && (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-          <DepartmentLettersPanel department={department} />
+        <div className="flex min-h-0 flex-1 flex-col">
           <DepartmentAccountsPanel
             department={department}
             onChanged={onChanged}
             search={accountsSearch}
             typeFilter={accountsFilter}
             // The same panel the console pages draw whole, here given the
-            // room the letters above it leave rather than the full desk.
-            className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
-          />
+            // whole Requests view rather than the room letters left it.
+            className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"/>
         </div>
       )}
       {subTab === "calendar" && (
@@ -7403,7 +7413,6 @@ function DepartmentDetail({
         <div className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
           <DepartmentLettersPanel
             department={department}
-            canCompose={false}
             className="shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm"
           />
         </div>
@@ -7499,6 +7508,13 @@ function DepartmentDetail({
           onClose={() => setShowAddMember(false)}
           onAdd={addMember}
           onBatchAdd={addMembers}
+        />
+      )}
+      {showWriteLetter && (
+        <WriteLetterModal
+          open={showWriteLetter}
+          department={department}
+          onClose={() => setShowWriteLetter(false)}
         />
       )}
       {assignFor && typeof assignFor.id === "number" && (

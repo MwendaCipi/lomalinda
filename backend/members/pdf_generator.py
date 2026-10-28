@@ -218,10 +218,10 @@ def _to_eat(dt):
 def _thermal_signatures(c, y, width, margin, signatures):
     """The office signatures at the foot of a thermal receipt.
 
-    The treasurer's pen and the pastor's — every paper the church prints
-    answers to the pastor. When one signature is provided it is centred
-    horizontally on the receipt with generous breathing space; two (the
-    common case now) sit in two columns.
+    The treasurer's pen alone (an elder's throws in when the treasurer's
+    seat proves empty). When one signature is provided it is centred
+    horizontally on the receipt with generous breathing space; two sit in
+    two columns.
     Returns the ``y`` the caller continues from.
     """
     entries = list(signatures or ())[:2]
@@ -1524,7 +1524,7 @@ def generate_in_kind_thermal_receipt_pdf(
     Same 80 mm layout as the money receipt, but the lines are the donated
     items rather than account amounts: there is no currency to total, so
     each item simply lists, and the purpose names what the gift was for.
-    The signatures at the foot are the same two offices as the money slip.
+    The signature at the foot is the same single office as the money slip.
     """
     church_name = pdf_church_name(church_name)
     issued_at = issued_at or timezone.now()
