@@ -185,16 +185,7 @@ export function MonthGrid<T extends GridEvent>({
               };
             });
 
-            // Find events that span across the weekdays (Monday through Friday, or Sun through Sabbath, or entire week)
-            // A week event covers all valid days of this week or Mon-Fri of this week.
-            const weekdaySlots = weekDates.filter((w) => w.weekday >= 1 && w.weekday <= 5 && w.withinMonth);
-            const fullWeekEvent = events.find((ev) => {
-              const { start, end } = getEventDateRange(ev);
-              if (!start || !end || start === end) return false;
-              // Check if event covers the weekdays of this week
-              if (weekdaySlots.length === 0) return false;
-              return weekdaySlots.every((slot) => slot.iso >= start && slot.iso <= end);
-            });
+
 
             const opensUpwards = week >= weeks - 2;
 
@@ -203,25 +194,46 @@ export function MonthGrid<T extends GridEvent>({
                 {weekdayNames.map((short, weekday) => {
                   const info = weekDates[weekday];
                   const { day, withinMonth, iso } = info;
-                  const isToday = withinMonth && iso === todayKey;
+                  const isToday = withinMonth && iso === todayKey;                    // Find a week-long program whose dates cover this calendar week
+                    // (Sunday through Saturday by default; a touching multi-day event that
+                    // spans the whole week also qualifies, and the week label uses its real
+                    // dates rather than assuming Sun–Sat). A week runs Sun–Sat unless
+                    // the dates say otherwise.
+                    const fullWeekSlots = weekDates.filter((w) => w.withinMonth);
+                    const fullWeekEvent = events.find((ev) => {
+                      const { start, end } = getEventDateRange(ev);
+                      if (!start || !end || start === end) return false;
+                      if (fullWeekSlots.length === 0) return false;
+                      if (fullWeekSlots.length < 6) return false;
+                      const weekStart = fullWeekSlots[0].iso;
+                      const weekEnd = fullWeekSlots[fullWeekSlots.length - 1].iso;
+                      // Treat as full week if it covers the week start and goes to at least
+                      // the week end (or the Saturday of that week), regardless of minor
+                      // off-by-one in stored end dates.
+                      if (start <= weekStart && end >= weekEnd) return true;
+                      if (start <= weekStart && end >= weekStart && (end >= weekEnd || fullWeekSlots.every((slot) => slot.iso >= start && slot.iso <= end))) {
+                        return fullWeekSlots.filter((slot) => slot.iso >= start && slot.iso <= end).length >= 6;
+                      }
+                      return fullWeekSlots.every((slot) => slot.iso >= start && slot.iso <= end);
+                    });
 
-                  // If this week has a full-week program (like Youth Week of Prayer) spanning weekdays,
-                  // join Monday through Friday into one row cell, showing the name of the program.
-                  if (fullWeekEvent && weekday >= 1 && weekday <= 5) {
-                    // Only render the td on Monday (weekday === 1) with colSpan=5
-                    if (weekday === 1) {
+                    // If this week has a full-week program (like Youth Week of Prayer) that runs
+                    // across the whole week, join the covered weekdays into one row cell.
+                    if (fullWeekEvent && weekday >= 0 && weekday <= 6) {
+                    // Only render the spanning cell once per week, on its first covered weekday.
+                    if (weekday === 0) {
                       const actionKey = `week-${fullWeekEvent.id}-${week}`;
                       return (
                         <td
                           key="weekdays-joined"
-                          colSpan={5}
+                          colSpan={7}
                           className="h-24 border-l border-sand-wash px-3 py-2 align-top bg-sand-plate/60"
                         >
                           <div className="flex items-center justify-between text-xs font-semibold text-moss mb-1.5">
-                            <span className="text-[11px] uppercase tracking-wider text-ember font-bold">Weekdays</span>
+                            <span className="text-[11px] uppercase tracking-wider text-ember font-bold">Week</span>
                             <span className="text-[10px] text-moss-dark">
-                              {weekDates[1].withinMonth ? new Date(year, month, weekDates[1].day).getDate() : ""} –{" "}
-                              {weekDates[5].withinMonth ? new Date(year, month, weekDates[5].day).getDate() : ""}{" "}
+                              {weekDates[0].withinMonth ? new Date(year, month, weekDates[0].day).getDate() : ""} –{" "}
+                              {weekDates[6].withinMonth ? new Date(year, month, weekDates[6].day).getDate() : ""}{" "}
                               {monthNames[month]}
                             </span>
                           </div>
@@ -258,7 +270,7 @@ export function MonthGrid<T extends GridEvent>({
                         </td>
                       );
                     }
-                    // For weekdays 2, 3, 4, 5: skip since Monday spans all 5 columns
+                    // For the other days in the week: skip since Sunday's cell spans the whole week.
                     return null;
                   }
 
