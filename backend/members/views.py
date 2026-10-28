@@ -52,6 +52,7 @@ from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_pu
 from chat.realtime import broadcast_announcement_response
 from .validators import validate_phone_number
 from .mpesa_tokens import allocation_lines, pack_callback_context, unpack_callback_context
+from django.core.management import call_command
 from .password_policy import MIN_LENGTH as PASSWORD_MIN_LENGTH, password_problems, validate_church_password
 # Which address each kind of letter leaves as: a receipt answers from the
 # treasury's address, a verification code from the church's identity one, a
@@ -8454,6 +8455,23 @@ class UserDetailUpdateView(APIView):
             # above was still church business done immediately.
             return Response(UserDetailSerializer(target_user).data)
 
+        # Admins editing their own profile with name changes can apply immediately
+        is_own_profile = target_user.id == request.user.id
+        is_name_change = (
+            'first_name' in changes or 'last_name' in changes
+        )
+        is_admin_editing_own_name = is_own_profile and is_name_change
+
+        if is_admin_editing_own_name:
+            # Apply the changes immediately without a proposal
+            target_profile.save(update_fields=list(changes.keys()))
+            # Notify church about the admin edit via a less intrusive means
+            # (no profile change request needed since admin has authority)
+            return Response(
+                UserDetailSerializer(target_user).data,
+                status=status.HTTP_200_OK,
+            )
+
         proposal = ProfileChangeRequest.objects.create(
             member=target_user,
             proposed_by=request.user,
@@ -14134,12 +14152,15 @@ class DepartmentAccountView(APIView):
         )
 
         is_deaconate = target.code == 'deaconate'
-        # The ask lands with the pastor's office, clerk, and administration for pastor approval
+        # The ask lands with the treasury (which reads it first), the pastor's
+        # office, the clerk and administration — the first pen in the chain is
+        # the treasurer's, so the treasury has to hear about it.
         audience = User.objects.filter(
-            Q(member_profile__role__in=['pastor', 'admin', 'clerk']) |
+            Q(member_profile__role__in=['pastor', 'admin', 'clerk', 'treasurer']) |
             Q(member_profile__roles__contains='pastor') |
             Q(member_profile__roles__contains='admin') |
-            Q(member_profile__roles__contains='clerk'),
+            Q(member_profile__roles__contains='clerk') |
+            Q(member_profile__roles__contains='treasurer'),
             is_active=True,
         ).distinct()
         desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests'
@@ -14204,6 +14225,10 @@ def _withdrawal_review_row(row):
         'reason': row.reason,
         'status': row.status,
         'requested_by': giver_display_name('', member=row.requested_by),
+        # The three clearances in the order they are given: the treasurer's
+        # first read, the elder's blessing, then the pastor's approval.
+        'treasurer_approved_by': giver_display_name('', member=row.treasurer_approved_by) if row.treasurer_approved_by else None,
+        'treasurer_approved_at': row.treasurer_approved_at,
         'pastor_approved_by': giver_display_name('', member=row.pastor_approved_by) if row.pastor_approved_by else None,
         'pastor_approved_at': row.pastor_approved_at,
         'elder_approved_by': giver_display_name('', member=row.elder_approved_by) if row.elder_approved_by else None,
@@ -14216,10 +14241,11 @@ def _withdrawal_review_row(row):
 
 
 class DepartmentWithdrawalReviewView(APIView):
-    """The three-step review of a department's withdrawal ask.
+    """The four clearances a department's withdrawal ask passes through.
 
     GET  — returns every request across every department, with enough detail
-           for the pastor gate, elder gate, and the treasurer's queue. Reversed rows
+           for each gate: the treasurer's screen, the elder's blessing, the
+           pastor's approval and the treasurer's release. Reversed rows
            are kept in the list: the treasurer answers them again by
            approving the request afresh.
     POST — handles five actions via the ``action`` field:
@@ -14241,7 +14267,7 @@ class DepartmentWithdrawalReviewView(APIView):
         if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user) and not is_pastor_or_admin(request.user):
             return Response({'detail': 'Only pastors, elders, or treasurers can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
         rows = DepartmentWithdrawalRequest.objects.select_related(
-            'department', 'account', 'requested_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
+            'department', 'account', 'requested_by', 'treasurer_approved_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
         ).order_by('-created_at')
         data = []
         for row in rows:
@@ -14252,6 +14278,7 @@ class DepartmentWithdrawalReviewView(APIView):
             # is pressed rather than answering with a refusal.
             item['you_pastor_approved'] = row.pastor_approved_by_id == request.user.id
             item['you_elder_approved'] = row.elder_approved_by_id == request.user.id
+            item['you_treasurer_approved'] = row.treasurer_approved_by_id == request.user.id
             data.append(item)
         return Response({'requests': data})
 
@@ -14260,17 +14287,17 @@ class DepartmentWithdrawalReviewView(APIView):
         row_id = request.data.get('id')
 
         if action == 'pastor_approve':
-            if not is_pastor_or_admin(request.user):
-                return Response({'detail': 'Only pastors or administrators can give pastor approval.'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_treasurer_or_admin(request.user) and not is_pastor_or_admin(request.user):
+                return Response({'detail': 'Only pastors, elders, or treasurers can give initial approval.'}, status=status.HTTP_403_FORBIDDEN)
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
                 pk=row_id, status='pending',
             ).first()
             if row is None:
-                return Response({'detail': 'That request is not pending pastor approval or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
-            row.status = 'pastor_approved'
-            row.pastor_approved_by = request.user
-            row.pastor_approved_at = timezone.now()
-            row.save(update_fields=['status', 'pastor_approved_by', 'pastor_approved_at'])
+                return Response({'detail': 'That request is not pending initial approval or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            row.status = 'treasurer_approved'
+            row.treasurer_approved_by = request.user
+            row.treasurer_approved_at = timezone.now()
+            row.save(update_fields=['status', 'treasurer_approved_by', 'treasurer_approved_at'])
             # Notify elders so they can review and approve
             audience = User.objects.filter(
                 Q(member_profile__role='elder') | Q(member_profile__roles__contains='elder') |
@@ -14278,7 +14305,7 @@ class DepartmentWithdrawalReviewView(APIView):
                 is_active=True,
             ).distinct()
             desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
-            title = f'{row.department.name} withdrawal cleared by pastor'
+            title = f'{row.department.name} withdrawal cleared for elder approval'
             pastor_name = giver_display_name('', member=request.user)
             account_name = row.account.description or row.account.name
             msg = (
@@ -14288,13 +14315,12 @@ class DepartmentWithdrawalReviewView(APIView):
             )
             sms_text = (
                 f"SDA Loma Linda: KES {row.amount:,.2f} withdrawal for {row.department.name} "
-                f"cleared by Pastor {pastor_name}. Waiting for elder approval: {desk_link}"
+                f"cleared by Treasurer {pastor_name}. Waiting for elder approval: {desk_link}"
             )
             _notify_withdrawal_audience(audience, title, msg, desk_link, sms_text)
             return Response({'id': row.id, 'status': row.status})
 
         if action == 'elder_approve':
-            # Any elder or admin may bless the request once pastor approval is recorded.
             if not is_elder_or_admin(request.user):
                 return Response({'detail': 'Only elders or administrators can give elder approval.'}, status=status.HTTP_403_FORBIDDEN)
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
@@ -14303,21 +14329,21 @@ class DepartmentWithdrawalReviewView(APIView):
             if row is None:
                 return Response({'detail': 'That request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             if row.status == 'pending':
-                return Response({'detail': 'A funds withdrawal request must be approved by the Pastor before an elder can approve.'}, status=status.HTTP_400_BAD_REQUEST)
-            if row.status != 'pastor_approved':
-                return Response({'detail': 'That request is not waiting for elder approval.'}, status=status.HTTP_400_BAD_REQUEST)
-            if row.pastor_approved_by_id == request.user.id and not (request.user.is_superuser or request.user.is_staff):
+                return Response({'detail': 'A funds withdrawal request must be approved by the Treasurer before an elder can approve.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.status != 'treasurer_approved':
+                return Response({'detail': 'That request is not waiting for treasurer approval.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.treasurer_approved_by_id == request.user.id and not (request.user.is_superuser or request.user.is_staff):
                 return Response(
-                    {'detail': 'You gave this request its pastor approval — a different elder must approve it.'},
+                    {'detail': 'You gave this request its treasurer approval — a different elder must approve it.'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             row.status = 'elder_approved'
             row.elder_approved_by = request.user
             row.elder_approved_at = timezone.now()
             row.save(update_fields=['status', 'elder_approved_by', 'elder_approved_at'])
-            # Notify the treasurer's office so they can act.
+            # Notify the pastor so they can give final approval
             audience = User.objects.filter(
-                Q(member_profile__role='treasurer') | Q(member_profile__roles__contains='treasurer') |
+                Q(member_profile__role='pastor') | Q(member_profile__roles__contains='pastor') |
                 Q(member_profile__role='admin') | Q(member_profile__roles__contains='admin'),
                 is_active=True,
             ).distinct()
@@ -14328,11 +14354,52 @@ class DepartmentWithdrawalReviewView(APIView):
             msg = (
                 f"{elder_name} has cleared the "
                 f"KES {row.amount:,.2f} withdrawal request from {row.department.name} "
-                f"({account_name}) — it is ready for your approval: {desk_link}"
+                f"({account_name}) — it is ready for pastor approval: {desk_link}"
             )
             sms_text = (
                 f"SDA Loma Linda: KES {row.amount:,.2f} withdrawal for {row.department.name} "
-                f"cleared by Elder {elder_name}. Ready for Treasury release: {desk_link}"
+                f"cleared by Elder {elder_name}. Waiting for pastor approval: {desk_link}"
+            )
+            _notify_withdrawal_audience(audience, title, msg, desk_link, sms_text)
+            return Response({'id': row.id, 'status': row.status})
+
+        # The last clearance before the money moves: the treasurer screened it,
+        # the elder blessed it, and the pastor's approval is what makes it
+        # releasable — the chain the model's STATUS_CHOICES lists in order.
+        if action == 'pastor_final_approve':
+            if not is_pastor_or_admin(request.user):
+                return Response({'detail': 'Only the church pastor or an administrator can give the final approval.'}, status=status.HTTP_403_FORBIDDEN)
+            row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
+                pk=row_id,
+            ).first()
+            if row is None:
+                return Response({'detail': 'That request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            if row.status == 'pending':
+                return Response({'detail': 'A funds withdrawal request must be cleared by the treasurer and the elder before the pastor can approve it.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.status != 'elder_approved':
+                return Response({'detail': 'That request is not waiting for pastoral approval.'}, status=status.HTTP_400_BAD_REQUEST)
+            row.status = 'pastor_approved'
+            row.pastor_approved_by = request.user
+            row.pastor_approved_at = timezone.now()
+            row.save(update_fields=['status', 'pastor_approved_by', 'pastor_approved_at'])
+            # Tell the treasury: every clearance is on the ask, so the money can go.
+            audience = User.objects.filter(
+                Q(member_profile__role='treasurer') | Q(member_profile__roles__contains='treasurer') |
+                Q(member_profile__role='admin') | Q(member_profile__roles__contains='admin'),
+                is_active=True,
+            ).distinct()
+            desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
+            title = f'{row.department.name} withdrawal approved by pastor'
+            pastor_name = giver_display_name('', member=request.user)
+            account_name = row.account.description or row.account.name
+            msg = (
+                f"{pastor_name} has given final approval for the "
+                f"KES {row.amount:,.2f} withdrawal request from {row.department.name} "
+                f"({account_name}) — the treasury can release it now: {desk_link}"
+            )
+            sms_text = (
+                f"SDA Loma Linda: KES {row.amount:,.2f} withdrawal for {row.department.name} "
+                f"approved by Pastor {pastor_name}. Ready for release: {desk_link}"
             )
             _notify_withdrawal_audience(audience, title, msg, desk_link, sms_text)
             return Response({'id': row.id, 'status': row.status})
@@ -14345,13 +14412,13 @@ class DepartmentWithdrawalReviewView(APIView):
             # still gated by the balance check below, so the fund can never
             # go below zero however many times a request swings.
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
-                pk=row_id, status__in=['elder_approved', 'reversed'],
+                pk=row_id, status__in=['pastor_approved', 'reversed'],
             ).first()
             if row is None:
                 return Response({'detail': 'That request is not waiting on approval, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             # Separation of duties: whoever cleared this ask as pastor or elder
             # cannot also release it as the treasurer.
-            if (row.elder_approved_by_id == request.user.id or row.pastor_approved_by_id == request.user.id) and not (request.user.is_superuser or request.user.is_staff):
+            if (row.elder_approved_by_id == request.user.id or row.treasurer_approved_by_id == request.user.id or row.pastor_approved_by_id == request.user.id) and not (request.user.is_superuser or request.user.is_staff):
                 return Response(
                     {'detail': 'You gave this request prior clearance — a different treasurer must release the money.'},
                     status=status.HTTP_403_FORBIDDEN,
@@ -14395,7 +14462,7 @@ class DepartmentWithdrawalReviewView(APIView):
             if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user) and not is_pastor_or_admin(request.user):
                 return Response({'detail': 'Only pastors, elders, or treasurers can decline withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
-                pk=row_id, status__in=['pending', 'pastor_approved', 'elder_approved'],
+                pk=row_id, status__in=['pending', 'treasurer_approved', 'elder_approved', 'pastor_approved'],
             ).first()
             if row is None:
                 return Response({'detail': 'That request cannot be declined at this point.'}, status=status.HTTP_404_NOT_FOUND)
@@ -14520,7 +14587,7 @@ class WithdrawalRequestsPdfView(APIView):
             wanted_from, wanted_to = wanted_to, wanted_from
 
         rows = DepartmentWithdrawalRequest.objects.select_related(
-            'department', 'account', 'requested_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
+            'department', 'account', 'requested_by', 'treasurer_approved_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
         ).order_by('-created_at')
 
         data = []
@@ -14595,7 +14662,7 @@ class WithdrawalRequestPdfView(APIView):
             return Response({'detail': 'Only pastors, elders, or treasurers can print withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
 
         row = DepartmentWithdrawalRequest.objects.select_related(
-            'department', 'account', 'requested_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
+            'department', 'account', 'requested_by', 'treasurer_approved_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
         ).filter(pk=pk).first()
         if row is None:
             return Response({'detail': 'That withdrawal request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
@@ -14611,6 +14678,19 @@ class WithdrawalRequestPdfView(APIView):
         filename = f'Withdrawal_Request_{row.id}.pdf'
         response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
+
+
+def _letter_desk_link(department):
+    """Where the next pen finds a department's letters.
+
+    A letter waits on its own department's Requests view — the page that now
+    carries the desk's letters and its fund asks together. The Pastorate is
+    the one desk whose Requests chip is something else (the church's asks of
+    that office), so a letter written by the pastorate links to that chip
+    instead, where the desk draws its Letters tab.
+    """
+    view = 'requests' if department.code == 'pastorate' else 'accounts'
+    return f'{settings.FRONTEND_URL}/my-areas?area={department.code}&view={view}'
 
 
 class DepartmentLetterListCreateView(APIView):
@@ -14681,7 +14761,10 @@ class DepartmentLetterListCreateView(APIView):
             is_active=True,
         ).distinct()
 
-        desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=requests'
+        # The letter itself is what the pastor must open, and its paper lives
+        # on its own department's Requests view — the link goes straight to it
+        # rather than to an office's inbox that does not hold this letter.
+        desk_link = _letter_desk_link(dept)
         subject = f'Official Letter for Signature: {dept.name}'
         requester_name = giver_display_name('', member=request.user)
         body = (
@@ -14731,7 +14814,7 @@ class DepartmentLetterReviewView(APIView):
                 Q(member_profile__roles__contains='admin'),
                 is_active=True,
             ).distinct()
-            desk_link = f'{settings.FRONTEND_URL}/administration?tab=correspondence'
+            desk_link = _letter_desk_link(row.department)
             subject = f'Pastor Signed: Letter from {row.department.name} awaiting Clerk signature'
             pastor_name = giver_display_name('', member=request.user)
             body = (
@@ -14761,7 +14844,7 @@ class DepartmentLetterReviewView(APIView):
             # Notify the requester that the letter is fully signed and ready to download
             requester = row.requested_by
             if requester:
-                download_link = f'{settings.FRONTEND_URL}/my-areas?area={row.department.code}&view=requests'
+                download_link = _letter_desk_link(row.department)
                 subject = f'Letter Fully Signed: {row.title}'
                 body = (
                     f"Your official letter \"{row.title}\" for {row.department.name} has been signed "

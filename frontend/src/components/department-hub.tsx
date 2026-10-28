@@ -30,6 +30,7 @@ import {
   ChevronDown,
   Church,
   Clock,
+  FileText,
   HandHeart,
   Handshake,
   Heart,
@@ -92,6 +93,7 @@ import { AreaJoinModal } from "./area-modals";
 import { RecordList } from "./record-list";
 import { SectionNav, SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
+import { DepartmentLettersPanel } from "./department-letters";
 import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles-combobox";
 import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
@@ -4053,7 +4055,7 @@ type FundWithdrawal = {
   account_description?: string;
   amount: string;
   reason: string;
-  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "treasurer_approved" | "elder_approved" | "pastor_approved" | "approved" | "declined" | "reversed";
   reply: string;
   requested_by: string;
   created_at: string;
@@ -4117,7 +4119,7 @@ type UnifiedAccountItem = {
   amount: number;
   isOutflow: boolean;
   category: "contribution" | "withdrawal";
-  status: "completed" | "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "completed" | "pending" | "treasurer_approved" | "elder_approved" | "pastor_approved" | "approved" | "declined" | "reversed";
   accountId?: number;
   accountName?: string;
   accountDescription?: string;
@@ -4470,8 +4472,9 @@ export function DepartmentAccountsPanel({
     const map: Record<string, string> = {
       completed: "bg-sand text-moss",
       pending: "bg-amber-50 text-amber-800",
-      pastor_approved: "bg-purple-50 text-purple-800",
+      treasurer_approved: "bg-amber-50 text-amber-800",
       elder_approved: "bg-mist-select text-bark",
+      pastor_approved: "bg-purple-50 text-purple-800",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
       reversed: "bg-red-50 text-red-700",
@@ -4479,8 +4482,9 @@ export function DepartmentAccountsPanel({
     const labels: Record<string, string> = {
       completed: "Completed",
       pending: "Pending",
-      pastor_approved: "Pastor Approved",
+      treasurer_approved: "Treasurer Approved",
       elder_approved: "Elder Approved",
+      pastor_approved: "Pastor Approved",
       approved: "Approved",
       declined: "Declined",
       reversed: "Rejected",
@@ -4935,12 +4939,16 @@ function monthIndexForQuery(raw: string, year: number): number | null {
   return null;
 }
 
-type PastorateRequestKind = "withdrawals" | "prayer" | "visitation" | "dedication" | "all";
+type PastorateRequestKind = "letters" | "withdrawals" | "prayer" | "visitation" | "dedication" | "all";
 
-function PastorateRequestsDesk() {
-  const [tab, setTab] = useState<PastorateRequestKind>("withdrawals");
+function PastorateRequestsDesk({ department }: { department: { code: string; label: string } }) {
+  // Letters first: a letter awaiting the pastor's signature is the ask that
+  // cannot wait on the reader finding a tab, and the notification that told
+  // them about it lands on this desk.
+  const [tab, setTab] = useState<PastorateRequestKind>("letters");
 
   const tabs: { key: PastorateRequestKind; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: "letters", label: "Letters", icon: FileText },
     { key: "withdrawals", label: "Fund Withdrawals", icon: Wallet },
     { key: "prayer", label: "Prayer Requests", icon: HandHeart },
     { key: "visitation", label: "Visitations", icon: Users },
@@ -4975,6 +4983,11 @@ function PastorateRequestsDesk() {
       </div>
 
       <div className="min-h-0 flex-1">
+        {tab === "letters" && (
+          <div className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
+            <DepartmentLettersPanel department={department} className="shrink-0 overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm" />
+          </div>
+        )}
         {tab === "withdrawals" && <WithdrawalRequestsPanel statusFilter="all" />}
         {tab === "prayer" && <RequestsAdminManager initialTab="prayer" />}
         {tab === "visitation" && <RequestsAdminManager initialTab="visitation" />}
@@ -4990,7 +5003,7 @@ function DepartmentDetail({
   onChanged,
   // A desk opens on its calendar: the events are what the reader came for;
   // the roll is one toggle away beneath it.
-  initialTab = "calendar",
+  initialTab = department.code === "pastorate" ? "requests" : "calendar",
   onBack,
   embedded = false,
 }: {
@@ -5521,15 +5534,17 @@ function DepartmentDetail({
       ...(isPastorate
         ? [{ key: "requests", label: "Requests", short: "Requests", icon: Inbox }]
         : []),
-      // The fund ledger and withdrawal requests unified under one desk.
-      // The deaconate names the page Funding, as its console and
-      // map pages do — behind the same desk sit its funding requests too.
-      {
-        key: "accounts",
-        label: isDeaconate ? "Funding" : isMusic ? "Account" : "Account Status",
-        short: isDeaconate ? "Funding" : "Account",
-        icon: Wallet,
-      },
+      // The desk's asks, gathered under one name: the letters it writes on
+      // the church's letterhead and the money it asks of the treasury. It was
+      // called Account Status (Account on Music, Funding on the Deaconate) —
+      // a name for the ledger alone, on a page that has always held the
+      // requests too. The Pastorate is the one desk without it: its own
+      // Requests chip is the church's asks of that office, and the pastor
+      // does not raise fund requests, so the ledger would be a second door to
+      // a page this desk already names.
+      ...(isPastorate
+        ? []
+        : [{ key: "accounts", label: "Requests", short: "Requests", icon: Wallet }]),
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
       // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
@@ -6811,14 +6826,25 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* Account Status tab */}
+      {/* The Requests view: the letters the desk writes on the church's
+          letterhead — which leave for the pastor's signature, then the
+          clerk's, and come back here fully signed — over the fund ledger and
+          the money it asks for. The letters sit first because they are the
+          desk's own paper; the ledger keeps the room beneath them, at the
+          height it always had. */}
       {subTab === "accounts" && (
-        <DepartmentAccountsPanel
-          department={department}
-          onChanged={onChanged}
-          search={accountsSearch}
-          typeFilter={accountsFilter}
-        />
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+          <DepartmentLettersPanel department={department} />
+          <DepartmentAccountsPanel
+            department={department}
+            onChanged={onChanged}
+            search={accountsSearch}
+            typeFilter={accountsFilter}
+            // The same panel the console pages draw whole, here given the
+            // room the letters above it leave rather than the full desk.
+            className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
+          />
+        </div>
       )}
       {subTab === "calendar" && (
         // The calendar's frame is the room left under the strip, not a height
@@ -7229,7 +7255,7 @@ function DepartmentDetail({
       )}
       {subTab === "requests" && isPastorate && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
-          <PastorateRequestsDesk />
+          <PastorateRequestsDesk department={department} />
         </div>
       )}
 

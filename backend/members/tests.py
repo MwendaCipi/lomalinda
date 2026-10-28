@@ -15698,6 +15698,12 @@ class DepartmentFundTests(APITestCase):
             'id': self._pending().id, 'action': 'elder_approve',
         }, format='json')
         self.assertEqual(bless.status_code, status.HTTP_200_OK)
+        # Then the pastor's approval — nothing is releasable without it.
+        self.client.force_authenticate(self.pastor)
+        final = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'action': 'pastor_final_approve',
+        }, format='json')
+        self.assertEqual(final.status_code, status.HTTP_200_OK)
         self.client.force_authenticate(self.treasurer)
         queue = self.client.get('/api/members/department-withdrawals/review/')
         self.assertEqual([row['reason'] for row in queue.data['requests']], ['Buses to the camporee'])
@@ -15742,7 +15748,15 @@ class DepartmentFundTests(APITestCase):
         }, format='json')
         self.assertEqual(bless.status_code, status.HTTP_200_OK)
 
+        # The pastor approves it — that is what makes it releasable at all.
+        self.client.force_authenticate(self.pastor)
+        final = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_final_approve',
+        }, format='json')
+        self.assertEqual(final.status_code, status.HTTP_200_OK)
+
         # The same hand cannot then release it, and no money moves.
+        self.client.force_authenticate(both)
         release = self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'approve',
         }, format='json')
@@ -15750,7 +15764,7 @@ class DepartmentFundTests(APITestCase):
         account.refresh_from_db()
         self.assertEqual(account.balance, Decimal('500.00'))
         row.refresh_from_db()
-        self.assertEqual(row.status, 'elder_approved')
+        self.assertEqual(row.status, 'pastor_approved')
 
         # The queue says why before the button is pressed...
         queue = self.client.get('/api/members/department-withdrawals/review/')
@@ -15781,6 +15795,10 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': self._pending().id, 'action': 'elder_approve',
         }, format='json')
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self._pending().id, 'action': 'pastor_final_approve',
+        }, format='json')
         # The ask was within the balance when it was made; the fund has
         # shrunk by the time the treasurer answers it.
         account.balance = Decimal('150.00')
@@ -15792,7 +15810,7 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         account.refresh_from_db()
         self.assertEqual(account.balance, Decimal('150.00'))
-        self.assertEqual(self._pending().status, 'elder_approved')
+        self.assertEqual(self._pending().status, 'pastor_approved')
 
     def test_the_treasurer_declines_with_a_word_back(self):
         account = self._fund()
@@ -15848,6 +15866,11 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'elder_approve',
         }, format='json')
+        # The pastor's approval is what makes it releasable.
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_final_approve',
+        }, format='json')
         self.client.force_authenticate(self.treasurer)
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'approve',
@@ -15889,6 +15912,11 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'elder_approve',
         }, format='json')
+        # The pastor's approval is what makes it releasable.
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_final_approve',
+        }, format='json')
         self.client.force_authenticate(self.treasurer)
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'approve',
@@ -15911,10 +15939,11 @@ class DepartmentFundTests(APITestCase):
 
     @patch('members.views.sms.send', return_value=True)
     def test_withdrawal_notification_pipeline_sms_and_links(self, mock_sms):
-        """SMS and email notifications with links travel across the 3-step pipeline:
-        1. Creation notifies Pastor with link to /my-areas?area=pastorate&view=requests
-        2. Pastor approval notifies Elder with link to /administration?view=accounts&withdrawals=1
-        3. Elder approval notifies Treasury with link to /administration?view=accounts&withdrawals=1
+        """SMS and email notifications with links travel across the four gates:
+        1. Creation tells the pastor (link to /my-areas?area=pastorate&view=requests)
+        2. The treasury's first clearance tells the elders
+        3. The elder's blessing tells the pastor
+        4. The pastor's approval tells the treasury the money can go
         """
         self.pastor.member_profile.phone_number = '+254711111111'
         self.pastor.member_profile.save()
@@ -15949,7 +15978,7 @@ class DepartmentFundTests(APITestCase):
         elder_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254722222222']
         self.assertTrue(len(elder_calls) >= 1)
         self.assertIn('administration?view=accounts&withdrawals=1', elder_calls[-1][0][1])
-        self.assertIn('cleared by Pastor', elder_calls[-1][0][1])
+        self.assertIn('cleared by Treasurer', elder_calls[-1][0][1])
 
         # Step 3: Elder approves
         self.client.force_authenticate(self.elder)
@@ -15958,11 +15987,23 @@ class DepartmentFundTests(APITestCase):
         }, format='json')
         self.assertEqual(e_res.status_code, status.HTTP_200_OK)
 
+        # The pastor is told it awaits their approval.
+        pastor_final_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254711111111']
+        self.assertIn('cleared by Elder', pastor_final_calls[-1][0][1])
+
+        # Step 4: Pastor gives the final approval, and the treasury is told
+        # the money can be released.
+        self.client.force_authenticate(self.pastor)
+        f_res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_final_approve',
+        }, format='json')
+        self.assertEqual(f_res.status_code, status.HTTP_200_OK)
+
         # Verify Treasury received SMS with administration withdrawals link
         treasurer_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254733333333']
         self.assertTrue(len(treasurer_calls) >= 1)
         self.assertIn('administration?view=accounts&withdrawals=1', treasurer_calls[-1][0][1])
-        self.assertIn('cleared by Elder', treasurer_calls[-1][0][1])
+        self.assertIn('approved by Pastor', treasurer_calls[-1][0][1])
 
 
 class SeededDepartmentFundTests(APITestCase):
@@ -18836,3 +18877,167 @@ class PrayerCellFlowTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(self.PrayerCell.objects.filter(name='Hijacked').exists())
+
+
+class DepartmentLetterFlowTests(APITestCase):
+    """A department's letter travels: its writer, the pastor, the clerk, back.
+
+    The letter is written here, printed on the church's letterhead, cleared
+    with the pastor's saved signature, countersigned by the church clerk, and
+    returned to whoever wrote it as a fully signed sheet ready for the stamp.
+    The desk's Letters view is that whole round trip on a screen, so these
+    tests walk it: who may write, who may sign and in what order, and what the
+    writer is finally handed.
+    """
+
+    def setUp(self):
+        self.writer = User.objects.create_user(
+            'ltr.writer', 'ltr.writer@example.com', 'StrongPass#2026',
+            first_name='Wendy', last_name='Writer',
+        )
+        MemberProfile.objects.create(user=self.writer, role='member', roles='member')
+        self.pastor = User.objects.create_user(
+            'ltr.pastor', 'ltr.pastor@example.com', 'StrongPass#2026',
+            first_name='Paul', last_name='Pastor',
+        )
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        self.clerk = User.objects.create_user(
+            'ltr.clerk', 'ltr.clerk@example.com', 'StrongPass#2026',
+            first_name='Claire', last_name='Clerk',
+        )
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk,member')
+        self.outsider = User.objects.create_user(
+            'ltr.outsider', 'ltr.outsider@example.com', 'StrongPass#2026',
+            first_name='Otto', last_name='Outsider',
+        )
+        MemberProfile.objects.create(user=self.outsider, role='member', roles='member')
+        self.music = Department.objects.get(code='music')
+
+    def _write(self):
+        """The desk writes a letter the way its modal sends it."""
+        self.client.force_authenticate(self.writer)
+        return self.client.post('/api/members/department-letters/', {
+            'department': self.music.code,
+            'title': 'Request for choir robes',
+            'content': 'The choir needs new robes before the term begins.',
+        }, format='json')
+
+    def _sign(self, user, action, pk):
+        self.client.force_authenticate(user)
+        return self.client.post(
+            f'/api/members/department-letters/{pk}/review/',
+            {'action': action}, format='json',
+        )
+
+    def _notices(self, prefix):
+        return [m for m in mail.outbox if m.subject.startswith(prefix)]
+
+    def test_the_letter_leaves_for_the_pastor_at_the_requests_view(self):
+        """A written letter lands as pending, and the pastor is told exactly
+        where it waits — the department's Requests view, which is where the
+        letters live now rather than an office inbox that never held it."""
+        created = self._write()
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        self.assertEqual(created.data['status'], 'pending_pastor')
+
+        notice = self._notices('Official Letter for Signature:')
+        self.assertEqual(len(notice), 1)
+        self.assertIn('/my-areas?area=music&view=accounts', notice[0].body)
+
+        # The desk reads its own letters back under its own area.
+        self.client.force_authenticate(self.writer)
+        listed = self.client.get('/api/members/department-letters/', {'department': 'music'})
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['title'] for row in listed.data], ['Request for choir robes'])
+
+    def test_the_clerk_cannot_sign_first_and_a_member_signs_nothing(self):
+        """Two pens, one order. The clerk waits for the pastor, and a member
+        standing outside both offices is refused before any state moves."""
+        pk = self._write().data['id']
+
+        early = self._sign(self.clerk, 'clerk_sign', pk)
+        self.assertEqual(early.status_code, status.HTTP_400_BAD_REQUEST)
+
+        uninvited = self._sign(self.outsider, 'pastor_sign', pk)
+        self.assertEqual(uninvited.status_code, status.HTTP_403_FORBIDDEN)
+
+        from .models import DepartmentLetterRequest
+        row = DepartmentLetterRequest.objects.get(pk=pk)
+        self.assertEqual(row.status, 'pending_pastor')
+        self.assertIsNone(row.clerk_signed_by)
+        self.assertIsNone(row.pastor_signed_by)
+
+    def test_the_pastor_signs_then_the_clerk_and_the_letter_comes_back_signed(self):
+        """The round trip: the pastor's signature, the clerk's after it, and
+        the fully signed letterhead handed back to its writer — both officers
+        on the sheet, with the stamp's own box left for the office to use."""
+        pk = self._write().data['id']
+
+        blessed = self._sign(self.pastor, 'pastor_sign', pk)
+        self.assertEqual(blessed.status_code, status.HTTP_200_OK, blessed.data)
+        self.assertEqual(blessed.data['status'], 'pastor_signed')
+        self.assertEqual(blessed.data['pastor_name'], 'Paul Pastor')
+
+        # The clerk is the next pen, told the same way, at the same view.
+        clerk_notice = self._notices('Pastor Signed:')
+        self.assertEqual(len(clerk_notice), 1)
+        self.assertIn('/my-areas?area=music&view=accounts', clerk_notice[0].body)
+
+        # A pen already put down cannot be put down twice.
+        again = self._sign(self.pastor, 'pastor_sign', pk)
+        self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
+
+        counted = self._sign(self.clerk, 'clerk_sign', pk)
+        self.assertEqual(counted.status_code, status.HTTP_200_OK, counted.data)
+        self.assertEqual(counted.data['status'], 'completed')
+        self.assertEqual(counted.data['clerk_name'], 'Claire Clerk')
+
+        # …and the letter goes back to the person who wrote it.
+        writer_notice = self._notices('Letter Fully Signed:')
+        self.assertEqual(len(writer_notice), 1)
+        self.assertIn('/my-areas?area=music&view=accounts', writer_notice[0].body)
+
+        self.client.force_authenticate(self.writer)
+        pdf = self.client.get(f'/api/members/department-letters/{pk}/pdf/')
+        self.assertEqual(pdf.status_code, status.HTTP_200_OK)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+        flat = _pdf_text(pdf.content)
+        # The letterhead, the subject, both officers under their own slots,
+        # and the box the stamp is affixed into.
+        self.assertIn('OFFICIALCHURCHCORRESPONDENCE', flat)
+        self.assertIn('REQUESTFORCHOIRROBES', flat)
+        self.assertIn('PaulPastor', flat)
+        self.assertIn('ClaireClerk', flat)
+        self.assertIn('OfficialChurchStamp', flat)
+
+    def test_a_letter_is_only_its_own_departments_business_to_the_writer(self):
+        """The register is read by area: a desk sees its own letters, and a
+        writer only ever gets back the one they sent."""
+        mine = self._write()
+        other = Department.objects.get(code='chaplaincy')
+        self.client.force_authenticate(self.writer)
+        elsewhere = self.client.get('/api/members/department-letters/', {'department': other.code})
+        self.assertEqual(elsewhere.status_code, status.HTTP_200_OK)
+        self.assertEqual(elsewhere.data, [])
+
+        self.client.force_authenticate(self.clerk)
+        listed = self.client.get('/api/members/department-letters/', {'department': 'music'})
+        self.assertEqual([row['id'] for row in listed.data], [mine.data['id']])
+
+    def test_a_pastorate_letter_links_to_the_pastorates_own_requests_tab(self):
+        """The Pastorate's desk is the one desk whose Requests chip is the
+        church's asks of that office rather than a ledger, so a letter of its
+        own is linked there — the tab its Letters are drawn on."""
+        pastorate = Department.objects.get(code='pastorate')
+        self.client.force_authenticate(self.writer)
+        created = self.client.post('/api/members/department-letters/', {
+            'department': pastorate.code,
+            'title': 'Pulpit roster for December',
+            'content': 'The December roster is attached for approval.',
+        }, format='json')
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+
+        notice = self._notices('Official Letter for Signature:')
+        self.assertEqual(len(notice), 1)
+        self.assertIn('/my-areas?area=pastorate&view=requests', notice[0].body)

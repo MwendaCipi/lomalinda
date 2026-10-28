@@ -2516,8 +2516,9 @@ class DepartmentWithdrawalRequest(models.Model):
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('pastor_approved', 'Pastor Approved'),
+        ('treasurer_approved', 'Treasurer Approved'),
         ('elder_approved', 'Elder Approved'),
+        ('pastor_approved', 'Pastor Approved'),
         ('approved', 'Approved'),
         ('declined', 'Declined'),
         ('reversed', 'Reversed'),
@@ -2535,7 +2536,15 @@ class DepartmentWithdrawalRequest(models.Model):
         null=True, blank=True, related_name='department_withdrawals_pastor_approved',
     )
     pastor_approved_at = models.DateTimeField(null=True, blank=True)
-    # Elder gate — set when an elder (or admin) blesses the request after pastor approval.
+    # Treasurer gate — set on the treasurer's first read of the ask, which is
+    # what puts it in front of an elder.
+    treasurer_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_withdrawals_treasurer_approved',
+    )
+    treasurer_approved_at = models.DateTimeField(null=True, blank=True)
+    # Elder gate — set when an elder (or admin) blesses the request after the
+    # treasurer's first read.
     elder_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='department_withdrawals_elder_approved',
