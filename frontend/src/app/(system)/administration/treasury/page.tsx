@@ -2331,10 +2331,18 @@ export default function TreasuryPage() {
                                     showAlert("Pull M-Pesa", "Network error. Please try again.", "error");
                                   });
                               }}
-                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-emerald px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-dark"
+                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-emerald-700 px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800"
                             >
                               <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                               <span className="truncate">Pull M-Pesa</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { void load(); }}
+                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
+                              <span className="truncate">Refresh</span>
                             </button>
                           </div>
                         </div>
