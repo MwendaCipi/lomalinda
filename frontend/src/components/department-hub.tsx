@@ -1342,6 +1342,89 @@ function ProgramEditorModal({
         i === index ? { ...item, parts: item.parts.map((part, p) => (p === partIndex ? edit(part) : part)) } : item,
       ),
     );
+  /** An hour as minutes past midnight — null when it names no hour. */
+  const hourMinutes = (hour: string): number | null => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(hour);
+    if (!match) return null;
+    const minutes = Number(match[1]) * 60 + Number(match[2]);
+    return minutes > 1439 ? null : minutes;
+  };
+  /** Minutes past midnight written back as the hour the sheet prints. */
+  const minuteHour = (minutes: number): string => {
+    const capped = Math.max(0, Math.min(minutes, 1439));
+    return `${String(Math.floor(capped / 60)).padStart(2, "0")}:${String(capped % 60).padStart(2, "0")}`;
+  };
+  /**
+   * One activity's hour edited — with the activities around it kept in
+   * step, so the programme never shows two things running at once.
+   *
+   * An end that now runs past the next activity's start pulls that start up
+   * to it: the next activity simply loses the time that was eaten from it.
+   * Only when the bite would leave it ending before it begins does the whole
+   * activity slide along by the minutes it lost (its length kept) — and its
+   * new end may then reach the one after it, carrying the walk forward.
+   * A start that now begins before the previous activity ends pulls that
+   * end back to it the same way, walking backwards.
+   *
+   * An hour the programme never named stops the walk rather than inventing
+   * one: a boundary nobody typed is not one to rewrite.
+   */
+  const setPartTime = (index: number, partIndex: number, patch: { start?: string; end?: string }) => {
+    setItems((current) =>
+      current.map((item, i) => {
+        if (i !== index) return item;
+        // Every row the walk may reach is copied first: state already handed
+        // out must not be written into in place.
+        const parts = item.parts.map((part, p) => (p === partIndex ? { ...part, ...patch } : { ...part }));
+        if (patch.end !== undefined) {
+          for (let p = partIndex; p < parts.length - 1; p++) {
+            const end = hourMinutes(parts[p].end || parts[p].start);
+            const next = parts[p + 1];
+            const start = hourMinutes(next.start);
+            // Nothing named to bite against, or nothing bitten: stop.
+            if (end === null || start === null || start >= end) break;
+            const nextEnd = hourMinutes(next.end);
+            if (nextEnd === null) {
+              // It gains the new end as its start and, with no far side to
+              // it, nothing beyond it can be said to move.
+              next.start = minuteHour(end);
+              break;
+            }
+            if (nextEnd > end) {
+              // It still fits — it just begins where the one before it now
+              // ends — so its own end, and everything after it, holds.
+              next.start = minuteHour(end);
+              break;
+            }
+            // The bite would leave it ending before it begins: slide it by
+            // the minutes it lost, length kept, and carry on — its new end
+            // may reach the activity after it.
+            const length = Math.max(0, nextEnd - start);
+            next.start = minuteHour(end);
+            next.end = minuteHour(end + length);
+          }
+        }
+        if (patch.start !== undefined) {
+          // The activity now begins before the one before it ends: that end
+          // is pulled back to the new start, and a start pushed back by this
+          // walk may in turn begin before *its* predecessor ends.
+          let boundary = hourMinutes(parts[partIndex].start);
+          for (let p = partIndex - 1; p >= 0 && boundary !== null; p--) {
+            const prev = parts[p];
+            const end = hourMinutes(prev.end);
+            if (end === null || end <= boundary) break;
+            prev.end = minuteHour(boundary);
+            // Pulling the end back would leave it ending before it begins —
+            // slide its start back to the same hour and keep walking.
+            const start = hourMinutes(prev.start);
+            if (start !== null && start > boundary) prev.start = minuteHour(boundary);
+            boundary = hourMinutes(prev.start);
+          }
+        }
+        return { ...item, parts };
+      }),
+    );
+  };
   const dropPart = (index: number, partIndex: number) =>
     setItems((current) =>
       current.map((item, i) =>
@@ -1926,7 +2009,7 @@ function ProgramEditorModal({
                                 <TimeField
                                   value={part.start}
                                   around={hourBefore(index, partIndex)}
-                                  onChange={(hour) => mapPart(index, partIndex, (p) => ({ ...p, start: hour }))}
+                                  onChange={(hour) => setPartTime(index, partIndex, { start: hour })}
                                   label={`Start time of activity ${partIndex + 1} in session ${index + 1}`}
                                   className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
                                 />
@@ -1934,7 +2017,7 @@ function ProgramEditorModal({
                                 <TimeField
                                   value={part.end}
                                   around={part.start || hourBefore(index, partIndex)}
-                                  onChange={(hour) => mapPart(index, partIndex, (p) => ({ ...p, end: hour }))}
+                                  onChange={(hour) => setPartTime(index, partIndex, { end: hour })}
                                   label={`End time of activity ${partIndex + 1} in session ${index + 1}`}
                                   className="w-28 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs focus:border-ember focus:outline-none"
                                 />
