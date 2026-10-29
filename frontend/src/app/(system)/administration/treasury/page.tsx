@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, FolderCheck, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, FileText, FolderCheck, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -117,7 +117,12 @@ type ReportPreview = {
   title: string;
   filename: string;
   range: string;
+  // The blob the desktop frame shows.
   url: string;
+  // The document's own address — a real URL with the token for that one
+  // safe read — from which a phone hands the paper to the browser's own
+  // reader instead of the frame it cannot fill.
+  apiUrl: string;
 };
 
 export default function TreasuryPage() {
@@ -915,6 +920,11 @@ export default function TreasuryPage() {
       });
 
       if (!res.ok) {
+        await showAlert(
+          "Could not prepare the report",
+          "The church's server could not produce the statement. Opening the printed page instead.",
+          "error"
+        );
         window.print();
         return;
       }
@@ -925,6 +935,9 @@ export default function TreasuryPage() {
         filename: `Financial_Treasury${tag}_${fromDate || "all"}_to_${toDate || "all"}.pdf`,
         range: rangeLabel,
         url: window.URL.createObjectURL(blob),
+        // The token rides the URL for the tab's own single safe read; the
+        // desktop frame keeps reading the blob it already holds.
+        apiUrl: token ? `${pdfUrl}&access_token=${encodeURIComponent(token)}` : pdfUrl,
       });
     } catch {
       window.print();
@@ -2438,11 +2451,25 @@ export default function TreasuryPage() {
             </header>
 
             <div className="min-h-0 flex-1 overflow-auto bg-sand-soft p-3 sm:p-4">
+              {/* A phone cannot fill a frame with a PDF — behind it the
+                  preview offers the paper the way the desk hands any
+                  document over: the reader taps and the tab walks to the
+                  served sheet, shown in the browser's own PDF reader. */}
               <iframe
                 src={preview.url}
                 title={preview.title}
-                className="h-full min-h-[60vh] w-full rounded-xl border border-sand-line bg-white"
+                className="hidden h-full min-h-[60vh] w-full rounded-xl border border-sand-line bg-white md:block"
               />
+              <a
+                href={preview.apiUrl}
+                target="_blank"
+                rel="noopener"
+                className="flex h-full min-h-[60vh] w-full flex-col items-center justify-center gap-3 rounded-xl border border-sand-line bg-white p-8 text-center md:hidden"
+              >
+                <FileText className="h-8 w-8 text-ember" aria-hidden="true" />
+                <span className="text-sm font-bold text-bark">Open the report</span>
+                <span className="text-[11px] text-moss">Opens in its own tab, with your dates kept</span>
+              </a>
             </div>
 
             <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-4 py-3 sm:px-5">

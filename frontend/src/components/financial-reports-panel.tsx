@@ -5,6 +5,7 @@ import { Download, Eye, EyeOff, MoreHorizontal, Pencil, Plus, Trash2 } from "luc
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
+import { openPdfTab } from "@/lib/pdf-lightbox";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { ReportComposer, reportAuthHeaders as authHeaders, type Report } from "./report-composer";
 
@@ -154,46 +155,15 @@ export function FinancialReportsPanel() {
     setReports((rows) => rows.filter((row) => row.id !== report.id));
   };
 
-  /** Open the statement PDF in the browser's own viewer (new tab on desktop,
-   *  direct download on mobile — a fetch-then-popup is blocked by mobile
-   *  browsers because the gesture is already spent by the time the response
-   *  arrives). The blob URL is never revoked: the browser's Save button
-   *  re-reads it after the tab finishes loading, and revoking it early turns
-   *  that into a connection error. The URL dies with the page. */
-  const previewPdf = async (report: Report) => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    try {
-      const res = await fetch(`${API_URL}/api/members/reports/${report.id}/pdf/`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        await showAlert(
-          "Could not prepare the PDF",
-          "The church's server could not produce the statement. Please try again.",
-          "error"
-        );
-        return;
-      }
-      const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const touchScreen = window.matchMedia?.("(pointer: coarse)")?.matches;
-      const opened = !touchScreen && window.open(blobUrl, "_blank");
-      if (opened) return;
-      // Mobile fallback: mount the anchor before clicking — required by mobile
-      // browsers before they will honour the `download` attribute.
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `Financial_Report_${report.title.replace(/[^\w-]+/g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch {
-      await showAlert(
-        "Could not prepare the PDF",
-        "The church's server could not be reached. Please try again.",
-        "error"
-      );
-    }
+  /** Open the statement PDF in its own tab — the way the lessons under
+   *  Materials read: the tab walks the browser to the served paper, which
+   *  every phone shows in its own PDF reader. */
+  const previewPdf = (report: Report) => {
+    openPdfTab(`${API_URL}/api/members/reports/${report.id}/pdf/`, {
+      headers: authHeaders(),
+      fallbackError: "The church's server could not produce the statement. Please try again.",
+      onError: (message) => showAlert("Could not prepare the PDF", message, "error"),
+    });
   };
 
   return (

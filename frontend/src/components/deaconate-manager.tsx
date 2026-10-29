@@ -31,6 +31,7 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { FilterPopover, FilterSet } from "@/components/filter-popover";
 import { DepartmentAccountsPanel, DepartmentHub } from "./department-hub";
 import { showAlert } from "@/lib/alerts";
+import { openPdfTab } from "@/lib/pdf-lightbox";
 import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
 
@@ -633,33 +634,22 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     }
   };
 
-  const printRotaPdf = async (item?: RotaEntry) => {
-    try {
-      const params = new URLSearchParams();
-      params.set("desk", deskParam);
-      if (item) {
-        params.set("from", item.date);
-        params.set("to", item.date);
-        params.set("q", item.title || "");
-      } else {
-        if (rotaFromDate) params.set("from", rotaFromDate);
-        if (rotaToDate) params.set("to", rotaToDate);
-        if (rotaSearchQuery.trim()) params.set("q", rotaSearchQuery.trim());
-      }
-      const queryStr = params.toString() ? `?${params.toString()}` : "";
-      const res = await apiFetch(`/duty-rota/pdf/${queryStr}`);
-      if (!res.ok) throw new Error("Could not fetch PDF for printing");
-      const blob = await res.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const win = window.open(blobUrl, "_blank");
-      if (win) {
-        win.focus();
-      } else {
-        window.location.href = blobUrl;
-      }
-    } catch {
-      showAlert("Print Failed", "Could not prepare the duty rota for printing.", "error");
+  const printRotaPdf = (item?: RotaEntry) => {
+    const params = new URLSearchParams();
+    params.set("desk", deskParam);
+    if (item) {
+      params.set("from", item.date);
+      params.set("to", item.date);
+      params.set("q", item.title || "");
+    } else {
+      if (rotaFromDate) params.set("from", rotaFromDate);
+      if (rotaToDate) params.set("to", rotaToDate);
+      if (rotaSearchQuery.trim()) params.set("q", rotaSearchQuery.trim());
     }
+    openPdfTab(`${API_URL}/api/members/duty-rota/pdf/?${params.toString()}`, {
+      fallbackError: "Could not prepare the duty rota for printing.",
+      onError: (message) => showAlert("Print Failed", message, "error"),
+    });
   };
 
   const openShareModal = (target: RotaEntry | null) => {

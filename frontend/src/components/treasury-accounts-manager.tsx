@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
+import { openPdfTab } from "@/lib/pdf-lightbox";
 import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
@@ -33,33 +34,6 @@ type TreasuryAccount = {
   created_at: string;
 };
 
-/**
- * Hand a finished PDF to the browser.
- *
- * A desktop opens the sheet in its own tab, where the browser offers print
- * and save. A phone refuses a popup raised this long after the tap — the
- * fetch above has already spent the gesture — and often returns a window it
- * never shows, so on a touch screen the file is downloaded directly; the
- * anchor is mounted in the document first, which mobile browsers require
- * before they honour `download` at all.
- *
- * The blob is never revoked. The PDF tab re-reads this URL whenever Save is
- * pressed — minutes after the print — and a revoked URL turns that later
- * download into a connection error. The URLs die with the page that made
- * them, and a receipt-sized PDF costs nothing to hold until then.
- */
-const deliverPdf = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const touchScreen = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
-  const opened = !touchScreen && window.open(url, "_blank");
-  if (opened) return;
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-};
 
 /** The desk's own bearer header, read the way the component below reads it. */
 const fundAuthHeaders = (): Record<string, string> => {
@@ -215,53 +189,34 @@ export function WithdrawalRequestsPanel({
   // The wide report prints from the backend now: the same rows under the same
   // filters arrive as a real PDF. It carries no signature slots — a signed
   // copy belongs to one request, which each row's own Print produces.
-  const printReport = async () => {
+  const printReport = () => {
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (search.trim()) params.set("search", search.trim());
+    // The printed report reads the same window the screen shows.
+    if (fromDate) params.set("from_date", fromDate);
+    if (toDate) params.set("to_date", toDate);
     setPrinting(true);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      if (search.trim()) params.set("search", search.trim());
-      // The printed report reads the same window the screen shows.
-      if (fromDate) params.set("from_date", fromDate);
-      if (toDate) params.set("to_date", toDate);
-      const res = await fetch(`${API_URL}/api/members/department-withdrawals/pdf/?${params.toString()}`, {
-        headers: fundAuthHeaders(),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Could not generate the report.");
-      }
-      deliverPdf(
-        await res.blob(),
-        `Withdrawal_Requests_${new Date().toISOString().slice(0, 10)}.pdf`
-      );
-    } catch (error) {
-      showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
-    } finally {
-      setPrinting(false);
-    }
+    openPdfTab(`${API_URL}/api/members/department-withdrawals/pdf/?${params.toString()}`, {
+      headers: fundAuthHeaders(),
+      fallbackError: "Could not generate the report.",
+      onError: (message) => showAlert("Could not print", message, "error"),
+      onSettled: () => setPrinting(false),
+    });
   };
 
   // Each request prints itself: one request on its own sheet, with the amount
   // spelled out and the three signature slots (the authorizing officer, the
   // one issuing, and the receiver) that the department signs for the money.
-  const printRequest = async (row: WithdrawalRequestRow) => {
+  const printRequest = (row: WithdrawalRequestRow) => {
     if (printingId !== null) return;
     setPrintingId(row.id);
-    try {
-      const res = await fetch(`${API_URL}/api/members/department-withdrawals/${row.id}/pdf/`, {
-        headers: fundAuthHeaders(),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Could not print the request.");
-      }
-      deliverPdf(await res.blob(), `Withdrawal_Request_${row.id}.pdf`);
-    } catch (error) {
-      showAlert("Could not print", error instanceof Error ? error.message : "Try again.", "error");
-    } finally {
-      setPrintingId(null);
-    }
+    openPdfTab(`${API_URL}/api/members/department-withdrawals/${row.id}/pdf/`, {
+      headers: fundAuthHeaders(),
+      fallbackError: "Could not print the request.",
+      onError: (message) => showAlert("Could not print", message, "error"),
+      onSettled: () => setPrintingId(null),
+    });
   };
 
   const filteredRows = rows.filter((row) => {

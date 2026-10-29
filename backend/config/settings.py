@@ -270,7 +270,10 @@ IMAP_TIMEOUT = int(os.getenv('IMAP_TIMEOUT', '30'))
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'members.authentication.QueryAccessTokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
     'DEFAULT_THROTTLE_RATES': {
         # Public invitation lookup/acceptance (members/throttling.py): plenty

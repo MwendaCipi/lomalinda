@@ -18,6 +18,7 @@ import {
   refreshRoleRegister,
 } from "./roles-combobox";
 import { densityCellPad } from "@/lib/table-density";
+import { openPdfTab } from "@/lib/pdf-lightbox";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
 import { brand } from "@/lib/brand";
@@ -2210,19 +2211,13 @@ export function UserManagement() {
 
   // ── Print handler ────────────────────────────────────────────────────────────
   const handlePrintMemberList = () => {
-    const token = localStorage.getItem("access_token");
-    // Fetch with the Authorization header and open the blob: putting the JWT
-    // in the URL would leak it into browser history and the Referer of any
-    // request the PDF viewer tab makes.
-    fetch(`${API_URL}/api/members/users/list-pdf/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.blob())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-      })
-      .catch(() => setMessage({ type: "error", text: "Failed to generate PDF." }));
+    // The list opens in its own tab and the phone shows it in the browser's
+    // own PDF reader — the token rides the URL for that one navigation (safe
+    // GETs only, header always wins; backend/members/authentication.py).
+    openPdfTab(`${API_URL}/api/members/users/list-pdf/`, {
+      fallbackError: "Failed to generate PDF.",
+      onError: () => setMessage({ type: "error", text: "Failed to generate PDF." }),
+    });
   };
 
   return (

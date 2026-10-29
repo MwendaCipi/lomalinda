@@ -28,6 +28,7 @@ import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
+import { openPdfTab } from "@/lib/pdf-lightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -58,29 +59,6 @@ function authHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
-
-/**
- * Hand a finished PDF to the browser.
- *
- * A desktop opens the sheet in its own tab, where the browser offers print
- * and save; a phone refuses a popup raised this long after the tap, so the
- * file is downloaded directly, with the anchor mounted first — mobile
- * browsers ignore `download` on an anchor that was never in the document.
- * The blob is never revoked: the tab re-reads its URL whenever Save is
- * pressed, and a revoked URL turns that later save into an error.
- */
-const deliverPdf = (blob: Blob, filename: string, forceDownload = false) => {
-  const url = URL.createObjectURL(blob);
-  const touchScreen = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
-  const opened = !forceDownload && !touchScreen && window.open(url, "_blank");
-  if (opened) return;
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-};
 
 /** What a letter's row wears while it is on its way between the two pens. */
 const STATUS: Record<LetterRow["status"], { label: string; className: string }> = {
@@ -325,24 +303,17 @@ export function DepartmentLettersPanel({
     }
   };
 
-  /** Read the sheet while it travels; hand it over to keep once it is signed. */
-  const openPdf = async (row: LetterRow) => {
+  /** Read the sheet while it travels; a signed copy keeps its own Download
+   *  from the tab's PDF reader once the browser is showing it. */
+  const openPdf = (row: LetterRow) => {
     if (pdfId !== null) return;
     setPdfId(row.id);
-    try {
-      const response = await fetch(`${API_URL}/api/members/department-letters/${row.id}/pdf/`, {
-        headers: authHeaders(),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || "That letter could not be opened.");
-      }
-      deliverPdf(await response.blob(), `Letter_${row.department_code}_${row.id}.pdf`, row.status === "completed");
-    } catch (error) {
-      showAlert("Could not open the letter", error instanceof Error ? error.message : "Try again.", "error");
-    } finally {
-      setPdfId(null);
-    }
+    openPdfTab(`${API_URL}/api/members/department-letters/${row.id}/pdf/`, {
+      headers: authHeaders(),
+      fallbackError: "That letter could not be opened.",
+      onError: (message) => showAlert("Could not open the letter", message, "error"),
+      onSettled: () => setPdfId(null),
+    });
   };
 
   return (
