@@ -46,7 +46,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
 from chat.realtime import broadcast_announcement_response
@@ -10345,6 +10345,137 @@ class TreasurySpreadsheetView(APIView):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+def _treasury_period_window(started, close):
+    """One reporting period as the desk reads it: a start and an end.
+
+    ``started`` is the close before it and ``close`` is the TreasuryPeriod
+    that ends it. Either end may be missing — the first period opens at the
+    church's first gift, and the period still open has no close yet.
+    """
+    return {
+        'id': close.id if close else None,
+        'started_at': started.closed_at.isoformat() if started else None,
+        'closed_at': close.closed_at.isoformat() if close else None,
+        'closed_by': (
+            (close.closed_by.get_full_name() or close.closed_by.get_username())
+            if close and close.closed_by else ""
+        ),
+        'note': close.note if close else "",
+        'is_open': close is None,
+    }
+
+
+def _treasury_period_windows():
+    """Every period, oldest first, with the one still open last."""
+    closes = list(TreasuryPeriod.objects.select_related('closed_by').order_by('closed_at'))
+    windows = []
+    started = None
+    for close in closes:
+        windows.append(_treasury_period_window(started, close))
+        started = close
+    windows.append(_treasury_period_window(started, None))
+    return windows
+
+
+def _parse_period_close(value):
+    """Read the close the desk names, as an aware instant.
+
+    A browser's ``datetime-local`` answers without a zone, and the church
+    keeps Nairobi time, so a naive value is read in the church's own zone
+    rather than in the server's (which may be UTC).
+    """
+    from django.utils.dateparse import parse_datetime
+
+    moment = parse_datetime(str(value or '').replace('Z', '+00:00'))
+    if moment is None:
+        raise ValidationError({'closed_at': 'Use a date and time, e.g. 2026-10-31T00:00.'})
+    if timezone.is_naive(moment):
+        moment = timezone.make_aware(moment, timezone.get_current_timezone())
+    return moment
+
+
+class TreasuryPeriodView(APIView):
+    """The desk's reporting periods: read them, and close the open one."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_finance_manager(request.user):
+            return Response(
+                {"detail": "Only finance managers can read the church's periods."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response({"periods": _treasury_period_windows()})
+
+    def post(self, request):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
+            return Response(
+                {"detail": "Only the treasurer can close a period."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        moment = _parse_period_close(request.data.get('closed_at'))
+        last = TreasuryPeriod.objects.order_by('-closed_at').first()
+        if last and moment <= last.closed_at:
+            raise ValidationError({
+                'closed_at': 'A period closes after the one before it — pick a later date and time.',
+            })
+        close = TreasuryPeriod.objects.create(
+            closed_at=moment,
+            closed_by=request.user,
+            note=str(request.data.get('note') or '').strip()[:200],
+        )
+        return Response(
+            {
+                "period": _treasury_period_window(
+                    TreasuryPeriod.objects.filter(closed_at__lt=close.closed_at).order_by('-closed_at').first(),
+                    close,
+                ),
+                "periods": _treasury_period_windows(),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class TreasuryPeriodDetailView(APIView):
+    """Move a period's close — the cut-off that put gifts in the wrong period.
+
+    Only the latest close may be moved. An older one has another close after
+    it, and shifting it would silently re-cut a period the church has already
+    read and signed; the desk edits the close that ends the period on screen.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not (request.user.is_staff or getattr(request.user, "member_profile", None) and request.user.member_profile.has_role("admin", "treasurer")):
+            return Response(
+                {"detail": "Only the treasurer can move a period's close."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        close = TreasuryPeriod.objects.filter(pk=pk).first()
+        if close is None:
+            return Response({"detail": "That period is not on the record."}, status=status.HTTP_404_NOT_FOUND)
+        latest = TreasuryPeriod.objects.order_by('-closed_at').first()
+        if latest and latest.pk != close.pk:
+            raise ValidationError({
+                'closed_at': 'Only the period still in force can be moved — close the open one to edit an older cut-off.',
+            })
+        moment = _parse_period_close(request.data.get('closed_at'))
+        before = TreasuryPeriod.objects.filter(closed_at__lt=close.closed_at).exclude(pk=close.pk).order_by('-closed_at').first()
+        if before and moment <= before.closed_at:
+            raise ValidationError({
+                'closed_at': 'A close lands after the one before it — pick a later date and time.',
+            })
+        close.closed_at = moment
+        if 'note' in request.data:
+            close.note = str(request.data.get('note') or '').strip()[:200]
+        close.save(update_fields=['closed_at', 'note'])
+        return Response({
+            "period": _treasury_period_window(before, close),
+            "periods": _treasury_period_windows(),
+        })
 
 
 class TreasuryDepartmentAssignmentsView(APIView):

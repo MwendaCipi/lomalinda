@@ -3180,3 +3180,36 @@ class PrayerCellJoinRequest(models.Model):
 
     def __str__(self):
         return f"{self.member.get_username()} → {self.cell.name} ({self.get_status_display()})"
+
+
+class TreasuryPeriod(models.Model):
+    """One close of the church's books — the end of a reporting period.
+
+    A period is a *close*, not a stored pair of dates: the window a report
+    covers runs from the close before it to this close, and the period still
+    open runs from the last close to the moment the treasurer closes it next.
+    Storing only the close is what lets a mistaken cut-off be moved: change
+    the close, and every window either side of it is redrawn — the gifts that
+    fell on the wrong side of midnight sit in the right period again, because
+    no report was ever written down, only read from these instants.
+    """
+
+    #: When the period ended. Named by the treasurer — the date and, when the
+    #: desk asks for it, the hour the money was counted and signed off.
+    closed_at = models.DateTimeField()
+    #: Who closed it, so the record answers for itself.
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='treasury_periods_closed',
+    )
+    note = models.CharField(max_length=200, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['closed_at']
+
+    def __str__(self):
+        return f"Treasury period closed {self.closed_at:%Y-%m-%d %H:%M}"
