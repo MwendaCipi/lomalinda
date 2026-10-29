@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, FileText, FolderCheck, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, FolderCheck, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
+import { openPdfTab } from "@/lib/pdf-lightbox";
 import { ChurchLockup } from "@/components/church-lockup";
 import { TREASURY_VIEW_HREF, TreasuryNav, UNASSIGNED_CHANGED_EVENT } from "@/components/treasury-nav";
 import { AssignPaymentModal, ContactGiverModal } from "@/components/unassigned-payments-panel";
@@ -108,23 +109,6 @@ const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.
  */
 const isMpesaGiving = (g: IndividualGiving) => g.source === "digital" && /^m-?pesa$/i.test(g.payment_method || "");
 
-/**
- * A finished report, held for the desk to look at before it decides to save
- * it — sometimes one wants to read the document first. The PDF is drawn as
- * itself, in the browser's own viewer.
- */
-type ReportPreview = {
-  title: string;
-  filename: string;
-  range: string;
-  // The blob the desktop frame shows.
-  url: string;
-  // The document's own address — a real URL with the token for that one
-  // safe read — from which a phone hands the paper to the browser's own
-  // reader instead of the frame it cannot fill.
-  apiUrl: string;
-};
-
 export default function TreasuryPage() {
   // The ledger reads the month so far: the 1st, not the first Sabbath — a
   // from-date of the 3rd had the treasurer asking why receipts had vanished.
@@ -172,10 +156,9 @@ export default function TreasuryPage() {
   const datesRef = useRef<HTMLDivElement>(null);
   const datesPanelRef = useRef<HTMLDivElement>(null);
   const customWindow = fromDate !== firstDayOfMonth() || toDate !== localDate();
-  // A report is generated on demand, so the desk is told the document is being
-  // document opens in the preview below — viewed first, downloaded from there.
+  // A report is generated on demand — a “Preparing…” toast on the desk while
+  // the server draws it, then its own tab shows the paper.
   const [preparing, setPreparing] = useState<null | "pdf">(null);
-  const [preview, setPreview] = useState<ReportPreview | null>(null);
 
   // Purpose Expansion & View Mode State
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
@@ -783,20 +766,6 @@ export default function TreasuryPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [activeActionMenuId]);
 
-  // Escape closes the document preview, the way the desk's other overlays
-  // close — the report was only being looked at.
-  useEffect(() => {
-    if (!preview) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        window.URL.revokeObjectURL(preview.url);
-        setPreview(null);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [preview]);
-
   // After the shared Add Receipt modal saves, refresh the ledgers and show
   // the honest delivery feedback line (same banner as before the extraction).
   async function handleReceiptSaved(deliveryMessage: string, receipt: { received_on: string }) {
@@ -871,8 +840,8 @@ export default function TreasuryPage() {
     });
   }, [viewMode, loadFailedGivings]);
 
-  // The window every report on this page is cut to — and the one the preview
-  // is named with, so a document opened for the 8th to the 9th says so.
+  // The window every report on this page is cut to — the dates the PDF
+  // buttons open with.
   const rangeLabel = fromDate === toDate ? fromDate : `${fromDate} → ${toDate}`;
 
 
@@ -898,51 +867,6 @@ export default function TreasuryPage() {
       } finally {
         setLoadingPurpose(null);
       }
-    }
-  };
-
-  const handleDownloadBackendPdf = async (includeIndividual: boolean = false, purposeName?: string | null) => {
-    if (preparing) return;
-    setPreparing("pdf");
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-      // The report is cut to the dates on screen — always both ends of the
-      // selected range, never the month the range happens to sit in.
-      const params = new URLSearchParams();
-      if (fromDate) params.append("start_date", fromDate);
-      if (toDate) params.append("end_date", toDate);
-      if (includeIndividual) params.append("include_individual", "true");
-      if (purposeName) params.append("purpose", purposeName);
-
-      const pdfUrl = `${API_URL}/api/members/reports/ledger/pdf/?${params.toString()}`;
-      const res = await fetch(pdfUrl, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!res.ok) {
-        await showAlert(
-          "Could not prepare the report",
-          "The church's server could not produce the statement. Opening the printed page instead.",
-          "error"
-        );
-        window.print();
-        return;
-      }
-      const blob = await res.blob();
-      const tag = purposeName ? `_${purposeName.replace(/[^\w-]+/g, "_")}` : "";
-      setPreview({
-        title: purposeName ? `Treasury — ${purposeName}` : "Financial Treasury report",
-        filename: `Financial_Treasury${tag}_${fromDate || "all"}_to_${toDate || "all"}.pdf`,
-        range: rangeLabel,
-        url: window.URL.createObjectURL(blob),
-        // The token rides the URL for the tab's own single safe read; the
-        // desktop frame keeps reading the blob it already holds.
-        apiUrl: token ? `${pdfUrl}&access_token=${encodeURIComponent(token)}` : pdfUrl,
-      });
-    } catch {
-      window.print();
-    } finally {
-      setPreparing(null);
     }
   };
 
@@ -1090,22 +1014,37 @@ export default function TreasuryPage() {
   const selectedGivings = expandedPurpose ? purposeGivings[expandedPurpose] || [] : [];
   const selectedPurposeTotal = selectedGivings.reduce((acc, g) => acc + Number(g.amount || 0), 0);
 
-  /** Closing the preview lets the object URL go: the desk has either saved
-   *  the document by then or decided against it. */
-  const closePreview = () => {
-    if (preview) window.URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  };
+  const handleDownloadBackendPdf = (includeIndividual: boolean = false, purposeName?: string | null) => {
+    if (preparing) return;
+    setPreparing("pdf");
+    try {
+      // The report is cut to the dates on screen — always both ends of the
+      // selected range, never the month the range happens to sit in.
+      const params = new URLSearchParams();
+      if (fromDate) params.append("start_date", fromDate);
+      if (toDate) params.append("end_date", toDate);
+      if (includeIndividual) params.append("include_individual", "true");
+      if (purposeName) params.append("purpose", purposeName);
 
-  /** The document, saved — the same bytes that were just on screen. */
-  const downloadPreview = () => {
-    if (!preview) return;
-    const a = document.createElement("a");
-    a.href = preview.url;
-    a.download = preview.filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+      const pdfUrl = `${API_URL}/api/members/reports/ledger/pdf/?${params.toString()}`;
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      // The document is read the way the lessons under Materials read: its
+      // own tab, which walks to the served sheet and hands it to the
+      // browser's own PDF reader — on every device, with its own save
+      // control. No frame, no overlay, nothing held over the ledger.
+      openPdfTab(pdfUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        fallbackError: "The church's server could not produce the statement. Opening the printed page instead.",
+        onError: (message) => {
+          showAlert("Could not prepare the report", message, "error");
+          window.print();
+        },
+        onSettled: () => setPreparing(null),
+      });
+    } catch {
+      setPreparing(null);
+      window.print();
+    }
   };
 
   return (
@@ -2399,7 +2338,7 @@ export default function TreasuryPage() {
       {/* Preparing the document: generation runs on the server and can take a
           moment, so the desk is told what is being made and for which dates
           rather than left wondering whether the click registered. */}
-      {preparing && !preview && (
+      {preparing && (
         <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 print:hidden">
           <div className="flex items-center gap-2.5 rounded-2xl bg-bark px-4 py-3 text-xs font-semibold text-white shadow-xl">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -2410,93 +2349,6 @@ export default function TreasuryPage() {
         </div>
       )}
 
-      {/* The finished document, read before it is saved — a lightbox over the
-          ledger, so the report never leaves the page it was asked from. */}
-      {preview && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-bark/60 p-3 sm:p-6 print:hidden"
-          onMouseDown={(event) => event.target === event.currentTarget && closePreview()}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label={preview.title}
-            className="flex h-full max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
-          >
-            <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-sand-line px-4 py-3 sm:px-5">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-bark">{preview.title}</p>
-                <p className="mt-0.5 truncate text-[11px] text-moss">
-                  {preview.range} • PDF • {preview.filename}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={downloadPreview}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
-                >
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                  Download
-                </button>
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  aria-label="Close preview"
-                  className="rounded-xl p-2 text-moss transition hover:bg-sand hover:text-bark"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </header>
-
-            <div className="min-h-0 flex-1 overflow-auto bg-sand-soft p-3 sm:p-4">
-              {/* A phone cannot fill a frame with a PDF — behind it the
-                  preview offers the paper the way the desk hands any
-                  document over: the reader taps and the tab walks to the
-                  served sheet, shown in the browser's own PDF reader. */}
-              <iframe
-                src={preview.url}
-                title={preview.title}
-                className="hidden h-full min-h-[60vh] w-full rounded-xl border border-sand-line bg-white md:block"
-              />
-              <a
-                href={preview.apiUrl}
-                target="_blank"
-                rel="noopener"
-                className="flex h-full min-h-[60vh] w-full flex-col items-center justify-center gap-3 rounded-xl border border-sand-line bg-white p-8 text-center md:hidden"
-              >
-                <FileText className="h-8 w-8 text-ember" aria-hidden="true" />
-                <span className="text-sm font-bold text-bark">Open the report</span>
-                <span className="text-[11px] text-moss">Opens in its own tab, with your dates kept</span>
-              </a>
-            </div>
-
-            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-4 py-3 sm:px-5">
-              <p className="text-[11px] text-moss">
-                Cut to {preview.range}. What you see is the file you save.
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:bg-sand"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  onClick={downloadPreview}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
-                >
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                  Download
-                </button>
-              </div>
-            </footer>
-          </section>
-        </div>
-      )}
     </main>
   );
 }
