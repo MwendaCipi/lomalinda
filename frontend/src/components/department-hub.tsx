@@ -78,6 +78,7 @@ import {
 } from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
+import { AnnouncementsFeed } from "@/components/announcements-feed";
 
 import {
   invalidateDepartments,
@@ -4500,9 +4501,6 @@ export function DepartmentAccountsPanel({
   className?: string;
 }) {
   const isDeaconate = department.code === "deaconate";
-  // The elders' funding desk reads the church's accounts; its strip carries
-  // no request button (see the effect below).
-  const isEldership = department.code === "eldership";
   const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [movements, setMovements] = useState<FundMovement[]>([]);
@@ -4578,8 +4576,8 @@ export function DepartmentAccountsPanel({
     };
   }, [load]);
 
-  // Both buttons open the one form — the footer's and the one the shell
-  // draws at the far right of the toggles strip.
+  // The request action lives in this panel's footer. Keeping the strip free
+  // of actions leaves its full width for ministry and department views.
   const openWithdraw = useCallback(() => {
     if (withdrawAccountId === null && accounts.length > 0) {
       const primary = accounts.find((a) => a.is_primary) ?? accounts[0];
@@ -4587,30 +4585,6 @@ export function DepartmentAccountsPanel({
     }
     setShowWithdrawModal(true);
   }, [withdrawAccountId, accounts]);
-
-  // A second request button at the toggles strip's far right — a PC
-  // convenience beside the one in the footer, pointing at the same modal,
-  // and never the only way to reach it: the shell draws that slot on large
-  // screens only (hidden below lg), so a phone keeps the footer's.
-  //
-  // The eldership's strip carries no such button. Its funding desk is a read
-  // of the church's accounts and the elders ask through the footer's own
-  // button; every other desk keeps its slot.
-  const { setTogglesRightAction } = usePageHeader();
-  useEffect(() => {
-    if (!canRequest || isEldership) return;
-    setTogglesRightAction(
-      <button
-        type="button"
-        onClick={openWithdraw}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep"
-      >
-        {isDeaconate ? <Wallet className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}
-        {isDeaconate ? "Request funding" : "Request withdrawal"}
-      </button>
-    );
-    return () => setTogglesRightAction(null);
-  }, [canRequest, isEldership, openWithdraw, isDeaconate, setTogglesRightAction]);
 
   const selectedWithdrawAccount = useMemo(() => {
     if (withdrawAccountId !== null) {
@@ -5260,11 +5234,16 @@ function monthIndexForQuery(raw: string, year: number): number | null {
 function DepartmentDetail({
   department,
   onChanged,
-  // A desk opens on its calendar: the events are what the reader came for;
-  // the roll is one toggle away beneath it. The pastorate opens on its
-  // letters instead — a signature waiting is the ask that cannot wait on
-  // the reader finding a chip.
-  initialTab = department.code === "pastorate" ? "letter-approvals" : "calendar",
+  // Children Ministry opens on its single, combined roster. The age classes
+  // remain a label on each child, rather than separate pages of the desk.
+  // Other desks open on their calendar; the pastorate opens on letters that
+  // need a signature.
+  initialTab =
+    department.code === "children"
+      ? "members"
+      : department.code === "pastorate"
+        ? "letter-approvals"
+        : "calendar",
   onBack,
   embedded = false,
 }: {
@@ -5286,6 +5265,10 @@ function DepartmentDetail({
   embedded?: boolean;
 }) {
   const units = department.units ?? [];
+  // Children classes are membership metadata, not departments to navigate
+  // between. Keeping this guard also protects the UI while an existing
+  // installation is waiting for the data migration that clears old units.
+  const hasMemberUnitPages = department.code !== "children" && units.length > 0;
   // Personal Ministries runs the church's weekly rhythm, so the church's own
   // week is kept on its page — see WeeklyMeetingsPanel.
   const keepsTheWeek = department.code === "personal_ministries";
@@ -5342,6 +5325,11 @@ function DepartmentDetail({
   // The Message button at the foot of the roll opens the composer over the
   // desk — the roll on screen is the roll the send addresses.
   const [showMessageModal, setShowMessageModal] = useState(false);
+  // The buttons panel of the Sharing view: its New Announcement button opens
+  // the same compose modal the console posts from, over the desk. The feed
+  // remounts on a posted announcement so the desk sees it at once.
+  const [showShareComposer, setShowShareComposer] = useState(false);
+  const [shareFeedKey, setShareFeedKey] = useState(0);
   const [churchName, setChurchName] = useState("SDA Church Loma Linda, Meru");
   const [showLeadership, setShowLeadership] = useState(false);
   // A member reading the area who is not on its roll can ask to join from
@@ -5413,7 +5401,7 @@ function DepartmentDetail({
   const activeStripKey =
     subTab === "members"
       ? unit === null
-        ? units.length > 0
+        ? hasMemberUnitPages
           ? "unit:null"
           : "members"
         : `unit:${unit}`
@@ -5544,7 +5532,7 @@ function DepartmentDetail({
 
   // Inject the search bar into the AppFrame page header's right slot — the
   // shell draws the title and description; we slot the search beside them.
-  const { setHeaderRightAction, setCustomToggles, setTogglesRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
   const router = useRouter();
 
   /** A roll row's Chat here: open the DM, then land in it — the roster's
@@ -5763,12 +5751,12 @@ function DepartmentDetail({
       // A department that runs as units reads one at a time — the roll and
       // the calendar follow the toggle — so the units ride the strip beside
       // the views: All Members, then the desk's own fellowships.
-      ...(names.length > 0
+      ...(hasMemberUnitPages
         ? [{ key: "unit:null", label: "All Members", short: "Members", icon: Users }]
         : []),
-      ...names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })),
+      ...(hasMemberUnitPages ? names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })) : []),
       // A desk without units keeps the roll named "All Members".
-      ...(names.length === 0
+      ...(!hasMemberUnitPages
         ? [{ key: "members", label: isMusic ? "Members" : "All Members", short: "Members", icon: Users }]
         : []),
       // Music sings in more than one voice: the choir's own roll and the
@@ -5858,7 +5846,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, canOpenOfficeViews, isPastorate, department.code]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, canOpenOfficeViews, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // A unit key selects the unit and lands the desk on its roll; a plain key
@@ -7157,11 +7145,10 @@ function DepartmentDetail({
       )}
 
       {/* The Requests view: the fund ledger and the money the desk asks for,
-          full width. The letters the desk writes are the Write Letter button
-          at the desk's foot — the modal opens from the buttons panel, not a
-          panel of their own riding the ledger. */}
+          full width. Writing a letter belongs with those outgoing asks, at
+          the bottom of this view rather than in the strip or member register. */}
       {subTab === "accounts" && (
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
           <DepartmentAccountsPanel
             department={department}
             onChanged={onChanged}
@@ -7169,7 +7156,19 @@ function DepartmentDetail({
             typeFilter={accountsFilter}
             // The same panel the console pages draw whole, here given the
             // whole Requests view rather than the room letters left it.
-            className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"/>
+            className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
+          />
+          {!isPastorate && (
+            <div className="hidden shrink-0 items-center border-t border-sand-line pt-3 lg:flex">
+              <button
+                type="button"
+                onClick={() => setShowWriteLetter(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+              >
+                <PenLine className="h-3.5 w-3.5" /> Write Letter
+              </button>
+            </div>
+          )}
         </div>
       )}
       {subTab === "calendar" && (
@@ -7563,17 +7562,24 @@ function DepartmentDetail({
         </div>
       )}
       {(subTab === "announcements" || subTab === "sharing") && canOpenOfficeViews && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
-          {/* No heading of its own: the strip above names Sharing on every
-              width, and the board's own chrome already carries the way back.
-              The search rides the desk's heading row (`hostSearch`), the way
-              the other eldership pages hang theirs there. */}
-          {/* The desk page holds still at every width, so the board needs a
-              height of its own to scroll within — the card fills the panel
-              and the board's list scrolls inside it, instead of its posts
-              being cut off at the card's foot. */}
-          <div className="flex min-h-0 flex-1 flex-col">
-            <AnnouncementManager embedded hostSearch />
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          {/* The posts themselves, read the simple way they are read in the
+              fellowship feed — flat cards, no manager chrome, no nesting.
+              The feed scrolls within the card; nothing above it moves. */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-3 sm:p-4">
+            <AnnouncementsFeed key={shareFeedKey} embedded />
+          </div>
+          {/* The buttons panel: separate from the card and held at the foot
+              of the desk, the way every other desk keeps its actions — the
+              feed above grows without moving the bar below it. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowShareComposer(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> New Announcement
+            </button>
           </div>
         </div>
       )}
@@ -7695,6 +7701,43 @@ function DepartmentDetail({
           department={department}
           onClose={() => setShowWriteLetter(false)}
         />
+      )}
+      {showShareComposer && canOpenOfficeViews && (
+        // The compose modal rides the desk: the same fields the console's
+        // manager posts from, opened from the buttons panel's button and
+        // closed — or handed back once a post has gone out — from within.
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4 sm:p-6"
+          onClick={() => setShowShareComposer(false)}
+        >
+          <div
+            className="mx-auto w-full max-w-2xl rounded-2xl bg-white shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-sand-line px-4 py-3 sm:px-5">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
+                <Sparkles className="h-4 w-4 text-ember" aria-hidden="true" /> New Announcement
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowShareComposer(false)}
+                aria-label="Close"
+                className="rounded-lg p-1 text-moss transition hover:bg-sand-linen hover:text-bark"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
+              <AnnouncementManager
+                composerOnly
+                onDone={() => {
+                  setShowShareComposer(false);
+                  setShareFeedKey((key) => key + 1);
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
       {assignFor && typeof assignFor.id === "number" && (
         <AssignRoleModal

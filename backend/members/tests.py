@@ -14527,13 +14527,10 @@ class DepartmentGroupAndUnitTests(APITestCase):
         # The AYM's name reads in full — the abbreviation moved out of it
         # (0178), and the rail keeps its own short form beside the name.
         self.assertEqual(rows['aym']['label'], 'Adventist Youth Ministry')
-        # Children carries its six classes as units (0204), so its desk offers
-        # the class toggle — even though each band is also a department of its
-        # own; the strip the frontend draws reads these names.
-        self.assertEqual(
-            rows['children']['units'],
-            ['Beginners', 'Kindergarten', 'Primary', 'Junior', 'Teens', 'Pathfinders'],
-        )
+        # Children classes are labels on one combined roster, not separate
+        # desk pages. The ChildrenGroup records retain the age brackets used
+        # when registering a child.
+        self.assertEqual(rows['children']['units'], [])
         self.assertEqual(rows['kindergarten']['group'], 'department')
         self.assertEqual(rows['pathfinders']['group'], 'department')
 

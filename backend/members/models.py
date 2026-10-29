@@ -479,10 +479,7 @@ class Department(models.Model):
     @property
     def unit_names(self):
         """The department's sub-units, in the order the desk wrote them."""
-        names = [name.strip() for name in (self.units or '').split(',') if name.strip()]
-        if not names and self.code == 'children':
-            return ['Beginners', 'Kindergarten', 'Primary', 'Junior', 'Teens', 'Pathfinders']
-        return names
+        return [name.strip() for name in (self.units or '').split(',') if name.strip()]
 
     def __str__(self):
         return self.name
