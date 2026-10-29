@@ -14970,6 +14970,67 @@ class DepartmentLetterReviewView(APIView):
         return Response({'detail': 'Invalid action. Choose pastor_sign, clerk_sign, or decline.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ChurchLetterheadView(APIView):
+    """The church's official letterhead, created at the letters desk.
+
+    One image for the whole church — symbol, name and contact strip as the
+    office wants them to print. Once it is on file, official letters sent for
+    signature are composed on it: the PDF generator draws it across the head
+    of the first page and lays the letter's title and body beneath, instead
+    of printing the paper's own auto-drawn mark.
+
+    Reading it is open (it is the head of a public letter); creating,
+    replacing or removing it is for the officers who sign letters — the
+    pastor, the clerk and an administrator — because whatever is in storage
+    here rides above every letter the church sends.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _payload(self, letterhead):
+        return {
+            'has_letterhead': bool(letterhead),
+            'letterhead_url': letterhead.url if letterhead else '',
+        }
+
+    def get(self, request):
+        return Response(self._payload(ChurchSettings.objects.filter(pk=1).first().letterhead
+                                      if ChurchSettings.objects.filter(pk=1).exists() else None))
+
+    def put(self, request):
+        def _is_letter_office(user):
+            return (
+                user.is_staff or
+                is_pastor_or_admin(user) or
+                is_clerk_or_admin(user)
+            )
+
+        if not _is_letter_office(request.user):
+            return Response({'detail': 'Only pastors, clerks or admins can create the church letterhead.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        image = request.FILES.get('letterhead')
+        if not image:
+            return Response({'detail': 'Attach the letterhead as an image.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        row, _ = ChurchSettings.objects.get_or_create(pk=1)
+        row.letterhead = image
+        row.save(update_fields=['letterhead'])
+        return Response(self._payload(row.letterhead))
+
+    def delete(self, request):
+        if not (request.user.is_staff or is_pastor_or_admin(request.user) or is_clerk_or_admin(request.user)):
+            return Response({'detail': 'Only pastors, clerks or admins can remove the church letterhead.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        row = ChurchSettings.objects.filter(pk=1).first()
+        if row and row.letterhead:
+            storage = row.letterhead.storage
+            storage.delete(row.letterhead.name)
+            row.letterhead = None
+            row.save(update_fields=['letterhead'])
+        return Response({'has_letterhead': False, 'letterhead_url': ''})
+
+
 class DepartmentLetterPdfView(APIView):
     """Generate and download the official letterhead PDF for a department letter."""
 
@@ -15001,7 +15062,16 @@ class DepartmentLetterPdfView(APIView):
 
         serializer = DepartmentLetterRequestSerializer(row)
         church_name = current_church_name()
-        pdf_bytes = generate_department_letter_pdf(serializer.data, church_name, pastor_sig, clerk_sig)
+        # The church's own letterhead, when the letters desk has created one:
+        # the sheet is composed on that head, not on the paper's drawn mark.
+        letterhead = None
+        settings_row = ChurchSettings.objects.filter(pk=1).first()
+        if settings_row and settings_row.letterhead:
+            try:
+                letterhead = settings_row.letterhead.read()
+            except Exception:
+                letterhead = None
+        pdf_bytes = generate_department_letter_pdf(serializer.data, church_name, pastor_sig, clerk_sig, letterhead=letterhead)
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"Letter_{row.department.code}_{row.id}.pdf"

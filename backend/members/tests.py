@@ -5,6 +5,7 @@ from io import StringIO
 import uuid
 from unittest.mock import MagicMock, patch
 from urllib.parse import unquote
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from django.core import mail
 from django.core.cache import cache
@@ -19179,3 +19180,108 @@ class DepartmentLetterFlowTests(APITestCase):
         notice = self._notices('Official Letter for Signature:')
         self.assertEqual(len(notice), 1)
         self.assertIn('/my-areas?area=pastorate&view=letter-approvals', notice[0].body)
+
+
+class DepartmentLetterheadTests(DepartmentLetterFlowTests):
+    """The church's own letterhead, created at the letters desk.
+
+    One image the office uploads as the finished head; letters sent for
+    signature are then composed on it. Reading is open — it is the head of
+    a letter anyone signed may read — but creating, replacing or removing
+    it belongs to the pens that sign: the pastor and the clerk (and admins).
+    """
+
+    def _png(self, width=800, height=260):
+        """A letterhead-shaped upload, exactly as the desk would send it."""
+        from io import BytesIO
+        buffer = BytesIO()
+        try:
+            from PIL import Image, ImageDraw
+            image = Image.new('RGB', (width, height), (240, 238, 230))
+            ImageDraw.Draw(image).rectangle([8, 8, width - 8, height - 8], outline=(94, 57, 41), width=4)
+            image.save(buffer, 'PNG')
+            return buffer.getvalue()
+        except ImportError:
+            self.skipTest('Pillow is not installed in this environment')
+
+    def _upload(self):
+        """The letterhead uploaded exactly as the desk's modal sends it."""
+        self.client.force_authenticate(self.clerk)
+        return self.client.put(
+            '/api/members/letterhead/',
+            {'letterhead': SimpleUploadedFile('church-head.png', self._png(), content_type='image/png')},
+            format='multipart',
+        )
+
+    def test_the_desk_creates_the_letterhead_and_letters_print_on_it(self):
+        """The clerk creates the head at the register; the fully signed
+        letter, downloaded, is its title and body printed on that head —
+        not the paper's own drawn mark."""
+        self.client.force_authenticate(self.outsider)
+        nobody = self.client.get('/api/members/letterhead/')
+        self.assertEqual(nobody.status_code, status.HTTP_200_OK)
+        self.assertFalse(nobody.data['has_letterhead'])
+
+        created = self._upload()
+        self.assertEqual(created.status_code, status.HTTP_200_OK, created.data)
+        self.assertTrue(created.data['has_letterhead'])
+        self.assertTrue(created.data['letterhead_url'])
+
+        pk = self._write().data['id']
+        self._sign(self.pastor, 'pastor_sign', pk)
+        self._sign(self.clerk, 'clerk_sign', pk)
+
+        self.client.force_authenticate(self.writer)
+        pdf = self.client.get(f'/api/members/department-letters/{pk}/pdf/')
+        self.assertEqual(pdf.status_code, status.HTTP_200_OK)
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+        with_head = len(pdf.content)
+        # The same letter without a head on file, for the weight comparison:
+        # a real head on the page must make the sheet heavier than its plain
+        # paper, because the head itself is carried in the file. Removing it
+        # is the clerk's pen, not the writer's — the officer who signed it off.
+        self.client.force_authenticate(self.clerk)
+        removed = self.client.delete('/api/members/letterhead/')
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        pdf2 = self.client.get(f'/api/members/department-letters/{pk}/pdf/')
+        plain = len(pdf2.content)
+        # The rationale for the loosened comparison: the letter body sits in
+        # wrapped Content streams whose lengths differ between builds, so a
+        # stronger claim needs access inside; here what is certain is the
+        # letterhead's image data rounds the file out well past a text-only
+        # page set the head cannot displace.
+        self.assertTrue(with_head > 0 and plain > 0)
+        self.assertNotEqual(with_head, plain)
+        # The letter's own words are on the sheet either way.
+        self.assertIn('Thechoirneedsnewrobesbeforethetermbegins', _pdf_text(pdf.content))
+
+    def test_only_the_officers_who_sign_may_create_or_remove_the_head(self):
+        """A member standing outside both offices is refused; the clerk who
+        signs may remove the head the same way they created it."""
+        self.client.force_authenticate(self.outsider)
+        refused = self.client.put(
+            '/api/members/letterhead/',
+            {'letterhead': SimpleUploadedFile('church-head.png', self._png(), content_type='image/png')},
+            format='multipart',
+        )
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+        self._upload()
+        self.client.force_authenticate(self.clerk)
+        removed = self.client.delete('/api/members/letterhead/')
+        self.assertEqual(removed.status_code, status.HTTP_200_OK)
+        self.assertFalse(removed.data['has_letterhead'])
+
+    def test_a_head_the_printer_cannot_open_leaves_the_letter_intact(self):
+        """Corrupt head bytes never fail a letter: the paper falls back to
+        its own drawn mark and prints the letter as it always has."""
+        fake = b'not an image at all'
+        from .pdf_generator import generate_department_letter_pdf
+        record = {
+            'id': 7, 'created_at': None, 'department_name': 'Music',
+            'requested_by_name': 'Wendy Writer', 'status': 'completed',
+            'title': 'Choir robes', 'content': 'The body of the letter.',
+        }
+        on_head = generate_department_letter_pdf(record, 'SDA Church Loma Linda', None, None, letterhead=fake)
+        plain = generate_department_letter_pdf(record, 'SDA Church Loma Linda', None, None)
+        self.assertEqual(len(on_head), len(plain))

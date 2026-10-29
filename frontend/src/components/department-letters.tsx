@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, FileText, PenLine, X } from "lucide-react";
+import { Download, FileText, PenLine, Stamp, X } from "lucide-react";
 
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -192,6 +192,174 @@ export function WriteLetterModal({
   );
 }
 
+/** The church's letterhead, created right at the desk.
+ *
+ * One head for the whole church: the office uploads it as a finished image
+ * — symbol, name and contact strip as they want them to print — and every
+ * letter sent for signature is then composed on it, its title and body
+ * beneath. Replacing it is the same act: upload again and it is swapped for
+ * the next letter. Opening the desk's register shows what is on file; the
+ * server refuses anyone who is not one of the handlers who signs.
+ */
+function LetterheadModal({
+  currentUrl,
+  onClose,
+  onDone,
+}: {
+  currentUrl: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const pick = (picked: File | undefined) => {
+    setFile(picked ?? null);
+    setPreview(picked ? URL.createObjectURL(picked) : "");
+  };
+
+  const save = async () => {
+    if (!file) return;
+    setSaving(true);
+    try {
+      const body = new FormData();
+      body.append("letterhead", file);
+      const response = await fetch(`${API_URL}/api/members/letterhead/`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "The letterhead could not be saved.");
+      showAlert("Letterhead saved", "Letters sent for signature now print on this head.", "success");
+      onDone();
+      onClose();
+    } catch (error) {
+      showAlert("Could not save the letterhead", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/letterhead/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "The letterhead could not be removed.");
+      }
+      showAlert("Letterhead removed", "Letters sent for signature go back to the paper's own drawn head.", "success");
+      onDone();
+      onClose();
+    } catch (error) {
+      showAlert("Could not remove the letterhead", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const shownUrl = preview || currentUrl;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="The church letterhead"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-sand-line px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-bark">The church letterhead</h3>
+            <p className="mt-0.5 text-xs text-moss">
+              One head for the whole church — every letter sent for signature prints on it, its title and body beneath.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1 text-moss transition hover:bg-sand hover:text-bark"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          {shownUrl ? (
+            <div className="rounded-xl border border-sand-line bg-sand/30 p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-moss">On file</p>
+              <div className="mt-2 flex items-center justify-center rounded-lg border border-sand-line bg-white px-4 py-3">
+                {/* Plain img: the letterhead is a same-origin upload. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={resolveAttachmentUrl(shownUrl)}
+                  alt="The church letterhead"
+                  className="max-h-40 w-full object-contain"
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-moss-faint">
+                Replacing it is the same act — upload below and it is swapped for the next letter.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-sand-line bg-sand/30 px-4 py-3 text-xs text-moss">
+              No letterhead on file yet — letters print on the paper&apos;s own drawn head until you create one here.
+            </div>
+          )}
+
+          <label className="block text-sm font-medium text-bark">
+            {shownUrl ? "Replace with" : "Create from"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => pick(event.target.files?.[0])}
+              className="mt-1 block w-full cursor-pointer rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-moss file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-sand file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-bark hover:file:bg-sand-mute"
+            />
+          </label>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-5 py-3">
+          {currentUrl ? (
+            <button
+              type="button"
+              onClick={() => void remove()}
+              disabled={saving}
+              className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-red-700 transition hover:border-red-400 disabled:opacity-60"
+            >
+              Remove
+            </button>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving || !file}
+              className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save letterhead"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DepartmentLettersPanel({
   department,
   // Which letters this copy reads. A desk's own panel answers for its desk
@@ -230,6 +398,19 @@ export function DepartmentLettersPanel({
   // shows what the pen will actually put on it.
   const [mySignature, setMySignature] = useState<{ url: string; office: string; name: string } | null>(null);
   const [pdfId, setPdfId] = useState<number | null>(null);
+  // The church's letterhead, and whether its modal is open. Read only by the
+  // pens that sign — a member reading the register has no head to manage.
+  const [letterhead, setLetterhead] = useState<{ url: string } | null>(null);
+  const [letterheadOpen, setLetterheadOpen] = useState(false);
+
+  const loadLetterhead = useCallback(() => {
+    fetch(`${API_URL}/api/members/letterhead/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setLetterhead(data?.has_letterhead ? { url: data.letterhead_url } : null))
+      .catch(() => {
+        // A head no one has created yet reads as none; nothing to note.
+      });
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -246,6 +427,11 @@ export function DepartmentLettersPanel({
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load, version]);
+
+  // One head for the church, read by the ones who would touch it.
+  useEffect(() => {
+    if (canSignPastor || canSignClerk) void Promise.resolve().then(loadLetterhead);
+  }, [canSignPastor, canSignClerk, loadLetterhead, version]);
 
   /** The pen this reader may put on this letter, or null — the server's rule, read here. */
   const signActionFor = (row: LetterRow): "pastor_sign" | "clerk_sign" | "decline" | null => {
@@ -327,6 +513,19 @@ export function DepartmentLettersPanel({
               : "Written here, signed by the pastor then the clerk, and returned fully signed for stamping."}
           </p>
         </div>
+        {(canSignPastor || canSignClerk) && (
+          <button
+            type="button"
+            onClick={() => {
+              loadLetterhead();
+              setLetterheadOpen(true);
+            }}
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-sand-mute px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+          >
+            <Stamp className="h-3.5 w-3.5" aria-hidden="true" />
+            Letterhead
+          </button>
+        )}
       </header>
 
       <div className={`custom-hover-scrollbar overflow-y-auto ${scrollList && letters.length > 0 ? "max-h-64" : ""}`}>
@@ -431,6 +630,15 @@ export function DepartmentLettersPanel({
           </ul>
         )}
       </div>
+
+      {/* The church's letterhead — created here by the hands that sign. */}
+      {letterheadOpen && (
+        <LetterheadModal
+          currentUrl={letterhead?.url ?? ""}
+          onClose={() => setLetterheadOpen(false)}
+          onDone={() => loadLetterhead()}
+        />
+      )}
 
       {/* Sign — the letter on the table, the signature that will go on it, and the pen. */}
       {signing && (

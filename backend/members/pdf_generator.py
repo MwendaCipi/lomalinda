@@ -1,3 +1,4 @@
+import functools
 import io
 import re
 from decimal import Decimal
@@ -9,6 +10,10 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
     SimpleDocTemplate,
+    BaseDocTemplate,
+    Frame,
+    PageTemplate,
+    NextPageTemplate,
     Paragraph,
     Spacer,
     Table,
@@ -112,9 +117,13 @@ def _draw_logo(c, center_x, top_y, height, line_2=_LOCKUP_LINE_2):
 
 
 class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, **kwargs):
+    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, letterhead=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._footer_text = footer_text
+        # The church's uploaded letterhead, when the letters desk has created
+        # one: drawn across the head of page 1 (see draw_page_decorations),
+        # the paper's own mark standing in elsewhere and when there is none.
+        self._letterhead = letterhead
         self._saved_page_states = []
 
     def showPage(self):
@@ -131,9 +140,25 @@ class NumberedCanvas(canvas.Canvas):
 
     def draw_page_decorations(self, page_count):
         self.saveState()
-        # Letterhead first: the church's own mark at the head of every
-        # page, above the margin the document's own content starts at.
-        _draw_logo(self, A4[0] / 2, A4[1] - 0.7 * cm, 9 * mm)
+        # Letterhead first: an uploaded head the letters desk created prints
+        # across the head of page 1, with the letter's body starting beneath
+        # it on the frame that reserved that room; the paper's own drawn mark
+        # serves page 1 when none has been created and every page after.
+        if self._letterhead and self._pageNumber == 1:
+            head = _letterhead_geometry(self._letterhead)
+            if head:
+                head_w, head_h = head
+                self.drawImage(
+                    ImageReader(io.BytesIO(self._letterhead)),
+                    (A4[0] - head_w) / 2,
+                    A4[1] - _LETTERHEAD_TOP_GAP - head_h,
+                    head_w,
+                    head_h,
+                )
+            else:
+                _draw_logo(self, A4[0] / 2, A4[1] - 0.7 * cm, 9 * mm)
+        else:
+            _draw_logo(self, A4[0] / 2, A4[1] - 0.7 * cm, 9 * mm)
         self.restoreState()
         self.saveState()
         self.setFont("Helvetica", 8)
@@ -151,6 +176,40 @@ class NumberedCanvas(canvas.Canvas):
         self.drawString(1.5 * cm, 1.2 * cm, footer_text)
         self.drawRightString(A4[0] - 1.5 * cm, 1.2 * cm, page_text)
         self.restoreState()
+
+
+#: The head an uploaded letterhead may cover. The letters desk creates the
+#: church's own head as an image; a very tall one cannot push the letter's
+#: body halfway down the page, so whatever its ratio it prints no taller
+#: than this — a wider head simply prints shorter.
+_LETTERHEAD_MAX_HEIGHT = 4.5 * cm
+_LETTERHEAD_TOP_GAP = 0.7 * cm
+_LETTERHEAD_BODY_GAP = 0.4 * cm
+
+
+def _letterhead_geometry(image):
+    """An uploaded letterhead's print box for the letter page, or ``None``.
+
+    Answers ``(width, height)`` for drawing the image across the head of the
+    first page — full content width, capped in height. ``None`` when there is
+    no letterhead, or its bytes cannot be opened (a missing file under the
+    media root, a payload that is not an image): the paper then keeps the
+    church's own drawn mark rather than failing the letter.
+    """
+    if not image:
+        return None
+    try:
+        dims = ImageReader(io.BytesIO(image)).getSize()
+        image_w, image_h = float(dims[0]), float(dims[1])
+    except Exception:
+        return None
+    if image_w <= 0 or image_h <= 0:
+        return None
+    left_margin = right_margin = 1.8 * cm
+    avail_w = A4[0] - left_margin - right_margin
+    height = min(avail_w * image_h / image_w, _LETTERHEAD_MAX_HEIGHT)
+    width = height * image_w / image_h
+    return width, height
 
 
 def _signature_size(image):
@@ -2179,7 +2238,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     return buffer.getvalue()
 
 
-def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=None, clerk_sig=None) -> bytes:
+def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=None, clerk_sig=None, letterhead=None) -> bytes:
     """The official department letter / requisition on church letterhead.
 
     Carries:
@@ -2192,17 +2251,44 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
           - Pastor (with signature image, name, date)
           - Clerk (with signature image, name, date)
           - Official church stamp placeholder box
+
+    ``letterhead`` is the church's own letterhead as image bytes — the head
+    the letters desk creates from this desk's register. When it is on file
+    the sheet is composed on it: the head prints across the top of page 1
+    and the letter's title and body start beneath (page 2 onward keeps the
+    paper's own small drawn mark). Without one the paper draws its usual
+    mark; either way the body of the letter is the same.
     """
     church_name = pdf_church_name(church_name)
+    head = _letterhead_geometry(letterhead)
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=1.8 * cm,
-        leftMargin=1.8 * cm,
-        topMargin=2.0 * cm,
-        bottomMargin=2.2 * cm,
-    )
+
+    # One page two ways. Without the church's own head the letter follows the
+    # usual single margin. With it, page 1's body frame starts beneath the
+    # drawn head (so the letter clears its top instead of running behind it)
+    # and the second template carries the later pages back under the small
+    # drawn mark — the story's first flowable asks for that switch.
+    if head:
+        head_w, head_h = head
+        doc = BaseDocTemplate(buffer, pagesize=A4)
+        body_bottom = 2.2 * cm
+        body_left = 1.8 * cm
+        body_w = A4[0] - body_left - 1.8 * cm
+        first_top = A4[1] - _LETTERHEAD_TOP_GAP - head_h - _LETTERHEAD_BODY_GAP
+        later_top = A4[1] - 2.0 * cm
+        doc.addPageTemplates([
+            PageTemplate(id='letterhead', frames=[Frame(body_left, body_bottom, body_w, first_top - body_bottom)]),
+            PageTemplate(id='later', frames=[Frame(body_left, body_bottom, body_w, later_top - body_bottom)]),
+        ])
+    else:
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            rightMargin=1.8 * cm,
+            leftMargin=1.8 * cm,
+            topMargin=2.0 * cm,
+            bottomMargin=2.2 * cm,
+        )
 
     st = get_pdf_styles()
     story = []
@@ -2314,7 +2400,11 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
         slots=letter_slots,
     ))
 
-    doc.build(story, canvasmaker=NumberedCanvas)
+    if head:
+        story.insert(0, NextPageTemplate('later'))
+        doc.build(story, canvasmaker=functools.partial(NumberedCanvas, letterhead=letterhead))
+    else:
+        doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
     return buffer.getvalue()
 

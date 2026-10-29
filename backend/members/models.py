@@ -2000,6 +2000,13 @@ def format_clock(value):
 
 
 class ChurchSettings(models.Model):
+    # The church's own letterhead, created at the letters desk (pastor/clerk/admin):
+    # an uploaded image of the finished head — symbol, name and contact strip as
+    # the office wants them to print. Once it is on file, an official letter sent
+    # for signature is composed on it (title and body beneath) instead of the
+    # paper's auto-drawn mark. See members/pdf_generator and
+    # ChurchLetterheadView.
+    letterhead = models.ImageField(upload_to='letterhead/', blank=True)
     church_name = models.CharField(max_length=160, default='SDA Church Loma Linda')
     district = models.CharField(max_length=160, blank=True, help_text='NEKF district name, e.g. "Meru Central"')
     field = models.CharField(max_length=160, blank=True, default='North East Kenya Field', help_text='SDA Field name, e.g. "North East Kenya Field"')
