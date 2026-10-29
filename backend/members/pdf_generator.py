@@ -2430,7 +2430,7 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
         letter_signatures['clerk'] = clerk_sig
 
     story.append(SignatureSlotsFlowable(
-        height=3.8 * cm,
+        height=4.4 * cm,
         signatures=letter_signatures,
         slots=letter_slots,
     ))

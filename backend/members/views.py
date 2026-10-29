@@ -15028,37 +15028,54 @@ class DepartmentLetterReviewView(APIView):
         if action == 'pastor_sign':
             if not is_pastor_or_admin(request.user):
                 return Response({'detail': 'Only the church pastor or administrator can sign as pastor.'}, status=status.HTTP_403_FORBIDDEN)
-            if row.status != 'pending_pastor':
-                return Response({'detail': 'This letter is not currently awaiting pastor signature.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.pastor_signed_by_id:
+                return Response({'detail': 'Pastor has already signed this letter.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.status == 'declined' or row.status == 'completed':
+                return Response({'detail': 'This letter cannot be signed in its current state.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            row.status = 'pastor_signed'
             row.pastor_signed_by = request.user
             row.pastor_signed_at = timezone.now()
+            if row.clerk_signed_by_id:
+                row.status = 'completed'
+            elif row.status == 'pending_pastor' or row.status == 'pastor_signed':
+                row.status = 'pastor_signed'
+            else:
+                row.status = 'pastor_signed' if not row.clerk_signed_by_id else 'completed'
             row.save(update_fields=['status', 'pastor_signed_by', 'pastor_signed_at'])
 
-            # Notify Clerk and Administration to sign
-            clerk_audience = User.objects.filter(
-                Q(member_profile__role__in=['clerk', 'admin']) |
-                Q(member_profile__roles__contains='clerk') |
-                Q(member_profile__roles__contains='admin'),
-                is_active=True,
-            ).distinct()
-            # The clerk's page in Clerkship (Letter Approvals) holds every
-            # letter in the church, so this notice hands over the one place
-            # that answers for them all rather than this desk's own view:
-            # wherever the letter was written, the second pen is found here.
-            desk_link = f'{settings.FRONTEND_URL}/administration?tab=clerk-letters'
-            subject = f'Pastor Signed: Letter from {row.department.name} awaiting Clerk signature'
-            pastor_name = giver_display_name('', member=request.user)
-            body = (
-                f"{pastor_name} has signed the letter \"{row.title}\" for {row.department.name}. "
-                f"It is now ready for the Church Clerk's signature: {desk_link}"
-            )
-            sms_text = (
-                f"SDA Loma Linda: Letter for {row.department.name} ({row.title[:30]}) "
-                f"was signed by Pastor. Review & sign: {desk_link}"
-            )
-            _notify_withdrawal_audience(clerk_audience, subject, body, desk_link, sms_text)
+            if row.clerk_signed_by_id:
+                requester = row.requested_by
+                if requester:
+                    download_link = _letter_desk_link(row.department)
+                    subject = f'Letter Fully Signed: {row.title}'
+                    body = (
+                        f"Your official letter \"{row.title}\" for {row.department.name} has been signed "
+                        f"by both Pastor and Clerk! You can now download it from the Requests desk for stamping: {download_link}"
+                    )
+                    sms_text = (
+                        f"SDA Loma Linda: Your letter for {row.department.name} ({row.title[:30]}) "
+                        f"is fully signed! Download for stamping: {download_link}"
+                    )
+                    _notify_withdrawal_audience([requester], subject, body, download_link, sms_text)
+            else:
+                clerk_audience = User.objects.filter(
+                    Q(member_profile__role__in=['clerk', 'admin']) |
+                    Q(member_profile__roles__contains='clerk') |
+                    Q(member_profile__roles__contains='admin'),
+                    is_active=True,
+                ).distinct()
+                desk_link = f'{settings.FRONTEND_URL}/administration?tab=clerk-letters'
+                subject = f'Pastor Signed: Letter from {row.department.name} awaiting Clerk signature'
+                pastor_name = giver_display_name('', member=request.user)
+                body = (
+                    f"{pastor_name} has signed the letter \"{row.title}\" for {row.department.name}. "
+                    f"It is now ready for the Church Clerk's signature: {desk_link}"
+                )
+                sms_text = (
+                    f"SDA Loma Linda: Letter for {row.department.name} ({row.title[:30]}) "
+                    f"was signed by Pastor. Review & sign: {desk_link}"
+                )
+                _notify_withdrawal_audience(clerk_audience, subject, body, desk_link, sms_text)
 
             serializer = DepartmentLetterRequestSerializer(row)
             return Response(serializer.data)
@@ -15066,28 +15083,52 @@ class DepartmentLetterReviewView(APIView):
         elif action == 'clerk_sign':
             if not is_clerk_or_admin(request.user):
                 return Response({'detail': 'Only the church clerk or administrator can sign as clerk.'}, status=status.HTTP_403_FORBIDDEN)
-            if row.status != 'pastor_signed':
-                return Response({'detail': 'This letter must be signed by the pastor before the clerk can sign.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.clerk_signed_by_id:
+                return Response({'detail': 'Clerk has already signed this letter.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.status == 'declined' or row.status == 'completed':
+                return Response({'detail': 'This letter cannot be signed in its current state.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            row.status = 'completed'
             row.clerk_signed_by = request.user
             row.clerk_signed_at = timezone.now()
+            if row.pastor_signed_by_id:
+                row.status = 'completed'
+            else:
+                row.status = 'pastor_signed'
             row.save(update_fields=['status', 'clerk_signed_by', 'clerk_signed_at'])
 
-            # Notify the requester that the letter is fully signed and ready to download
-            requester = row.requested_by
-            if requester:
-                download_link = _letter_desk_link(row.department)
-                subject = f'Letter Fully Signed: {row.title}'
+            if row.pastor_signed_by_id:
+                requester = row.requested_by
+                if requester:
+                    download_link = _letter_desk_link(row.department)
+                    subject = f'Letter Fully Signed: {row.title}'
+                    body = (
+                        f"Your official letter \"{row.title}\" for {row.department.name} has been signed "
+                        f"by both Pastor and Clerk! You can now download it from the Requests desk for stamping: {download_link}"
+                    )
+                    sms_text = (
+                        f"SDA Loma Linda: Your letter for {row.department.name} ({row.title[:30]}) "
+                        f"is fully signed! Download for stamping: {download_link}"
+                    )
+                    _notify_withdrawal_audience([requester], subject, body, download_link, sms_text)
+            else:
+                pastor_audience = User.objects.filter(
+                    Q(member_profile__role__in=['pastor', 'admin']) |
+                    Q(member_profile__roles__contains='pastor') |
+                    Q(member_profile__roles__contains='admin'),
+                    is_active=True,
+                ).distinct()
+                desk_link = _letter_desk_link(row.department)
+                subject = f'Clerk Signed: Letter from {row.department.name} awaiting Pastor signature'
+                clerk_name = giver_display_name('', member=request.user)
                 body = (
-                    f"Your official letter \"{row.title}\" for {row.department.name} has been signed "
-                    f"by both Pastor and Clerk! You can now download it from the Requests desk for stamping: {download_link}"
+                    f"{clerk_name} has signed the letter \"{row.title}\" for {row.department.name}. "
+                    f"It is now ready for the Pastor's signature: {desk_link}"
                 )
                 sms_text = (
-                    f"SDA Loma Linda: Your letter for {row.department.name} ({row.title[:30]}) "
-                    f"is fully signed! Download for stamping: {download_link}"
+                    f"SDA Loma Linda: Letter for {row.department.name} ({row.title[:30]}) "
+                    f"was signed by Clerk. Review & sign: {desk_link}"
                 )
-                _notify_withdrawal_audience([requester], subject, body, download_link, sms_text)
+                _notify_withdrawal_audience(pastor_audience, subject, body, desk_link, sms_text)
 
             serializer = DepartmentLetterRequestSerializer(row)
             return Response(serializer.data)

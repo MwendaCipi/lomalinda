@@ -4517,6 +4517,7 @@ export function DepartmentAccountsPanel({
   typeFilter = "all",
   showInlineControls = false,
   className = "flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm h-full sm:overflow-hidden",
+  footer,
 }: {
   department: { code: string; label: string };
   onChanged?: () => void;
@@ -4526,6 +4527,7 @@ export function DepartmentAccountsPanel({
   typeFilter?: "all" | "contributions" | "withdrawals";
   showInlineControls?: boolean;
   className?: string;
+  footer?: React.ReactNode;
 }) {
   const isDeaconate = department.code === "deaconate";
   const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
@@ -5076,6 +5078,7 @@ export function DepartmentAccountsPanel({
               </div>
             </div>
           </div>
+          {footer}
         </>
       )}
 
@@ -7170,7 +7173,7 @@ function DepartmentDetail({
           full width. Writing a letter belongs with those outgoing asks, at
           the bottom of this view rather than in the strip or member register. */}
       {subTab === "accounts" && (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col">
           <DepartmentAccountsPanel
             department={department}
             onChanged={onChanged}
@@ -7179,18 +7182,20 @@ function DepartmentDetail({
             // The same panel the console pages draw whole, here given the
             // whole Requests view rather than the room letters left it.
             className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
+            footer={
+              !isPastorate ? (
+                <div className="flex items-center justify-end border-t border-sand-line px-3 py-2 sm:px-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowWriteLetter(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  >
+                    <PenLine className="h-3.5 w-3.5" /> Write Letter
+                  </button>
+                </div>
+              ) : undefined
+            }
           />
-          {!isPastorate && (
-            <div className="hidden shrink-0 items-center border-t border-sand-line pt-3 lg:flex">
-              <button
-                type="button"
-                onClick={() => setShowWriteLetter(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-              >
-                <PenLine className="h-3.5 w-3.5" /> Write Letter
-              </button>
-            </div>
-          )}
         </div>
       )}
       {subTab === "calendar" && (
