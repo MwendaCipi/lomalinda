@@ -5234,16 +5234,11 @@ function monthIndexForQuery(raw: string, year: number): number | null {
 function DepartmentDetail({
   department,
   onChanged,
-  // Children Ministry opens on its single, combined roster. The age classes
-  // remain a label on each child, rather than separate pages of the desk.
-  // Other desks open on their calendar; the pastorate opens on letters that
-  // need a signature.
-  initialTab =
-    department.code === "children"
-      ? "members"
-      : department.code === "pastorate"
-        ? "letter-approvals"
-        : "calendar",
+  // Every desk opens on the first page its strip holds: the chip first in
+  // line is the page showing, on a phone as on a desk. The strip's first
+  // item is the Event Calendar on every desk, so that is where its walk
+  // begins — no desk opens further down its own strip.
+  initialTab = "calendar",
   onBack,
   embedded = false,
 }: {
