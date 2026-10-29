@@ -274,14 +274,10 @@ export function WithdrawalRequestsPanel({
           Elder approved by {row.elder_approved_by}
         </p>
       )}
-      {row.treasurer_approved_by && (
-        <p className="text-[10px] text-moss-faint">
-          Treasurer approved by {row.treasurer_approved_by}
-        </p>
-      )}
+
       {row.decided_by && (row.status === "approved" || row.status === "declined") && (
         <p className="text-[10px] italic text-moss-faint">
-          {row.status === "approved" ? "Treasurer approved" : "Rejected"} by {row.decided_by}
+          {row.status === "approved" ? "Approved by" : "Rejected"} by {row.decided_by}
           {row.reply ? `: "${row.reply}"` : ""}
         </p>
       )}
