@@ -1263,7 +1263,7 @@ export default function TreasuryPage() {
                                         disabled={resendingId === g.id}
                                         className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
                                       >
-                                        {resendingId === g.id ? "Sending..." : "Resend"}
+                                        {resendingId === g.id ? "Sending..." : "Receipt"}
                                       </button>
                                     </div>
                                   </div>
@@ -1339,11 +1339,20 @@ export default function TreasuryPage() {
                                           )}
                                           <button
                                             type="button"
+                                            onClick={() => {
+                                              setAssigningGiving(g);
+                                            }}
+                                            className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-bark hover:bg-sand"
+                                          >
+                                            Reassign
+                                          </button>
+                                          <button
+                                            type="button"
                                             onClick={() => handleResendReceipt(g)}
                                             disabled={resendingId === g.id}
                                             className="rounded-lg bg-ember px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
                                           >
-                                            {resendingId === g.id ? "Sending..." : "Resend"}
+                                            {resendingId === g.id ? "Sending..." : "Receipt"}
                                           </button>
                                         </div>
                                       </div>
@@ -1449,11 +1458,20 @@ export default function TreasuryPage() {
                                           )}
                                           <button
                                             type="button"
+                                            onClick={() => {
+                                              setAssigningGiving(g);
+                                            }}
+                                            className="rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-xs font-semibold text-bark hover:bg-sand"
+                                          >
+                                            Reassign
+                                          </button>
+                                          <button
+                                            type="button"
                                             onClick={() => handleResendReceipt(g)}
                                             disabled={resendingId === g.id}
                                             className="rounded-lg bg-ember px-2.5 py-1 text-xs font-semibold text-white hover:bg-ember-dark disabled:opacity-60"
                                           >
-                                            {resendingId === g.id ? "Sending..." : "Resend"}
+                                            {resendingId === g.id ? "Sending..." : "Receipt"}
                                           </button>
                                         </div>
                                       </td>
@@ -2495,6 +2513,7 @@ export default function TreasuryPage() {
           defaultReceipt={heldReceipt}
           onClose={() => setAssigningGiving(null)}
           onAssigned={afterHeldChange}
+          reassign={true}
         />
       )}
       {contactingGiving && (

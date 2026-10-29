@@ -85,12 +85,14 @@ export function AssignPaymentModal({
   defaultReceipt,
   onClose,
   onAssigned,
+  reassign = false,
 }: {
   row: HeldPayment;
   accounts: AccountOption[];
   defaultReceipt: string;
   onClose: () => void;
   onAssigned: (row: HeldPayment) => void;
+  reassign?: boolean;
 }) {
   const [picked, setPicked] = useState<PickedAccount[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -177,6 +179,7 @@ export function AssignPaymentModal({
         receipt_email: email.trim(),
         receipt_phone: phone.trim(),
         receipt_message: message.trim(),
+        reassign: reassign ? true : undefined,
       }),
     })
       .then(async (res) => {
@@ -185,7 +188,7 @@ export function AssignPaymentModal({
           const receipt = data.receipt as { email_sent?: boolean; sms_sent?: boolean } | null;
           const thanked = receipt ? [receipt.email_sent && "email", receipt.sms_sent && "SMS"].filter(Boolean).join(" and ") : "";
           showAlert(
-            "Payment assigned",
+            reassign ? "Payment reassigned" : "Payment assigned",
             thanked
               ? `Credited across ${picked.length} account(s). Receipt sent by ${thanked}.`
               : data.detail || `Credited across ${picked.length} account(s).`,
@@ -195,7 +198,7 @@ export function AssignPaymentModal({
           onAssigned(row);
           onClose();
         } else {
-          showAlert("Could not assign", data.detail || "Try again.", "error");
+          showAlert(reassign ? "Could not reassign" : "Could not assign", data.detail || "Try again.", "error");
         }
       })
       .catch(() => showAlert("Network error", "Could not reach the server.", "error"))
@@ -213,10 +216,10 @@ export function AssignPaymentModal({
         <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6 sm:px-8 sm:pt-8">
           <div>
             <p className="hidden text-[10px] font-extrabold uppercase tracking-wider text-ember sm:block">
-              Unassigned payment
+              {reassign ? "Reassign payment" : "Unassigned payment"}
             </p>
             <h3 id="assign-payment-title" className="text-lg font-bold text-bark">
-              Assign KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+              {reassign ? "Reassign" : "Assign"} KES {Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
             </h3>
             <p className="mt-0.5 text-[11px] text-moss">
               Typed: {row.typed_reference || "(blank)"} · {row.mpesa_receipt_number} · {dmy(row.paid_at)}
@@ -322,7 +325,7 @@ export function AssignPaymentModal({
             disabled={sending}
             className="w-full rounded-xl bg-ember px-5 py-3 text-sm font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
           >
-            {sending ? "Assigning…" : "Assign"}
+            {sending ? (reassign ? "Reassigning…" : "Assigning…") : (reassign ? "Reassign" : "Assign")}
           </button>
         </div>
       </div>

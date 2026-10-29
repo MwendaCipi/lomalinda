@@ -6469,7 +6469,8 @@ class AssignContributionAccountView(APIView):
         contribution = generics.get_object_or_404(Contribution, pk=pk)
         if contribution.status != 'completed':
             return Response({'detail': 'Only completed payments can be assigned.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not contribution.needs_review:
+        reassign = request.data.get('reassign') or request.data.get('reassign_account') or request.data.get('force')
+        if not contribution.needs_review and not reassign:
             return Response({'detail': 'This payment has already been assigned.'}, status=status.HTTP_400_BAD_REQUEST)
 
         allocations = request.data.get('allocations')
