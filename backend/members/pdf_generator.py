@@ -613,7 +613,10 @@ def generate_treasury_pdf(
             Paragraph(format_money(tot_amount), st["cell_right_bold"]),
         ])
 
-        ind_table = Table(ind_data, colWidths=[4.6 * cm, 2.3 * cm, 4.2 * cm, 2.2 * cm, 2.3 * cm, 2.4 * cm], repeatRows=1)
+        # M-Pesa references are ten characters and must stay readable at a
+        # glance. Give Receipt / Ref a little more room by taking only a
+        # modest amount from the wrapping Giver Name and Account columns.
+        ind_table = Table(ind_data, colWidths=[4.25 * cm, 2.3 * cm, 3.8 * cm, 2.2 * cm, 3.05 * cm, 2.4 * cm], repeatRows=1)
         ind_style = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
