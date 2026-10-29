@@ -2117,7 +2117,21 @@ function ProgramEditorModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => removeSession(index)}
+                    onClick={async () => {
+                      const { default: Swal } = await import("sweetalert2");
+                      const result = await Swal.fire({
+                        title: "Delete session?",
+                        text: "This will remove the session and its activities from the programme.",
+                        icon: "warning",
+                        showCancelButton: true,
+                        confirmButtonText: "Delete",
+                        cancelButtonText: "Cancel",
+                        confirmButtonColor: "#b91c1c",
+                      });
+                      if (result.isConfirmed) {
+                        removeSession(index);
+                      }
+                    }}
                     aria-label={`Remove session ${index + 1}`}
                     className="mr-2.5 shrink-0 rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-red-300 hover:text-red-600"
                   >
@@ -2130,21 +2144,33 @@ function ProgramEditorModal({
                     id={`${uid}-session-${index}`}
                     className="space-y-3 border-t border-sand-line bg-sand-plate p-3"
                   >
-            {/* A free-text block is the open panel's whole form: one
-                textarea, no name, no hour — the text is what the sheet
-                prints. */}
+            {/* A free-text block has its own title like a session, and
+                its text starts from the left margin on the sheet. */}
             {session.text !== undefined ? (
-              <label className="block">
-                <span className="block text-[11px] font-semibold text-moss">Text</span>
-                <textarea
-                  rows={4}
-                  value={session.text}
-                  onChange={(e) => setSession(index, { text: e.target.value })}
-                  aria-label={`Text of block ${index + 1}`}
-                  placeholder="A song, a Bible verse, anything the programme should carry…"
-                  className="mt-1 w-full resize-y rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
-                />
-              </label>
+              <>
+                <label className="block">
+                  <span className="block text-[11px] font-semibold text-moss">Title</span>
+                  <input
+                    type="text"
+                    value={session.title || ""}
+                    onChange={(e) => setSession(index, { title: e.target.value })}
+                    aria-label={`Title of free text block ${index + 1}`}
+                    placeholder="e.g. Hymn, Scripture Reading"
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] font-semibold text-moss">Text</span>
+                  <textarea
+                    rows={4}
+                    value={session.text}
+                    onChange={(e) => setSession(index, { text: e.target.value })}
+                    aria-label={`Text of block ${index + 1}`}
+                    placeholder="A song, a Bible verse, anything the programme should carry…"
+                    className="mt-1 w-full resize-y rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                  />
+                </label>
+              </>
             ) : (
               <label className="block">
                 <span className="block text-(11px] font-semibold text-moss">Name</span>

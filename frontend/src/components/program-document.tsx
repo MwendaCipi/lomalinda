@@ -349,16 +349,17 @@ export function ProgramDocument({
             {items.map((item, index) => {
               const range = sessionRange(item);
               // A free-text block — a song, a Bible verse — prints the way
-              // the desk wrote it: each typed line its own line, under the
-              // hour column every row shares, and nothing invented beside
-              // it.
+              // the desk wrote it: each typed line its own line. If it has
+              // a title it appears like a session; otherwise it starts from
+              // the left margin with no time-column indent.
               const freeTextLines = (item.text ?? "")
                 .replace(/\r\n/g, "\n")
                 .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean);
+                .map((line) => line.trimEnd())
+                .filter((line, idx, arr) => line.trim() !== "" || idx === 0 && arr.some((l) => l.trim() !== ""));
               const freeTextOnly =
-                freeTextLines.length > 0 && !item.title && item.participants.length === 0 && item.parts.length === 0;
+                (item.text !== undefined) && !item.title && item.participants.length === 0 && item.parts.length === 0;
+              const isFreeText = item.text !== undefined;
               return (
                 <li
                   key={`${item.start}-${item.title}-${index}`}
@@ -366,13 +367,36 @@ export function ProgramDocument({
                   className="py-3"
                 >
                   {freeTextOnly ? (
-                    <ul className={`space-y-0.5 ${TIME_INDENT}`}>
-                      {freeTextLines.map((line, lineIndex) => (
+                    <ul className="space-y-0.5">
+                      {freeTextLines.filter((line) => line.trim() !== "").map((line, lineIndex) => (
                         <li key={lineIndex} className="whitespace-pre-wrap text-sm font-semibold leading-6 text-bark">
-                          {line}
+                          {line.trim()}
                         </li>
                       ))}
                     </ul>
+                  ) : isFreeText && item.title ? (
+                    <>
+                      <div className="flex items-baseline gap-4">
+                        <span
+                          className={`${TIME_COL} shrink-0 text-right text-sm font-semibold text-ember`}
+                          aria-hidden={range === "—"}
+                        >
+                          {range !== "—" ? range : ""}
+                        </span>
+                        <span className="text-sm font-semibold leading-6 text-bark">
+                          {item.title}
+                        </span>
+                      </div>
+                      {freeTextLines.filter((line) => line.trim() !== "").length > 0 && (
+                        <ul className={`mt-1.5 space-y-0.5 ${TIME_INDENT}`}>
+                          {freeTextLines.filter((line) => line.trim() !== "").map((line, lineIndex) => (
+                            <li key={lineIndex} className="whitespace-pre-wrap text-sm leading-6 text-bark">
+                              {line.trim()}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   ) : (
                     <>
                       <div className="flex items-baseline gap-4">
