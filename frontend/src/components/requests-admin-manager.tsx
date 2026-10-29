@@ -8,7 +8,6 @@ import { dayFirstTime } from "@/lib/dates";
 import { reviewBucket, type StatusFilter } from "@/lib/requests";
 import { pinnedMapHref } from "@/lib/places";
 import { Check, Handshake, MapPin, X } from "lucide-react";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { RecordList } from "./record-list";
 import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { densityCellPad } from "@/lib/table-density";
@@ -902,31 +901,10 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
 
   return (
     <div className="flex h-full min-h-0 flex-col p-4 sm:p-6 lg:p-8">
-      {/* Pinned header: title row, then one toolbar row — search, the two
-          filter popovers, and the metrics on the far right. The table
-          beneath scrolls under it. */}
-      <div className="shrink-0 space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1">
-          <BackToOverviewArrow />
-          {/* Named by the strip above on a wide screen. */}
-          <div className="md:hidden">
-            <h2 className="text-2xl font-semibold text-bark">
-              {activeTab === "joins" ? "Join Requests" : activeTab === "clerk" ? "Clerkship Requests" : "Received Requests"}
-            </h2>
-            <p className="mt-0.5 text-sm text-moss">
-              {activeTab === "joins"
-                ? "New members and members asking to join a ministry, waiting on an answer."
-                : activeTab === "clerk"
-                  ? "New members, ministry joins and membership transfers waiting on an answer."
-                : "Join requests, prayer, visitation, dedications, welfare and membership transfers."}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      </div>
-
+      {/* No heading of its own and no way back: the shell's band names the
+          page (heading first, the way the desk's other pages do) and its
+          search and filters ride that band at the top. The table beneath
+          scrolls under it. */}
       {/* The table scrolls beneath the pinned toolbar. */}
       <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar">
         {/* Table on desktop, cards on phones — RecordList owns the breakpoint

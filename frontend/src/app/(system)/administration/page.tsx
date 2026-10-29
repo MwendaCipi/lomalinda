@@ -34,6 +34,36 @@ const ELDERSHIP_HEADING = {
   description: "The church's leadership, announcements, accounts and the requests members send.",
 };
 
+/**
+ * The desk pages the rail's strips carry as toggles behind a named desk:
+ * what each page calls itself. The names follow the strip's labels, so
+ * heading and toggle can never disagree; the blurbs come from the registry.
+ * Sharing is the one renamed page: the console's query name is
+ * "announcements", but the page the desk's strip opens reads "Sharing".
+ */
+const deskTabHeadings: Record<string, { label: string; description?: string }> = {
+  announcements: {
+    label: "Sharing",
+    description: "Publish announcements and share a daily thought with the church.",
+  },
+  requests: {
+    label: "Requests",
+    description: "The asks the church has received.",
+  },
+  "clerk-requests": {
+    label: "Requests",
+    description: "New members, ministry joins and membership transfers waiting on an answer.",
+  },
+  "eldership-moments": {
+    label: "Moments",
+    description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
+  },
+  "eldership-funding": {
+    label: "Funding",
+    description: "The church's treasury accounts, with balances and movements.",
+  },
+};
+
 type StaffRole =
   | "admin"
   | "clerk"
@@ -446,6 +476,29 @@ function AdministrationContent() {
     );
     return () => setCustomToggles(null);
   }, [activeTab, treasuryTab, isFinance, setCustomToggles, router]);
+  // The rail's own strip carries these desks with no heading — the band's
+  // default hiding the name on a phone is what left the desks' pages looking
+  // bare there while Leadership (a desk view of the hub) read named and
+  // headed. So the desk's console pages name themselves, heading first,
+  // their search and filters riding the row under the name — the same order
+  // the desk's own views keep: name, controls, strip beneath.
+  const deskTailTab =
+    activeTab === "announcements" ||
+    activeTab === "requests" ||
+    activeTab === "eldership-moments" ||
+    activeTab === "eldership-funding" ||
+    activeTab === "clerk-requests";
+  useEffect(() => {
+    if (!deskTailTab) return;
+    const heading =
+      deskTabHeadings[activeTab] ?? { label: activeTab };
+    setCustomHeader(heading);
+    setHeadingFirst(true);
+    return () => {
+      setCustomHeader(null);
+      setHeadingFirst(false);
+    };
+  }, [deskTailTab, activeTab, setCustomHeader, setHeadingFirst]);
   // The console's own pages draw the Administration strip. The clerk's
   // register is deliberately not among them: it answers to `clerk-users`
   // (see the rail's Clerkship row), so opening Clerkship never meets
@@ -905,6 +958,11 @@ function AdministrationContent() {
                   department={{ code: "eldership", label: "Eldership" }}
                   onChanged={() => {}}
                   search=""
+                  // The search and the movements filter ride the page itself
+                  // here — the desk-accounts view inside the hub hosts them in
+                  // its header band, but this console page has none; without
+                  // them the desk read with no way to narrow its ledger.
+                  showInlineControls
                 />
               </div>
             )}

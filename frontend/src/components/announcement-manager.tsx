@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { ArrowUpRight, Download, Megaphone, Send, Sparkles, X } from "lucide-react";
+import { ArrowUpRight, Download, Megaphone, Search, Send, Sparkles, X } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { localDate, dayFirst } from "@/lib/dates";
 import { eventLabel } from "@/lib/announcement-dates";
@@ -328,6 +328,18 @@ export function AnnouncementManager({
 }: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean } = {}) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
+  // The board's own search — title and the words of the post, narrowing the
+  // cards above the list rather than a page refetch. The heading names the
+  // board above it, so a reader landing on Sharing finds a way through the
+  // posts without scrolling every card.
+  const [boardSearch, setBoardSearch] = useState("");
+  const visibleAnnouncements = (() => {
+    const needle = boardSearch.trim().toLowerCase();
+    if (!needle) return announcements;
+    return announcements.filter((item) =>
+      `${item.title} ${item.text} ${item.attachment_name ?? ""}`.toLowerCase().includes(needle),
+    );
+  })();
   const [showCreateModal, setShowCreateModal] = useState(composerOnly);
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1425,6 +1437,21 @@ export function AnnouncementManager({
 
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
+        {/* The board's own search, pinned at the top like every desk's search:
+            the heading above names the place, this narrows its posts. */}
+        <div className="shrink-0 border-b border-sand-line bg-white px-4 py-2.5 sm:px-6">
+          <div className="relative max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" aria-hidden="true" />
+            <input
+              type="search"
+              value={boardSearch}
+              onChange={(event) => setBoardSearch(event.target.value)}
+              placeholder="Search announcements..."
+              aria-label="Search announcements"
+              className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none transition focus:border-ember"
+            />
+          </div>
+        </div>
         {todayThought && (
           <div className="shrink-0 border-b border-sand-line bg-sand-linen/60 px-4 py-3 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -1458,24 +1485,32 @@ export function AnnouncementManager({
         {/* The announcement board is cards at every width — a bulletin reads as
             a bulletin, not as a ledger row. */}
         <RecordList
-          rows={announcements}
+          rows={visibleAnnouncements}
           loading={loadingList}
           rowKey={(item) => item.id}
           cardsOnly
           loadingLabel="Loading announcements..."
-          cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
+          cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
           cardsStateClassName="col-span-full py-12 text-center text-sm text-moss"
           cardsEmpty={
-            <>
-              <Megaphone size={36} className="text-moss-faint" aria-hidden="true" />
-              <p className="mt-3 text-sm font-semibold text-bark">No announcements available.</p>
-              <p className="mt-1 text-xs text-moss">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
-            </>
+            boardSearch.trim() ? (
+              <>
+                <Search size={32} className="text-moss-faint" aria-hidden="true" />
+                <p className="mt-3 text-sm font-semibold text-bark">No announcements match that search.</p>
+                <p className="mt-1 text-xs text-moss">Try another word, or clear the search to read the whole board.</p>
+              </>
+            ) : (
+              <>
+                <Megaphone size={36} className="text-moss-faint" aria-hidden="true" />
+                <p className="mt-3 text-sm font-semibold text-bark">No announcements available.</p>
+                <p className="mt-1 text-xs text-moss">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
+              </>
+            )
           }
           renderCard={(item) => (
             <article
               key={item.id}
-              className="flex min-h-40 flex-col gap-3 rounded-2xl border border-sand-line bg-white p-5 text-xs shadow-sm md:min-h-56 md:p-6"
+              className="flex min-h-56 flex-col gap-4 rounded-2xl border border-sand-line bg-white p-5 text-xs shadow-sm md:p-6"
             >
               <div className="flex items-start justify-between gap-3">
                 <h4 className="text-sm font-bold text-bark">{item.title}</h4>
@@ -1577,7 +1612,7 @@ export function AnnouncementManager({
         <div className="shrink-0 border-t-2 border-sand-mute bg-sand font-bold text-bark">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <span className="text-xs text-moss sm:text-sm">
-              Showing <strong className="text-bark">{announcements.length}</strong> announcement{announcements.length === 1 ? "" : "s"}
+              Showing <strong className="text-bark">{visibleAnnouncements.length}</strong> announcement{visibleAnnouncements.length === 1 ? "" : "s"}
             </span>
             <div className="flex items-center gap-2">
               <button
