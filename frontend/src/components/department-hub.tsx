@@ -5705,8 +5705,7 @@ function DepartmentDetail({
   // `eldershipViews`): the desk's roll, its baptismal class and the church's
   // calendar are views of this desk, so a press takes them in place, while
   // the rest are console pages, so a press walks to the page that holds them.
-  // The phone's map and the rail therefore meet the same eight chips, in the
-  // same order.
+  // The deaconate's rota is deliberately kept under its own desk, not here.
   const eldershipStripItems = useMemo(
     () =>
       eldershipViews.map((view) => ({
@@ -5723,8 +5722,6 @@ function DepartmentDetail({
   // those same names, so the desk reads the same chip it would there.
   const eldershipChip = useMemo(() => {
     switch (subTab) {
-      case "rota":
-        return "rota";
       case "calendar":
         return "calendar";
       case "moments":
@@ -5832,9 +5829,8 @@ function DepartmentDetail({
       return () => setCustomToggles(null);
     }
     // The eldership reads one strip wherever it is opened — the rail's row on
-    // a desk, the Eldership card in a hand — so this desk draws the same
-    // eight pages the console's strip names, rather than a second list of its
-    // own. Eight chips sit four a row on a phone: two level rows of four.
+    // a desk, the Eldership card in a hand — so this desk draws the same seven
+    // pages the console's strip names. The deaconate's rota is on its own desk.
     if (department.code === "eldership") {
       setCustomToggles(
         <SubNav
@@ -7319,15 +7315,10 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* The deaconate's property register and duty rota — the console desk's
-          own panels — ride this desk's structure wherever it opens, the same
-          way the pulpit and music rota ride their desks above. On the console
-          the desk never reaches here (its six pages are their own panels); on
-          the map this is what keeps Property and the Rota on the same page
-          structure every other view of this desk keeps. The rota filters and
-          the register's search stay the panels' own: no desk above hosts them
-          here, so `filtersHosted` is deliberately unset. */}
-      {((subTab === "inventory" && isDeaconate) || (subTab === "rota" && (isDeaconate || department.code === "eldership"))) && (
+      {/* The deaconate's property register and duty rota belong to the
+          deaconate desk alone. Its rota filters and register search stay with
+          their own panels, so `filtersHosted` is deliberately unset. */}
+      {(subTab === "inventory" || subTab === "rota") && isDeaconate && (
         <div className="h-full min-h-0">
           <DeaconateManager initialTab={subTab} desk="deaconate" embedded />
         </div>

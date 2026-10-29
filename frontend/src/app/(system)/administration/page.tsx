@@ -595,7 +595,6 @@ function AdministrationContent() {
           description: "The church's leadership, announcements, accounts and the requests members send.",
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
-            { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Duty Rota", description: "The deacons', deaconesses' and pulpit duty rosters.", href: "/administration?tab=deaconate-rota" },
             { icon: <Sparkles size={20} aria-hidden="true" />, label: "Sharing", description: "Publish announcements and share daily thoughts with the church.", href: "/administration?tab=announcements" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },

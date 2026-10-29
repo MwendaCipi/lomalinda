@@ -797,11 +797,12 @@ export const clerkshipItems: RailRow[] = [
  * The rail's Eldership row opens the desk itself, and so does a phone's
  * Eldership card; but the desk's own views and the console's pages used to be
  * two different strips, so the same desk named a different set of pages in a
- * hand and on a screen. These eight are the church's desk either way: the
+ * hand and on a screen. These seven are the church's desk either way: the
  * elders' roll, its baptismal class and the church's calendar, which the desk
  * keeps, and the leadership register, the board, the asks, the wall and the
- * accounts, which the console holds. Eight chips sit four a row on a phone —
- * two level rows of four — and as one line on a wide screen, at every door.
+ * accounts, which the console holds. The deaconate's rota is kept under its
+ * own desk, not nested under Eldership. The seven chips sit four a row on a
+ * phone and as one line on a wide screen, at every door.
  * The labels are one word at every width, the strip being long now; the one
  * hybrid is Announcements, which reads "Announce" in a hand and in full on
  * a desk.
@@ -811,22 +812,13 @@ export const clerkshipItems: RailRow[] = [
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "rota" | "baptismal-class" | "leaders" | "calendar" | "sharing" | "requests" | "moments" | "funding";
+  key: "baptismal-class" | "leaders" | "calendar" | "sharing" | "requests" | "moments" | "funding";
   label: string;
   short?: string;
   icon: LucideIcon;
   href: string;
   description: string;
 }[] = [
-  // The duty rota: the deacons', deaconesses' and pulpit rosters the elders oversee.
-  {
-    key: "rota",
-    label: "Duty Rota",
-    short: "Rota",
-    icon: ClipboardList,
-    href: "/administration?tab=deaconate-rota",
-    description: "The deacons' and deaconesses' duty rosters for the church's services.",
-  },
   // The baptismal class: who the elders are preparing for the font, their
   // walk from studying to baptism, kept by the desk itself.
   {
@@ -889,7 +881,7 @@ export const eldershipViews: {
 ];
 
 /**
- * The same eight as rail rows, so the rail, the shell's strip and the desk's
+ * The same seven as rail rows, so the rail, the shell's strip and the desk's
  * own strip can never name a different set.
  *
  * A console page answers on its `?tab=`, which is how the console's own pages
@@ -1189,7 +1181,7 @@ export const railEntries: RailEntry[] = [
   // treasurer's has always stood on its own. The office console (the roster
   // and the church's settings) is deliberately not here: the account menu is
   // its only door, so the rail carries the desks of ongoing work.
-  { label: "Eldership", icon: Armchair, items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
+  { label: "Eldership", icon: Armchair, href: "/my-areas?area=eldership&view=calendar", items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
   { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.clerkship },
   // The treasury's row names the desk; its pages are the desk's own strip (see
   // `ownStrip`), so the rail never draws a second, older list of them.
