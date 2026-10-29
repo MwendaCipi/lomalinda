@@ -10051,30 +10051,45 @@ def _get_saturdays_in_month(ref_date):
 def _gather_weekly_contributions(start_date, end_date):
     """
     Returns (saturdays, weekly_data, overall_purpose_map) where:
-    - saturdays: list of Saturday dates in the month
+    - saturdays: list of Saturday dates for weeks in the period (week 1 starts at period start)
     - weekly_data: {saturday_date: {purpose: {mpesa, bank_transfer, cheque, cash}}}
     - overall_purpose_map: {purpose: {mpesa, bank_transfer, cheque, cash, total}}
 
-    The week grid is the whole month (so the Saturday columns read as the
-    month they name), but the money in it is only what the selected range
-    covers — a treasurer who asked for the 8th to the 9th gets those two
-    days, not the month the range happens to sit in.
+    Weeks align to the reporting period: the first week of the period starts
+    at the period start (week 1), numbered sequentially from there. Only weeks
+    that fall within the period are included.
     """
-    saturdays = _get_saturdays_in_month(start_date)
-    if not saturdays:
-        saturdays = [start_date]
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except Exception:
+            pass
+    if isinstance(end_date, str):
+        try:
+            end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        except Exception:
+            pass
 
-    # Determine the month boundaries: the grid is the month the range names,
-    # the money in it is only the range itself.
-    last_sat = saturdays[-1]
-    # Week ends the Friday after the last Saturday
-    month_end = last_sat + timedelta(days=6)
-    # But cap at end_date if user specified a range
-    if end_date < month_end:
-        month_end = end_date
-    # …and open at start_date, so a range that starts on the 8th does not
-    # carry the 1st to the 7th with it.
+    # Find the Saturday that starts the week containing or beginning the period
+    # Week runs Sat-Fri; week 1 starts at the beginning of the period
+    days_since_sat = (start_date.weekday() - 5) % 7
+    period_week_start = start_date - timedelta(days=days_since_sat)
+
+    saturdays = []
+    week_sat = period_week_start
+    # Generate weeks until we've passed the end of period (up to reasonable limit like 10 weeks)
+    while week_sat <= end_date + timedelta(days=6):  # include weeks that might extend past end
+        saturdays.append(week_sat)
+        week_sat = week_sat + timedelta(days=7)
+        if len(saturdays) > 12:  # safety limit
+            break
+
+    if not saturdays:
+        saturdays = [period_week_start]
+
+    # Money is only what the selected range covers
     month_start = start_date
+    month_end = end_date
 
     # Query all contributions in range
     digital_filter = Q(status='completed', giving_type='financial') & (
@@ -10093,10 +10108,10 @@ def _gather_weekly_contributions(start_date, end_date):
         # Find the Saturday on or before this date
         days_since_sat = (d.weekday() - 5) % 7
         sat = d - timedelta(days=days_since_sat)
-        # If sat is before our first Saturday, clamp to first Saturday
+        # If sat is before our first Saturday of the period, clamp to first
         if sat < saturdays[0]:
             return saturdays[0]
-        # If sat is after our last Saturday, clamp to last Saturday
+        # If sat is after our last Saturday, clamp to last
         if sat > saturdays[-1]:
             return saturdays[-1]
         return sat
