@@ -59,8 +59,8 @@ const deskTabHeadings: Record<string, { label: string; description?: string }> =
     description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
   },
   "eldership-funding": {
-    label: "Funding",
-    description: "The church's treasury accounts, with balances and movements.",
+    label: "Requests",
+    description: "Funding requests, church treasury accounts, balances and movements.",
   },
 };
 
@@ -673,7 +673,7 @@ function AdministrationContent() {
             { icon: <FileText size={20} aria-hidden="true" />, label: "Correspondences", description: "Write, share and print the church's official correspondence.", href: "/administration?tab=correspondence" },
             { icon: <Mail size={20} aria-hidden="true" />, label: "Messaging", description: "Letters arriving at info@sdalomalinda.or.ke, and the messages the church sends.", href: "/administration?tab=emails" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Meetings", description: "The board and business meetings, agendas, files and minutes.", href: "/administration?tab=meetings" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding", description: "The church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Requests", description: "Funding requests and the church funds the clerk keeps the books for.", href: "/administration?tab=clerkship-funding" },
           ],
         }
       : null,
@@ -687,7 +687,7 @@ function AdministrationContent() {
             { icon: <Sparkles size={20} aria-hidden="true" />, label: "Sharing", description: "Publish announcements and share daily thoughts with the church.", href: "/administration?tab=announcements" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding", description: "The church's treasury accounts.", href: "/administration?tab=eldership-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Requests", description: "Funding requests and the church's treasury accounts.", href: "/administration?tab=eldership-funding" },
           ],
         }
       : null,
@@ -720,7 +720,7 @@ function AdministrationContent() {
             { icon: <ClipboardList size={20} aria-hidden="true" />, label: "Duty Rota", description: "The deacons' and deaconesses' duty rosters for the church's services.", href: "/administration?tab=deaconate-rota" },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=deaconate-moments" },
             { icon: <Calendar size={20} aria-hidden="true" />, label: "Calendar", description: "Communion services, foot washing and the ordinances the desk keeps.", href: "/administration?tab=deaconate-calendar" },
-            { icon: <Wallet size={20} aria-hidden="true" />, label: "Funding", description: "The funds the deaconate's work is answered for.", href: "/administration?tab=deaconate-funding" },
+            { icon: <Wallet size={20} aria-hidden="true" />, label: "Requests", description: "Funding requests and the funds the deaconate's work is answered for.", href: "/administration?tab=deaconate-funding" },
           ],
         }
       : null,
