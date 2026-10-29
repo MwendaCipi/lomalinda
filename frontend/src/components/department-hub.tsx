@@ -3353,18 +3353,10 @@ function LeadershipEditModal({
       people: role.holders.map((h) => ({ id: h.id, name: h.name, username: h.username, kind: h.kind })),
     }))
   );
-  // Whether this account leads the area — the one seat that fills its custom
-  // offices. The directory answers for the whole area; a unit's own read
-  // answers again when the modal switches unit.
   const [canManageCustom, setCanManageCustom] = useState<boolean>(department.can_manage_custom ?? true);
 
-  // In a department that runs as units, the board on screen is that unit's —
-  // read from the API rather than taken from the directory, which carries the
-  // department's board and not each unit's.
   useEffect(() => {
     if (!unit) return;
-    // The read is abandoned when the modal switches unit again: the effect's
-    // own signal is what stops a slower answer seating the wrong board.
     const controller = new AbortController();
     fetch(`${API_URL}/api/members/departments/${department.code}/leadership/${unitQuery(unit)}`, {
       headers: authHeaders(),
@@ -3395,111 +3387,82 @@ function LeadershipEditModal({
       .catch(() => undefined);
     return () => controller.abort();
   }, [department.code, unit]);
-  // The two base positions the desk appoints by: the Leader seat every area
-  // keeps, and the "Assistant" seat beside it where the area carries one.
-  // Eldership sits under its three named offices instead of a generic
-  // Leader, so neither is there.
+
   const leaderRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "leader") ?? null;
   const assistantRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "assistant") ?? null;
-  // The area's own offices — every row that is not the base Leader or
-  // Assistant: the seeded catalogue (Secretary, Treasurer, Choir Leader),
-  // Eldership's three elders and the deaconate's two head seats.
-  // Their seats are set by name, and (on the deaconate) by the member's sex,
-  // the way the church reads the office.
   const officeRoles = draft.filter((r) => r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
-  // Split the offices by who fills them. The church's elected seats — the
-  // three elders, the deaconate's two heads — are set from this desk wherever
-  // it can act; the area's own offices (Secretary, Treasurer, Choir Leader)
-  // are its leader's to fill, so a church officer sees them named but not
-  // pressable. The server refuses the seat all the same.
   const customRoles = officeRoles.filter((r) => r.is_custom);
 
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [roleQueries, setRoleQueries] = useState<Record<number, string>>({});
+  const [roleResults, setRoleResults] = useState<Record<number, SearchResult[]>>({});
+  const [roleSearching, setRoleSearching] = useState<Record<number, boolean>>({});
 
-  /** The one search the modal runs, debounced. The state writes ride a
-      microtask, which is what keeps the effect from cascading the render. */
   useEffect(() => {
-    const value = query.trim();
-    if (value.length < 2) {
-      void Promise.resolve().then(() => {
-        setResults([]);
-        setSearching(false);
-      });
-      return;
-    }
-    void Promise.resolve().then(() => {
-      setResults([]);
-      setSearching(true);
-    });
-    const timer = window.setTimeout(() => {
-      // The office users list is the roster the elder's desk already has.
-      fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
-        .then((res) => (res.ok ? res.json() : []))
-        .then((rows) => {
-          const q = value.toLowerCase();
-          setResults(
-            (Array.isArray(rows) ? rows : [])
-              .filter((u: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) =>
-                `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase().includes(q)
-              )
-              .slice(0, 8)
-              .map((u: { id: number; first_name?: string; last_name?: string; username: string; gender?: string }) => ({
-                id: u.id,
-                name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username,
-                username: u.username,
-                gender: u.gender,
-              }))
-          );
-        })
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-
-  /** The staged lines: every appointment the desk has set that the area
-      does not already carry. One per press, person first, position under. */
-  const staged: { roleId: number; positionLabel: string; person: RolePerson }[] = [];
-  for (const role of draft) {
-    const before = department.roles.find((r) => r.id === role.id);
-    for (const p of role.people) {
-      if (!before?.holders.some((h) => h.id === p.id && h.kind === p.kind)) {
-        staged.push({ roleId: role.id, positionLabel: seatTitle(department.code, role.name, p.kind), person: p });
+    const timers: number[] = [];
+    Object.entries(roleQueries).forEach(([roleIdStr, query]) => {
+      const roleId = Number(roleIdStr);
+      const value = query.trim();
+      if (value.length < 2) {
+        void Promise.resolve().then(() => {
+          setRoleResults((prev) => ({ ...prev, [roleId]: [] }));
+          setRoleSearching((prev) => ({ ...prev, [roleId]: false }));
+        });
+        return;
       }
-    }
-  }
-
-  /** Take one staged appointment back off the list before the save. */
-  const unstage = (line: { roleId: number; person: RolePerson }) => {
-    setDraft((current) => current.map((r) =>
-      r.id === line.roleId
-        ? { ...r, people: r.people.filter((p) => !(p.id === line.person.id && p.kind === line.person.kind)) }
-        : r
-    ));
-  };
-
-  /** Stage one appointment. A leader seat already filled asks first — the
-      staged line will replace that holder at save; assistants are uncapped,
-      so every press adds another staged line. */
-  const appoint = (role: RoleDraft, seat: "leader" | "assistant", member: SearchResult, clearQuery: () => void) => {
-    const go = () => {
-      setDraft((current) => current.map((r) => {
-        if (r.id !== role.id) return r;
-        const people = r.people.filter((p) => !(p.kind === seat && p.id === member.id));
-        const person: RolePerson = { id: member.id, name: member.name, username: member.username, kind: seat };
-        if (seat === "leader") people.unshift(person);
-        else people.push(person);
-        return { ...r, people };
-      }));
-      clearQuery();
+      void Promise.resolve().then(() => {
+        setRoleResults((prev) => ({ ...prev, [roleId]: [] }));
+        setRoleSearching((prev) => ({ ...prev, [roleId]: true }));
+      });
+      const timer = window.setTimeout(() => {
+        fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
+          .then((res) => (res.ok ? res.json() : []))
+          .then((rows) => {
+            const q = value.toLowerCase();
+            setRoleResults((prev) => ({
+              ...prev,
+              [roleId]: (Array.isArray(rows) ? rows : [])
+                .filter((u: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) =>
+                  `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase().includes(q)
+                )
+                .slice(0, 8)
+                .map((u: { id: number; first_name?: string; last_name?: string; username: string; gender?: string }) => ({
+                  id: u.id,
+                  name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username,
+                  username: u.username,
+                  gender: u.gender,
+                })),
+            }));
+          })
+          .catch(() => setRoleResults((prev) => ({ ...prev, [roleId]: [] })))
+          .finally(() => setRoleSearching((prev) => ({ ...prev, [roleId]: false })));
+      }, 250);
+      timers.push(timer);
+    });
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
     };
-    // The deaconate seats its two offices by sex, as the church reads them:
-    // the Head Deacon is a man's, the Head Deaconess a woman's. Where the
-    // member's profile records a sex, the seat refuses the wrong one before
-    // staging; a profile that does not say leaves the desk to know.
+  }, [roleQueries]);
+
+  const assignToRole = (role: RoleDraft, seat: "leader" | "assistant", member: SearchResult) => {
+    const go = () => {
+      setDraft((current) =>
+        current.map((r) => {
+          if (r.id !== role.id) return r;
+          const people = r.people.filter((p) => !(p.kind === seat && p.id === member.id));
+          const person: RolePerson = { id: member.id, name: member.name, username: member.username, kind: seat };
+          if (seat === "leader") {
+            const filtered = people.filter((p) => p.kind !== "leader");
+            return { ...r, people: [person, ...filtered.filter((p) => p.kind === "assistant")] };
+          } else {
+            if (people.some((p) => p.id === member.id && p.kind === "assistant")) return r;
+            return { ...r, people: [...people, person] };
+          }
+        })
+      );
+      setRoleQueries((prev) => ({ ...prev, [role.id]: "" }));
+      setRoleResults((prev) => ({ ...prev, [role.id]: [] }));
+    };
     const seatSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
     if (seat === "leader" && seatSex && member.gender && member.gender.toLowerCase() !== seatSex) {
       showAlert(
@@ -3515,7 +3478,7 @@ function LeadershipEditModal({
       if (holder && holder.id !== member.id) {
         showAlert(
           "Seat is taken",
-          `${seatTitle(department.code, role.name, seat)} is ${holder.name}. Appointing ${member.name} replaces them at save.`,
+          `${seatTitle(department.code, role.name, seat)} is ${holder.name}. Appointing ${member.name} replaces them.`,
           "warning",
           { confirmButtonText: "Replace", showCancelButton: true, cancelButtonText: "Cancel" }
         ).then((answer) => {
@@ -3527,9 +3490,12 @@ function LeadershipEditModal({
     go();
   };
 
-  const clearSearch = () => {
-    setQuery("");
-    setResults([]);
+  const removeFromRole = (roleId: number, person: RolePerson) => {
+    setDraft((current) =>
+      current.map((r) =>
+        r.id === roleId ? { ...r, people: r.people.filter((p) => !(p.id === person.id && p.kind === person.kind)) } : r
+      )
+    );
   };
 
   const save = async () => {
@@ -3564,6 +3530,19 @@ function LeadershipEditModal({
     }
   };
 
+  const rolesToDisplay: Array<{ role: RoleDraft; kind: "leader" | "assistant" }> = [];
+  if (leaderRole) {
+    rolesToDisplay.push({ role: leaderRole, kind: "leader" });
+  }
+  officeRoles
+    .filter((role) => canManageCustom || !role.is_custom)
+    .forEach((role) => {
+      rolesToDisplay.push({ role, kind: "leader" });
+    });
+  if (assistantRole) {
+    rolesToDisplay.push({ role: assistantRole, kind: "assistant" });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
       <div
@@ -3575,126 +3554,112 @@ function LeadershipEditModal({
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6">
           <div>
             <h3 className="text-lg font-bold text-bark">Leadership: {department.label}</h3>
-            <p className="text-[11px] text-moss">Search a member, set them into a position, then save. Contacts stay on their accounts.</p>
+            <p className="text-[11px] text-moss">Assign people to each role. Save to apply all changes.</p>
           </div>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* One search at the top: find a member, then set them into a
-            position — the leader's seat, one of the assistants', or an
-            elder's office. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search a member to appoint…"
-              className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
-            />
-          </div>
-          {/* The area's own offices, named once: a church officer sees what
-              the area carries but not the buttons — its leader fills them. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {customRoles.length > 0 && !canManageCustom && (
-            <p className="mt-2 text-[11px] text-moss">
+            <p className="text-[11px] text-moss">
               {customRoles.map((role) => role.name).join(", ")}{" "}
               {customRoles.length === 1 ? "is" : "are"} set by {department.label}&apos;s leader.
             </p>
           )}
-          <div className="mt-2 divide-y divide-sand-soft">
-            {results.map((member) => (
-              <div key={member.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <p className="min-w-0 truncate text-xs">
-                  <span className="font-semibold text-bark">{member.name}</span>
-                  <span className="ml-1.5 text-[11px] text-moss-faint">@{member.username}</span>
-                </p>
-                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                  {leaderRole && (
-                    <button
-                      type="button"
-                      onClick={() => appoint(leaderRole, "leader", member, clearSearch)}
-                      className="rounded-xl bg-ember px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-ember-deep"
-                    >
-                      {/* The seat's own word for its leader: Sabbath School
-                          seats a superintendent, everywhere else a leader. */}
-                      Set {seatTitle(department.code, leaderRole.name, "leader").toLowerCase()}
-                    </button>
-                  )}
-                  {officeRoles
-                    .filter((role) => canManageCustom || !role.is_custom)
-                    .map((role) => {
-                    // A seat the church fills by sex rests inert under a
-                    // candidate the office is not for — the profile that
-                    // says nothing leaves the button open for the desk to
-                    // judge.
-                    const seatSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
-                    const offSex = Boolean(seatSex && member.gender && member.gender.toLowerCase() !== seatSex);
-                    return (
-                      <button
-                        key={role.id}
-                        type="button"
-                        disabled={offSex}
-                        title={offSex ? `The ${role.name} is a ${seatSex === "male" ? "man" : "woman"}'s office.` : undefined}
-                        onClick={() => appoint(role, "leader", member, clearSearch)}
-                        className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition ${
-                          offSex
-                            ? "cursor-not-allowed border border-sand-line bg-sand text-moss-faint"
-                            : "bg-ember text-white hover:bg-ember-deep"
-                        }`}
-                      >
-                        Set {role.name}
-                      </button>
-                    );
-                  })}
-                  {/* Only where the area carries the base Assistant seat
-                      beside its Leader — Eldership's three offices are the
-                      whole board, so no Set assistant there. */}
-                  {assistantRole && (
-                    <button
-                      type="button"
-                      onClick={() => appoint(assistantRole, "assistant", member, clearSearch)}
-                      className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
-                    >
-                      Set assistant
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {!searching && query.trim().length >= 2 && results.length === 0 && (
-              <p className="py-2 text-center text-xs text-moss">No members match that search.</p>
-            )}
-            {searching && <p className="py-2 text-center text-xs text-moss">Searching…</p>}
-          </div>
-        </div>
 
-        {/* The staged appointments: one line per press — person, then the
-            position they were given. Nothing shows until something is set. */}
-        <div className="mt-4 space-y-2">
-          {staged.map((line) => (
-            <div key={`${line.roleId}-${line.person.id}-${line.person.kind}`} className="flex items-center justify-between gap-3 rounded-xl border border-sand-line bg-sand-plate px-3 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-bark">{line.person.name}</p>
-                <p className="text-[11px] text-moss">{line.positionLabel}</p>
+          {rolesToDisplay.map(({ role, kind }) => {
+            const assignedPeople = role.people.filter((p) => p.kind === kind);
+            const seatSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
+            const roleTitle = kind === "leader" ? seatTitle(department.code, role.name, "leader") : "Assistant";
+            const query = roleQueries[role.id] || "";
+            const results = roleResults[role.id] || [];
+            const searching = roleSearching[role.id] || false;
+            
+            return (
+              <div key={`${role.id}-${kind}`} className="rounded-xl border border-sand-line p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-bark">{roleTitle}</h4>
+                </div>
+                
+                {assignedPeople.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {assignedPeople.map((person) => (
+                      <div
+                        key={`${person.id}-${person.kind}`}
+                        className="flex items-center gap-2 rounded-lg bg-sand-plate px-2 py-1"
+                      >
+                        <span className="text-xs text-bark">{person.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFromRole(role.id, person)}
+                          className="text-moss hover:text-red-600"
+                          title="Remove"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-moss" />
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setRoleQueries((prev) => ({ ...prev, [role.id]: e.target.value }))}
+                    placeholder={`Search to assign to ${roleTitle.toLowerCase()}...`}
+                    className="w-full rounded-lg border border-sand-line bg-white py-1.5 pl-8 pr-2 text-xs focus:border-ember focus:outline-none"
+                  />
+                </div>
+                
+                {query.trim().length >= 2 && (
+                  <div className="divide-y divide-sand-soft rounded-lg border border-sand-line">
+                    {results.map((member) => {
+                      const offSex = Boolean(seatSex && member.gender && member.gender.toLowerCase() !== seatSex);
+                      return (
+                        <button
+                          key={member.id}
+                          type="button"
+                          disabled={offSex}
+                          onClick={() => {
+                            if (offSex) {
+                              showAlert(
+                                "Not this office's to hold",
+                                `The ${roleTitle} is a ${seatSex === "male" ? "man" : "woman"}'s office.`,
+                                "warning"
+                              );
+                              return;
+                            }
+                            assignToRole(role, kind, member);
+                          }}
+                          className={`w-full flex items-center justify-between px-2 py-1.5 text-left text-xs ${
+                            offSex
+                              ? "cursor-not-allowed text-moss-faint bg-sand"
+                              : "hover:bg-sand-plate text-bark"
+                          }`}
+                        >
+                          <div>
+                            <span className="font-medium">{member.name}</span>
+                            <span className="ml-1.5 text-[10px] text-moss-faint">@{member.username}</span>
+                          </div>
+                          {offSex && (
+                            <span className="text-[9px] text-moss-faint">{seatSex === "male" ? "Men only" : "Women only"}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {!searching && results.length === 0 && (
+                      <p className="px-2 py-1.5 text-center text-[11px] text-moss">No members match.</p>
+                    )}
+                    {searching && <p className="px-2 py-1.5 text-center text-[11px] text-moss">Searching...</p>}
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => unstage(line)}
-                title="Remove this appointment"
-                className="shrink-0 rounded-full p-1 text-moss transition hover:bg-white hover:text-red-600"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-          {staged.length === 0 && (
-            <p className="rounded-xl border border-dashed border-sand-line px-3 py-2 text-[11px] italic text-moss-faint">
-              No appointments set yet. Search above, then set a position.
-            </p>
-          )}
+            );
+          })}
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-sand-line px-6 py-3">
@@ -3718,6 +3683,7 @@ function LeadershipEditModal({
     </div>
   );
 }
+
 
 /**
  * Give a roll member one or more of the area's seats — picked in one combo,
