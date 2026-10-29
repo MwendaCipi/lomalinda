@@ -78,16 +78,14 @@ type WithdrawalRequestRow = {
   account_balance: string;
   amount: string;
   reason: string;
-  status: "pending" | "treasurer_approved" | "elder_approved" | "pastor_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
   requested_by: string;
-  /** The first clearance: the treasury's own read, before an elder sees it. */
+  /** The treasury's release of the money itself — the chain's last step. */
   treasurer_approved_by: string | null;
   treasurer_approved_at: string | null;
-  /** Whether the signed-in officer gave this row that first clearance. */
-  you_treasurer_approved?: boolean;
   pastor_approved_by: string | null;
   pastor_approved_at: string | null;
-  /** Whether the signed-in officer gave this row its pastoral approval. */
+  /** Whether the signed-in officer gave this row its pastoral blessing. */
   you_pastor_approved?: boolean;
   elder_approved_by: string | null;
   elder_approved_at: string | null;
@@ -104,11 +102,12 @@ type WithdrawalRequestRow = {
  * The departments' withdrawal queue — showing every request across every
  * department in a structured, actionable table.
  * Approval is four clearances in order:
- *   1. The treasury reads the ask first ("Treasurer Approve")
- *   2. An elder blesses it ("Elder Approve")
- *   3. The pastor approves it ("Pastor Approve")
- *   4. The treasury then releases the money — debiting the fund and
+ *   1. The pastor blesses the ask ("Pastor Approve")
+ *   2. An elder approves it ("Elder Approve")
+ *   3. The treasury then releases the money — debiting the fund and
  *      reflecting in Expenses — or declines
+ * Any of the three may decline at any point, but none may approve before
+ * the one ahead of them in the chain has.
  * Approved requests remain visible so the treasurer can reverse them if needed,
  * and a reversed one can be approved again while the account still covers it.
  */
@@ -170,9 +169,8 @@ export function WithdrawalRequestsPanel({
       setOpenAction(null);
       setReply("");
       const messages: Record<string, [string, string]> = {
-        pastor_approve: ["Treasury approval recorded", "The elders can now act on this request."],
-        elder_approve: ["Elder approval recorded", "The pastor approves it next."],
-        pastor_final_approve: ["Pastoral approval recorded", "The treasury can release the money now."],
+        pastor_approve: ["Pastor's approval recorded", "The elder can now act on this request."],
+        elder_approve: ["Elder approval recorded", "The treasury can release the money now."],
         approve: ["Withdrawal approved", "The fund has been debited and reflected in Expenses."],
         decline: ["Request declined", "The desk has your reply."],
         reverse: ["Withdrawal reversed", "The fund has been credited back and expense record removed."],
@@ -193,8 +191,7 @@ export function WithdrawalRequestsPanel({
   const statusBadge = (status: WithdrawalRequestRow["status"]) => {
     const map: Record<string, string> = {
       pending: "bg-sand text-bark",
-      treasurer_approved: "bg-amber-50 text-amber-800",
-      elder_approved: "bg-mist-select text-bark",
+      elder_approved: "bg-amber-50 text-amber-800",
       pastor_approved: "bg-purple-50 text-purple-800",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
@@ -202,7 +199,6 @@ export function WithdrawalRequestsPanel({
     };
     const labels: Record<string, string> = {
       pending: "Pending",
-      treasurer_approved: "Treasurer Approved",
       elder_approved: "Elder Approved",
       pastor_approved: "Pastor Approved",
       approved: "Approved",
@@ -270,7 +266,7 @@ export function WithdrawalRequestsPanel({
 
   const filteredRows = rows.filter((row) => {
     if (statusFilter === "pending") {
-      if (!["pending", "treasurer_approved", "elder_approved", "pastor_approved"].includes(row.status)) return false;
+      if (!["pending", "pastor_approved", "elder_approved"].includes(row.status)) return false;
     } else if (statusFilter === "approved") {
       if (row.status !== "approved") return false;
     } else if (statusFilter === "rejected") {
@@ -305,17 +301,17 @@ export function WithdrawalRequestsPanel({
   const money = (value: string | number) =>
     `KES ${Number(value).toLocaleString("en-KE", { minimumFractionDigits: 2 })}`;
 
-  /* The four clearances on one ask, in the order they are given: the
-     treasurer's first read, the elder's blessing, the pastor's approval —
-     and then the treasurer's own word, "Treasurer approved by …", the office
-     that actually released the money named as itself, so it is never read as
-     a second, anonymous approval. Both layouts read these same lines, so a
-     request says the same thing on a phone as on a desk. */
+  /* The clearances on one ask, in the order the church gives them: the
+     pastor's blessing, the elder's approval, and then the treasury's own
+     word, "Treasurer approved by …", the office that actually released the
+     money named as itself, so it is never read as a second, anonymous
+     approval. Both layouts read these same lines, so a request says the
+     same thing on a phone as on a desk. */
   const trail = (row: WithdrawalRequestRow) => (
     <>
-      {row.treasurer_approved_by && (
+      {row.pastor_approved_by && (
         <p className="text-[10px] text-moss-faint">
-          Treasurer approved by {row.treasurer_approved_by}
+          Pastor approved by {row.pastor_approved_by}
         </p>
       )}
       {row.elder_approved_by && (
@@ -323,9 +319,9 @@ export function WithdrawalRequestsPanel({
           Elder approved by {row.elder_approved_by}
         </p>
       )}
-      {row.pastor_approved_by && (
+      {row.treasurer_approved_by && (
         <p className="text-[10px] text-moss-faint">
-          Pastor approved by {row.pastor_approved_by}
+          Treasurer approved by {row.treasurer_approved_by}
         </p>
       )}
       {row.decided_by && (row.status === "approved" || row.status === "declined") && (
@@ -489,19 +485,23 @@ export function WithdrawalRequestsPanel({
         // The ask's four clearances, in the order it passes them: the
         // treasury's first read, the elder's blessing, the pastor's approval,
         // and then the treasury's release of the money itself.
-        const firstRead = target.status === "pending";
-        const awaitingElder = target.status === "treasurer_approved";
-        const awaitingPastor = target.status === "elder_approved";
-        const awaitingRelease = target.status === "pastor_approved";
-        const inFlight = firstRead || awaitingElder || awaitingPastor || awaitingRelease;
+        const awaitingPastor = target.status === "pending";
+        const awaitingElder = target.status === "pastor_approved";
+        const awaitingRelease = target.status === "elder_approved";
+        const inFlight = awaitingPastor || awaitingElder || awaitingRelease;
         const canReverse = target.status === "approved";
         const isReversed = target.status === "reversed";
         // Four hands, four people: whoever cleared this ask earlier cannot
         // also release it as the treasurer. The API refuses the later step,
         // and the button says why rather than letting the desk find out by
         // error.
+        // Three hands, three people: whoever blessed this ask earlier
+        // cannot also release it as the treasurer. The API refuses the
+        // later step, and the button says why rather than letting the desk
+        // find out by error.
+        const selfPastorCleared = Boolean(target.you_pastor_approved);
         const selfElderCleared = Boolean(target.you_elder_approved);
-        const selfScreened = Boolean(target.you_treasurer_approved);
+        const selfCleared = selfPastorCleared || selfElderCleared;
         // Approving a reversed request debits the fund a second time, so the
         // option is offered only while the account still covers the ask — the
         // API enforces the same rule; this keeps the button honest.
@@ -523,28 +523,26 @@ export function WithdrawalRequestsPanel({
                 </div>
                 <p className="text-moss">{target.reason}</p>
                 <p className="text-[11px] text-moss-faint">
-                  {firstRead
-                    ? "With the treasury for its first read before an elder can act."
+                  {awaitingPastor
+                    ? "Waiting on the pastor's blessing before an elder can act."
                     : awaitingElder
-                      ? "Cleared by the treasury. An elder blesses it next."
-                      : awaitingPastor
-                        ? "Cleared by the treasury and an elder. The pastor approves it next."
-                        : awaitingRelease
-                          ? "Approved by the pastor. The treasury releases or declines it now."
-                          : canReverse
-                            ? `${target.decided_by ? `Treasurer approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
-                            : isReversed
-                              ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
-                              : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
+                      ? "Blessed by the pastor. An elder approves it next."
+                      : awaitingRelease
+                        ? "Approved by the pastor and an elder. The treasury releases or declines it now."
+                        : canReverse
+                          ? `${target.decided_by ? `Treasurer approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
+                          : isReversed
+                            ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
+                            : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
                 </p>
-                {awaitingRelease && (selfElderCleared || selfScreened) && (
+                {awaitingRelease && selfCleared && (
                   <p className="mt-1.5 text-[11px] font-semibold text-ember">
-                    {selfScreened
-                      ? "You gave this request its first clearance. The treasurer who releases the money has to be someone else."
-                      : "You cleared this request as its elder. The treasurer who releases the money has to be someone else."}
+                    {selfPastorCleared
+                      ? "You gave this request its pastoral blessing. The treasurer who releases the money has to be someone else."
+                      : "You approved this request as its elder. The treasurer who releases the money has to be someone else."}
                   </p>
                 )}
-                {isReversed && (selfElderCleared || selfScreened) && (
+                {isReversed && selfCleared && (
                   <p className="mt-1.5 text-[11px] font-semibold text-ember">
                     You cleared this request earlier. The treasurer who approves it again has to be someone else.
                   </p>
@@ -582,14 +580,14 @@ export function WithdrawalRequestsPanel({
                   {inFlight || isReversed ? "Cancel" : "Close"}
                 </button>
 
-                {firstRead && (
+                {awaitingPastor && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "pastor_approve")}
                     disabled={busy}
                     className="rounded-xl border border-sand-mute bg-sand px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-sand-mute disabled:opacity-60"
                   >
-                    {busy ? "Saving…" : "Treasurer Approve"}
+                    {busy ? "Saving…" : "Pastor Approve"}
                   </button>
                 )}
 
@@ -601,17 +599,6 @@ export function WithdrawalRequestsPanel({
                     className="rounded-xl border border-mist-select bg-mist-select/30 px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
                   >
                     {busy ? "Saving…" : "Elder Approve"}
-                  </button>
-                )}
-
-                {awaitingPastor && (
-                  <button
-                    type="button"
-                    onClick={() => act(target.id, "pastor_final_approve")}
-                    disabled={busy}
-                    className="rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-1.5 text-xs font-semibold text-purple-800 transition hover:bg-purple-100 disabled:opacity-60"
-                  >
-                    {busy ? "Saving…" : "Pastor Approve"}
                   </button>
                 )}
 
@@ -630,9 +617,9 @@ export function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy || selfElderCleared || selfScreened}
+                    disabled={busy || selfCleared}
                     title={
-                      selfElderCleared || selfScreened
+                      selfCleared
                         ? "You gave this request an earlier clearance. A different treasurer must release the money."
                         : undefined
                     }
@@ -646,9 +633,9 @@ export function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy || selfElderCleared || selfScreened}
+                    disabled={busy || selfCleared}
                     title={
-                      selfElderCleared || selfScreened
+                      selfCleared
                         ? "You cleared this request earlier. A different treasurer must approve it again."
                         : undefined
                     }
@@ -694,7 +681,7 @@ export function WithdrawalRequestsPanel({
         <div>
           {filteredRows.length} {filteredRows.length === 1 ? "request" : "requests"}
           {filteredRows.length !== rows.length ? ` (filtered from ${rows.length})` : ""} ·{" "}
-          <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => ["pending", "treasurer_approved", "elder_approved", "pastor_approved"].includes(r.status)).length} awaiting action</span></span>
+          <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => ["pending", "pastor_approved", "elder_approved"].includes(r.status)).length} awaiting action</span></span>
         </div>
         {/* Refresh re-reads the request roll: gives a pending withdrawal its
             answer the instant it is approved elsewhere. First in the row. */}

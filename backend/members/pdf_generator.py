@@ -1892,7 +1892,6 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
     else:
         status_names = {
             "pending": "Pending",
-            "treasurer_approved": "Treasurer Approved",
             "elder_approved": "Elder Approved",
             "pastor_approved": "Pastor Approved",
             "approved": "Approved",
@@ -2089,7 +2088,6 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     status_names = {
         "pending": "Pending",
-        "treasurer_approved": "Treasurer Approved",
         "elder_approved": "Elder Approved",
         "pastor_approved": "Pastor Approved",
         "approved": "Approved",
@@ -2519,6 +2517,14 @@ def _program_rows(event):
             continue
         title = str(session.get('title') or '').strip()
         session_people = people_of(session.get('participants'))
+        # A free-text block — a song, a Bible verse — the resource session
+        # carries as text lines rather than as activities. Each typed line
+        # reads as its own row, the way the verse is laid on the paper.
+        text_lines = [
+            line
+            for line in str(session.get('text') or '').replace('\r\n', '\n').split('\n')
+            if line.strip()
+        ]
         children = []
         for part in (session.get('parts') or [])[:40]:
             if not isinstance(part, dict):
@@ -2533,7 +2539,7 @@ def _program_rows(event):
                 'people': part_people,
                 'indent': INDENT,
             })
-        if not title and not session_people and not children:
+        if not title and not session_people and not children and not text_lines:
             continue
         rows.append({
             'hours': _spoken_range(session.get('start'), session.get('end')),
@@ -2542,6 +2548,12 @@ def _program_rows(event):
             'indent': 0,
         })
         rows.extend(children)
+        rows.extend({
+            'hours': '',
+            'title': line,
+            'people': [],
+            'indent': INDENT,
+        } for line in text_lines)
 
     if not rows:
         rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',

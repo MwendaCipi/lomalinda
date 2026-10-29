@@ -15761,18 +15761,25 @@ class DepartmentFundTests(APITestCase):
             'id': self._pending().id, 'action': 'pastor_approve',
         }, format='json')
         self.assertEqual(pastor_bless.status_code, status.HTTP_200_OK)
-        # Then the elder gate: nothing reaches the treasurer uncleared.
+        row = self._pending()
+        self.assertEqual(row.status, 'pastor_approved')
+        self.assertEqual(row.pastor_approved_by_id, self.pastor.id)
+        # The treasurer cannot release it before the elder has blessed it.
+        self.client.force_authenticate(self.treasurer)
+        self.assertEqual(
+            self.client.post('/api/members/department-withdrawals/review/', {
+                'id': row.id, 'action': 'approve',
+            }, format='json').status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        # Then the elder gate: nothing reaches the treasury uncleared.
         self.client.force_authenticate(self.elder)
         bless = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': self._pending().id, 'action': 'elder_approve',
+            'id': row.id, 'action': 'elder_approve',
         }, format='json')
         self.assertEqual(bless.status_code, status.HTTP_200_OK)
-        # Then the pastor's approval — nothing is releasable without it.
-        self.client.force_authenticate(self.pastor)
-        final = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': self._pending().id, 'action': 'pastor_final_approve',
-        }, format='json')
-        self.assertEqual(final.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'elder_approved')
         self.client.force_authenticate(self.treasurer)
         queue = self.client.get('/api/members/department-withdrawals/review/')
         self.assertEqual([row['reason'] for row in queue.data['requests']], ['Buses to the camporee'])
@@ -15817,12 +15824,6 @@ class DepartmentFundTests(APITestCase):
         }, format='json')
         self.assertEqual(bless.status_code, status.HTTP_200_OK)
 
-        # The pastor approves it — that is what makes it releasable at all.
-        self.client.force_authenticate(self.pastor)
-        final = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': row.id, 'action': 'pastor_final_approve',
-        }, format='json')
-        self.assertEqual(final.status_code, status.HTTP_200_OK)
 
         # The same hand cannot then release it, and no money moves.
         self.client.force_authenticate(both)
@@ -15833,7 +15834,7 @@ class DepartmentFundTests(APITestCase):
         account.refresh_from_db()
         self.assertEqual(account.balance, Decimal('500.00'))
         row.refresh_from_db()
-        self.assertEqual(row.status, 'pastor_approved')
+        self.assertEqual(row.status, 'elder_approved')
 
         # The queue says why before the button is pressed...
         queue = self.client.get('/api/members/department-withdrawals/review/')
@@ -15864,10 +15865,6 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': self._pending().id, 'action': 'elder_approve',
         }, format='json')
-        self.client.force_authenticate(self.pastor)
-        self.client.post('/api/members/department-withdrawals/review/', {
-            'id': self._pending().id, 'action': 'pastor_final_approve',
-        }, format='json')
         # The ask was within the balance when it was made; the fund has
         # shrunk by the time the treasurer answers it.
         account.balance = Decimal('150.00')
@@ -15879,7 +15876,7 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         account.refresh_from_db()
         self.assertEqual(account.balance, Decimal('150.00'))
-        self.assertEqual(self._pending().status, 'pastor_approved')
+        self.assertEqual(self._pending().status, 'elder_approved')
 
     def test_the_treasurer_declines_with_a_word_back(self):
         account = self._fund()
@@ -15899,6 +15896,80 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(row.reply, 'Wait for the board')
         # The answer travels back to the desk that asked.
         self.assertTrue(any('declined' in m.subject for m in mail.outbox))
+
+    def test_no_office_approves_before_the_one_ahead(self):
+        """The chain runs pastor, then elder, then treasurer: the elder can
+        bless nothing before the pastor's approval, and the treasurer can
+        release nothing before the elder's blessing."""
+        self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '200', 'reason': 'Chairs for the seminar',
+        }, format='json')
+        row = self._pending()
+
+        self.client.force_authenticate(self.elder)
+        too_soon_elder = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'elder_approve',
+        }, format='json')
+        self.assertEqual(too_soon_elder.status_code, status.HTTP_400_BAD_REQUEST)
+        self.client.force_authenticate(self.treasurer)
+        too_soon_release = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(too_soon_release.status_code, status.HTTP_404_NOT_FOUND)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'pending')
+
+        # The pastor's approval is the first clearance; still the treasurer
+        # cannot release before the elder has blessed.
+        self.client.force_authenticate(self.pastor)
+        self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_approve',
+        }, format='json')
+        self.client.force_authenticate(self.treasurer)
+        self.assertEqual(
+            self.client.post('/api/members/department-withdrawals/review/', {
+                'id': row.id, 'action': 'approve',
+            }, format='json').status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'pastor_approved')
+
+    def test_any_office_may_decline_at_any_point(self):
+        """All three offices read every ask at every step and may reject at
+        any point — the treasurer on a pending ask, the elder after the
+        pastor's blessing, the pastor at the head of the chain."""
+        self._fund()
+        for decider, stage in ((self.treasurer, None), (self.pastor, 'pastor_approve'), (self.elder, 'pastor')):
+            self.client.force_authenticate(self.leader)
+            self.client.post('/api/members/departments/music/account/', {
+                'amount': '50', 'reason': 'A bundle of choir books',
+            }, format='json')
+            row = self._pending()
+            if stage == 'pastor_approve':
+                self.client.force_authenticate(self.pastor)
+                self.client.post('/api/members/department-withdrawals/review/', {
+                    'id': row.id, 'action': 'pastor_approve',
+                }, format='json')
+            elif stage == 'pastor':
+                self.client.force_authenticate(self.pastor)
+                self.client.post('/api/members/department-withdrawals/review/', {
+                    'id': row.id, 'action': 'pastor_approve',
+                }, format='json')
+                self.client.force_authenticate(self.elder)
+                self.client.post('/api/members/department-withdrawals/review/', {
+                    'id': row.id, 'action': 'elder_approve',
+                }, format='json')
+            self.client.force_authenticate(decider)
+            answer = self.client.post('/api/members/department-withdrawals/review/', {
+                'id': row.id, 'action': 'decline', 'reply': 'Not this time',
+            }, format='json')
+            self.assertEqual(answer.status_code, status.HTTP_200_OK)
+            row.refresh_from_db()
+            self.assertEqual(row.status, 'declined')
+            self.assertEqual(row.decided_by_id, decider.id)
 
     def test_nobody_but_the_treasurer_answers(self):
         self._fund()
@@ -15935,11 +16006,7 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'elder_approve',
         }, format='json')
-        # The pastor's approval is what makes it releasable.
-        self.client.force_authenticate(self.pastor)
-        self.client.post('/api/members/department-withdrawals/review/', {
-            'id': row.id, 'action': 'pastor_final_approve',
-        }, format='json')
+        # The elder's blessing is what makes it releasable.
         self.client.force_authenticate(self.treasurer)
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'approve',
@@ -15981,11 +16048,7 @@ class DepartmentFundTests(APITestCase):
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'elder_approve',
         }, format='json')
-        # The pastor's approval is what makes it releasable.
-        self.client.force_authenticate(self.pastor)
-        self.client.post('/api/members/department-withdrawals/review/', {
-            'id': row.id, 'action': 'pastor_final_approve',
-        }, format='json')
+        # The elder's blessing is what makes it releasable.
         self.client.force_authenticate(self.treasurer)
         self.client.post('/api/members/department-withdrawals/review/', {
             'id': row.id, 'action': 'approve',
@@ -16012,8 +16075,7 @@ class DepartmentFundTests(APITestCase):
         1. Creation lands on the pastorate's Treasury Approvals page
            (/my-areas?area=pastorate&view=treasury-approvals)
         2. The treasury's first clearance tells the elders
-        3. The elder's blessing tells the pastor
-        4. The pastor's approval tells the treasury the money can go
+        3. The elder's blessing tells the treasury the money can go
         """
         self.pastor.member_profile.phone_number = '+254711111111'
         self.pastor.member_profile.save()
@@ -16048,7 +16110,8 @@ class DepartmentFundTests(APITestCase):
         elder_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254722222222']
         self.assertTrue(len(elder_calls) >= 1)
         self.assertIn('administration?view=accounts&withdrawals=1', elder_calls[-1][0][1])
-        self.assertIn('cleared by Treasurer', elder_calls[-1][0][1])
+        # The elder clears it with a fresh SMS about the chain's wording.
+        self.assertIn('approved by Pastor', elder_calls[-1][0][1])
 
         # Step 3: Elder approves
         self.client.force_authenticate(self.elder)
@@ -16057,23 +16120,11 @@ class DepartmentFundTests(APITestCase):
         }, format='json')
         self.assertEqual(e_res.status_code, status.HTTP_200_OK)
 
-        # The pastor is told it awaits their approval.
-        pastor_final_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254711111111']
-        self.assertIn('cleared by Elder', pastor_final_calls[-1][0][1])
-
-        # Step 4: Pastor gives the final approval, and the treasury is told
-        # the money can be released.
-        self.client.force_authenticate(self.pastor)
-        f_res = self.client.post('/api/members/department-withdrawals/review/', {
-            'id': row.id, 'action': 'pastor_final_approve',
-        }, format='json')
-        self.assertEqual(f_res.status_code, status.HTTP_200_OK)
-
-        # Verify Treasury received SMS with administration withdrawals link
+        # The elder is told the treasury can now release the money.
         treasurer_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254733333333']
         self.assertTrue(len(treasurer_calls) >= 1)
         self.assertIn('administration?view=accounts&withdrawals=1', treasurer_calls[-1][0][1])
-        self.assertIn('approved by Pastor', treasurer_calls[-1][0][1])
+        self.assertIn('approved by Elder', treasurer_calls[-1][0][1])
 
 
 class SeededDepartmentFundTests(APITestCase):

@@ -1284,6 +1284,11 @@ function ProgramEditorModal({
     setOpenSession((open) => (open === null ? null : open > index ? open - 1 : open === index ? null : open));
   };
   const emptySession = { start: "", end: "", title: "", participants: [], parts: [] };
+  /** The first line a free-text block carries — what its strip reads. */
+  const firstLineOf = (text?: string): string =>
+    typeof text === "string"
+      ? text.split("\n").map((line) => line.trim()).filter(Boolean)[0] ?? ""
+      : "";
   /** Where an added activity starts: immediately where the one before it
       leaves off — its end hour (its own start, when it named no end) — so
       the desk chains the day without re-typing a time it just wrote. */
@@ -1590,95 +1595,135 @@ function ProgramEditorModal({
   };
   /** Two sessions trade places and start times. Every nested activity moves
       by the same offset as its session, preserving gaps and durations. */
-  const swapSessions = (fromIndex: number, toIndex: number) => {
+  // The hour a session stands at, however it was typed: its own field, or
+  // the first hour its activities carry.
+  const startOfSession = (item: ProgramItem) =>
+    hourMinutes(item.start) ?? item.parts.map((part) => hourMinutes(part.start)).find((time) => time !== null) ?? null;
+  // The hour a session ends at: its own field, or the last hour its
+  // activities leave the day at.
+  const endOfSession = (item: ProgramItem) => {
+    const end = hourMinutes(item.end);
+    if (end !== null) return end;
+    const last = item.parts[item.parts.length - 1];
+    if (!last) return null;
+    return hourMinutes(last.end) ?? hourMinutes(last.start);
+  };
+  const shiftSession = (item: ProgramItem, delta: number) => {
+    const move = (hour: string) => {
+      const minutes = hourMinutes(hour);
+      return minutes === null ? hour : minuteHour(minutes + delta);
+    };
+    return {
+      ...item,
+      start: move(item.start),
+      end: move(item.end),
+      parts: item.parts.map((part) => ({ ...part, start: move(part.start), end: move(part.end) })),
+    };
+  };
+  /**
+   * A session set down on another: the mover takes the hour it lands on —
+   * nothing traded away — and the sessions after it are pushed along so
+   * the day stays one unbroken walk: each begins where the one before it
+   * now ends, every length keeping its minutes. Nothing before the drop
+   * moves; a session nobody typed an hour into stops the walk rather than
+   * inventing one.
+   */
+  const moveSessions = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
-    setOpenSession((open) => open === fromIndex ? toIndex : open === toIndex ? fromIndex : open);
+    // The open strip follows the card it belongs to.
+    setOpenSession((open) => {
+      if (open === null) return null;
+      const landed = fromIndex < toIndex ? toIndex - 1 : toIndex;
+      const afterRemoval = open === fromIndex ? landed : open > fromIndex ? open - 1 : open;
+      return afterRemoval >= landed && afterRemoval !== landed ? afterRemoval + 1 : afterRemoval;
+    });
     setItems((current) => {
       const next = current.map((item) => ({
         ...item,
         participants: [...item.participants],
         parts: item.parts.map((part) => ({ ...part, participants: [...part.participants] })),
       }));
-      const dragged = next[fromIndex];
-      const target = next[toIndex];
-      if (!dragged || !target) return current;
-
-      const startOf = (item: ProgramItem) =>
-        hourMinutes(item.start) ?? item.parts.map((part) => hourMinutes(part.start)).find((time) => time !== null) ?? null;
-      const shift = (item: ProgramItem, delta: number) => {
-        const move = (hour: string) => {
-          const minutes = hourMinutes(hour);
-          return minutes === null ? hour : minuteHour(minutes + delta);
-        };
-        return {
-          ...item,
-          start: move(item.start),
-          end: move(item.end),
-          parts: item.parts.map((part) => ({ ...part, start: move(part.start), end: move(part.end) })),
-        };
-      };
-      const fromStart = startOf(dragged);
-      const toStart = startOf(target);
-      if (fromStart !== null && toStart !== null) {
-        next[fromIndex] = shift(target, fromStart - toStart);
-        next[toIndex] = shift(dragged, toStart - fromStart);
-      } else {
-        next[fromIndex] = target;
-        next[toIndex] = dragged;
+      // The hour it met was typed on the original rows — read the target's
+      // start from those before anything is shifted.
+      const targetStart = startOfSession(current[toIndex]);
+      const draggedStart = startOfSession(current[fromIndex]);
+      const draggedEnd = endOfSession(current[fromIndex]);
+      const draggedLength = draggedStart !== null && draggedEnd !== null && draggedEnd >= draggedStart ? draggedEnd - draggedStart : null;
+      // The slots: lift the mover out, place it where it was dropped.
+      const slot = fromIndex < toIndex ? toIndex - 1 : toIndex;
+      const dragged = next.splice(fromIndex, 1)[0];
+      if (!dragged) return current;
+      next.splice(slot, 0, dragged);
+      if (targetStart === null || draggedLength === null || draggedStart === null) return next;
+      // The mover begins where the one it met began; its end is carried
+      // with it, so the walk after it starts from where it now ends.
+      next[slot] = shiftSession(next[slot], targetStart - draggedStart);
+      let previousEnd: number | null = targetStart + draggedLength;
+      for (let i = slot + 1; i < next.length && previousEnd !== null; i++) {
+        const item = next[i];
+        const start = startOfSession(item);
+        const end = endOfSession(item);
+        // An hour nobody typed is a boundary the walk stops at — a session
+        // without one keeps its hours exactly as they were typed.
+        if (start === null || end === null || end < start) break;
+        const length = end - start;
+        if (previousEnd !== start) next[i] = shiftSession(item, previousEnd - start);
+        previousEnd = previousEnd + length;
       }
       return next;
     });
   };
-  /** Two activities trade places — each keeping its own length, and
-      trading start hours: the card set down begins where the one it met
-      began, and the one met takes the hour the card left behind. A length
-      travels with its activity, so nothing is compressed by the move. */
-  const swapParts = (from: { session: number; part: number }, to: { session: number; part: number }) => {
+  /**
+   * An activity set down on another, same walk one row smaller: the mover
+   * takes the hour it lands on and keeps its own length, and every
+   * activity after it — across the session line too — then begins where
+   * the one before it now ends. Nothing before the drop moves; an activity
+   * nobody typed an hour into stops the walk rather than inventing one.
+   */
+  const moveParts = (from: { session: number; part: number }, to: { session: number; part: number }) => {
     if (from.session === to.session && from.part === to.part) return;
     setItems((current) => {
       const next = current.map((session) => ({
         ...session,
         parts: session.parts.map((part) => ({ ...part, participants: [...part.participants] })),
       }));
+      // The entire programme's activities, in the order the sheet reads
+      // them: the drop walks this line, so the push crosses from one
+      // session's rows into the next as the day itself does.
+      const order: { session: number; part: number }[] = [];
+      current.forEach((session, sessionIndex) => session.parts.forEach((_, partIndex) => order.push({ session: sessionIndex, part: partIndex })));
+      const fromPos = order.findIndex((row) => row.session === from.session && row.part === from.part);
+      const toPos = order.findIndex((row) => row.session === to.session && row.part === to.part);
+      if (fromPos < 0 || toPos < 0) return current;
       const dragged = next[from.session].parts[from.part];
-      const target = next[to.session].parts[to.part];
-      if (!dragged || !target) return current;
-      const movedStart = hourMinutes(dragged.start);
-      const movedEnd = hourMinutes(dragged.end);
-      const metStart = hourMinutes(target.start);
-      const metEnd = hourMinutes(target.end);
-      if (movedStart !== null && metStart !== null) {
-        // An hour the activity never named as its end stays unnamed — a new
-        // slot takes its hour as it came, start with no far side.
-        const movedLength = Math.max(0, (movedEnd ?? movedStart) - movedStart);
-        const metLength = Math.max(0, (metEnd ?? metStart) - metStart);
-        next[from.session].parts[from.part] = {
-          start: minuteHour(metStart),
-          end: movedEnd === null ? "" : minuteHour(metStart + movedLength),
-          title: target.title,
-          participants: target.participants,
-        };
-        next[to.session].parts[to.part] = {
-          start: minuteHour(movedStart),
-          end: metEnd === null ? "" : minuteHour(movedStart + metLength),
-          title: dragged.title,
-          participants: dragged.participants,
-        };
-      } else {
-        // One side names no hour to begin from: the cards trade what they
-        // hold and each keeps the hours it brought.
-        next[from.session].parts[from.part] = {
-          start: dragged.start,
-          end: dragged.end,
-          title: target.title,
-          participants: target.participants,
-        };
-        next[to.session].parts[to.part] = {
-          start: target.start,
-          end: target.end,
-          title: dragged.title,
-          participants: dragged.participants,
-        };
+      if (!dragged) return current;
+      const draggedStart = hourMinutes(dragged.start);
+      const draggedEnd = hourMinutes(dragged.end);
+      const draggedLength = draggedStart !== null && draggedEnd !== null && draggedEnd >= draggedStart ? draggedEnd - draggedStart : null;
+      const targetStart = hourMinutes(current[to.session].parts[to.part]?.start);
+      const slot = fromPos < toPos ? toPos - 1 : toPos;
+      order.splice(fromPos, 1);
+      order.splice(slot, 0, from);
+      if (targetStart === null || draggedLength === null) return next;
+      next[from.session].parts[from.part] = {
+        ...next[from.session].parts[from.part],
+        start: minuteHour(targetStart),
+        end: hourMinutes(next[from.session].parts[from.part].end) === null ? "" : minuteHour(targetStart + draggedLength),
+        text: next[from.session].parts[from.part].text,
+      };
+      let previousEnd: number | null = targetStart + draggedLength;
+      for (let i = slot + 1; i < order.length && previousEnd !== null; i++) {
+        const row = order[i];
+        const part = next[row.session].parts[row.part];
+        const start = hourMinutes(part.start);
+        const end = hourMinutes(part.end);
+        if (start === null || end === null || end < start) break;
+        const length = end - start;
+        if (previousEnd !== start) {
+          part.start = minuteHour(previousEnd);
+          part.end = minuteHour(previousEnd + length);
+        }
+        previousEnd = previousEnd + length;
       }
       return next;
     });
@@ -1994,7 +2039,7 @@ function ProgramEditorModal({
           <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
             <div className="min-w-0 flex-1 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             <p className="text-xs text-moss">
-              Each session is one part of the day. Drag a session onto another to exchange positions and start times while keeping each session’s duration. Open a session to add the activities inside it.
+              Each session is one part of the day. Drag a session onto another: it takes that session's start time, and the ones after it are pushed along — each starting where the one before it ends, every length kept. Open a session to add the activities inside it.
             </p>
             <div className="mt-3 space-y-3">
           {items.map((session, index) => {
@@ -2012,7 +2057,7 @@ function ProgramEditorModal({
                 onDrop={(event) => {
                   dropOnSource(event);
                   const source = dragSource.current;
-                  if (source?.kind === "session") swapSessions(source.session, index);
+                  if (source?.kind === "session") moveSessions(source.session, index);
                   endDrag();
                 }}
                 className={`overflow-hidden rounded-2xl border bg-white transition ${
@@ -2031,7 +2076,7 @@ function ProgramEditorModal({
                     draggable
                     onDragStart={beginDrag({ kind: "session", session: index }, sessionCardId(index))}
                     onDragEnd={endDrag}
-                    title="Drag onto another session to exchange positions and start times"
+                    title="Drag onto another session: it takes that start time, and later sessions are pushed along"
                     aria-label={`Drag session ${index + 1} to another position`}
                     className="flex shrink-0 cursor-grab items-center self-stretch px-2 active:cursor-grabbing"
                   >
@@ -2062,7 +2107,10 @@ function ProgramEditorModal({
                       </span>
                     )}
                     <span className="min-w-0 truncate text-xs font-semibold text-bark">
-                      {session.title || "Untitled session"}
+                      {/* A free-text block: the first line it carries, else
+                          what it is — the strip reads the text, not the
+                          number of the row it sits on. */}
+                      {session.title || firstLineOf(session.text) || (session.text !== undefined ? "Free text" : "Untitled session")}
                     </span>
                   </button>
                   <button
@@ -2080,21 +2128,40 @@ function ProgramEditorModal({
                     id={`${uid}-session-${index}`}
                     className="space-y-3 border-t border-sand-line bg-sand-plate p-3"
                   >
-                    <label className="block">
-                      <span className="block text-[11px] font-semibold text-moss">Name</span>
-                      <input
-                        type="text"
-                        value={session.title}
-                        onChange={(e) => setSession(index, { title: e.target.value })}
-                        aria-label={`Name of session ${index + 1}`}
-                        placeholder="Sabbath School"
-                        className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
-                      />
-                    </label>
+            {/* A free-text block is the open panel's whole form: one
+                textarea, no name, no hour — the text is what the sheet
+                prints. */}
+            {session.text !== undefined ? (
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-moss">Text</span>
+                <textarea
+                  rows={4}
+                  value={session.text}
+                  onChange={(e) => setSession(index, { text: e.target.value })}
+                  aria-label={`Text of block ${index + 1}`}
+                  placeholder="A song, a Bible verse, anything the programme should carry…"
+                  className="mt-1 w-full resize-y rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                />
+              </label>
+            ) : (
+              <label className="block">
+                <span className="block text-(11px] font-semibold text-moss">Name</span>
+                <input
+                  type="text"
+                  value={session.title}
+                  onChange={(e) => setSession(index, { title: e.target.value })}
+                  aria-label={`Name of session ${index + 1}`}
+                  placeholder="Sabbath School"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs focus:border-ember focus:outline-none"
+                />
+              </label>
+            )}
 
                     {/* The activities this session holds: each opened by its own
                         button, and each one entered under the time it runs,
-                        its name and its facilitator. */}
+                        its name and its facilitator. A free-text block holds
+                        nothing but its text. */}
+            {session.text === undefined && (
                     <div className="space-y-2 border-t border-sand-line pt-3">
                       {session.parts.length > 0 && (
                         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-moss">
@@ -2110,10 +2177,9 @@ function ProgramEditorModal({
                           onDragLeave={leaveDrop(partCardId(index, partIndex))}
                           onDrop={(event) => {
                             dropOnSource(event);
-                            const source = dragSource.current;
-                            if (source?.kind === "part") {
-                              swapParts(source, { session: index, part: partIndex });
-                            }
+                            const source = dragSource.current;                              if (source?.kind === "part") {
+                                moveParts(source, { session: index, part: partIndex });
+                              }
                             endDrag();
                           }}
                           className={`rounded-xl border bg-white p-2.5 transition ${
@@ -2131,7 +2197,7 @@ function ProgramEditorModal({
                                   beginDrag({ kind: "part", session: index, part: partIndex }, partCardId(index, partIndex))
                                 }
                                 onDragEnd={endDrag}
-                                title="Drag onto another activity to swap places"
+                                title="Drag onto another activity: it takes that start time, and later activities are pushed along"
                                 className="flex shrink-0 cursor-grab active:cursor-grabbing"
                               >
                               <GripVertical
@@ -2319,6 +2385,7 @@ function ProgramEditorModal({
                         </button>
                       </div>
                     </div>
+            )}
                   </div>
                 )}
               </div>
@@ -2355,6 +2422,23 @@ function ProgramEditorModal({
               className={`inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep${isPage ? " min-w-0 flex-1 justify-center" : ""}`}
             >
               <Plus className="h-3.5 w-3.5" /> Add session
+            </button>
+            {/* A free-text block of the day: one box for whatever the
+                programme should carry as written — a song, a Bible verse —
+                with no hour asked for. It stands like a session, so it is
+                dragged anywhere the same grip drags the others. */}
+            <button
+              type="button"
+              onClick={() => {
+                setItems((current) => [...current, { ...emptySession, text: "" }]);
+                setOpenSession(items.length);
+                pendingScrollRef.current = sessionCardId(items.length);
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Add Free Text</span>
+              <span className="sm:hidden">Free Text</span>
             </button>
             {isPage && (
               <>
@@ -4287,7 +4371,7 @@ type FundWithdrawal = {
   account_description?: string;
   amount: string;
   reason: string;
-  status: "pending" | "treasurer_approved" | "elder_approved" | "pastor_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
   reply: string;
   requested_by: string;
   created_at: string;
@@ -4351,7 +4435,7 @@ type UnifiedAccountItem = {
   amount: number;
   isOutflow: boolean;
   category: "contribution" | "withdrawal";
-  status: "completed" | "pending" | "treasurer_approved" | "elder_approved" | "pastor_approved" | "approved" | "declined" | "reversed";
+  status: "completed" | "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
   accountId?: number;
   accountName?: string;
   accountDescription?: string;
@@ -4704,8 +4788,7 @@ export function DepartmentAccountsPanel({
     const map: Record<string, string> = {
       completed: "bg-sand text-moss",
       pending: "bg-amber-50 text-amber-800",
-      treasurer_approved: "bg-amber-50 text-amber-800",
-      elder_approved: "bg-mist-select text-bark",
+      elder_approved: "bg-amber-50 text-amber-800",
       pastor_approved: "bg-purple-50 text-purple-800",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
@@ -4714,7 +4797,6 @@ export function DepartmentAccountsPanel({
     const labels: Record<string, string> = {
       completed: "Completed",
       pending: "Pending",
-      treasurer_approved: "Treasurer Approved",
       elder_approved: "Elder Approved",
       pastor_approved: "Pastor Approved",
       approved: "Approved",

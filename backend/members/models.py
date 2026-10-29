@@ -2501,24 +2501,25 @@ class TreasuryAccountTransaction(models.Model):
 class DepartmentWithdrawalRequest(models.Model):
     """A department asks its treasurer to pay money out of its own fund.
 
-    The approval travels in two steps:
-      1. A pastor (or admin) blesses the request — status becomes
+    The approval travels in three steps, in a fixed order — each officer can
+    see and decline the ask at any point, but none can approve before the
+    one ahead of them has:
+      1. The pastor (or admin) blesses the request — status becomes
          ``pastor_approved``.
-      2. An elder (or admin) then blesses the request — status becomes
+      2. An elder (or admin) then blesses it — status becomes
          ``elder_approved``.
-      3. The treasurer then approves (debiting the fund) or declines.
+      3. The treasurer releases it (debiting the fund) or declines.
 
     Once approved, the treasurer may also reverse the debit — returning the
     money to the fund and marking the request ``reversed``. A reversed
-    request can then be approved again (the fund is debited a second time),
-    so a reversal is a correction rather than a dead end.
+    request can then be released again by the treasurer (the fund is debited
+    a second time), so a reversal is a correction rather than a dead end.
     """
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('treasurer_approved', 'Treasurer Approved'),
-        ('elder_approved', 'Elder Approved'),
         ('pastor_approved', 'Pastor Approved'),
+        ('elder_approved', 'Elder Approved'),
         ('approved', 'Approved'),
         ('declined', 'Declined'),
         ('reversed', 'Reversed'),
@@ -2530,27 +2531,28 @@ class DepartmentWithdrawalRequest(models.Model):
     reason = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_withdrawals_requested')
-    # Pastor gate — set when a pastor (or admin) blesses the request.
+    # Pastor gate — the first clearance, set when a pastor (or admin) blesses
+    # the pending ask.
     pastor_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='department_withdrawals_pastor_approved',
     )
     pastor_approved_at = models.DateTimeField(null=True, blank=True)
-    # Treasurer gate — set on the treasurer's first read of the ask, which is
-    # what puts it in front of an elder.
-    treasurer_approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='department_withdrawals_treasurer_approved',
-    )
-    treasurer_approved_at = models.DateTimeField(null=True, blank=True)
     # Elder gate — set when an elder (or admin) blesses the request after the
-    # treasurer's first read.
+    # pastor's approval.
     elder_approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='department_withdrawals_elder_approved',
     )
     elder_approved_at = models.DateTimeField(null=True, blank=True)
-    # Treasurer decision — set when the treasurer approves or declines.
+    # Treasurer gate — set when the treasurer releases the money, the last of
+    # the three clearances.
+    treasurer_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_withdrawals_treasurer_approved',
+    )
+    treasurer_approved_at = models.DateTimeField(null=True, blank=True)
+    # Treasurer decision — set when the treasurer releases or declines.
     decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='department_withdrawals_decided')
     decided_at = models.DateTimeField(null=True, blank=True)
     reply = models.CharField(max_length=255, blank=True, default='')

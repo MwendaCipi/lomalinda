@@ -38,6 +38,10 @@ export type ProgramPart = {
   end: string;
   title: string;
   participants: ProgramParticipant[];
+  /** Free text the row carries in place of — or beside — its name: a
+      Bible verse, a song, anything the programme should say as it is
+      typed. A session marked this way is a text block, not an hour. */
+  text?: string;
 };
 
 /** One session of the order of service — Sabbath School, holding the activities that run through it. */
@@ -121,12 +125,14 @@ function parsePart(raw: unknown): ProgramPart | null {
   const entry = raw as Partial<ProgramPart> & { parts?: unknown };
   const title = String(entry.title ?? "").trim();
   const participants = parseParticipants(entry.participants);
-  if (!title && participants.length === 0) return null;
+  const text = typeof entry.text === "string" ? String(entry.text) : undefined;
+  if (!title && participants.length === 0 && !text?.trim()) return null;
   return {
     start: toClock(entry.start),
     end: toClock(entry.end),
     title,
     participants,
+    ...(text !== undefined ? { text } : {}),
   };
 }
 
@@ -166,9 +172,9 @@ export function serializeProgramItems(items: ProgramItem[]): ProgramItem[] {
   return parseProgramItems(JSON.stringify(items));
 }
 
-/** Does this session have anything to print — a name, or an activity within it? */
+/** Does this session have anything to print — a name, an activity within it, or a block of free text? */
 export function programItemHasContent(item: ProgramItem): boolean {
-  return Boolean(item.title.trim()) || item.participants.length > 0 || item.parts.length > 0;
+  return Boolean(item.title.trim()) || item.participants.length > 0 || item.parts.length > 0 || Boolean(item.text?.trim());
 }
 
 /**
@@ -341,60 +347,91 @@ export function ProgramDocument({
           </h3>
           <ul className="mx-auto mt-4 max-w-md divide-y divide-sand-line border-y border-sand-line text-left">
             {items.map((item, index) => {
-              // The hours this row runs, printed beside its name only when
-              // it carries any: a session no longer collects hours of its
-              // own (the activities hold the time), so it prints as its
-              // name alone rather than against a column of dashes.
               const range = sessionRange(item);
+              // A free-text block — a song, a Bible verse — prints the way
+              // the desk wrote it: each typed line its own line, under the
+              // hour column every row shares, and nothing invented beside
+              // it.
+              const freeTextLines = (item.text ?? "")
+                .replace(/\r\n/g, "\n")
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean);
+              const freeTextOnly =
+                freeTextLines.length > 0 && !item.title && item.participants.length === 0 && item.parts.length === 0;
               return (
                 <li
                   key={`${item.start}-${item.title}-${index}`}
                   id={idPrefix ? `${idPrefix}-session-${index}` : undefined}
                   className="py-3"
                 >
-                  <div className="flex items-baseline gap-4">
-                    {/* The hour's own column, held open whether the row
-                        carries one or not: the name — and the facilitators
-                        under it — begin at the same place the whole sheet
-                        down, the way the papers print them. */}
-                    <span
-                      className={`${TIME_COL} shrink-0 text-right text-sm font-semibold text-ember`}
-                      aria-hidden={range === "—"}
-                    >
-                      {range !== "—" ? range : ""}
-                    </span>
-                    <span className="text-sm font-semibold leading-6 text-bark">
-                      {item.title || "—"}
-                    </span>
-                  </div>
-                  <Facilitators people={item.participants} className={`mt-1 ${TIME_INDENT}`} />
-
-                  {/* What happens inside the session, indented behind a rule —
-                      the printed programme's own way of showing a part of the
-                      day holding the activities that run through it. */}
-                  {item.parts.length > 0 && (
-                    <ul className="mt-1.5 ml-2 space-y-2 border-l-2 border-sand-line pl-3">
-                      {item.parts.map((part, partIndex) => {
-                        const partRange = sessionRange(part);
-                        return (
-                          <li
-                            key={`${part.start}-${part.title}-${partIndex}`}
-                            id={idPrefix ? `${idPrefix}-part-${index}-${partIndex}` : undefined}
-                          >
-                            <div className="flex items-baseline gap-4">
-                              <span
-                                className={`${TIME_COL} shrink-0 text-right text-xs font-semibold text-ember`}
-                                aria-hidden={partRange === "—"}
-                              >
-                                {partRange !== "—" ? partRange : ""}
-                              </span>
-                              <span className="text-xs font-semibold leading-5 text-bark">{part.title || "—"}</span>
-                            </div>
-                            <Facilitators people={part.participants} className={TIME_INDENT} />
-                          </li>
-                        );
-                      })}
+                  {freeTextOnly ? (
+                    <ul className={`space-y-0.5 ${TIME_INDENT}`}>
+                      {freeTextLines.map((line, lineIndex) => (
+                        <li key={lineIndex} className="whitespace-pre-wrap text-sm font-semibold leading-6 text-bark">
+                          {line}
+                        </li>
+                      ))}
                     </ul>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-4">
+                        {/* The hour's own column, held open whether the row
+                            carries one or not: the name — and the facilitators
+                            under it — begin at the same place the whole sheet
+                            down, the way the papers print them. */}
+                        <span
+                          className={`${TIME_COL} shrink-0 text-right text-sm font-semibold text-ember`}
+                          aria-hidden={range === "—"}
+                        >
+                          {range !== "—" ? range : ""}
+                        </span>
+                        <span className="text-sm font-semibold leading-6 text-bark">
+                          {item.title || "—"}
+                        </span>
+                      </div>
+                      <Facilitators people={item.participants} className={`mt-1 ${TIME_INDENT}`} />
+
+                      {/* What happens inside the session, indented behind a rule —
+                          the printed programme's own way of showing a part of the
+                          day holding the activities that run through it. */}
+                      {item.parts.length > 0 && (
+                        <ul className="mt-1.5 ml-2 space-y-2 border-l-2 border-sand-line pl-3">
+                          {item.parts.map((part, partIndex) => {
+                            const partRange = sessionRange(part);
+                            return (
+                              <li
+                                key={`${part.start}-${part.title}-${partIndex}`}
+                                id={idPrefix ? `${idPrefix}-part-${index}-${partIndex}` : undefined}
+                              >
+                                <div className="flex items-baseline gap-4">
+                                  <span
+                                    className={`${TIME_COL} shrink-0 text-right text-xs font-semibold text-ember`}
+                                    aria-hidden={partRange === "—"}
+                                  >
+                                    {partRange !== "—" ? partRange : ""}
+                                  </span>
+                                  <span className="text-xs font-semibold leading-5 text-bark">{part.title || "—"}</span>
+                                </div>
+                                <Facilitators people={part.participants} className={TIME_INDENT} />
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+
+                      {/* Typed lines beside a named row — the verses a session
+                          carries under it — print beneath its people. */}
+                      {freeTextLines.length > 0 && !freeTextOnly && (
+                        <ul className={`mt-1.5 space-y-0.5 ${TIME_INDENT}`}>
+                          {freeTextLines.map((line, lineIndex) => (
+                            <li key={lineIndex} className="whitespace-pre-wrap text-xs leading-5 text-moss">
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
                 </li>
               );
