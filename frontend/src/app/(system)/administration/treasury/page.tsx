@@ -900,7 +900,7 @@ export default function TreasuryPage() {
     const rows = payload.periods ?? [];
     setPeriods(rows);
     // Land on the close just written: the treasurer reads what they have just
-    // cut off, and the button they pressed is now the Edit Close for it.
+    // cut off, and the button they pressed is now the Edit Period for it.
     const savedIndex = rows.findIndex((period) => period.id === payload.period?.id);
     const index = savedIndex >= 0 ? savedIndex : rows.length - 1;
     if (index < 0) return;
@@ -950,7 +950,7 @@ export default function TreasuryPage() {
   // everywhere else, which is always the open books.
   const currentPeriod = periods[periodIndex] ?? null;
   const latestClosedId = [...periods].reverse().find((period) => !period.is_open)?.id ?? null;
-  const editingThisClose = Boolean(currentPeriod && !currentPeriod.is_open && currentPeriod.id === latestClosedId);
+  const editingThisPeriod = Boolean(currentPeriod && !currentPeriod.is_open && currentPeriod.id === latestClosedId);
 
 
   const toggleExpandPurpose = async (purposeName: string) => {
@@ -1722,16 +1722,16 @@ export default function TreasuryPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setPeriodModal(editingThisClose ? "edit" : "close")}
+                          onClick={() => setPeriodModal(editingThisPeriod ? "edit" : "close")}
                           title={
-                            editingThisClose
+                            editingThisPeriod
                               ? "Move this period's close"
                               : "Close the period the books are in"
                           }
                           className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-bark px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90"
                         >
                           <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" aria-hidden="true" />
-                          <span className="truncate">{editingThisClose ? "Edit Close" : "Close Period"}</span>
+                          <span className="truncate">{editingThisPeriod ? "Edit Period" : "Close Period"}</span>
                         </button>
                         <button
                           type="button"

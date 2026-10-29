@@ -157,7 +157,7 @@ export function ClosePeriodModal({
           <div>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-bark">
               <Lock className="h-4 w-4 text-ember" aria-hidden="true" />
-              {mode === "edit" ? "Edit Close" : "Close Period"}
+              {mode === "edit" ? "Edit Period" : "Close Period"}
             </h2>
             <p className="mt-1 text-xs leading-5 text-moss">
               {mode === "edit"
@@ -262,7 +262,7 @@ export function ClosePeriodModal({
               className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60"
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-              {mode === "edit" ? "Save Close" : "Close Period"}
+              {mode === "edit" ? "Save" : "Close Period"}
             </button>
           </div>
         </form>
