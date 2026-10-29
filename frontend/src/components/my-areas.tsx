@@ -7,6 +7,7 @@ import { LogOut, MoreVertical, UserPlus, Users } from "lucide-react";
 import { usePageHeader } from "@/components/app-frame";
 import { SubNav } from "@/components/sub-nav";
 import {
+  areaSearchWords,
   DEACONATE_ROLES,
   deaconateViews,
   ELDER_ROLES,
@@ -186,14 +187,15 @@ export function MyAreas() {
   // map the member may see, so an area is as findable from "My Ministry" as
   // from "Other Ministries". The toggle keeps naming the half being browsed —
   // it is the list beside the search, not a fence around it — and clearing the
-  // box puts that half back exactly as it was.
+  // box puts that half back exactly as it was. The short forms count too: a
+  // member who types "apm" or "amm" means the desk, not the long name on it.
   const [search, setSearch] = useState("");
   const searchNeedle = search.trim().toLowerCase();
   const matches = useMemo(
     () =>
       searchNeedle
         ? searchable.filter((area) =>
-            `${area.label} ${area.description} ${area.holders.map((holder) => holder.name).join(" ")}`
+            `${area.label} ${area.description} ${area.holders.map((holder) => holder.name).join(" ")} ${areaSearchWords(area.code, area.label)}`
               .toLowerCase()
               .includes(searchNeedle)
           )

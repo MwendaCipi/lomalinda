@@ -69,6 +69,7 @@ import { showOfflineGuard } from "@/components/toast";
 import {
   areaHasMoments,
   areaHasMessaging,
+  areaSearchWords,
   DEPARTMENT_BLURBS,
   deaconateViews,
   departmentDeskCode,
@@ -7984,7 +7985,10 @@ export function DepartmentHub({
   const directoryNeedle = directorySearch.trim().toLowerCase();
   const visibleDepartments = directoryNeedle
     ? departments.filter((d) =>
-        `${shortDeptLabel(d)} ${d.label} ${d.leader?.name ?? ""} ${d.assistants.map((a) => a.name).join(" ")}`
+        // The short forms ride beside the row's words: the initials on its
+        // badge, the church record's own code and the older spellings of it
+        // ("amo" for the men's fellowship) all reach the desk.
+        `${shortDeptLabel(d)} ${d.label} ${d.leader?.name ?? ""} ${d.assistants.map((a) => a.name).join(" ")} ${areaSearchWords(d.code, d.label)}`
           .toLowerCase()
           .includes(directoryNeedle)
       )

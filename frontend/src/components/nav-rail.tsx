@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Mail, Menu, Search, UserPlus } from "lucide-react";
 
-import { entryHref, railFor, railSectionsFor, type RailRow } from "@/config/navigation";
+import { areaSearchWords, entryHref, railFor, railSectionsFor, type RailRow } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
 import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -80,7 +80,11 @@ export function NavRail() {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const matches = (row: { label: string; short?: string; description?: string; dept?: string }) => {
-    const hay = `${row.label}${row.short ? ` ${row.short}` : ""}`.toLowerCase();
+    // The short forms ride beside the words the row shows: a member types the
+    // initials the church says out loud — "apm", "amm", "amo", "awm", "aym"
+    // — and the desk they name answers. Without them the rail only answered
+    // to the full names printed on its rows.
+    const hay = `${row.label}${row.short ? ` ${row.short}` : ""} ${areaSearchWords(row.dept, row.label)}`.toLowerCase();
     if (hay.includes(needle)) return true;
     // Only a directory desk matches on its blurb: a desk *page*'s description
     // may name another desk, and searching "Treasury" would otherwise mint

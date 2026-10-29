@@ -1602,6 +1602,60 @@ export function departmentDeskCode(code: string | null | undefined): string | nu
   return DEPARTMENT_DESK_ALIASES[code] ?? code;
 }
 
+/**
+ * The other spellings an area answers to in a search box, besides the name it
+ * shows. A church says its fellowships in initials — APM, AMM, AWM, AYM — so a
+ * box that only reads labels never reaches the desk the member typed.
+ */
+const AREA_EXTRA_SPELLINGS: Record<string, readonly string[]> = {
+  // The men's fellowship is filed as AMM and still called the Adventist Men
+  // (Organisation) — AMO — in older notices and links. Both are its name.
+  amm: ["amo"],
+};
+
+/** Words too common to earn a letter in an acronym: "Possibility" counts, "of" does not. */
+const ACRONYM_SKIP = new Set(["a", "an", "and", "at", "for", "in", "of", "the", "&"]);
+
+/**
+ * The initials a name spells: "Adventist Possibility Ministries" → "apm".
+ *
+ * A possessive leaves a stray "s" behind ("Men's" splits in two), so a lone
+ * letter never earns one — the name's own words are what spell it.
+ */
+export function areaAcronym(label: string): string {
+  return label
+    .split(/[^A-Za-z0-9]+/)
+    .filter((word) => word.length > 1 && !ACRONYM_SKIP.has(word.toLowerCase()))
+    .map((word) => word[0])
+    .join("")
+    .toLowerCase();
+}
+
+/**
+ * Every short form an area answers to, as one searchable string: the church
+ * record's own code (`apm`, `amm`, `awm`, `aym`), the older spelling the church
+ * still uses, and the initials its name spells. Search boxes match this beside
+ * the words the row shows, so a member typing what they say reaches the desk.
+ *
+ * One- and two-letter initials are left out: the record's code already carries
+ * the fellowship's real short form, and "am" would match half the rail.
+ */
+export function areaSearchWords(
+  code: string | null | undefined,
+  label: string | null | undefined
+): string {
+  const words = new Set<string>();
+  if (code) {
+    words.add(code.toLowerCase());
+    for (const spelling of AREA_EXTRA_SPELLINGS[code] ?? []) words.add(spelling);
+  }
+  if (label) {
+    const acronym = areaAcronym(label);
+    if (acronym.length >= 3) words.add(acronym);
+  }
+  return [...words].join(" ");
+}
+
 export function railHere(pathname: string, query: RailQuery | null, entries: RailEntry[]): RailHere {
   const tab = query?.tab ?? null;
   const dept = departmentDeskCode(query?.dept);
