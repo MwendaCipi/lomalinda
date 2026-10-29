@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calendar, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { showAlert } from "@/lib/alerts";
 
@@ -67,6 +67,19 @@ export function ChurchBudgetManager() {
     // Deferred by a microtask so the fetch is not started in the effect's own
     // synchronous body (the convention across the desks).
     void Promise.resolve().then(load);
+  }, [load]);
+
+  /** Re-read the budget desk: the same read the desk opens with, without
+      the loading gate — the year cards stay in place while the fetch runs,
+      and the button wears the wait. */
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [load]);
 
   const openCreate = () => {
@@ -158,14 +171,27 @@ export function ChurchBudgetManager() {
             <p className="mt-1 text-sm text-moss">Post the year&apos;s plan and decide when the congregation sees it.</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 rounded-full bg-ember px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-ember-dark"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Post Budget</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={refreshing}
+            aria-label="Refresh church budgets"
+            title="Refresh"
+            className="inline-flex items-center gap-1.5 rounded-full border border-sand-mute bg-white px-3.5 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+            <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 rounded-full bg-ember px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-ember-dark"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Post Budget</span>
+          </button>
+        </div>
       </div>
 
       {actionMessage && (

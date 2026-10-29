@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   Receipt,
+  RefreshCw,
   Trash2,
   User,
   Users,
@@ -483,7 +484,7 @@ export function CampaignManagement({
   }, [openCreate, canCreate, presetAccount, presetAccountId, presetAccountLabel]);
 
   function fetchCampaigns(token: string) {
-    fetch(`${API_URL}/api/members/campaigns/`, {
+    return fetch(`${API_URL}/api/members/campaigns/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : []))
@@ -508,7 +509,7 @@ export function CampaignManagement({
 
   /** Load the treasury accounts a drive can be started against. */
   const fetchDriveAccounts = useCallback((token: string) => {
-    fetch(`${API_URL}/api/members/treasury/accounts/`, {
+    return fetch(`${API_URL}/api/members/treasury/accounts/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : []))
@@ -523,6 +524,22 @@ export function CampaignManagement({
     const token = localStorage.getItem("access_token");
     if (token) fetchDriveAccounts(token);
   }, [fetchDriveAccounts]);
+
+  /** Re-read the desk: the drives, and — for the treasurer — the accounts a
+      new drive may be started against. A busy list keeps its rows; the
+      button wears the wait. */
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshDesk = useCallback(async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    setRefreshing(true);
+    try {
+      await fetchCampaigns(token);
+      if (isAdminMode && canEdit) await fetchDriveAccounts(token);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [isAdminMode, canEdit, fetchDriveAccounts]);
 
   /**
    * Promote a picked account: open the creation form with that account
@@ -561,6 +578,21 @@ export function CampaignManagement({
           className="w-full min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60 sm:flex-none"
           aria-label="Search fund drives"
         />
+        {/* The desk re-read: a gift added by phone, a pull from the ledger,
+            or another officer's edit shows up the moment the hand asks. The
+            labelled form on a wide screen, the icon alone where one row of
+            controls must still fit beside the search. */}
+        <button
+          type="button"
+          onClick={() => void refreshDesk()}
+          disabled={refreshing}
+          aria-label="Refresh fund drives"
+          title="Refresh"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:w-auto sm:px-3"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+          <span className="hidden text-xs font-semibold sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
+        </button>
         {/* One row on a phone: the search takes the line's spare width and the
             door to a new drive keeps its own — stacked, they cost two rows. */}
         <button
@@ -575,7 +607,7 @@ export function CampaignManagement({
       </div>
     );
     return () => setHeaderRightAction(null);
-  }, [isAdminMode, formOnly, canEdit, search, openStartDrive, setHeaderRightAction]);
+  }, [isAdminMode, formOnly, canEdit, search, openStartDrive, refreshDesk, refreshing, setHeaderRightAction]);
 
   function fetchUsers(token: string) {
     fetch(`${API_URL}/api/members/users/`, {

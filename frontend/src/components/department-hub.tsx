@@ -1155,6 +1155,7 @@ function EventProgramMenu({
 
 /** Where a programme drag began: an activity's card, or one facilitator's line. */
 type ProgramDragSource =
+  | { kind: "session"; session: number }
   | { kind: "part"; session: number; part: number }
   | { kind: "person"; session: number; part: number; person: number };
 
@@ -1470,6 +1471,7 @@ function ProgramEditorModal({
   // The card ids ride the copy's own prefix — a phone's modal and a desk's
   // page render this sheet twice, one hidden — so the pickup finds the card
   // of the copy the hand took it from.
+  const sessionCardId = (session: number) => `${uid}-session-card-${session}`;
   const partCardId = (session: number, part: number) => `${uid}-part-${session}-${part}`;
   const personRowId = (session: number, part: number, person: number) => `${uid}-part-${session}-${part}-person-${person}`;
   const endDrag = () => {
@@ -1585,6 +1587,47 @@ function ProgramEditorModal({
   const dropOnSource = (event: DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
+  };
+  /** Two sessions trade places and start times. Every nested activity moves
+      by the same offset as its session, preserving gaps and durations. */
+  const swapSessions = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setOpenSession((open) => open === fromIndex ? toIndex : open === toIndex ? fromIndex : open);
+    setItems((current) => {
+      const next = current.map((item) => ({
+        ...item,
+        participants: [...item.participants],
+        parts: item.parts.map((part) => ({ ...part, participants: [...part.participants] })),
+      }));
+      const dragged = next[fromIndex];
+      const target = next[toIndex];
+      if (!dragged || !target) return current;
+
+      const startOf = (item: ProgramItem) =>
+        hourMinutes(item.start) ?? item.parts.map((part) => hourMinutes(part.start)).find((time) => time !== null) ?? null;
+      const shift = (item: ProgramItem, delta: number) => {
+        const move = (hour: string) => {
+          const minutes = hourMinutes(hour);
+          return minutes === null ? hour : minuteHour(minutes + delta);
+        };
+        return {
+          ...item,
+          start: move(item.start),
+          end: move(item.end),
+          parts: item.parts.map((part) => ({ ...part, start: move(part.start), end: move(part.end) })),
+        };
+      };
+      const fromStart = startOf(dragged);
+      const toStart = startOf(target);
+      if (fromStart !== null && toStart !== null) {
+        next[fromIndex] = shift(target, fromStart - toStart);
+        next[toIndex] = shift(dragged, toStart - fromStart);
+      } else {
+        next[fromIndex] = target;
+        next[toIndex] = dragged;
+      }
+      return next;
+    });
   };
   /** Two activities trade places — each keeping its own length, and
       trading start hours: the card set down begins where the one it met
@@ -1951,7 +1994,7 @@ function ProgramEditorModal({
           <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
             <div className="min-w-0 flex-1 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             <p className="text-xs text-moss">
-              Each session is one part of the day. Open a session to add the activities inside it.
+              Each session is one part of the day. Drag a session onto another to exchange positions and start times while keeping each session’s duration. Open a session to add the activities inside it.
             </p>
             <div className="mt-3 space-y-3">
           {items.map((session, index) => {
@@ -1963,8 +2006,18 @@ function ProgramEditorModal({
             return (
               <div
                 key={index}
-                id={`${uid}-session-card-${index}`}
-                className="overflow-hidden rounded-2xl border border-sand-line bg-white"
+                id={sessionCardId(index)}
+                onDragOver={allowDrop("session", sessionCardId(index))}
+                onDragLeave={leaveDrop(sessionCardId(index))}
+                onDrop={(event) => {
+                  dropOnSource(event);
+                  const source = dragSource.current;
+                  if (source?.kind === "session") swapSessions(source.session, index);
+                  endDrag();
+                }}
+                className={`overflow-hidden rounded-2xl border bg-white transition ${
+                  dragOverId === sessionCardId(index) ? "border-ember" : "border-sand-line"
+                }${draggingId === sessionCardId(index) ? " opacity-40" : ""}`}
               >
                 {/* The session shut: its hours and its name on the outside.
                     Opening one closes the other, so only one part of the day
@@ -1974,6 +2027,16 @@ function ProgramEditorModal({
                     not only on the words themselves. Remove keeps its own
                     place beside it. */}
                 <div className="flex items-center">
+                  <span
+                    draggable
+                    onDragStart={beginDrag({ kind: "session", session: index }, sessionCardId(index))}
+                    onDragEnd={endDrag}
+                    title="Drag onto another session to exchange positions and start times"
+                    aria-label={`Drag session ${index + 1} to another position`}
+                    className="flex shrink-0 cursor-grab items-center self-stretch px-2 active:cursor-grabbing"
+                  >
+                    <GripVertical className="h-4 w-4 text-moss-faint transition hover:text-moss" aria-hidden="true" />
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
@@ -2284,7 +2347,7 @@ function ProgramEditorModal({
                 setOpenSession(items.length);
                 // Land on the card just minted — its opened panel rides
                 // below the fold once the day is long.
-                pendingScrollRef.current = `${uid}-session-card-${items.length}`;
+                pendingScrollRef.current = sessionCardId(items.length);
                 // Its row on the sheet appears the moment it is named, and
                 // that keystroke is the change this walks in on.
                 followPreview(`preview-${uid}-session-${items.filter(programItemHasContent).length}`);
