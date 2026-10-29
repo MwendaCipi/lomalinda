@@ -44,6 +44,21 @@ export type PdfTabOptions = {
 
 export function openPdfTab(url: string, options: PdfTabOptions = {}): void {
   const { headers, fallbackError = "The document could not be opened.", onError, onSettled } = options;
+  // A browser navigation cannot carry an Authorization header. Give the
+  // preview fetch one (even where a caller did not provide it) and put the
+  // same short-lived token on the safe GET URL the new tab will navigate to.
+  // `QueryAccessTokenAuthentication` accepts that parameter only for safe
+  // methods, which keeps the actual document in the browser's PDF viewer
+  // without making the report endpoint public.
+  const requestHeaders = new Headers(headers);
+  const storedToken = typeof window === "undefined" ? null : localStorage.getItem("access_token");
+  if (!requestHeaders.has("Authorization") && storedToken) {
+    requestHeaders.set("Authorization", `Bearer ${storedToken}`);
+  }
+  const bearer = requestHeaders.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? storedToken;
+  const authenticatedUrl = new URL(url, window.location.origin);
+  if (bearer) authenticatedUrl.searchParams.set("access_token", bearer);
+
   // The one synchronous step a click gets: the tab itself, before any
   // awaiting — opened later, the browser would refuse it.
   const tab = window.open("about:blank", "_blank");
@@ -56,7 +71,7 @@ export function openPdfTab(url: string, options: PdfTabOptions = {}): void {
   tab.document.write(LOADING_HTML);
   tab.document.close();
 
-  fetch(url, { headers })
+  fetch(authenticatedUrl.toString(), { headers: requestHeaders })
     .then(async (res) => {
       if (!res.ok) {
         let detail = "";
@@ -69,7 +84,7 @@ export function openPdfTab(url: string, options: PdfTabOptions = {}): void {
       }
     })
     .then(() => {
-      tab.location.href = url;
+      tab.location.href = authenticatedUrl.toString();
     })
     .catch((error) => {
       // Nothing was shown; close the tab so the error is read where it was asked for.
