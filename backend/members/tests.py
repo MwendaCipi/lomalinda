@@ -8186,6 +8186,52 @@ class MusicRotaTests(APITestCase):
         self.assertEqual(DutyRota.objects.filter(desk='music').count(), 1)
 
 
+class EldershipRotaTests(APITestCase):
+    """Eldership and Deaconate keep separately permissioned rota lines."""
+
+    def setUp(self):
+        self.eldership = Department.objects.get(code='eldership')
+        elder_role = DepartmentRole.objects.get(department=self.eldership, name='First Elder')
+        self.elder = User.objects.create_user(
+            'rota.elder', 'rota.elder@example.com', 'ElderPass#2026',
+        )
+        MemberProfile.objects.create(user=self.elder, role='member', roles='member')
+        DepartmentAssignment.objects.create(
+            department=self.eldership, role=elder_role, member=self.elder, kind='leader',
+        )
+        self.deacon = User.objects.create_user(
+            'rota.deacon', 'rota.deacon@example.com', 'DeaconPass#2026',
+        )
+        MemberProfile.objects.create(user=self.deacon, role='member', roles='member')
+        DepartmentMembership.objects.create(department='deaconate', member=self.deacon)
+
+    def _schedule(self, desk, title):
+        return self.client.post('/api/members/duty-rota/', {
+            'desk': desk,
+            'title': title,
+            'date': '2026-11-07',
+            'assigned_team': [],
+        }, format='json')
+
+    def test_eldership_and_deaconate_have_independent_rota_access_and_entries(self):
+        self.client.force_authenticate(self.elder)
+        elder_entry = self._schedule('eldership', 'Elder visitation')
+        self.assertEqual(elder_entry.status_code, status.HTTP_201_CREATED)
+
+        self.client.force_authenticate(self.deacon)
+        deaconate_entry = self._schedule('deaconate', 'Sanctuary duty')
+        refused_eldership_write = self._schedule('eldership', 'Unauthorized elder duty')
+        self.assertEqual(deaconate_entry.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(refused_eldership_write.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.elder)
+        elder_lines = self.client.get('/api/members/duty-rota/?desk=eldership')
+        refused_deaconate_read = self.client.get('/api/members/duty-rota/?desk=deaconate')
+        self.assertEqual(elder_lines.status_code, status.HTTP_200_OK)
+        self.assertEqual([row['title'] for row in elder_lines.data], ['Elder visitation'])
+        self.assertEqual(refused_deaconate_read.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class MemberRosterSystemAccountTests(APITestCase):
     """The member roster lists the congregation, not the deployment's owner."""
 

@@ -47,11 +47,11 @@ DEFAULT_MUSIC_ASSIGNMENT_MESSAGE = DEFAULT_ASSIGNMENT_MESSAGE
 #: Where a reminder's link lands: the deaconate's rota, where the duty is read.
 DUTY_ROTA_LINK = '/administration?tab=deaconate-rota'
 
-#: The pulpit team's roster is kept on the Personal Ministries desk, so its
-#: notices land there, on that desk's Pulpit Team view. The music department's
-#: duties land the same way, on the music desk's Duties view.
+#: The pulpit team's roster is kept on Personal Ministries, music's on Music,
+#: and Eldership's own rota on the Eldership desk.
 PULPIT_ROTA_LINK = '/administration?dept=personal_ministries&view=pulpit-team'
 MUSIC_ROTA_LINK = '/administration?dept=music&view=duties'
+ELDERSHIP_ROTA_LINK = '/administration?dept=eldership&view=rota'
 
 
 def rota_link(entry) -> str:
@@ -61,6 +61,8 @@ def rota_link(entry) -> str:
         return PULPIT_ROTA_LINK
     if desk == 'music':
         return MUSIC_ROTA_LINK
+    if desk == 'eldership':
+        return ELDERSHIP_ROTA_LINK
     return DUTY_ROTA_LINK
 
 
@@ -70,6 +72,7 @@ DESK_DEPARTMENT_CODES = {
     DutyRota.DESK_DEACONATE: 'deaconate',
     DutyRota.DESK_PULPIT: 'personal_ministries',
     DutyRota.DESK_MUSIC: 'music',
+    DutyRota.DESK_ELDERSHIP: 'eldership',
 }
 
 
@@ -130,6 +133,7 @@ DESK_DEFAULT_TITLES = {
     DutyRota.DESK_PULPIT: 'Sabbath Pulpit Team',
     DutyRota.DESK_DEACONATE: 'Sabbath Duty Rota',
     DutyRota.DESK_MUSIC: 'Sabbath Music Duties',
+    DutyRota.DESK_ELDERSHIP: 'Eldership Duty Rota',
 }
 
 

@@ -347,7 +347,7 @@ interface DeaconateManagerProps {
    * search, so these variants keep their filters inline rather than taking
    * the shell's header band over.
    */
-  desk?: "deaconate" | "pulpit" | "music";
+  desk?: "deaconate" | "pulpit" | "music" | "eldership";
   /**
    * Whether a surface above — the Personal Ministries desk, which keeps its
    * own heading — is hosting this rota's date and search filters at the right
@@ -362,11 +362,12 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const isPulpit = desk === "pulpit";
+  const isEldership = desk === "eldership";
   // What this desk's rota is called wherever the reader is told about it.
-  const rotaName = desk === "music" ? "Music Duties" : isPulpit ? "Pulpit Team" : "Duty Rota";
+  const rotaName = desk === "music" ? "Music Duties" : isPulpit ? "Pulpit Team" : isEldership ? "Eldership Duty Rota" : "Duty Rota";
   // What a line of it is called when the desk names none.
   const defaultRotaTitle =
-    desk === "music" ? MUSIC_DEFAULT_TITLE : isPulpit ? PULPIT_DEFAULT_TITLE : emptyRotaForm.title;
+    desk === "music" ? MUSIC_DEFAULT_TITLE : isPulpit ? PULPIT_DEFAULT_TITLE : isEldership ? "Eldership Duty Rota" : emptyRotaForm.title;
   // The save form as the desk opens it. The default title is written into
   // the field as its value, not left as a hint in an empty box, so what the
   // desk sees is what is saved when it changes nothing else.
@@ -374,7 +375,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // What a line of this desk's rota is called wherever it is named.
   const titleOf = (entry: { title?: string | null }) => rotaTitleOf(entry, defaultRotaTitle);
   // The query that asks the server for this desk's lines only.
-  const deskParam = desk === "music" ? "music" : isPulpit ? "pulpit" : "deaconate";
+  const deskParam = desk === "music" ? "music" : isPulpit ? "pulpit" : isEldership ? "eldership" : "deaconate";
   const activeTab = initialTab;
 
   // Inventory state (server-backed: this is the real property register)
@@ -1557,7 +1558,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {activeTab === "rota" && (
         <>
           <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4">
-            {(isPulpit || desk === "music") && !rotaFiltersHosted && (
+            {(isPulpit || desk === "music" || isEldership) && !rotaFiltersHosted && (
               /* The rota views' filters, when no surface above hosts them.
                  The Personal Ministries desk keeps its own heading, so while it
                  renders this panel it also reads the filters from context and
@@ -1569,7 +1570,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
                   <input
                     type="text"
-                    placeholder={desk === "music" ? "Search music duties…" : "Search the pulpit team…"}
+                    placeholder={desk === "music" ? "Search music duties…" : isEldership ? "Search Eldership rota…" : "Search the pulpit team…"}
                     value={rotaSearchQuery}
                     onChange={(e) => setRotaSearchQuery(e.target.value)}
                     className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
@@ -1605,7 +1606,9 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                     ? "No one is on the music rota yet. Schedule who sings and plays on the Sabbath."
                     : isPulpit
                       ? "No one is on the pulpit team yet. Schedule the Sabbath's preachers, players and readers."
-                      : "No duty rota has been scheduled yet."
+                      : isEldership
+                        ? "The Eldership rota is empty. Schedule the elders' duties here."
+                        : "No duty rota has been scheduled yet."
                   : "No entries match your filters."}
               </div>
             ) : (

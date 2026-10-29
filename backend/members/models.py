@@ -2787,20 +2787,22 @@ class DutyRota(models.Model):
 
     #: The desks that keep a rota here. ``deaconate`` is what the table was
     #: born as; ``pulpit`` is the Personal Ministries desk's Sabbath team;
-    #: ``music`` is the music desk's own line of who plays, sings and leads
-    #: on a day.
+    #: ``music`` is the music desk's line of who plays and sings; ``eldership``
+    #: is the elders' own rota, separate from the deaconate's.
     DESK_DEACONATE = 'deaconate'
     DESK_PULPIT = 'pulpit'
     DESK_MUSIC = 'music'
+    DESK_ELDERSHIP = 'eldership'
     DESK_CHOICES = [
         (DESK_DEACONATE, 'Deaconate duty rota'),
         (DESK_PULPIT, 'Pulpit team'),
         (DESK_MUSIC, 'Music duties'),
+        (DESK_ELDERSHIP, 'Eldership duty rota'),
     ]
 
     desk = models.CharField(
         max_length=20, choices=DESK_CHOICES, default=DESK_DEACONATE,
-        help_text='Which desk keeps this line: the deaconate duty rota, the pulpit team, or music duties',
+        help_text='Which desk keeps this line: the deaconate duty rota, the pulpit team, music duties, or the eldership',
     )
     title = models.CharField(max_length=200)
     duty_date = models.DateField()

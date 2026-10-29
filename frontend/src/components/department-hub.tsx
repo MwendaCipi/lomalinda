@@ -5159,6 +5159,7 @@ function DepartmentDetail({
   // has no rail to offer them, and the desk would otherwise arrive with no way
   // to reach its calendar or its accounts at all.
   const isDeaconate = department.code === "deaconate";
+  const isEldership = department.code === "eldership";
   const onConsole = usePathname().startsWith("/administration");
   // Whether the console's own strip already names the deaconate's pages: it
   // does on every one of them (`?tab=deaconate-*`), and not on the desk opened
@@ -5228,6 +5229,7 @@ function DepartmentDetail({
   // are the seats this church actually fills.
   const canOpenOfficeViews =
     department.code === "eldership" && viewerRoles.some((role) => ELDERSHIP_ROLES.includes(role));
+  const canOpenEldershipRota = canOpenOfficeViews;
   // May this viewer document a moment from the desk? The same answer the
   // server gives on the POST — administrators, and the deaconate, whose desk
   // holds the pictures of the church's days — so the button never appears
@@ -5508,13 +5510,17 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
-    } else if (subTab === "pulpit-team" || subTab === "duties") {
+    } else if (subTab === "pulpit-team" || subTab === "duties" || (subTab === "rota" && isEldership)) {
       // The rota views' date range and search ride the right of this desk's
       // heading, the place every other view here keeps its controls, rather
       // than a band of the panel's own below it. The values live in the
       // panel, which owns the rota; it exposes them through context and
       // reads them back the same way.
-      const rotaPlaceholder = subTab === "pulpit-team" ? "Search the pulpit team…" : "Search music duties…";
+      const rotaPlaceholder = subTab === "pulpit-team"
+        ? "Search the pulpit team…"
+        : subTab === "rota"
+          ? "Search Eldership rota…"
+          : "Search music duties…";
       const filters = hostedRotaFilters?.filters;
       setHeaderRightAction(
         filters ? (
@@ -5557,6 +5563,7 @@ function DepartmentDetail({
   }, [
     subTab,
     isDeaconate,
+    isEldership,
     rollSearch,
     eventSearch,
     calendarView,
@@ -5702,10 +5709,9 @@ function DepartmentDetail({
     setSubTab(key as DeptSubTab);
   }, []);
   // The eldership's strip is one list at every width and every door (see
-  // `eldershipViews`): the desk's roll, its baptismal class and the church's
-  // calendar are views of this desk, so a press takes them in place, while
-  // the rest are console pages, so a press walks to the page that holds them.
-  // The deaconate's rota is deliberately kept under its own desk, not here.
+  // `eldershipViews`): the desk's rota, baptismal class and church calendar
+  // are views of this desk, so a press takes them in place, while console
+  // pages walk to the page that holds them.
   const eldershipStripItems = useMemo(
     () =>
       eldershipViews.map((view) => ({
@@ -5728,6 +5734,8 @@ function DepartmentDetail({
         return "moments";
       case "accounts":
         return "funding";
+      case "rota":
+        return "rota";
       case "baptismal-class":
         return "baptismal-class";
       case "announcements":
@@ -5741,7 +5749,7 @@ function DepartmentDetail({
     (key: string) => {
       const view = eldershipViews.find((candidate) => candidate.key === key);
       if (!view) return;
-      if (key === "calendar" || key === "baptismal-class") {
+      if (key === "calendar" || key === "baptismal-class" || key === "rota") {
         // A view of this desk. On the map the address bar names it too, so a
         // reload lands where the reader stood; on the console the desk is one
         // department of the directory, so the press walks to it instead.
@@ -5829,8 +5837,8 @@ function DepartmentDetail({
       return () => setCustomToggles(null);
     }
     // The eldership reads one strip wherever it is opened — the rail's row on
-    // a desk, the Eldership card in a hand — so this desk draws the same seven
-    // pages the console's strip names. The deaconate's rota is on its own desk.
+    // a desk, the Eldership card in a hand — including the Eldership's own rota,
+    // separate from the Deaconate's.
     if (department.code === "eldership") {
       setCustomToggles(
         <SubNav
@@ -7321,6 +7329,13 @@ function DepartmentDetail({
       {(subTab === "inventory" || subTab === "rota") && isDeaconate && (
         <div className="h-full min-h-0">
           <DeaconateManager initialTab={subTab} desk="deaconate" embedded />
+        </div>
+      )}
+
+      {/* The Eldership keeps its own rota, held apart from Deaconate duties. */}
+      {subTab === "rota" && isEldership && canOpenEldershipRota && (
+        <div className="h-full min-h-0">
+          <DeaconateManager initialTab="rota" desk="eldership" embedded />
         </div>
       )}
 

@@ -9,6 +9,8 @@ import { SubNav } from "@/components/sub-nav";
 import {
   DEACONATE_ROLES,
   deaconateViews,
+  ELDER_ROLES,
+  eldershipViews,
   isStaffRole,
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
@@ -218,8 +220,11 @@ export function MyAreas() {
    */
   const holdsDeaconate = DEACONATE_ROLES.some((role) => roles.includes(role)) || ties.includes("deaconate");
   const opensDeaconateDesk = openArea?.code === "deaconate" && holdsDeaconate;
+  const holdsEldership = ELDER_ROLES.some((role) => roles.includes(role)) || ties.includes("eldership");
+  const opensEldershipDesk = openArea?.code === "eldership" && holdsEldership;
   const deaconateView = (deaconateViews.find((page) => page.view === openView)?.view ?? "members") as
     (typeof deaconateViews)[number]["view"];
+  const eldershipView = eldershipViews.find((page) => page.key === openView)?.key ?? "calendar";
   // Every deaconate page reads the hub now, the way every other toggle of an
   // area does: the roll, the calendar and the moments wall come from the hub
   // itself, and the register and the rota are the console desk's own panels
@@ -283,6 +288,23 @@ export function MyAreas() {
     );
     return () => setCustomToggles(null);
   }, [openArea, tab, setCustomToggles, showMap]);
+
+  // The Eldership desk draws its own pages, including its separately stored
+  // duty rota. Ordinary area members still see their read-only desk.
+  useEffect(() => {
+    if (!opensEldershipDesk) return;
+    setCustomToggles(
+      <SubNav
+        label="Eldership pages"
+        value={eldershipView}
+        onChange={(next) => router.replace(`/my-areas?area=eldership&view=${next}`, { scroll: false })}
+        items={eldershipViews
+          .filter((page) => page.key !== "rota" || ELDER_ROLES.some((role) => roles.includes(role)))
+          .map((page) => ({ key: page.key, label: page.label, short: page.short }))}
+      />
+    );
+    return () => setCustomToggles(null);
+  }, [opensEldershipDesk, eldershipView, setCustomToggles, router]);
 
   // The deaconate's desk draws the desk's own six pages, the same ones the
   // console's strip names. Moving between them replaces the entry, so a
@@ -459,7 +481,7 @@ export function MyAreas() {
               />
             ) : (
               <DepartmentHub
-                key={openArea.code}
+                key={`${openArea.code}-${opensEldershipDesk ? eldershipView : openArea.code}`}
                 initialDept={openArea.code}
                 // The address bar names the view a desk's strip pressed — the
                 // eldership's Event Calendar and Baptismal class are two — so
@@ -482,7 +504,7 @@ export function MyAreas() {
                         ? "accounts"
                         : openView === "baptismal-class"
                           ? "baptismal-class"
-                          : openView === "rota"
+                          : openView === "rota" && opensEldershipDesk
                             ? "rota"
                             : "calendar"
                 }

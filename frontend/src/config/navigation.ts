@@ -812,7 +812,7 @@ export const clerkshipItems: RailRow[] = [
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "baptismal-class" | "leaders" | "calendar" | "sharing" | "requests" | "moments" | "funding";
+  key: "baptismal-class" | "leaders" | "calendar" | "sharing" | "requests" | "moments" | "funding" | "rota";
   label: string;
   short?: string;
   icon: LucideIcon;
@@ -877,6 +877,13 @@ export const eldershipViews: {
     icon: Wallet,
     href: "/administration?tab=eldership-funding",
     description: "The church's treasury accounts, with balances and movements.",
+  },
+  {
+    key: "rota",
+    label: "Duty Rota",
+    icon: ClipboardList,
+    href: "/my-areas?area=eldership&view=rota",
+    description: "Eldership's own rota, separate from Deaconate duties.",
   },
 ];
 

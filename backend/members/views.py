@@ -11355,7 +11355,8 @@ class DutyRotaPeopleView(APIView):
         # a member up, since every desk rosters the same people.
         if not (can_keep_rota(request.user, DutyRota.DESK_DEACONATE)
                 or can_keep_rota(request.user, DutyRota.DESK_PULPIT)
-                or can_keep_rota(request.user, DutyRota.DESK_MUSIC)):
+                or can_keep_rota(request.user, DutyRota.DESK_MUSIC)
+                or can_keep_rota(request.user, DutyRota.DESK_ELDERSHIP)):
             return Response(
                 {'detail': 'Only the officers who keep a rota can look up officers.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -11695,16 +11696,16 @@ def can_manage_department(user, department):
 def can_keep_rota(user, desk):
     """Who keeps one desk's rota: the deaconate's, the pulpit's, or music's.
 
-    The pulpit team is rostered by the Personal Ministries desk — its leader
-    and assistant, plus the office as everywhere else — and the music department
-    rosters who plays, sings and leads on a day, by its own leadership, the
-    same way. A desk's rota is its own business: the deaconate's steward edits
-    no pulpit line, and the personal ministries leader edits no deaconate one.
+    The pulpit team is rostered by Personal Ministries, music by its own
+    leadership, and Eldership by the elders' own desk. A desk's rota is its own
+    business: the deaconate's steward edits no Eldership line, and vice versa.
     """
     if desk == DutyRota.DESK_PULPIT:
         return can_manage_department(user, 'personal_ministries')
     if desk == DutyRota.DESK_MUSIC:
         return can_manage_department(user, 'music')
+    if desk == DutyRota.DESK_ELDERSHIP:
+        return can_manage_department(user, 'eldership')
     return can_manage_deaconate(user)
 
 
@@ -11720,6 +11721,7 @@ def keeps_any_rota(user):
         can_keep_rota(user, DutyRota.DESK_DEACONATE)
         or can_keep_rota(user, DutyRota.DESK_PULPIT)
         or can_keep_rota(user, DutyRota.DESK_MUSIC)
+        or can_keep_rota(user, DutyRota.DESK_ELDERSHIP)
     )
 
 
@@ -11735,6 +11737,8 @@ def rota_desk_from(request, default=DutyRota.DESK_DEACONATE):
         return DutyRota.DESK_PULPIT
     if desk == DutyRota.DESK_MUSIC:
         return DutyRota.DESK_MUSIC
+    if desk == DutyRota.DESK_ELDERSHIP:
+        return DutyRota.DESK_ELDERSHIP
     return default
 
 
