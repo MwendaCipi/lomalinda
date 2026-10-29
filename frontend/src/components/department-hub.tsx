@@ -5404,8 +5404,20 @@ function DepartmentDetail({
 
   // The strip names the view, and which unit's roll it reads: All Members and
   // the unit fellowships read their roll, the rest name the view itself. This
-  // is what marks the active toggle in the merged strip.
-  const activeStripKey = subTab === "members" ? (unit === null ? "unit:null" : `unit:${unit}`) : subTab;
+  // is what marks the active toggle in the merged strip — and the key must
+  // match the strip's own name for the roll: a desk that runs as units calls
+  // it "unit:null", a plain desk's toggle is simply "members". Reading the
+  // plain desk's roll as "unit:null" left the underscore parked on the chip
+  // pressed before it (Events, the desk's opening view) no matter what the
+  // reader pressed next.
+  const activeStripKey =
+    subTab === "members"
+      ? unit === null
+        ? units.length > 0
+          ? "unit:null"
+          : "members"
+        : `unit:${unit}`
+      : subTab;
   // The roll's and the calendar's search boxes.
   const [rollSearch, setRollSearch] = useState("");
   const [eventSearch, setEventSearch] = useState("");
@@ -5894,19 +5906,25 @@ function DepartmentDetail({
     (key: string) => {
       const view = eldershipViews.find((candidate) => candidate.key === key);
       if (!view) return;
-      if (key === "calendar" || key === "baptismal-class" || key === "rota") {
-        // A view of this desk. On the map the address bar names it too, so a
-        // reload lands where the reader stood; on the console the desk is one
-        // department of the directory, so the press walks to it instead.
-        if (!onConsole) {
-          setSubTab(key as DeptSubTab);
-          router.replace(view.href, { scroll: false });
-          return;
-        }
+      // A view of this desk stays here — the heading, search and strip never
+      // leave — while the console pages walk to the page that holds them.
+      // Sharing is a view of the desk too for the officers who hold it (see
+      // the rendering below), so its press stays in place instead of walking
+      // to the console's board.
+      if (
+        (key === "calendar" || key === "baptismal-class" || key === "rota" || (key === "sharing" && canOpenOfficeViews)) &&
+        !onConsole
+      ) {
+        setSubTab(key as DeptSubTab);
+        router.replace(
+          key === "sharing" ? "/my-areas?area=eldership&view=sharing" : view.href,
+          { scroll: false },
+        );
+        return;
       }
       router.push(view.href);
     },
-    [onConsole, router]
+    [onConsole, canOpenOfficeViews, router]
   );
   // On a phone the area names itself above the strip it answers to: the
   // shell's heading band carries the area's name — with the way back out of
@@ -7015,8 +7033,11 @@ function DepartmentDetail({
               {rollQuery ? ` of ${memberRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             {canManageRoll ? (
-              /* Leader / assistant: Chat (group) + Add Member */
-              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              /* Leader / assistant: Chat (group) + Add Member. Two per row
+                  in a hand — the four actions a leader holds fill the foot
+                  as a 2×2 — and one trailing row of natural buttons on the
+                  wider screens. */
+              <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:justify-end">
                 <button
                   type="button"
                   onClick={async () => {
@@ -7027,7 +7048,7 @@ function DepartmentDetail({
                       showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
                     }
                   }}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                 >
                   <MessageSquare className="h-3.5 w-3.5" /> Chat
                 </button>
@@ -7035,7 +7056,7 @@ function DepartmentDetail({
                   <button
                     type="button"
                     onClick={() => setShowMessageModal(true)}
-                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
                     <Send className="h-3.5 w-3.5" /> Message
                   </button>
@@ -7044,7 +7065,7 @@ function DepartmentDetail({
                   <button
                     type="button"
                     onClick={() => setShowAddChild(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-fuchsia-700 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-fuchsia-800"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-fuchsia-700 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-fuchsia-800"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add Child
                   </button>
@@ -7057,17 +7078,23 @@ function DepartmentDetail({
                   <button
                     type="button"
                     onClick={() => setShowWriteLetter(true)}
-                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
                   >
-                    <PenLine className="h-3.5 w-3.5" /> Write Letter
+                    <PenLine className="h-3.5 w-3.5" />
+                    {/* Two words do not share a phone-width half-row well:
+                        the hand reads one. */}
+                    <span className="sm:hidden">Letter</span>
+                    <span className="hidden sm:inline">Write Letter</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => setShowAddMember(true)}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
                 >
-                  <UserPlus className="h-3.5 w-3.5" /> Add Member
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span className="sm:hidden">Member</span>
+                  <span className="hidden sm:inline">Add Member</span>
                 </button>
               </div>
             ) : !onRoll && !holdsOffice ? (
@@ -7151,7 +7178,7 @@ function DepartmentDetail({
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="desk-calendar flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div
-            className="desk-calendar-body custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-3 pt-4"
+            className="desk-calendar-body custom-table-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 pt-3 sm:px-5 sm:pt-4"
             ref={calendarScrollRef}
           >
           {loadingEvents ? (
@@ -7164,7 +7191,7 @@ function DepartmentDetail({
             // The year as one wall: every month of it, one under the other.
             // There are no arrows here — the wall itself is scrolled, and the
             // search above names a month to land on.
-            <div className="mt-3 space-y-4">
+            <div className="sm:mt-3 space-y-4">
               {Array.from({ length: 12 }, (_, index) => (
                 <div
                   key={index}
@@ -7210,7 +7237,7 @@ function DepartmentDetail({
               {/* The calendar read the church's way: the same table its own
                   calendar draws — the day, the event, the hour, the actions —
                   and the cards a phone reads below it. */}
-              <div className="mt-3 hidden overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line md:block">
+              <div className="mt-1 hidden overflow-x-auto custom-table-scrollbar rounded-xl border border-sand-line md:block">
                 <table className="w-full min-w-[680px] border-collapse text-left text-xs">
                   <thead className="border-b border-sand-line bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
                     <tr>
@@ -7300,12 +7327,12 @@ function DepartmentDetail({
 
               {/* A phone reads the same events as cards — the table's four
                   columns cannot sit on a phone's width without scrolling. */}
-              <div className="mt-3 grid gap-4 md:hidden">
+              <div className="mt-1 grid gap-3 md:hidden">
                 {filteredEvents.map((event) => {
                   const actionKey = `mobile-event-${event.id}`;
                   const hasProgram = eventHasProgram(event);
                   return (
-                    <div key={event.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
+                    <div key={event.id} className="rounded-2xl border border-sand-line bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <span className="text-xs font-semibold text-ember">{dayFirst(event.date)}</span>
@@ -7854,7 +7881,7 @@ export function DepartmentHub({
   // widths. A single department's desk draws its own search there instead
   // (see `DepartmentDetail`), so opening a row takes the slot over.
   const [directorySearch, setDirectorySearch] = useState("");
-  const { setHeaderRightAction, setCustomHeader } = usePageHeader();
+  const { setHeaderRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
   useEffect(() => {
     setHeaderRightAction(
       <input
@@ -7892,6 +7919,10 @@ export function DepartmentHub({
   }, [onBack]);
   useEffect(() => {
     if (embedded || selected) return;
+    // A phone asks for the heading first here just as it does on the desks:
+    // arriving at the directory used to leave its heading behind, so only the
+    // search answered above the strip in a hand.
+    setHeadingFirst(true);
     setCustomHeader({
       label: directoryHeading.label,
       description: directoryHeading.description,
@@ -7906,8 +7937,11 @@ export function DepartmentHub({
         </button>
       ) : undefined,
     });
-    return () => setCustomHeader(null);
-  }, [directoryHeading, embedded, selected, setCustomHeader]);
+    return () => {
+      setCustomHeader(null);
+      setHeadingFirst(false);
+    };
+  }, [directoryHeading, embedded, selected, setCustomHeader, setHeadingFirst]);
   const directoryNeedle = directorySearch.trim().toLowerCase();
   const visibleDepartments = directoryNeedle
     ? departments.filter((d) =>

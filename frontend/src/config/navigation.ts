@@ -819,6 +819,17 @@ export const eldershipViews: {
   href: string;
   description: string;
 }[] = [
+  // The board of notices leads the desk: an officer opening it is publishing
+  // to the church first, so Sharing is both the strip's first page and the
+  // one every default door lands on.
+  {
+    key: "sharing",
+    label: "Sharing",
+    short: "Sharing",
+    icon: Sparkles,
+    href: "/administration?tab=announcements",
+    description: "Publish announcements and share a daily thought with the church.",
+  },
   // The baptismal class: who the elders are preparing for the font, their
   // walk from studying to baptism, kept by the desk itself.
   {
@@ -844,15 +855,6 @@ export const eldershipViews: {
     icon: Calendar,
     href: "/my-areas?area=eldership&view=calendar",
     description: "The church's calendar, with the gatherings the elders keep.",
-  },
-  // Notices published to the church family, and the daily devotional thought.
-  {
-    key: "sharing",
-    label: "Sharing",
-    short: "Sharing",
-    icon: Sparkles,
-    href: "/administration?tab=announcements",
-    description: "Publish announcements and share a daily thought with the church.",
   },
   {
     key: "requests",
@@ -1188,7 +1190,7 @@ export const railEntries: RailEntry[] = [
   // treasurer's has always stood on its own. The office console (the roster
   // and the church's settings) is deliberately not here: the account menu is
   // its only door, so the rail carries the desks of ongoing work.
-  { label: "Eldership", icon: Armchair, href: "/my-areas?area=eldership&view=calendar", items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
+  { label: "Eldership", icon: Armchair, href: "/my-areas?area=eldership&view=sharing", items: eldershipItems, roles: ELDERSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.eldership },
   { label: "Clerkship", icon: ClipboardList, items: clerkshipItems, roles: CLERKSHIP_ROLES, railMinistry: true, description: DEPARTMENT_BLURBS.clerkship },
   // The treasury's row names the desk; its pages are the desk's own strip (see
   // `ownStrip`), so the rail never draws a second, older list of them.

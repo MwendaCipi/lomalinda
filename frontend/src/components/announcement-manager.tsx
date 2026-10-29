@@ -5,7 +5,6 @@ import { showAlert } from "@/lib/alerts";
 import { ArrowUpRight, Download, Megaphone, Send, Sparkles, X } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { localDate, dayFirst } from "@/lib/dates";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { RecordList } from "./record-list";
@@ -1418,24 +1417,11 @@ export function AnnouncementManager({
         embedded ? "" : "border-b border-sand-line"
       }`}
     >
-      {/* Top Header — the phone's naming of the page: on a wide screen the
-          strip above does it, so the block goes. Embedded in another page
-          the host names it at every width, so the block goes there too. */}
-      {!embedded && (
-        <div className="shrink-0 border-b border-sand-line pb-3 md:hidden">
-          <div className="flex items-center gap-1">
-            <BackToOverviewArrow />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-bark sm:text-3xl">
-                Announcements Management
-              </h1>
-              <p className="mt-1 text-sm text-moss">
-                Manage published church bulletins, announcements, and member notifications.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* No heading of its own, and no way back to the console: the shell's
+          band names the page, and the desk this board sits under owns the
+          way out — a private back arrow to the console's overview read as if
+          Administration were the only road to it, when the console opens from
+          the account menu. */}
 
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">

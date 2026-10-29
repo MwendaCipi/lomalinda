@@ -224,7 +224,9 @@ export function MyAreas() {
   const opensEldershipDesk = openArea?.code === "eldership" && holdsEldership;
   const deaconateView = (deaconateViews.find((page) => page.view === openView)?.view ?? "members") as
     (typeof deaconateViews)[number]["view"];
-  const eldershipView = eldershipViews.find((page) => page.key === openView)?.key ?? "calendar";
+  // The desk opens on Sharing — its first page and the default of every
+  // door that opens it without naming a view.
+  const eldershipView = eldershipViews.find((page) => page.key === openView)?.key ?? "sharing";
   // Every deaconate page reads the hub now, the way every other toggle of an
   // area does: the roll, the calendar and the moments wall come from the hub
   // itself, and the register and the rota are the console desk's own panels
@@ -506,7 +508,13 @@ export function MyAreas() {
                           ? "baptismal-class"
                           : openView === "rota" && opensEldershipDesk
                             ? "rota"
-                            : "calendar"
+                            : openView === "calendar"
+                              // A view of the desk keeps its view when the
+                              // address bar names it.
+                              ? "calendar"
+                              : opensEldershipDesk && holdsEldership
+                                ? "sharing"
+                                : "calendar"
                 }
                 onBack={showMap}
               />
