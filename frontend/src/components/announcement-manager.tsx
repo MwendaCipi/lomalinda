@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
 import { ArrowUpRight, Download, Megaphone, Search, Send, Sparkles, X } from "lucide-react";
 import { brand } from "@/lib/brand";
+import { usePageHeader } from "@/components/app-frame";
 import { localDate, dayFirst } from "@/lib/dates";
 import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
@@ -325,7 +326,13 @@ export function AnnouncementManager({
       "Announcements Management" title and its back-to-overview arrow —
       stands down. */
   embedded = false,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean } = {}) {
+  /** The board's search rides the shell's heading row instead of a band of
+      the board's own — the console's Sharing page and the eldership desk's
+      Sharing view ask for it, so a phone meets the search at the top of the
+      page, the way every other desk's search rides the band, rather than
+      below the sheet's chrome. */
+  hostSearch = false,
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean; hostSearch?: boolean } = {}) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   // The board's own search — title and the words of the post, narrowing the
@@ -333,6 +340,29 @@ export function AnnouncementManager({
   // board above it, so a reader landing on Sharing finds a way through the
   // posts without scrolling every card.
   const [boardSearch, setBoardSearch] = useState("");
+  // The search, hosted: when a surface above (the console page, the hub's
+  // Sharing view) asks for it, the control rides the shell's heading row and
+  // the board draws no band of its own.
+  const { setHeaderRightAction } = usePageHeader();
+  useEffect(() => {
+    if (!hostSearch || composerOnly) return;
+    setHeaderRightAction(
+      <div className="flex w-full items-center sm:w-auto">
+        <div className="relative w-full">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" aria-hidden="true" />
+          <input
+            type="search"
+            value={boardSearch}
+            onChange={(event) => setBoardSearch(event.target.value)}
+            placeholder="Search announcements..."
+            aria-label="Search announcements"
+            className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none transition focus:border-ember sm:w-64"
+          />
+        </div>
+      </div>,
+    );
+    return () => setHeaderRightAction(null);
+  }, [hostSearch, composerOnly, boardSearch, setHeaderRightAction]);
   const visibleAnnouncements = (() => {
     const needle = boardSearch.trim().toLowerCase();
     if (!needle) return announcements;
@@ -1438,7 +1468,9 @@ export function AnnouncementManager({
       {/* Announcements — ledger-style table container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
         {/* The board's own search, pinned at the top like every desk's search:
-            the heading above names the place, this narrows its posts. */}
+            the heading above names the place, this narrows its posts. Held
+            when a surface above hosts it in the shell's heading row. */}
+        {!hostSearch && (
         <div className="shrink-0 border-b border-sand-line bg-white px-4 py-2.5 sm:px-6">
           <div className="relative max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" aria-hidden="true" />
@@ -1452,6 +1484,7 @@ export function AnnouncementManager({
             />
           </div>
         </div>
+        )}
         {todayThought && (
           <div className="shrink-0 border-b border-sand-line bg-sand-linen/60 px-4 py-3 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">

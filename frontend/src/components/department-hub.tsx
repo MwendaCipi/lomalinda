@@ -4381,7 +4381,7 @@ type FundWithdrawal = {
 /**
  * Popover filter near the search input to toggle between All, Contributions, and Withdrawals.
  */
-function AccountsFilterButton({
+export function AccountsFilterButton({
   value,
   onChange,
 }: {
@@ -5667,7 +5667,7 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
-    } else if (subTab === "pulpit-team" || subTab === "duties" || (subTab === "rota" && isEldership)) {
+    } else if (subTab === "pulpit-team" || subTab === "duties") {
       // The rota views' date range and search ride the right of this desk's
       // heading, the place every other view here keeps its controls, rather
       // than a band of the panel's own below it. The values live in the
@@ -5675,9 +5675,7 @@ function DepartmentDetail({
       // reads them back the same way.
       const rotaPlaceholder = subTab === "pulpit-team"
         ? "Search the pulpit team…"
-        : subTab === "rota"
-          ? "Search Eldership rota…"
-          : "Search music duties…";
+        : "Search music duties…";
       const filters = hostedRotaFilters?.filters;
       setHeaderRightAction(
         filters ? (
@@ -5708,7 +5706,14 @@ function DepartmentDetail({
           </div>
         ) : null
       );
-    } else if (!(isDeaconate && (subTab === "inventory" || subTab === "rota")) && subTab !== "spiritual") {
+    } else if (
+      !(isDeaconate && (subTab === "inventory" || subTab === "rota")) &&
+      // The Eldership rota is the third panel that writes this slot from
+      // inside itself: the desk's heading band carries the desk's name, and
+      // the rota's search and dates answer in that row. Clearing here would
+      // race the panel's own write and leave the strip row bare.
+      !(isEldership && subTab === "rota") && subTab !== "spiritual"
+    ) {
       // The deaconate's property and rota panels are the console desk's own:
       // they write their own search (and rota filters) to this slot from
       // inside themselves, so leaving it to them is what keeps those
@@ -7559,20 +7564,16 @@ function DepartmentDetail({
       )}
       {(subTab === "announcements" || subTab === "sharing") && canOpenOfficeViews && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
-          <div className="mb-4 shrink-0">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
-              <Sparkles className="h-4 w-4 text-ember" aria-hidden="true" /> Sharing
-            </h3>
-            <p className="mt-0.5 text-xs text-moss">
-              Notices published to the church family, and the daily devotional thought.
-            </p>
-          </div>
+          {/* No heading of its own: the strip above names Sharing on every
+              width, and the board's own chrome already carries the way back.
+              The search rides the desk's heading row (`hostSearch`), the way
+              the other eldership pages hang theirs there. */}
           {/* The desk page holds still at every width, so the board needs a
-              height of its own to scroll within — the card fills what the
-              heading leaves and the board's list scrolls inside it, instead
-              of its posts being cut off at the card's foot. */}
+              height of its own to scroll within — the card fills the panel
+              and the board's list scrolls inside it, instead of its posts
+              being cut off at the card's foot. */}
           <div className="flex min-h-0 flex-1 flex-col">
-            <AnnouncementManager embedded />
+            <AnnouncementManager embedded hostSearch />
           </div>
         </div>
       )}

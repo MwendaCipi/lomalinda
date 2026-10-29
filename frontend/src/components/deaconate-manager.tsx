@@ -447,7 +447,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     }),
     [rotaFromDate, rotaToDate, rotaSearchQuery],
   );
-  const rotaFiltersHosted = filtersHosted;
+  const rotaFiltersHosted = filtersHosted || desk === "eldership";
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareTarget, setShareTarget] = useState<RotaEntry | null>(null);
   const [shareChannels, setShareChannels] = useState({ whatsapp: true, sms: true, email: true });
@@ -776,6 +776,44 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
 
   useEffect(() => {
     if (activeTab !== "rota") return;
+    // The eldership desk keeps its rota as a view of itself: the desk's
+    // heading band ("Eldership") already names the place and carries no
+    // description, so only the rota's controls move up into its heading row —
+    // the same band the desk's other views answer in — and the panel draws
+    // no band of its own below the strip.
+    if (desk === "eldership") {
+      setHeaderRightAction(
+        <div className="flex w-full items-center gap-1.5 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:flex-none sm:w-56">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
+            <input
+              type="text"
+              placeholder="Search Eldership rota…"
+              value={rotaSearchQuery}
+              onChange={(e) => setRotaSearchQuery(e.target.value)}
+              className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
+            />
+          </div>
+          <input
+            type="date"
+            value={rotaFromDate}
+            onChange={(e) => setRotaFromDate(e.target.value)}
+            aria-label="From date"
+            title="From date"
+            className="h-[30px] shrink-0 rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none hidden sm:block"
+          />
+          <input
+            type="date"
+            value={rotaToDate}
+            onChange={(e) => setRotaToDate(e.target.value)}
+            aria-label="To date"
+            title="To date"
+            className="h-[30px] shrink-0 rounded-xl border border-sand-mute bg-white px-2.5 text-xs text-bark focus:border-ember focus:outline-none hidden sm:block"
+          />
+        </div>
+      );
+      return () => setHeaderRightAction(null);
+    }
     // The pulpit and music views are pages of desks that draw their own
     // heading and their own search in the band above — so these variants
     // take neither over, and carry their filters inside the panel instead.

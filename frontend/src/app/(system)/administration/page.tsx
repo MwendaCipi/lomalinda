@@ -12,7 +12,7 @@ import { MeetingsManager } from "@/components/meetings-manager";
 import { UserManagement } from "@/components/user-management";
 import { CorrespondenceManager } from "@/components/correspondence-manager";
 import { DepartmentLettersPanel } from "@/components/department-letters";
-import { DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
+import { AccountsFilterButton, DepartmentAccountsPanel, DepartmentHub } from "@/components/department-hub";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
@@ -433,7 +433,12 @@ function AdministrationContent() {
   // one here, the same way every other desk's rail section does, so opening
   // Administration from the account menu still meets a row of toggles to move
   // between the two. Desks that own their own strip (treasury, deaconate,
-  const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
+  const { setCustomToggles, setCustomHeader, setHeadingFirst, setHeaderRightAction } = usePageHeader();
+  // The elders' funding page keeps its ledger search and movements filter in
+  // the heading row, in the page's own state — the panel holds none of its own
+  // band below the strip.
+  const [eldershipFundingSearch, setEldershipFundingSearch] = useState("");
+  const [eldershipFundingFilter, setEldershipFundingFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   const deaconateTab = deaconateViews.some((page) => page.tab === activeTab);
   useEffect(() => {
     if (!deaconateTab) return;
@@ -486,7 +491,6 @@ function AdministrationContent() {
     activeTab === "announcements" ||
     activeTab === "requests" ||
     activeTab === "eldership-moments" ||
-    activeTab === "eldership-funding" ||
     activeTab === "clerk-requests";
   useEffect(() => {
     if (!deskTailTab) return;
@@ -499,6 +503,38 @@ function AdministrationContent() {
       setHeadingFirst(false);
     };
   }, [deskTailTab, activeTab, setCustomHeader, setHeadingFirst]);
+  // Eldership Funding — the one desk-tail page that asks for the other
+  // order: the strip names Funding, and the ledger's search and movements
+  // filter ride the heading row beneath it (the band's own control slot), the
+  // way the desk's own views answer. So the page asks for no heading-first
+  // phone display of its own — a phone meets no "Funding" heading and no
+  // paragraph under it, only the strip and the search that narrows what the
+  // strip opened — while the wider screens keep the page's name and line.
+  const eldershipFundingTab = activeTab === "eldership-funding";
+  useEffect(() => {
+    if (!eldershipFundingTab) return;
+    setCustomHeader(deskTabHeadings["eldership-funding"]);
+    setHeaderRightAction(
+      <div className="flex w-full items-center gap-1.5 sm:w-auto">
+        <input
+          type="search"
+          value={eldershipFundingSearch}
+          onChange={(e) => setEldershipFundingSearch(e.target.value)}
+          placeholder="Search transactions, reference…"
+          aria-label="Search transactions"
+          className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-56 sm:flex-none"
+        />
+        <AccountsFilterButton
+          value={eldershipFundingFilter}
+          onChange={setEldershipFundingFilter}
+        />
+      </div>
+    );
+    return () => {
+      setCustomHeader(null);
+      setHeaderRightAction(null);
+    };
+  }, [eldershipFundingTab, eldershipFundingSearch, eldershipFundingFilter, setCustomHeader, setHeaderRightAction]);
   // The console's own pages draw the Administration strip. The clerk's
   // register is deliberately not among them: it answers to `clerk-users`
   // (see the rail's Clerkship row), so opening Clerkship never meets
@@ -957,12 +993,13 @@ function AdministrationContent() {
                 <DepartmentAccountsPanel
                   department={{ code: "eldership", label: "Eldership" }}
                   onChanged={() => {}}
-                  search=""
-                  // The search and the movements filter ride the page itself
-                  // here — the desk-accounts view inside the hub hosts them in
-                  // its header band, but this console page has none; without
-                  // them the desk read with no way to narrow its ledger.
-                  showInlineControls
+                  // The search and the movements filter ride the page's heading
+                  // row (the band's control slot) — the panel's own inline row
+                  // stands down, so a phone reads the strip and the search it
+                  // answers to, with no heading or paragraph of the title's
+                  // own repeating the strip below it.
+                  search={eldershipFundingSearch}
+                  typeFilter={eldershipFundingFilter}
                 />
               </div>
             )}
