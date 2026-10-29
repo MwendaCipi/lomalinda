@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from functools import lru_cache
 
 from django.conf import settings
 
@@ -24,6 +25,23 @@ logger = logging.getLogger(__name__)
 
 # How long a push may sit in the browser maker's queue before expiring.
 PUSH_TTL_SECONDS = 3600
+
+
+@lru_cache(maxsize=2)
+def _vapid_instance(private_key_pem: str):
+    """The parsed signing key, memoized per stored PEM.
+
+    pywebpush cannot be handed the PEM string itself: its string path
+    (``Vapid.from_string``) reads the whole PEM — header lines and all — as a
+    base64 key, the decode lands in garbage, and every delivery dies with
+    "ASN.1 parsing error: invalid length" while the key on record is perfectly
+    sound. Parsing it here, the documented path (``from_pem``), and passing the
+    instance is what reaches the push service. Memoized because an
+    announcement loop asks for it once per device.
+    """
+    from py_vapid import Vapid
+
+    return Vapid.from_pem(private_key_pem.encode("ascii"))
 
 
 def generate_vapid_key_pair() -> tuple[str, str]:
@@ -117,13 +135,19 @@ def deliver_to_subscription(sub, payload: str, row) -> tuple[bool, int | None, s
     from pywebpush import WebPushException, webpush
 
     try:
+        parsed_key = _vapid_instance(row.vapid_private_key)
+    except Exception as exc:
+        logger.warning("Push to subscription %s skipped: the church's VAPID private key could not be read: %s", sub.pk, exc)
+        return False, None, "the church's VAPID key could not be read"
+
+    try:
         webpush(
             subscription_info={
                 'endpoint': sub.endpoint,
                 'keys': {'p256dh': sub.p256dh, 'auth': sub.auth},
             },
             data=payload,
-            vapid_private_key=row.vapid_private_key,
+            vapid_private_key=parsed_key,
             # The browser ties subscriptions to this identity — it must be
             # an origin the service worker answers for.
             vapid_claims={'sub': f"mailto:{getattr(settings, 'DEFAULT_FROM_EMAIL', 'admin@example.com')}"},
