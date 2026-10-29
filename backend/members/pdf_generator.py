@@ -801,8 +801,8 @@ def generate_treasury_pdf(
     paybill_row.append(Paragraph(format_money(mpesa_val), st["cell_right_bold"]))
     cash_table_data.append(paybill_row)
 
-    # Row: Bank-to-Bank
-    bank_row = [Paragraph('Bank-to-Bank', st["cell"])]
+    # Row: Bank Deposit — the NEKF sheet's own wording for the bank column.
+    bank_row = [Paragraph('Bank Deposit', st["cell"])]
     for i in range(5):
         sat = saturdays[i] if i < num_weeks else None
         wp = weekly_data.get(sat, {}) if sat else {}
@@ -838,9 +838,12 @@ def generate_treasury_pdf(
     story.append(Spacer(1, 8))
 
     # --- Signatures: Treasurer, Deacon, Elder, Pastor ---
+    # The deacon's line reads the head deacon's own signature: passing no
+    # office left the cell blank even after the deacon had signed, so the
+    # sheet that arrives at the field was missing a pen the church holds.
     sig_data = [[
-        signature_cell("<b>Signed By:</b>", offices.get("treasurer"), "Name: ______________________"),
-        signature_cell("Deacon", None, "Name: ______________________"),
+        signature_cell("<b>Signed By:</b> Treasurer", offices.get("treasurer"), "Name: ______________________"),
+        signature_cell("Deacon", offices.get("head_deacon"), "Name: ______________________"),
         signature_cell("Elder", offices.get("first_elder"), "Name: ______________________"),
         signature_cell("<b>Countersigned by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
     ]]
@@ -873,7 +876,9 @@ def generate_treasury_pdf(
         ("Combined (50%)", "combined_split"),
         ("Building/Development", ['building/development', 'building', 'building development']),
         ("Camp Expenses", ['camp expenses']),
-        ("Local Church Budget", ['local church budget', 'lcb']),
+        # The sheet names this fund by its short form, as the account is
+        # kept: LCB.
+        ("LCB", ['local church budget', 'lcb']),
         ("Others", "others_residual"),
     ]
 
@@ -1016,19 +1021,30 @@ def generate_treasury_pdf(
         if i % 2 == 0:
             local_style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#faf9f6")))
     local_table.setStyle(TableStyle(local_style))
-    story.append(local_table)
-    story.append(Spacer(1, 10))
+    # The local table and the two totals that answer it travel as one block,
+    # so a page break never leaves the totals on a sheet of their own with the
+    # rows they add up behind them.
+    local_block = [local_table, Spacer(1, 10)]
 
     # --- Total Offering (with weekly columns) ---
     grand_offering = trust_total + local_total
-    total_header = [Paragraph('<b>Total Offering</b>', st["cell_bold"])]
+    # The row prints white on the sheet's dark band. A table's TEXTCOLOR does
+    # not reach a Paragraph — the paragraph carries its own — so the grey of
+    # the cell style left this row unreadable on the dark ground, and the
+    # Total Offering line printed as an empty green band.
+    white_bold = ParagraphStyle(
+        "WhiteBold", parent=st["cell_bold"], textColor=colors.white
+    )
+    white_right_bold = ParagraphStyle(
+        "WhiteRightBold", parent=st["cell_right_bold"], textColor=colors.white
+    )
+    total_header = [Paragraph('Total Offering', white_bold)]
     for i in range(5):
-        total_header.append(Paragraph(format_money(week_trust[i] + week_local[i]), st["cell_right_bold"]))
-    total_header.append(Paragraph(format_money(grand_offering), st["cell_right_bold"]))
+        total_header.append(Paragraph(format_money(week_trust[i] + week_local[i]), white_right_bold))
+    total_header.append(Paragraph(format_money(grand_offering), white_right_bold))
     total_off = Table([total_header], colWidths=[3.5 * cm] + [2.8 * cm] * 5 + [3.0 * cm])
     total_off.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#26352f")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.white), ("ALIGN", (1, 0), (-1, -1), "RIGHT"), ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#26352f"))]))
-    story.append(total_off)
-    story.append(Spacer(1, 10))
+    local_block.extend([total_off, Spacer(1, 10)])
 
     # --- Total Remittance to NEKF ---
     remit_header = [Paragraph('<b>Total remittance to SDA CHURCH NEKF KSH</b>', st["cell_bold"])]
@@ -1037,7 +1053,8 @@ def generate_treasury_pdf(
     remit_header.append(Paragraph(format_money(trust_total), st["cell_right_bold"]))
     remit = Table([remit_header], colWidths=[3.5 * cm] + [2.8 * cm] * 5 + [3.0 * cm])
     remit.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f4ee")), ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#dfdbd1")), ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
-    story.append(remit)
+    local_block.append(remit)
+    story.append(KeepTogether(local_block))
     story.append(Spacer(1, 12))
 
     # --- Deposit Slips ---
@@ -1047,8 +1064,23 @@ def generate_treasury_pdf(
     story.append(dep)
     story.append(Spacer(1, 12))
 
-    # --- Presented by / Church Pastor ---
-    final_sig = [[Paragraph(f"<b>Presented by</b><br/><br/>Name: ________________________<br/>Treasurer", st["cell"]), Paragraph("", st["cell"]), Paragraph(f"Sign: ________________________<br/><br/>{end_date_str}", st["cell"])], [Paragraph(f"<b>Church Pastor</b><br/><br/>Name: ________________________", st["cell"]), Paragraph("", st["cell"]), Paragraph(f"Sign: ________________________<br/><br/>{end_date_str}", st["cell"])]]
+    # --- Presented by / Treasurer / Church Pastor ---
+    # The sheet's own foot, row for row: who presents the report, the
+    # treasurer's office with the Mobile No line beneath it, then the
+    # pastor's countersign. The Mobile No line used to be left out, which is
+    # the one line of the workbook this page never printed.
+    final_sig = [
+        [
+            Paragraph("<b>Presented by</b><br/><br/>Name: ________________________", st["cell"]),
+            Paragraph("Treasurer<br/>Mobile No: ____________", st["cell"]),
+            Paragraph(f"Sign: ________________________<br/><br/>{end_date_str}", st["cell"]),
+        ],
+        [
+            Paragraph("<b>Church Pastor</b><br/><br/>Name: ________________________", st["cell"]),
+            Paragraph("", st["cell"]),
+            Paragraph(f"Sign: ________________________<br/><br/>{end_date_str}", st["cell"]),
+        ],
+    ]
     final_sig_table = Table(final_sig, colWidths=[6.5 * cm, 5.0 * cm, 6.5 * cm])
     final_sig_table.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dfdbd1")), ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8), ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#faf7f2"))]))
     story.append(KeepTogether([final_sig_table]))

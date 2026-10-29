@@ -71,7 +71,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -3136,6 +3136,46 @@ class PdfGenerationAPITests(APITestCase):
             ' | District: Meru | Period: 2026-01-01 to 2026-01-31'
         self.assertIn(''.join(meta.split()), text)
 
+    def test_summary_report_reads_the_nekf_template_row_for_row(self):
+        """The summary prints the workbook's own lines — the two rows it had
+        renamed, the deacon's pen, and the Mobile No line it left out."""
+        from .pdf_generator import generate_treasury_pdf
+
+        text = _pdf_text(generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 1500, "cash": 1000, "mpesa": 500, "bank_transfer": 0, "cheque": 0},
+            signatures={
+                "head_deacon": {"name": "Deacon Otieno"},
+            },
+        ))
+
+        flat = ''.join(text.split())
+        for line in (
+            'WEEKLYCASHCOUNTSSUMMARY',
+            'ChurchPaybilla/c',
+            'BankDeposit',
+            'TotalReceived',
+            'OFFERINGSUMMARY',
+            'TotalTrustFunds',
+            'LCB',
+            'TotalLocalOffering',
+            'TotalOffering',
+            'DepositSlips',
+            'Presentedby',
+            'Treasurer',
+            'MobileNo',
+            'ChurchPastor',
+        ):
+            self.assertIn(line, flat)
+        # The funds are no longer renamed away from the sheet's rows.
+        self.assertNotIn('Bank-to-Bank', text)
+        self.assertNotIn(''.join('Local Church Budget'.split()), flat)
+        # The deacon's saved pen prints on the deacon's line.
+        self.assertIn('DeaconOtieno', flat)
+
     def test_member_giving_pdf_returns_valid_pdf_stream(self):
         Contribution.objects.create(
             member=self.user,
@@ -3289,6 +3329,106 @@ class TreasurySpreadsheetRangeTests(APITestCase):
             sheet['A3'].value,
             'CASH COUNT AND OFFERING REPORT SUMMARY FROM 2026-10-08 TO 2026-10-09',
         )
+
+
+class TreasuryPeriodTests(APITestCase):
+    """The desk's reporting periods: closing one ends it and opens the next,
+    and a close that cut a gift off on the wrong side can be moved."""
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user('period.treasurer', 'period.treasurer@sda.org', 'password123')
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer')
+        self.member = User.objects.create_user('period.member', 'period.member@sda.org', 'password123')
+        MemberProfile.objects.create(user=self.member, role='member')
+        self.client.force_authenticate(user=self.treasurer)
+
+    def _close(self, moment):
+        return self.client.post(
+            '/api/members/treasury/periods/',
+            {'closed_at': moment},
+            format='json',
+        )
+
+    @staticmethod
+    def _instant(value):
+        """The moment a close names, whatever zone the record writes it in."""
+        return datetime.fromisoformat(value)
+
+    def test_a_fresh_church_reads_one_open_period(self):
+        response = self.client.get('/api/members/treasury/periods/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        periods = response.data['periods']
+        self.assertEqual(len(periods), 1)
+        self.assertTrue(periods[0]['is_open'])
+        self.assertIsNone(periods[0]['started_at'])
+
+    def test_closing_opens_the_next_period_where_it_closed(self):
+        response = self._close('2026-10-30T00:00:00+03:00')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        periods = response.data['periods']
+        self.assertEqual(len(periods), 2)
+        closed, opened = periods
+        self.assertFalse(closed['is_open'])
+        self.assertEqual(
+            self._instant(closed['closed_at']),
+            self._instant('2026-10-30T00:00:00+03:00'),
+        )
+        self.assertEqual(closed['closed_by'], self.treasurer.get_username())
+        # The next period starts exactly where the last one ended, and is open.
+        self.assertTrue(opened['is_open'])
+        self.assertEqual(
+            self._instant(opened['started_at']),
+            self._instant('2026-10-30T00:00:00+03:00'),
+        )
+        self.assertIsNone(opened['closed_at'])
+
+    def test_a_period_cannot_close_before_the_one_before_it(self):
+        self._close('2026-10-16T00:00:00+03:00')
+        response = self._close('2026-10-02T00:00:00+03:00')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(TreasuryPeriod.objects.all()), 1)
+
+    def test_editing_the_close_moves_the_boundary(self):
+        first = self._close('2026-10-16T00:00:00+03:00').data['period']['id']
+        second = self._close('2026-10-30T00:00:00+03:00').data['period']['id']
+        # A gift counted at 11pm on the 29th was cut off into the wrong period;
+        # moving the close to the 30th at midnight keeps it in the 16th–29th.
+        response = self.client.patch(
+            f'/api/members/treasury/periods/{second}/',
+            {'closed_at': '2026-10-30T23:59:00+03:00'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        periods = response.data['periods']
+        self.assertEqual(
+            self._instant(periods[1]['closed_at']),
+            self._instant('2026-10-30T23:59:00+03:00'),
+        )
+        # The open period starts at the moved close, never at the old one.
+        self.assertEqual(
+            self._instant(periods[2]['started_at']),
+            self._instant('2026-10-30T23:59:00+03:00'),
+        )
+        self.assertNotEqual(first, second)
+
+    def test_an_older_close_cannot_be_moved(self):
+        older = self._close('2026-10-16T00:00:00+03:00').data['period']['id']
+        self._close('2026-10-30T00:00:00+03:00')
+        response = self.client.patch(
+            f'/api/members/treasury/periods/{older}/',
+            {'closed_at': '2026-10-20T00:00:00+03:00'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_member_may_not_close_a_period(self):
+        self.client.force_authenticate(user=self.member)
+        response = self._close('2026-10-30T00:00:00+03:00')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_the_close_needs_a_date_and_time(self):
+        response = self.client.post('/api/members/treasury/periods/', {'closed_at': 'not-a-date'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class ProfileAreaPickerTests(APITestCase):
