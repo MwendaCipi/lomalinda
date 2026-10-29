@@ -2039,7 +2039,7 @@ function ProgramEditorModal({
           <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
             <div className="min-w-0 flex-1 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             <p className="text-xs text-moss">
-              Each session is one part of the day. Drag a session onto another: it takes that session's start time, and the ones after it are pushed along — each starting where the one before it ends, every length kept. Open a session to add the activities inside it.
+              Each session is one part of the day. Drag a session onto another: it takes that session&apos;s start time, and the ones after it are pushed along — each starting where the one before it ends, every length kept. Open a session to add the activities inside it.
             </p>
             <div className="mt-3 space-y-3">
           {items.map((session, index) => {
