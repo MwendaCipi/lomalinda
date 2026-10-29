@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, FolderCheck, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, FolderCheck, Lock, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
+import { ClosePeriodModal, closeParts, closingDay, type TreasuryPeriodWindow } from "@/components/close-period-modal";
 import { waMeNumber } from "@/components/contact-modal";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { openConversation } from "@/lib/chat";
@@ -114,6 +115,13 @@ export default function TreasuryPage() {
   // from-date of the 3rd had the treasurer asking why receipts had vanished.
   const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(localDate);
+  // The desk's reporting periods: every close the church has made, oldest
+  // first, with the period still open last. The dates on screen are one of
+  // these windows — the open one until the chevrons say otherwise — so the
+  // from date is never typed in by hand to follow a close.
+  const [periods, setPeriods] = useState<TreasuryPeriodWindow[]>([]);
+  const [periodIndex, setPeriodIndex] = useState(0);
+  const [periodModal, setPeriodModal] = useState<null | "close" | "edit">(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cashReceipts, setCashReceipts] = useState<CashReceipt[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "denied">("loading");
@@ -771,7 +779,11 @@ export default function TreasuryPage() {
   async function handleReceiptSaved(deliveryMessage: string, receipt: { received_on: string }) {
     let nextFrom = fromDate;
     let nextTo = toDate;
-    if (receipt.received_on) {
+    // The dates belong to the period on screen now: a receipt that lands
+    // before the last close belongs to the period before, and widening this
+    // window to include it would print two periods as one. Only a desk with
+    // no periods on record (a fresh church) still widens to show its entry.
+    if (receipt.received_on && periods.length === 0) {
       if (receipt.received_on < nextFrom) nextFrom = receipt.received_on;
       if (receipt.received_on > nextTo) nextTo = receipt.received_on;
     }
@@ -802,6 +814,41 @@ export default function TreasuryPage() {
     setMessage(deliveryMessage);
   }
 
+  /** The day a period opens on — its start, or the month's own first day for
+      the church's first period, which has no close before it. */
+  const periodFromDate = (period: TreasuryPeriodWindow) =>
+    period.started_at ? closeParts(period.started_at).date : firstDayOfMonth();
+  /** The last day a period covers: the day before a midnight close, else the
+      close's own day. */
+  const periodToDate = (period: TreasuryPeriodWindow) =>
+    period.closed_at ? closingDay(period.closed_at) : localDate();
+
+  async function loadPeriods(): Promise<TreasuryPeriodWindow[]> {
+    try {
+      const response = await fetch(`${API_URL}/api/members/treasury/periods/`, { headers: headers() });
+      if (!response.ok) return [];
+      const data = await response.json();
+      const rows = Array.isArray(data?.periods) ? (data.periods as TreasuryPeriodWindow[]) : [];
+      setPeriods(rows);
+      return rows;
+    } catch {
+      return [];
+    }
+  }
+
+  /** Put a period's window on the desk — the one read finds its own dates. */
+  async function openPeriodOnDesk(index: number, rows = periods) {
+    const period = rows[index];
+    if (!period) return;
+    const from = periodFromDate(period);
+    const to = periodToDate(period);
+    setPeriodIndex(index);
+    setFromDate(from);
+    setToDate(to);
+    setStatus("loading");
+    await load(from, to);
+  }
+
   async function load(fDate = fromDate, tDate = toDate) {
     setMessage("");
     const profile = await fetch(`${API_URL}/api/members/me/`, { headers: headers() }).then((res) => res.ok ? res.json() : null);
@@ -823,7 +870,61 @@ export default function TreasuryPage() {
     setStatus("ready");
   }
 
-  useEffect(() => { load(); }, []);  async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
+  // The desk opens on the period still open — the one that began at the last
+  // close — so the from date follows the close instead of the month's 1st.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const rows = await loadPeriods();
+      if (cancelled) return;
+      const openIndex = rows.length - 1;
+      if (openIndex >= 0) {
+        await openPeriodOnDesk(openIndex, rows);
+        return;
+      }
+      await load();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // The mount reads the desk's periods once; every later move is the
+    // reader's own (a chevron, a close), never a re-run of this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** A period's window was closed or moved: put it on the desk. */
+  async function handlePeriodSaved(payload: {
+    period: TreasuryPeriodWindow | null;
+    periods: TreasuryPeriodWindow[];
+  }) {
+    const rows = payload.periods ?? [];
+    setPeriods(rows);
+    // Land on the close just written: the treasurer reads what they have just
+    // cut off, and the button they pressed is now the Edit Close for it.
+    const savedIndex = rows.findIndex((period) => period.id === payload.period?.id);
+    const index = savedIndex >= 0 ? savedIndex : rows.length - 1;
+    if (index < 0) return;
+    await openPeriodOnDesk(index, rows);
+    const period = rows[index];
+    const when = period?.closed_at ? dayFirst(period.closed_at) : "";
+    showAlert(
+      period?.is_open ? "Period open" : "Period closed",
+      period?.is_open
+        ? "The books now run from the last close."
+        : `The books close at ${when}. The next report opens there, and the from date follows it.`,
+      "success",
+      { toast: true, timer: 6000, showConfirmButton: false }
+    );
+  }
+
+  /** Walk the chevrons: one period back or forward, its own window on the desk. */
+  async function stepPeriod(delta: number) {
+    const next = periodIndex + delta;
+    if (next < 0 || next >= periods.length) return;
+    await openPeriodOnDesk(next);
+  }
+
+  async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
   async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
 
   // Opening the Failed tab, or switching the page open there, swaps the
@@ -843,6 +944,13 @@ export default function TreasuryPage() {
   // The window every report on this page is cut to — the dates the PDF
   // buttons open with.
   const rangeLabel = fromDate === toDate ? fromDate : `${fromDate} → ${toDate}`;
+  // The period on screen: the open one until the chevrons walk back. Only the
+  // latest close may be moved — an older one has another close after it — so
+  // the button reads Edit Close on that period alone and offers Close Period
+  // everywhere else, which is always the open books.
+  const currentPeriod = periods[periodIndex] ?? null;
+  const latestClosedId = [...periods].reverse().find((period) => !period.is_open)?.id ?? null;
+  const editingThisClose = Boolean(currentPeriod && !currentPeriod.is_open && currentPeriod.id === latestClosedId);
 
 
   const toggleExpandPurpose = async (purposeName: string) => {
@@ -1574,11 +1682,57 @@ export default function TreasuryPage() {
                     <div className="shrink-0 sticky bottom-0 md:static z-30 border-t border-sand-line bg-white px-3 py-2 sm:px-4 sm:py-2.5 font-semibold text-xs text-bark flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] md:shadow-none pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-2.5">
                       {/* A row count is the table's own vocabulary: with cards
                           on a phone it says nothing the list does not already
-                          say, and it costs a line of the ledger's height. */}
+                          say, and it costs a line of the ledger's height. The
+                          period the desk is cut to rides beside it — the
+                          chevrons below walk these same windows. */}
                       <span className="hidden text-moss text-[11px] md:inline md:text-xs">
                         Total Rows Available: <strong className="text-bark">{visibleRows.length}</strong>
+                        {periods.length > 0 && (
+                          <span className="ml-2 text-moss">
+                            • Periodic window <strong className="text-bark">{rangeLabel}</strong>
+                            {currentPeriod?.is_open ? " (open)" : " (closed)"}
+                          </span>
+                        )}
                       </span>
                       <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:w-auto sm:items-center sm:gap-2">
+                        {/* The periods, walked one at a time: back to an older
+                            close, forward to the one after it, the still-open
+                            period always last. */}
+                        <div className="flex items-center gap-1 rounded-xl border border-sand-mute bg-white p-0.5 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => void stepPeriod(-1)}
+                            disabled={periodIndex <= 0 || periods.length === 0}
+                            aria-label="Previous period"
+                            title="Previous period"
+                            className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg text-bark transition hover:bg-sand disabled:opacity-35 sm:h-8 sm:w-8"
+                          >
+                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void stepPeriod(1)}
+                            disabled={periodIndex >= periods.length - 1 || periods.length === 0}
+                            aria-label="Next period"
+                            title="Next period"
+                            className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg text-bark transition hover:bg-sand disabled:opacity-35 sm:h-8 sm:w-8"
+                          >
+                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPeriodModal(editingThisClose ? "edit" : "close")}
+                          title={
+                            editingThisClose
+                              ? "Move this period's close"
+                              : "Close the period the books are in"
+                          }
+                          className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-bark px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90"
+                        >
+                          <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{editingThisClose ? "Edit Close" : "Close Period"}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setIsModalOpen(true)}
@@ -2318,6 +2472,18 @@ export default function TreasuryPage() {
         onClose={() => setIsModalOpen(false)}
         onSaved={handleReceiptSaved}
       />
+
+      {/* Closing the books: the close named here ends the period on screen and
+          opens the next one, which is where the from date follows to. Mounted
+          only while it is open, so it always opens on fresh defaults. */}
+      {periodModal && (
+        <ClosePeriodModal
+          mode={periodModal}
+          period={currentPeriod}
+          onClose={() => setPeriodModal(null)}
+          onSaved={handlePeriodSaved}
+        />
+      )}
 
       {/* A held payment's own sheets — the same Assign and Contact the old
           Unassigned desk opened, now reached from the row itself in
