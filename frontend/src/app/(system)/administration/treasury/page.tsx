@@ -2432,33 +2432,43 @@ export default function TreasuryPage() {
                               )}
                               <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
                             </button>
+                            {/* The periods walked where the givings table
+                                reads them: back an older close, forward the
+                                one after, the still-open period last. */}
+                            <div className="flex items-center gap-1 rounded-xl border border-sand-mute bg-white p-0.5 shadow-sm">
+                              <button
+                                type="button"
+                                onClick={() => void stepPeriod(-1)}
+                                disabled={periodIndex <= 0 || periods.length === 0}
+                                aria-label="Previous period"
+                                title="Previous period"
+                                className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg text-bark transition hover:bg-sand disabled:opacity-35 sm:h-8 sm:w-8"
+                              >
+                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void stepPeriod(1)}
+                                disabled={periodIndex >= periods.length - 1 || periods.length === 0}
+                                aria-label="Next period"
+                                title="Next period"
+                                className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg text-bark transition hover:bg-sand disabled:opacity-35 sm:h-8 sm:w-8"
+                              >
+                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            </div>
                             <button
                               type="button"
-                              onClick={() => {
-                                fetch("/api/members/payments/mpesa/pull/", {
-                                  method: "POST",
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                    Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
-                                  },
-                                  body: JSON.stringify({ days: 1 }),
-                                })
-                                  .then((response) => response.json())
-                                  .then((data) => {
-                                    if (data.detail) {
-                                      showAlert("Pull M-Pesa", data.detail, "info", { toast: true, timer: 5000 });
-                                    } else {
-                                      showAlert("Pull M-Pesa", "Pull completed successfully", "success", { toast: true, timer: 5000 });
-                                    }
-                                  })
-                                  .catch(() => {
-                                    showAlert("Pull M-Pesa", "Network error. Please try again.", "error");
-                                  });
-                              }}
-                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-emerald-700 px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-800"
+                              onClick={() => setPeriodModal(editingThisPeriod ? "edit" : "close")}
+                              title={
+                                editingThisPeriod
+                                  ? "Move this period's close"
+                                  : "Close the period the books are in"
+                              }
+                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl bg-bark px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90"
                             >
-                              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                              <span className="truncate">Pull M-Pesa</span>
+                              <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" aria-hidden="true" />
+                              <span className="truncate">{editingThisPeriod ? "Edit Period" : "Close Period"}</span>
                             </button>
                             <button
                               type="button"

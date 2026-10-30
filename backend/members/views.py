@@ -10052,13 +10052,14 @@ def _get_saturdays_in_month(ref_date):
 def _gather_weekly_contributions(start_date, end_date):
     """
     Returns (saturdays, weekly_data, overall_purpose_map) where:
-    - saturdays: list of Saturday dates for weeks in the period (week 1 starts at period start)
+    - saturdays: the sabbath that closes each week of the period (week 1 first)
     - weekly_data: {saturday_date: {purpose: {mpesa, bank_transfer, cheque, cash}}}
     - overall_purpose_map: {purpose: {mpesa, bank_transfer, cheque, cash, total}}
 
-    Weeks align to the reporting period: the first week of the period starts
-    at the period start (week 1), numbered sequentially from there. Only weeks
-    that fall within the period are included.
+    Weeks run Sunday to Saturday, named by the sabbath that ends them. Week 1
+    of a period is the week that ends on the period's first sabbath — a close
+    cut into mid-week leaves that week running to its sabbath, and the next
+    report begins counting there.
     """
     if isinstance(start_date, str):
         try:
@@ -10071,22 +10072,24 @@ def _gather_weekly_contributions(start_date, end_date):
         except Exception:
             pass
 
-    # Find the Saturday that starts the week containing or beginning the period
-    # Week runs Sat-Fri; week 1 starts at the beginning of the period
-    days_since_sat = (start_date.weekday() - 5) % 7
-    period_week_start = start_date - timedelta(days=days_since_sat)
+    # Week 1 ends on the first sabbath on or after the period start: a close
+    # that lands mid-week (say a Wednesday midnight) leaves Sunday-to-Saturday
+    # still counting as the report's opening week, its sabbath naming it.
+    days_to_sat = (5 - start_date.weekday()) % 7
+    first_sabbath = start_date + timedelta(days=days_to_sat)
 
     saturdays = []
-    week_sat = period_week_start
-    # Generate weeks until we've passed the end of period (up to reasonable limit like 10 weeks)
-    while week_sat <= end_date + timedelta(days=6):  # include weeks that might extend past end
+    week_sat = first_sabbath
+    # Through the period's last week — one the window closes short of its
+    # sabbath still shows, its sabbath naming what remains of it.
+    while week_sat <= end_date + timedelta(days=6):
         saturdays.append(week_sat)
         week_sat = week_sat + timedelta(days=7)
         if len(saturdays) > 12:  # safety limit
             break
 
     if not saturdays:
-        saturdays = [period_week_start]
+        saturdays = [first_sabbath]
 
     # Money is only what the selected range covers
     month_start = start_date
@@ -10106,13 +10109,13 @@ def _gather_weekly_contributions(start_date, end_date):
             d = dt.date()
         else:
             d = dt
-        # Find the Saturday on or before this date
-        days_since_sat = (d.weekday() - 5) % 7
-        sat = d - timedelta(days=days_since_sat)
-        # If sat is before our first Saturday of the period, clamp to first
+        # The sabbath that ends the Sun-Sat week this date sits in.
+        days_to_sat = (5 - d.weekday()) % 7
+        sat = d + timedelta(days=days_to_sat)
+        # If sat is before our first sabbath of the period, clamp to first
         if sat < saturdays[0]:
             return saturdays[0]
-        # If sat is after our last Saturday, clamp to last
+        # If sat is after our last sabbath, clamp to last
         if sat > saturdays[-1]:
             return saturdays[-1]
         return sat
