@@ -54,6 +54,11 @@ type LetterRow = {
   clerk_signed_at: string | null;
   reply: string;
   declined_by_name: string | null;
+  recipient_name: string;
+  recipient_address: string;
+  recipient_town: string;
+  recipient_phone: string;
+  recipient_email: string;
   recipient_response: null | "accepted" | "turned_down";
   recipient_comment: string;
   responded_at: string | null;
@@ -156,10 +161,10 @@ export function WriteLetterModal({
     };
   }, [open]);
 
-  // The block the paper composes under the salutation — the pieces in the
-  // order they print, blanks out.
+  // The block the paper composes under the salutation. Recipient phone and
+  // email stay in the clerk's request record for delivery, not on the paper.
   const recipientBlock = () =>
-    [recipientName, recipientAddress, recipientTown, recipientPhone, recipientEmail]
+    [recipientName, recipientAddress, recipientTown]
       .map((line) => line.trim())
       .filter(Boolean);
 
@@ -311,12 +316,11 @@ export function WriteLetterModal({
                   </label>
                   <label className="block text-xs font-medium text-bark">
                     Address
-                    <textarea
-                      rows={3}
+                    <input
                       value={recipientAddress}
                       onChange={(event) => setRecipientAddress(event.target.value)}
                       placeholder="e.g. P.o Box 61-60300"
-                      className="mt-1 block w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
                     />
                   </label>
                   <label className="block text-xs font-medium text-bark">
@@ -329,7 +333,7 @@ export function WriteLetterModal({
                     />
                   </label>
                   <label className="block text-xs font-medium text-bark">
-                    Phone
+                    Recipient phone <span className="font-normal text-moss">(for clerk only)</span>
                     <input
                       value={recipientPhone}
                       onChange={(event) => setRecipientPhone(event.target.value)}
@@ -338,7 +342,7 @@ export function WriteLetterModal({
                     />
                   </label>
                   <label className="block text-xs font-medium text-bark">
-                    Email
+                    Recipient email <span className="font-normal text-moss">(for clerk only)</span>
                     <input
                       value={recipientEmail}
                       onChange={(event) => setRecipientEmail(event.target.value)}
@@ -524,12 +528,11 @@ export function WriteLetterModal({
             </label>
             <label className="block text-xs font-medium text-bark">
               Address
-              <textarea
-                rows={3}
+              <input
                 value={recipientAddress}
                 onChange={(event) => setRecipientAddress(event.target.value)}
                 placeholder="e.g. P.o Box 61-60300"
-                className="mt-1 block w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
               />
             </label>
             <label className="block text-xs font-medium text-bark">
@@ -542,7 +545,7 @@ export function WriteLetterModal({
               />
             </label>
             <label className="block text-xs font-medium text-bark">
-              Phone
+              Recipient phone <span className="font-normal text-moss">(for clerk only)</span>
               <input
                 value={recipientPhone}
                 onChange={(event) => setRecipientPhone(event.target.value)}
@@ -551,7 +554,7 @@ export function WriteLetterModal({
               />
             </label>
             <label className="block text-xs font-medium text-bark">
-              Email
+              Recipient email <span className="font-normal text-moss">(for clerk only)</span>
               <input
                 value={recipientEmail}
                 onChange={(event) => setRecipientEmail(event.target.value)}
@@ -1058,6 +1061,16 @@ export function DepartmentLettersPanel({
                   </p>
                   {row.status === "declined" && row.reply && (
                     <p className="mt-1 text-[11px] italic text-moss-faint">&quot;{row.reply}&quot;</p>
+                  )}
+
+                  {/* These delivery details belong to the clerk's work queue,
+                      not to the printed correspondence. */}
+                  {canSignClerk && (row.recipient_phone || row.recipient_email) && (
+                    <p className="mt-1 text-[11px] text-moss">
+                      Delivery contacts (not printed): {row.recipient_phone}
+                      {row.recipient_phone && row.recipient_email ? " · " : ""}
+                      {row.recipient_email && <a className="hover:text-ember hover:underline" href={`mailto:${row.recipient_email}`}>{row.recipient_email}</a>}
+                    </p>
                   )}
 
                   {/* What the recipient answered on a shared letter, if they have. */}

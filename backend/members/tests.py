@@ -19197,6 +19197,8 @@ class DepartmentLetterFlowTests(APITestCase):
             'content': 'The choir needs new robes before the term begins.',
             'letter_date': '21/10/2026',
             'recipient_address': 'Isiolo Central Point, P.O Box 61-60300, Isiolo.',
+            'recipient_phone': '0712345678',
+            'recipient_email': 'office@example.org',
         }, format='json')
 
     def _sign(self, user, action, pk):
@@ -19323,6 +19325,8 @@ class DepartmentLetterFlowTests(APITestCase):
         # closing, and both officers under their own pen spaces.
         self.assertIn('21/10/2026', flat)
         self.assertIn('IsioloCentralPoint', flat)
+        self.assertNotIn('0712345678', flat)
+        self.assertNotIn('office@example.org', flat)
         self.assertIn('TothePastor/Churchclerk,', flat)
         self.assertIn('REF:REQUESTFORCHOIRROBES', flat)
         self.assertIn('Thechoirneedsnewrobesbeforethetermbegins', flat)

@@ -2524,8 +2524,9 @@ def generate_department_letter_pdf(
     )
 
     # The date, alone on its first line, then the salutation, then the
-    # recipient set out as the template writes it: the name, the address's
-    # own lines, the town after the address, and the ways to reach them.
+    # recipient set out as the template writes it: their name, postal address
+    # and town.  The phone and email remain on the request for the clerk to
+    # use when delivering the letter; they are not part of the correspondence.
     story.append(Paragraph(escape(date_str), addr_style))
     story.append(Spacer(1, 8))
     # The salutation every letter of this kind carries.
@@ -2536,8 +2537,6 @@ def generate_department_letter_pdf(
             letter_record.get("recipient_name"),
             address_text,
             letter_record.get("recipient_town"),
-            letter_record.get("recipient_phone"),
-            letter_record.get("recipient_email"),
         )
         if str(line or "").strip()
     ]
