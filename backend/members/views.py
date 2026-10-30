@@ -14981,6 +14981,8 @@ class DepartmentLetterListCreateView(APIView):
             title=title[:200],
             content=content,
             status='pending_pastor',
+            letter_date=str(request.data.get('letter_date') or '').strip()[:40],
+            recipient_address=str(request.data.get('recipient_address') or '').strip()[:255],
         )
 
         # Notify Pastor and Administration (SMS, email, push, in-app)

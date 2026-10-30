@@ -72,3 +72,7 @@ backend/vfy_settings.py
 /intermediate_discrepancy_report.txt
 /review/
 verification/
+
+# Scratch files from local debugging sessions — same rule: not repo content,
+# and they must not block deploys.
+tmp/

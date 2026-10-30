@@ -17,6 +17,7 @@ dj-database-url>=2.3,<3.0
 gunicorn>=23.0,<24.0
 Pillow>=10.0,<12.0
 reportlab>=4.0,<6.0
+qrcode>=7.4,<9.0
 # The SDA mark on every printed record: the site's own SVG, drawn into the
 # PDF as vectors (svglib is pure Python; reportlab rasterises nothing).
 svglib>=2.0,<3.0

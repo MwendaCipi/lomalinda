@@ -2595,6 +2595,12 @@ class DepartmentLetterRequest(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_pastor', db_index=True)
+    # The letter's own front matter, kept as the writer typed it: the date
+    # the letter carries and the one address the recipient church receives
+    # it at. They print above and beside the subject on the paper itself —
+    # nothing is composed into the body to carry them.
+    letter_date = models.CharField(max_length=40, blank=True, default='')
+    recipient_address = models.CharField(max_length=255, blank=True, default='')
 
     pastor_signed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,

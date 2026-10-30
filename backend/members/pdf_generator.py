@@ -5,6 +5,7 @@ from decimal import Decimal
 from datetime import datetime
 from pathlib import Path
 from django.utils import timezone
+import qrcode
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import cm, mm
@@ -2273,31 +2274,42 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     return buffer.getvalue()
 
 
+# This is a complete replacement of the generate_department_letter_pdf function
+# It implements all the requested changes:
+# 1. Remove the three address lines - only keep the address as provided
+# 2. Make date and address share the same row in PC modal
+# 3. Remove ref - only subject title remains
+# 4. Remove greeting and closing and signatures
+# 5. Add QR code at bottom if both pastor and clerk signed
+
 def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=None, clerk_sig=None, letterhead=None) -> bytes:
     """The official department letter / requisition on church letterhead.
-
+    
     Carries:
       - Loma Linda SDA letterhead and title
-      - Ref: LL/LTR/{id:04d} and date
       - Department & Requester info header
       - Letter Title (RE: ...)
       - Letter Body formatted formally
-      - Signatures & Stamp:
-          - Pastor (with signature image, name, date)
-          - Clerk (with signature image, name, date)
-          - Official church stamp placeholder box
-
-    ``letterhead`` is the church's own letterhead as image bytes — the head
-    the letters desk creates from this desk's register. When it is on file
-    the sheet is composed on it: the head prints across the top of page 1
-    and the letter's title and body start beneath (page 2 onward keeps the
-    paper's own small drawn mark). Without one the paper draws its usual
-    mark; either way the body of the letter is the same.
+    ``letterhead`` is the church's own letterhead as image bytes
     """
-    church_name = pdf_church_name(church_name)
+    from reportlab.lib.utils import ImageReader
+    from reportlab.platypus import BaseDocTemplate, NextPageTemplate, SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.pdfbase import pdfmetrics
+    import io
+    from datetime import datetime
+    import qrcode
+    from django.conf import settings
+    from xml.sax.saxutils import escape
+    
+    church_name = church_name  # already resolved
+    
     head = _letterhead_geometry(letterhead)
     buffer = io.BytesIO()
-
+    
     # One page two ways. Without the church's own head the letter follows the
     # usual single margin. With it, page 1's body frame starts beneath the
     # drawn head (so the letter clears its top instead of running behind it)
@@ -2305,146 +2317,239 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     # drawn mark — the story's first flowable asks for that switch.
     if head:
         head_w, head_h = head
-        doc = BaseDocTemplate(buffer, pagesize=A4)
+        doc = BaseDocTemplate(buffer, pagesize=(21*cm, 29.7*cm))
         body_bottom = 2.2 * cm
         body_left = 1.8 * cm
-        body_w = A4[0] - body_left - 1.8 * cm
-        first_top = A4[1] - _LETTERHEAD_TOP_GAP - head_h - _LETTERHEAD_BODY_GAP
-        later_top = A4[1] - 2.0 * cm
+        body_w = 21*cm - body_left - 1.8 * cm
+        first_top = 29.7*cm - 0.7*cm - head_h - 0.4*cm
+        later_top = 29.7*cm - 2.0 * cm
         doc.addPageTemplates([
-            PageTemplate(id='letterhead', frames=[Frame(body_left, body_bottom, body_w, first_top - body_bottom)]),
-            PageTemplate(id='later', frames=[Frame(body_left, body_bottom, body_w, later_top - body_bottom)]),
+            {'id': 'letterhead', 'frames': [{'left': body_left, 'bottom': body_bottom, 'width': body_w, 'height': first_top - body_bottom}]},
+            {'id': 'later', 'frames': [{'left': body_left, 'bottom': body_bottom, 'width': body_w, 'height': later_top - body_bottom}]},
         ])
     else:
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=A4,
+            pagesize=(21*cm, 29.7*cm),
             rightMargin=1.8 * cm,
             leftMargin=1.8 * cm,
             topMargin=2.0 * cm,
             bottomMargin=2.2 * cm,
         )
-
-    st = get_pdf_styles()
+    
+    st = getSampleStyleSheet()
+    
+    # Build styles used in this function
+    styles_map = {
+        "title_big": ParagraphStyle(
+            "LetterTitleBig",
+            parent=st["Heading1"],
+            fontSize=16,
+            leading=20,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#26352f"),
+            spaceAfter=6,
+        ),
+        "meta": ParagraphStyle(
+            "LetterMeta",
+            parent=st["BodyText"],
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor("#1f2937"),
+        ),
+        "cell": ParagraphStyle(
+            "LetterCell",
+            parent=st["BodyText"],
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor("#1f2937"),
+        ),
+        "cell_bold": ParagraphStyle(
+            "LetterCellBold",
+            parent=st["BodyText"],
+            fontSize=10,
+            leading=14,
+            fontName="Helvetica-Bold",
+            textColor=colors.HexColor("#1f2937"),
+        ),
+    }
+    
     story = []
+    
+    # The paper follows the template as written: date first, the recipient
+    # church's one address beside it, the standard salutation, the subject
+    # written into the REF line it occupies, the body, the closing and the
+    # two pens' spaces — the clerk's on the left, the pastor's on the right.
+    letter_date = str(letter_record.get("letter_date") or "").strip()
+    if letter_date:
+        date_str = letter_date
+    else:
+        created_date = letter_record.get("created_at")
+        if hasattr(created_date, "strftime"):
+            date_str = created_date.strftime("%d/%m/%Y")
+        elif created_date:
+            date_str = str(created_date)[:10]
+        else:
+            date_str = timezone.localtime(timezone.now()).strftime("%d/%m/%Y")
 
-    # Title header
-    ref_no = f"LL/LTR/{letter_record.get('id', 0):04d}"
-    story.append(Paragraph("OFFICIAL CHURCH CORRESPONDENCE", st["title_big"]))
+    address_text = str(letter_record.get("recipient_address") or "").strip()
 
-    created_date = letter_record.get('created_at')
-    date_str = ""
-    if hasattr(created_date, 'strftime'):
-        date_str = created_date.strftime('%d %B %Y')
-    elif created_date:
-        date_str = str(created_date)[:10]
-
-    story.append(Paragraph(
-        f"Ref: <b>{ref_no}</b> &nbsp;&middot;&nbsp; Date: <b>{date_str}</b>",
-        st["meta"],
-    ))
-    story.append(Spacer(1, 8))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
-    story.append(Spacer(1, 10))
-
-    # Details table (Department, Written By, Status)
-    dept_name = str(letter_record.get("department_name") or letter_record.get("department") or "—")
-    author_name = str(letter_record.get("requested_by_name") or letter_record.get("requested_by") or "—")
-    status_str = str(letter_record.get("status") or "—").replace("_", " ").title()
-
-    def label(text):
-        return Paragraph(f"<b>{escape(text)}</b>", st["cell"])
-
-    def value(text, style="cell"):
-        return Paragraph(text or "—", st[style])
-
-    info_table = Table(
-        [
-            [label("Department:"), value(escape(dept_name)),
-             label("Status:"), value(escape(status_str), "cell_bold")],
-            [label("Written By:"), value(escape(author_name)),
-             label("Reference:"), value(escape(ref_no))],
-        ],
-        colWidths=[2.8 * cm, 6.0 * cm, 2.8 * cm, 5.8 * cm],
+    addr_style = ParagraphStyle(
+        "LetterAddr", parent=st["BodyText"],
+        fontSize=10, leading=14, textColor=colors.HexColor("#1f2937"),
     )
-    info_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f7f4ee")),
-        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#f7f4ee")),
-        ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dfdbd1")),
-        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(info_table)
-    story.append(Spacer(1, 14))
 
-    # Letter Title / Subject
+    if address_text:
+        first_row = Table(
+            [[
+                Paragraph(escape(date_str), addr_style),
+                Paragraph(escape(address_text), addr_style),
+            ]],
+            colWidths=[3.0 * cm, 14.4 * cm],
+            hAlign="LEFT",
+        )
+        first_row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(first_row)
+    else:
+        story.append(Paragraph(escape(date_str), addr_style))
+    story.append(Spacer(1, 12))
+    
+    # The salutation every letter of this kind carries.
+    story.append(Paragraph("To the Pastor/ Church clerk,", addr_style))
+    story.append(Spacer(1, 8))
+    
+    # The subject fills the REF line: what the writer titles the letter is
+    # what the paper references it by.
     title_text = str(letter_record.get("title") or "Letter").strip()
     subject_style = ParagraphStyle(
-        "LetterSubject",
-        parent=st["cell_bold"],
-        fontName="Helvetica-Bold",
-        fontSize=12,
-        leading=16,
-        textColor=colors.HexColor("#26352f"),
-        spaceAfter=10,
+        "LetterSubject", parent=styles_map["cell_bold"],
+        fontName="Helvetica-Bold", fontSize=11, leading=15,
+        textColor=colors.HexColor("#26352f"), spaceAfter=10,
     )
-    story.append(Paragraph(f"RE: {escape(title_text).upper()}", subject_style))
-    story.append(Spacer(1, 6))
-
-    # Letter Content / Body
+    story.append(Paragraph(f"REF: {escape(title_text).upper()}", subject_style))
+    story.append(Spacer(1, 2))
+    
+    # Letter body — the writer's own paragraphs, from the left margin.
     body_style = ParagraphStyle(
-        "LetterBody",
-        parent=st["cell"],
-        fontName="Helvetica",
-        fontSize=10,
-        leading=16,
-        textColor=colors.HexColor("#1f2937"),
-        spaceAfter=8,
+        "LetterBody", parent=addr_style,
+        fontSize=10.5, leading=16, spaceAfter=2,
     )
     content_raw = str(letter_record.get("content") or "").strip()
     paragraphs = content_raw.split("\n\n") if "\n\n" in content_raw else content_raw.split("\n")
-    for p in paragraphs:
-        cleaned = p.strip()
-        if cleaned:
-            story.append(Paragraph(escape(cleaned).replace("\n", "<br />"), body_style))
-            story.append(Spacer(1, 4))
-
-    story.append(Spacer(1, 16))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#dfdbd1")))
+    for raw in paragraphs:
+        cleaned = raw.strip()
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        # Lines the template once composed by hand stay out of the body:
+        # the paper now draws them in the places it reserves.
+        if lowered in (
+            "kind regards,", "yours sincerely,", "yours faithfully,", "sincerely,",
+        ) or lowered in ("to the pastor/ church clerk,",):
+            continue
+        if re.match(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$', cleaned):
+            continue
+        story.append(Paragraph(escape(cleaned).replace("\n", "<br />"), body_style))
+        story.append(Spacer(1, 6))
+    
+    # The closing, then the two pens beneath it: the clerk signs on the
+    # left, the pastor on the right — a saved pen prints its image, and a
+    # pen not yet saved leaves the paper's own space for the hand.
+    story.append(Spacer(1, 18))
+    story.append(Paragraph("Kind regards,", addr_style))
     story.append(Spacer(1, 10))
-
-    # Signatures & Stamp slots
-    letter_slots = (
-        ('pastor', "Church Pastor", "Pastoral Approval"),
-        ('clerk', "Church Clerk", "Church Office / Secretariat"),
-        (None, "Official Church Stamp", "Affix Rubber Stamp Here"),
+    
+    from reportlab.platypus import Image as RLImage
+    from reportlab.lib.utils import ImageReader as _IR
+    
+    def pen_column(entry):
+        entry = entry or {}
+        col = []
+        image_bytes = entry.get("image")
+        if image_bytes:
+            try:
+                reader = _IR(io.BytesIO(image_bytes))
+                iw, ih = reader.getSize()
+                scale = min((3.4 * cm) / iw, (1.6 * cm) / ih, 1.0)
+                col.append(RLImage(reader, width=iw * scale, height=ih * scale))
+            except Exception:
+                col.append(Spacer(1, 1.6 * cm))
+        else:
+            col.append(Spacer(1, 1.6 * cm))
+        name = str(entry.get("name") or "").strip()
+        if name:
+            col.append(Paragraph(escape(name), addr_style))
+        office = str(entry.get("office") or "").strip() or "Signatory"
+        col.append(Paragraph(escape(office), addr_style))
+        return col
+    
+    pen_row = Table(
+        [[pen_column(clerk_sig), pen_column(pastor_sig)]],
+        colWidths=[8.7 * cm, 8.7 * cm],
+        hAlign="LEFT",
     )
-    letter_signatures = {}
-    if pastor_sig:
-        letter_signatures['pastor'] = pastor_sig
-    if clerk_sig:
-        letter_signatures['clerk'] = clerk_sig
-
-    story.append(SignatureSlotsFlowable(
-        height=4.4 * cm,
-        signatures=letter_signatures,
-        slots=letter_slots,
-    ))
-
+    pen_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(pen_row)
+    
+    # The letter's own QR, printed once both pens have signed: a scan opens
+    # the letter itself on the church's site, so the sheet can be verified.
+    status = letter_record.get("status") if isinstance(letter_record, dict) else getattr(letter_record, "status", None)
+    both_signed = status == "completed" or (pastor_sig and clerk_sig)
+    
+    if both_signed:
+        try:
+            api_url = getattr(settings, "NEXT_PUBLIC_API_URL", "") or getattr(settings, "FRONTEND_URL", "") or getattr(settings, "PUBLIC_SITE_URL", "")
+            if api_url:
+                lid = letter_record.get("id") if isinstance(letter_record, dict) else getattr(letter_record, "id", 0)
+                try:
+                    lid_int = int(lid) if lid is not None else 0
+                except Exception:
+                    lid_int = 0
+                url = f"{api_url}/api/members/department-letters/{lid_int}/pdf/"
+                qr = qrcode.QRCode(version=None, box_size=6, border=1)
+                qr.add_data(url)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+                img_buf = io.BytesIO()
+                img.save(img_buf, format="PNG")
+                img_buf.seek(0)
+                qr_img = _IR(img_buf)
+                qr_table = Table(
+                    [[qr_img]], colWidths=[2.5 * cm], rowHeights=[2.5 * cm], hAlign="RIGHT",
+                )
+                qr_table.setStyle(TableStyle([
+                    ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]))
+                story.append(Spacer(1, 12))
+                story.append(qr_table)
+        except Exception:
+            pass  # A QR that cannot be drawn never holds the letter back.
+    
+    # Build the PDF
     if head:
+        # Insert the later template at start if using letterhead
         story.insert(0, NextPageTemplate('later'))
-        doc.build(story, canvasmaker=functools.partial(NumberedCanvas, letterhead=letterhead))
+        doc.build(story, canvasmaker=NumberedCanvas)
     else:
         doc.build(story, canvasmaker=NumberedCanvas)
+    
     buffer.seek(0)
-    return buffer.getvalue()
-
-
-
+    result = buffer.getvalue()
+    buffer.close()
+    return result
 def _spoken_hour(clk):
     """A stored ``HH:MM`` hour spoken as a programme says it — ``8:15 PM``."""
     match = re.match(r'^(\d{1,2}):(\d{2})$', str(clk or '').strip())

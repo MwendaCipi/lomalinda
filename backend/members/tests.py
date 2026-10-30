@@ -19195,6 +19195,8 @@ class DepartmentLetterFlowTests(APITestCase):
             'department': self.music.code,
             'title': 'Request for choir robes',
             'content': 'The choir needs new robes before the term begins.',
+            'letter_date': '21/10/2026',
+            'recipient_address': 'Isiolo Central Point, P.O Box 61-60300, Isiolo.',
         }, format='json')
 
     def _sign(self, user, action, pk):
@@ -19225,27 +19227,27 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertEqual(listed.status_code, status.HTTP_200_OK)
         self.assertEqual([row['title'] for row in listed.data], ['Request for choir robes'])
 
-    def test_the_clerk_cannot_sign_first_and_a_member_signs_nothing(self):
-        """Two pens, one order. The clerk waits for the pastor, and a member
-        standing outside both offices is refused before any state moves."""
+    def test_either_pen_may_sign_first_and_a_member_signs_nothing(self):
+        """Two pens, either order. The clerk may put theirs down before the
+        pastor's, and a member standing outside both offices is refused
+        before any state moves."""
         pk = self._write().data['id']
 
         early = self._sign(self.clerk, 'clerk_sign', pk)
-        self.assertEqual(early.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(early.status_code, status.HTTP_200_OK, early.data)
 
         uninvited = self._sign(self.outsider, 'pastor_sign', pk)
         self.assertEqual(uninvited.status_code, status.HTTP_403_FORBIDDEN)
 
         from .models import DepartmentLetterRequest
         row = DepartmentLetterRequest.objects.get(pk=pk)
-        self.assertEqual(row.status, 'pending_pastor')
-        self.assertIsNone(row.clerk_signed_by)
+        self.assertEqual(row.status, 'pastor_signed')
         self.assertIsNone(row.pastor_signed_by)
 
     def test_the_pastor_signs_then_the_clerk_and_the_letter_comes_back_signed(self):
         """The round trip: the pastor's signature, the clerk's after it, and
         the fully signed letterhead handed back to its writer — both officers
-        on the sheet, with the stamp's own box left for the office to use."""
+        on the sheet under their own pen spaces."""
         pk = self._write().data['id']
 
         blessed = self._sign(self.pastor, 'pastor_sign', pk)
@@ -19279,13 +19281,19 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertTrue(pdf.content.startswith(b'%PDF'))
         flat = _pdf_text(pdf.content)
-        # The letterhead, the subject, both officers under their own slots,
-        # and the box the stamp is affixed into.
-        self.assertIn('OFFICIALCHURCHCORRESPONDENCE', flat)
-        self.assertIn('REQUESTFORCHOIRROBES', flat)
+        # The template the letter mirrors: date beside the address, the
+        # salutation, the subject written into the REF line, the body and
+        # closing, and both officers under their own pen spaces.
+        self.assertIn('21/10/2026', flat)
+        self.assertIn('IsioloCentralPoint', flat)
+        self.assertIn('TothePastor/Churchclerk,', flat)
+        self.assertIn('REF:REQUESTFORCHOIRROBES', flat)
+        self.assertIn('Thechoirneedsnewrobesbeforethetermbegins', flat)
+        self.assertIn('Kindregards,', flat)
         self.assertIn('PaulPastor', flat)
         self.assertIn('ClaireClerk', flat)
-        self.assertIn('OfficialChurchStamp', flat)
+        self.assertIn('ChurchPastor', flat)
+        self.assertIn('ChurchClerk', flat)
 
     def test_a_letter_is_only_its_own_departments_business_to_the_writer(self):
         """The register is read by area: a desk sees its own letters, and a

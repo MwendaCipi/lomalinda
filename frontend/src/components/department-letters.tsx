@@ -89,89 +89,47 @@ export function WriteLetterModal({
   onSent?: () => void;
 }) {
   const [letterDate, setLetterDate] = useState("");
-  const [recipientName, setRecipientName] = useState("");
-  const [recipientChurch, setRecipientChurch] = useState("");
-  const [recipientAddress1, setRecipientAddress1] = useState("");
-  const [recipientAddress2, setRecipientAddress2] = useState("");
-  const [recipientAddress3, setRecipientAddress3] = useState("");
-  const [refNo, setRefNo] = useState("");
+  const [recipientAddress, setRecipientAddress] = useState("");
   const [subject, setSubject] = useState("");
-  const [greeting, setGreeting] = useState("");
   const [body, setBody] = useState("");
-  const [closing, setClosing] = useState("");
-  const [signer1Name, setSigner1Name] = useState("");
-  const [signer1Title, setSigner1Title] = useState("");
-  const [signer1Contact, setSigner1Contact] = useState("");
-  const [signer2Name, setSigner2Name] = useState("");
-  const [signer2Title, setSigner2Title] = useState("");
-  const [signer2Contact, setSigner2Contact] = useState("");
   const [sending, setSending] = useState(false);
 
   if (!open) return null;
 
-  const buildLetter = () => {
-    const parts: string[] = [];
-    if (letterDate.trim()) parts.push(letterDate.trim());
-    parts.push("");
-    parts.push("");
-    if (recipientName.trim()) {
-      parts.push(recipientName.trim());
-    } else {
-      parts.push("To the Pastor/ Church clerk,");
-    }
-    if (recipientChurch.trim()) parts.push(recipientChurch.trim());
-    if (recipientAddress1.trim()) parts.push(recipientAddress1.trim());
-    if (recipientAddress2.trim()) parts.push(recipientAddress2.trim());
-    if (recipientAddress3.trim()) parts.push(recipientAddress3.trim());
-    parts.push("");
-    parts.push("");
-    if (refNo.trim()) {
-      parts.push(refNo.trim().startsWith("REF:") ? refNo.trim() : `REF: ${refNo.trim()}`);
-    } else if (subject.trim()) {
-      parts.push(`REF: ${subject.trim().toUpperCase()}`);
-    }
-    parts.push("");
-    parts.push("");
-    const greetingText = greeting.trim() || "Greetings in the name of our Lord and savior, Jesus Christ. We hope this letter finds you well.";
-    parts.push(greetingText);
-    parts.push("");
-    if (body.trim()) {
-      parts.push(body.trim());
-    }
-    parts.push("");
-    const closingText = closing.trim() || "Please share your response at your earliest convenience for easier planning. We are looking forward to having you minister with us. God’s grace be with you.";
-    parts.push(closingText);
-    parts.push("");
-    parts.push("");
-    if (closingText.toLowerCase().includes("kind regards")) {
-      // already has kind regards
-    } else {
-      parts.push("Kind regards,");
-      parts.push("");
-    }
-    const line1 = [signer1Name.trim(), signer1Title.trim()].filter(Boolean).join(" ");
-    const line2 = [signer2Name.trim(), signer2Title.trim()].filter(Boolean).join(" ");
-    if (line1 || line2) {
-      parts.push(`${line1.padEnd(60)} ${line2}`);
-    }
-    const contact1 = signer1Contact.trim();
-    const contact2 = signer2Contact.trim();
-    if (contact1 || contact2) {
-      parts.push(`${contact1.padEnd(60)} ${contact2}`);
-    }
-    return parts.join("\n");
-  };
+  // A short look at the paper as it will print: date beside the address,
+  // the salutation every letter carries, the subject as its REF line, and
+  // the body as written. Greeting, closing and signature spaces belong to
+  // the paper itself — the writer never types them.
+  const preview = [
+    letterDate.trim() || dayFirst(new Date()),
+    recipientAddress.trim(),
+    "",
+    "To the Pastor/ Church clerk,",
+    "",
+    `REF: ${(subject.trim() || "Subject").toUpperCase()}`,
+    "",
+    body.trim(),
+    "",
+    "Kind regards,",
+    "",
+    "— signature space —",
+  ].filter((line, index, lines) => !(line === "" && lines[index + 1] === "")).join("\n");
 
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     setSending(true);
     try {
-      const title = subject.trim() || refNo.trim() || "Official Letter";
-      const content = buildLetter();
+      const title = subject.trim() || "Official Letter";
       const response = await fetch(`${API_URL}/api/members/department-letters/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ department: department?.code ?? "", title: title.trim(), content: content.trim() }),
+        body: JSON.stringify({
+          department: department?.code ?? "",
+          title: title.trim(),
+          content: body.trim(),
+          letter_date: letterDate.trim(),
+          recipient_address: recipientAddress.trim(),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || data.title || data.content || "The letter could not be sent.");
@@ -217,7 +175,7 @@ export function WriteLetterModal({
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs font-medium text-bark sm:col-span-2">
+            <label className="block text-xs font-medium text-bark">
               Date
               <input
                 value={letterDate}
@@ -226,58 +184,12 @@ export function WriteLetterModal({
                 className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
               />
             </label>
-            <label className="block text-xs font-medium text-bark sm:col-span-2">
-              To (Recipient line)
-              <input
-                value={recipientName}
-                onChange={(event) => setRecipientName(event.target.value)}
-                placeholder="e.g. To the Pastor/ Church clerk,"
-                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-              />
-            </label>
             <label className="block text-xs font-medium text-bark">
-              Church/Recipient Name
+              Address
               <input
-                value={recipientChurch}
-                onChange={(event) => setRecipientChurch(event.target.value)}
-                placeholder="e.g. Isiolo Central Point"
-                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-              />
-            </label>
-            <label className="block text-xs font-medium text-bark">
-              Address Line 1
-              <input
-                value={recipientAddress1}
-                onChange={(event) => setRecipientAddress1(event.target.value)}
-                placeholder="e.g. P.o Box 61-60300"
-                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-              />
-            </label>
-            <label className="block text-xs font-medium text-bark">
-              Address Line 2
-              <input
-                value={recipientAddress2}
-                onChange={(event) => setRecipientAddress2(event.target.value)}
-                placeholder="e.g. Isiolo."
-                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-              />
-            </label>
-            <label className="block text-xs font-medium text-bark">
-              Address Line 3
-              <input
-                value={recipientAddress3}
-                onChange={(event) => setRecipientAddress3(event.target.value)}
-                placeholder=""
-                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-              />
-            </label>
-            <label className="block text-xs font-medium text-bark sm:col-span-2">
-              REF *
-              <input
-                required
-                value={refNo}
-                onChange={(event) => setRefNo(event.target.value)}
-                placeholder="e.g. REF: INVITATION OF ISIOLO CENTRAL POINT CHURCH CHOIR"
+                value={recipientAddress}
+                onChange={(event) => setRecipientAddress(event.target.value)}
+                placeholder="e.g. Isiolo Central Point, P.o Box 61-60300, Isiolo."
                 className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
               />
             </label>
@@ -292,81 +204,21 @@ export function WriteLetterModal({
               />
             </label>
             <label className="block text-xs font-medium text-bark sm:col-span-2">
-              Greeting (optional)
-              <input
-                value={greeting}
-                onChange={(event) => setGreeting(event.target.value)}
-                placeholder="e.g. Greetings in the name of our Lord and savior, Jesus Christ. We hope this letter finds you well."
-                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-              />
-            </label>
-            <label className="block text-xs font-medium text-bark sm:col-span-2">
               Body *
               <textarea
                 required
-                rows={6}
+                rows={8}
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 placeholder="Write the main body of the letter..."
                 className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs leading-relaxed outline-none focus:border-ember"
               />
             </label>
-            <label className="block text-xs font-medium text-bark sm:col-span-2">
-              Closing (optional)
-              <textarea
-                rows={3}
-                value={closing}
-                onChange={(event) => setClosing(event.target.value)}
-                placeholder="e.g. Please share your response at your earliest convenience... We are looking forward to having you minister with us. God’s grace be with you."
-                className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs leading-relaxed outline-none focus:border-ember"
-              />
-            </label>
-            <div className="sm:col-span-2">
-              <p className="mb-2 text-xs font-medium text-bark">Signatures</p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input
-                  value={signer1Name}
-                  onChange={(e) => setSigner1Name(e.target.value)}
-                  placeholder="Signer 1 Name"
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                />
-                <input
-                  value={signer1Title}
-                  onChange={(e) => setSigner1Title(e.target.value)}
-                  placeholder="Signer 1 Title (e.g. Church Clerk)"
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                />
-                <input
-                  value={signer1Contact}
-                  onChange={(e) => setSigner1Contact(e.target.value)}
-                  placeholder="Signer 1 Contact"
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                />
-                <input
-                  value={signer2Name}
-                  onChange={(e) => setSigner2Name(e.target.value)}
-                  placeholder="Signer 2 Name"
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                />
-                <input
-                  value={signer2Title}
-                  onChange={(e) => setSigner2Title(e.target.value)}
-                  placeholder="Signer 2 Title (e.g. Church Pastor)"
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                />
-                <input
-                  value={signer2Contact}
-                  onChange={(e) => setSigner2Contact(e.target.value)}
-                  placeholder="Signer 2 Contact"
-                  className="rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
-                />
-              </div>
-            </div>
           </div>
           <div className="rounded-xl border border-sand-line bg-sand/30 p-3">
             <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Letter Preview</p>
             <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed text-bark">
-              {buildLetter()}
+              {preview}
             </pre>
           </div>
         </div>

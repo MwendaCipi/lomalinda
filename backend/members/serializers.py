@@ -2384,6 +2384,7 @@ class DepartmentLetterRequestSerializer(serializers.ModelSerializer):
             'id', 'department', 'department_name', 'department_code',
             'requested_by', 'requested_by_name',
             'title', 'content', 'status',
+            'letter_date', 'recipient_address',
             'pastor_signed_by', 'pastor_name', 'pastor_signed_at',
             'clerk_signed_by', 'clerk_name', 'clerk_signed_at',
             'reply', 'declined_by', 'declined_by_name',

@@ -5041,10 +5041,10 @@ export function DepartmentAccountsPanel({
                   // it: the button follows the account, not the office.
                   <span className="text-[11px] italic text-moss-faint">No fund to request from</span>
                 )}
+                {footer}
               </div>
             </div>
           </div>
-          {footer}
         </>
       )}
 
@@ -5310,8 +5310,9 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
-  // The Write Letter button at the foot of the roll opens the church-letterhead
-  // compose modal over the desk — the desk is the one the letter will carry.
+  // The Write Letter button in the Requests view's footer opens the
+  // church-letterhead compose modal over the desk — the desk is the one
+  // the letter will carry, and Requests is where outgoing asks live.
   const [showWriteLetter, setShowWriteLetter] = useState(false);
   // The Message button at the foot of the roll opens the composer over the
   // desk — the roll on screen is the roll the send addresses.
@@ -7054,23 +7055,6 @@ function DepartmentDetail({
                     <Plus className="h-3.5 w-3.5" /> Add Child
                   </button>
                 )}
-                {/* A letter written on the church's letterhead: the modal
-                    opens here, at the desk's foot, and leaves for the
-                    pastor's signature — the pastorate writes none, its
-                    Letters view is where the pen lands. */}
-                {!isPastorate && (
-                  <button
-                    type="button"
-                    onClick={() => setShowWriteLetter(true)}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                  >
-                    <PenLine className="h-3.5 w-3.5" />
-                    {/* Two words do not share a phone-width half-row well:
-                        the hand reads one. */}
-                    <span className="sm:hidden">Letter</span>
-                    <span className="hidden sm:inline">Write Letter</span>
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => setShowAddMember(true)}
@@ -7118,17 +7102,6 @@ function DepartmentDetail({
                 >
                   <Phone className="h-3.5 w-3.5" /> Contact leader
                 </button>
-                {/* The same door to the letterhead the desk's leaders get: any
-                    person on the roll may raise a letter for their desk. */}
-                {!isPastorate && (
-                  <button
-                    type="button"
-                    onClick={() => setShowWriteLetter(true)}
-                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                  >
-                    <PenLine className="h-3.5 w-3.5" /> Write Letter
-                  </button>
-                )}
               </div>
             ) : null}
           </div>
