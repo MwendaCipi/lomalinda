@@ -195,5 +195,6 @@ def user_signature_entry(user, office_title=None):
         'office': office_title or (office_for(profile) if profile else ''),
         'name': signer_name(profile),
         'image': signature_bytes(profile),
+        'phone': getattr(profile, 'phone_number', '') or '',
     }
 

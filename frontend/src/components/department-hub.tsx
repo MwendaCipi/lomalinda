@@ -7806,10 +7806,11 @@ function DepartmentDetail({
               onClose={() => setShowWriteLetter(false)}
             />
           </div>
-          {/* A desk reads the letter where it writes it: the sheet takes the
-              view as a page, typing on the left, the paper it prints on the
-              right. Both copies stay in the DOM at once — one hidden by CSS. */}
-          <div className="hidden min-h-0 flex-1 md:flex">
+          {/* A desk reads the letter through the whole viewport: the sheet
+              fixes itself over the desk as a page — typing on the left, the
+              paper it prints on the right, the way back pinned above. Both
+              copies stay in the DOM at once — one hidden by CSS. */}
+          <div className="hidden md:block">
             <WriteLetterModal
               open={showWriteLetter}
               department={department}

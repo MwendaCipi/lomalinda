@@ -153,13 +153,23 @@ export function WriteLetterModal({
     }
   };
 
-  // The desk reads the letter where it writes it: the sheet takes the view
-  // as a page — typing on the left, the paper it prints on the right — the
-  // way the programme editor opens. A phone keeps the one-card modal below.
+  // The desk reads the letter where it writes it: the sheet takes the whole
+  // viewport, a pinned bar above and the letter written beside the paper it
+  // prints on — the way the programme editor opens. A phone keeps the
+  // one-card modal below.
   if (variant === "page") {
     return (
-      <section aria-label="Write a letter" className="flex min-h-0 flex-1 flex-col bg-white">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-sand-line bg-sand px-4 py-2.5 sm:px-6">
+      <section
+        aria-label="Write a letter"
+        role="presentation"
+        // The page takes the viewport without scrolling itself: on a desk the
+        // two columns — writing on the left, the paper on the right — each
+        // scroll on their own.
+        className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-sand print:hidden md:overflow-hidden"
+      >
+        {/* The way back, pinned to the top of the page, so it never travels
+            out with the scroll. */}
+        <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b border-sand-line bg-sand px-4 py-2.5 sm:px-6">
           <button
             type="button"
             onClick={onClose}
@@ -169,8 +179,8 @@ export function WriteLetterModal({
           </button>
           <p className="text-sm font-semibold text-bark">Write a letter</p>
         </header>
-        <form onSubmit={send} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6">
-          <div className="mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col gap-6 md:grid md:grid-cols-2">
+        <form onSubmit={send} className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col bg-white px-4 pb-5 pt-4 shadow-sm sm:px-6">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 md:grid md:grid-cols-2">
             {/* The typing, on the left — its own scroll on a desk, and a panel
                 of buttons nailed to its foot, so Send is where the hand stops. */}
             <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
@@ -238,25 +248,38 @@ export function WriteLetterModal({
               </div>
             </div>
             {/* The paper, on the right: the letter laid out the way the church
-                prints it — date beside the address, the salutation, the
-                subject as its REF line, the body beneath — travelling with
-                every word typed on the left. */}
+                prints it — the date alone, the salutation, the receiving
+                address beneath it, the subject as its REF line, the body,
+                the closing and the two pens' spaces — travelling with every
+                word typed on the left. */}
             <div className="shrink-0 md:min-h-0 md:flex-1 md:overflow-y-auto custom-hover-scrollbar">
               <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Letter preview</p>
               <article className="mx-auto mt-2 w-full max-w-2xl rounded-lg border border-sand-line bg-white px-7 py-9 font-serif text-[13px] leading-relaxed text-bark shadow-sm">
-                <div className="flex items-start justify-between gap-6">
-                  <p>{letterDate.trim() || dayFirst(new Date())}</p>
-                  <p className="max-w-[60%] whitespace-pre-line text-right">
-                    {recipientAddress.trim() || <span className="text-moss-faint">Receiving address</span>}
-                  </p>
-                </div>
-                <p className="mt-8">To the Pastor/ Church clerk,</p>
-                <p className="mt-5">
+                <p>{letterDate.trim() || dayFirst(new Date())}</p>
+                <p className="mt-4">To the Pastor/ Church clerk,</p>
+                <p className={`mt-4 whitespace-pre-line${recipientAddress.trim() ? "" : " text-moss-faint"}`}>
+                  {recipientAddress.trim() || "Receiving address"}
+                </p>
+                <p className="mt-6">
                   <span className="font-semibold">REF: </span>
                   {subject.trim() || <span className="text-moss-faint">Subject</span>}
                 </p>
-                <div className="mt-5 whitespace-pre-line">
+                <div className="mt-6 whitespace-pre-line">
                   {body.trim() || <span className="text-moss-faint">The body of the letter will appear here as you type it…</span>}
+                </div>
+                {/* The closing and the two pens' spaces, the paper's own — the
+                    names print beneath the pens once the office-holders have
+                    signed. */}
+                <p className="mt-8">Kind regards,</p>
+                <div className="mt-6 grid grid-cols-2 gap-8 text-[12px]">
+                  <div>
+                    <div className="h-10" aria-hidden="true" />
+                    <p>Church Clerk</p>
+                  </div>
+                  <div>
+                    <div className="h-10" aria-hidden="true" />
+                    <p>Church Pastor</p>
+                  </div>
                 </div>
               </article>
             </div>

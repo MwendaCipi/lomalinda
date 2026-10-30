@@ -2293,7 +2293,8 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     ``letterhead`` is the church's own letterhead as image bytes
     """
     from reportlab.lib.utils import ImageReader
-    from reportlab.platypus import BaseDocTemplate, NextPageTemplate, SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.platypus import (BaseDocTemplate, NextPageTemplate, SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
+                                    PageTemplate as RLPageTemplate, Frame as RLFrame)
     from reportlab.lib import colors
     from reportlab.lib.units import cm
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -2323,9 +2324,17 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
         body_w = 21*cm - body_left - 1.8 * cm
         first_top = 29.7*cm - 0.7*cm - head_h - 0.4*cm
         later_top = 29.7*cm - 2.0 * cm
+        # Real template objects: a page template the printer can actually
+        # drive, its frame exactly the body box the head leaves beneath it.
         doc.addPageTemplates([
-            {'id': 'letterhead', 'frames': [{'left': body_left, 'bottom': body_bottom, 'width': body_w, 'height': first_top - body_bottom}]},
-            {'id': 'later', 'frames': [{'left': body_left, 'bottom': body_bottom, 'width': body_w, 'height': later_top - body_bottom}]},
+            RLPageTemplate('letterhead', [RLFrame(
+                body_left, body_bottom, body_w, first_top - body_bottom,
+                leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+            )]),
+            RLPageTemplate('later', [RLFrame(
+                body_left, body_bottom, body_w, later_top - body_bottom,
+                leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+            )]),
         ])
     else:
         doc = SimpleDocTemplate(
@@ -2376,10 +2385,10 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     
     story = []
     
-    # The paper follows the template as written: date first, the recipient
-    # church's one address beside it, the standard salutation, the subject
-    # written into the REF line it occupies, the body, the closing and the
-    # two pens' spaces — the clerk's on the left, the pastor's on the right.
+    # The paper follows the template as written: the date on its own line,
+    # the standard salutation, the receiving church's address beneath it, the
+    # subject written into the REF line it occupies, then the body — and the
+    # closing with the two pens' spaces after it (below).
     letter_date = str(letter_record.get("letter_date") or "").strip()
     if letter_date:
         date_str = letter_date
@@ -2399,28 +2408,15 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
         fontSize=10, leading=14, textColor=colors.HexColor("#1f2937"),
     )
 
-    if address_text:
-        first_row = Table(
-            [[
-                Paragraph(escape(date_str), addr_style),
-                Paragraph(escape(address_text), addr_style),
-            ]],
-            colWidths=[3.0 * cm, 14.4 * cm],
-            hAlign="LEFT",
-        )
-        first_row.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        story.append(first_row)
-    else:
-        story.append(Paragraph(escape(date_str), addr_style))
-    story.append(Spacer(1, 12))
-    
+    # The date, alone on its first line, then the salutation, then the
+    # address — each of its lines beneath the last, the way the church
+    # addresses its letters.
+    story.append(Paragraph(escape(date_str), addr_style))
+    story.append(Spacer(1, 8))
     # The salutation every letter of this kind carries.
     story.append(Paragraph("To the Pastor/ Church clerk,", addr_style))
+    if address_text:
+        story.append(Paragraph(escape(address_text).replace("\n", "<br />"), addr_style))
     story.append(Spacer(1, 8))
     
     # The subject fills the REF line: what the writer titles the letter is
@@ -2486,6 +2482,11 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
             col.append(Paragraph(escape(name), addr_style))
         office = str(entry.get("office") or "").strip() or "Signatory"
         col.append(Paragraph(escape(office), addr_style))
+        # The office's own number beneath its title, the way the template's
+        # sign-off does — a reader who needs to raise the office has it there.
+        phone = str(entry.get("phone") or "").strip()
+        if phone:
+            col.append(Paragraph(escape(phone), addr_style))
         return col
     
     pen_row = Table(
