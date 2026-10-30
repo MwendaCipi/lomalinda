@@ -234,6 +234,27 @@ export function WriteLetterModal({
     }
   };
 
+  // The document itself, in the browser's own PDF viewer — the same sheet
+  // the church will print, generated from the draft alone and shown the
+  // way the other papers are (through the reader that never blinks on a
+  // phone). Nothing is saved and nothing sent; the writer can still choose
+  // to walk away after looking.
+  const viewDocument = () => {
+    const params = new URLSearchParams({
+      title: subject.trim() || "Official Letter",
+      content: body.trim(),
+      letter_date: letterDate.trim(),
+      recipient_name: recipientName.trim(),
+      recipient_address: recipientAddress.trim(),
+      recipient_town: recipientTown.trim(),
+      recipient_phone: recipientPhone.trim(),
+      recipient_email: recipientEmail.trim(),
+    });
+    openPdfTab(`${API_URL}/api/members/department-letters/preview/?${params.toString()}`, {
+      fallbackError: "The letter could not be opened.",
+    });
+  };
+
   // The desk reads the letter where it writes it: the sheet takes the whole
   // viewport, a pinned bar above and the letter written beside the paper it
   // prints on — the way the programme editor opens. A phone keeps the
@@ -382,6 +403,15 @@ export function WriteLetterModal({
                   className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
                 >
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={viewDocument}
+                  disabled={!subject.trim() || !body.trim()}
+                  title="See the letter as the church will print it"
+                  className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-50"
+                >
+                  View Document
                 </button>
                 <button
                   type="submit"
@@ -591,6 +621,15 @@ export function WriteLetterModal({
             className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
           >
             Cancel
+          </button>
+          <button
+            type="button"
+            onClick={viewDocument}
+            disabled={!subject.trim() || !body.trim()}
+            title="See the letter as the church will print it"
+            className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-50"
+          >
+            View Document
           </button>
           <button
             type="submit"

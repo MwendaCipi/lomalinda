@@ -172,9 +172,9 @@ export function WithdrawalRequestsPanel({
       reversed: "bg-sand text-moss",
     };
     const labels: Record<string, string> = {
-      pending: "Pending",
-      elder_approved: "Elder Approved",
-      pastor_approved: "Pastor Approved",
+      pending: "Pending (pastor)",
+      elder_approved: "Pending (treasurer)",
+      pastor_approved: "Pending (elder)",
       approved: "Approved",
       declined: "Rejected",
       reversed: "Reversed",
@@ -401,13 +401,13 @@ export function WithdrawalRequestsPanel({
             <td className={`whitespace-nowrap px-4 ${rowPad} font-mono text-[11px] text-moss`}>
               {dayFirst(row.created_at)}
             </td>
-            <td className={`px-4 ${rowPad} font-medium text-bark`}>
-              <p className="font-semibold text-bark">{row.department}</p>
-              <p className="text-[11px] text-moss-faint">{row.account_name}</p>
+            <td className={`w-44 max-w-[11rem] px-4 ${rowPad} font-medium text-bark`}>
+              <p className="truncate font-semibold text-bark" title={row.department}>{row.department}</p>
+              <p className="truncate text-[11px] text-moss-faint" title={row.account_name}>{row.account_name}</p>
             </td>
-            <td className={`px-4 ${rowPad} text-moss`}>
-              <p className="font-medium text-bark">{row.reason}</p>
-              <p className="text-[11px] text-moss-faint">
+            <td className={`w-52 max-w-[13rem] px-4 ${rowPad} text-moss`}>
+              <p className="truncate font-medium text-bark" title={row.reason}>{row.reason}</p>
+              <p className="truncate text-[11px] text-moss-faint" title={`Asked by ${row.requested_by} · Bal: ${money(row.account_balance)}`}>
                 Asked by {row.requested_by} · Bal: {money(row.account_balance)}
               </p>
               {trail(row)}

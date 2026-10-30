@@ -15298,6 +15298,60 @@ class DepartmentLetterPdfView(APIView):
         return response
 
 
+class DepartmentLetterPreviewView(APIView):
+    """The letter as it is being written, before any pen is near it.
+
+    GET with the composer's own fields — the sheet is generated on the
+    letterhead from the draft alone, nothing stored and nothing requested,
+    so the writer can see the document while deciding whether to send it.
+    The pens shown beneath the closing are the offices' current keepers,
+    exactly what an unsent letter prints. ``?access_token=`` rides with the
+    tab that opens it (see openPdfTab) under the same safe-GET only rule
+    the other paper previews honour.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .pdf_generator import generate_department_letter_pdf
+
+        params = request.query_params
+        title = str(params.get('title') or '').strip()
+        content = str(params.get('content') or '').strip()
+        if not title:
+            return Response({'detail': 'The letter needs a title.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not content:
+            return Response({'detail': 'The letter needs content.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        record = {
+            'id': 0,
+            'title': title,
+            'content': content,
+            'status': 'pending_pastor',
+            'letter_date': str(params.get('letter_date') or '').strip(),
+            'recipient_name': str(params.get('recipient_name') or '').strip(),
+            'recipient_address': str(params.get('recipient_address') or '').strip(),
+            'recipient_town': str(params.get('recipient_town') or '').strip(),
+            'recipient_phone': str(params.get('recipient_phone') or '').strip(),
+            'recipient_email': str(params.get('recipient_email') or '').strip(),
+        }
+        church_name = current_church_name()
+        letterhead = None
+        settings_row = ChurchSettings.objects.filter(pk=1).first()
+        if settings_row and settings_row.letterhead:
+            try:
+                letterhead = settings_row.letterhead.read()
+            except Exception:
+                letterhead = None
+        pastor_sig = _default_letter_signatory('pastor', 'Church Pastor')
+        clerk_sig = _default_letter_signatory('clerk', 'Church Clerk')
+        pdf_bytes = generate_department_letter_pdf(record, church_name, pastor_sig, clerk_sig, letterhead=letterhead)
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Letter_preview.pdf"'
+        return response
+
+
 class DepartmentLetterSignatoriesView(APIView):
     """The pen pair a new letter previews beneath its closing.
 
