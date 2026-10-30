@@ -12,9 +12,11 @@
  * the current signer needs, and the PDF — viewed while it travels, downloaded
  * once both signatures are on it.
  *
- * Writing is not a button on this register: the modal lives with the desk's
- * own buttons (see the hub's bottom bar), and a copy of it is exported here
- * for them (`WriteLetterModal`). The server owns every step: it decides who
+ * Writing is not a button on this register: the writer opens next to the
+ * desk's own buttons (see the hub's bottom bar), and a copy of it is exported
+ * here for them (`WriteLetterModal`). On a desk it takes the view as a page —
+ * typing on the left, the paper it prints on the right; a phone keeps one
+ * card. The server owns every step: it decides who
  * may sign, that the pastor must sign before the clerk, and what the PDF
  * carries. This panel only asks the server what it may do, and shows the
  * answer.
@@ -22,7 +24,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, FileText, PenLine, Stamp, X } from "lucide-react";
+import { Download, FileText, MoveLeft, PenLine, Stamp, X } from "lucide-react";
 
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -80,11 +82,15 @@ const STATUS: Record<LetterRow["status"], { label: string; className: string }> 
 export function WriteLetterModal({
   open,
   department,
+  variant = "modal",
   onClose,
   onSent,
 }: {
   open: boolean;
   department: { code: string; label: string };
+  /** "page" opens inline on a desk, writing beside the paper; "modal" is the
+      phone-sized card. */
+  variant?: "modal" | "page";
   onClose: () => void;
   onSent?: () => void;
 }) {
@@ -146,6 +152,119 @@ export function WriteLetterModal({
       setSending(false);
     }
   };
+
+  // The desk reads the letter where it writes it: the sheet takes the view
+  // as a page — typing on the left, the paper it prints on the right — the
+  // way the programme editor opens. A phone keeps the one-card modal below.
+  if (variant === "page") {
+    return (
+      <section aria-label="Write a letter" className="flex min-h-0 flex-1 flex-col bg-white">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-sand-line bg-sand px-4 py-2.5 sm:px-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-semibold text-bark transition hover:text-ember"
+          >
+            <MoveLeft className="h-4 w-4" aria-hidden="true" /> Back to requests
+          </button>
+          <p className="text-sm font-semibold text-bark">Write a letter</p>
+        </header>
+        <form onSubmit={send} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6">
+          <div className="mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col gap-6 md:grid md:grid-cols-2">
+            {/* The typing, on the left — its own scroll on a desk, and a panel
+                of buttons nailed to its foot, so Send is where the hand stops. */}
+            <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
+              <p className="shrink-0 text-xs text-moss">
+                Typed on the left; on the right, the letter as the church will print it.
+              </p>
+              <div className="mt-3 min-w-0 flex-1 space-y-3 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-xs font-medium text-bark">
+                    Date
+                    <input
+                      value={letterDate}
+                      onChange={(event) => setLetterDate(event.target.value)}
+                      placeholder="e.g. 20/10/2026"
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark">
+                    Address
+                    <input
+                      value={recipientAddress}
+                      onChange={(event) => setRecipientAddress(event.target.value)}
+                      placeholder="Type the receiving address..."
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark sm:col-span-2">
+                    Subject/Title *
+                    <input
+                      required
+                      value={subject}
+                      onChange={(event) => setSubject(event.target.value)}
+                      placeholder="e.g. Invitation to Choir Day"
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark sm:col-span-2">
+                    Body *
+                    <textarea
+                      required
+                      rows={14}
+                      value={body}
+                      onChange={(event) => setBody(event.target.value)}
+                      placeholder="Write the main body of the letter..."
+                      className="mt-1 block min-h-[18rem] w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs leading-relaxed outline-none focus:border-ember"
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="mt-3 flex shrink-0 justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sending || !subject.trim() || !body.trim()}
+                  className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+                >
+                  {sending ? "Sending…" : "Send for signature"}
+                </button>
+              </div>
+            </div>
+            {/* The paper, on the right: the letter laid out the way the church
+                prints it — date beside the address, the salutation, the
+                subject as its REF line, the body beneath — travelling with
+                every word typed on the left. */}
+            <div className="shrink-0 md:min-h-0 md:flex-1 md:overflow-y-auto custom-hover-scrollbar">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Letter preview</p>
+              <article className="mx-auto mt-2 w-full max-w-2xl rounded-lg border border-sand-line bg-white px-7 py-9 font-serif text-[13px] leading-relaxed text-bark shadow-sm">
+                <div className="flex items-start justify-between gap-6">
+                  <p>{letterDate.trim() || dayFirst(new Date())}</p>
+                  <p className="max-w-[60%] whitespace-pre-line text-right">
+                    {recipientAddress.trim() || <span className="text-moss-faint">Receiving address</span>}
+                  </p>
+                </div>
+                <p className="mt-8">To the Pastor/ Church clerk,</p>
+                <p className="mt-5">
+                  <span className="font-semibold">REF: </span>
+                  {subject.trim() || <span className="text-moss-faint">Subject</span>}
+                </p>
+                <div className="mt-5 whitespace-pre-line">
+                  {body.trim() || <span className="text-moss-faint">The body of the letter will appear here as you type it…</span>}
+                </div>
+              </article>
+            </div>
+          </div>
+        </form>
+      </section>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
