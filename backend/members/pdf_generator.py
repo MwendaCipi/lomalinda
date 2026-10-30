@@ -2409,14 +2409,25 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     )
 
     # The date, alone on its first line, then the salutation, then the
-    # address — each of its lines beneath the last, the way the church
-    # addresses its letters.
+    # recipient set out as the template writes it: the name, the address's
+    # own lines, the town after the address, and the ways to reach them.
     story.append(Paragraph(escape(date_str), addr_style))
     story.append(Spacer(1, 8))
     # The salutation every letter of this kind carries.
     story.append(Paragraph("To the Pastor/ Church clerk,", addr_style))
-    if address_text:
-        story.append(Paragraph(escape(address_text).replace("\n", "<br />"), addr_style))
+    recipient_lines = [
+        line.strip()
+        for line in (
+            letter_record.get("recipient_name"),
+            address_text,
+            letter_record.get("recipient_town"),
+            letter_record.get("recipient_phone"),
+            letter_record.get("recipient_email"),
+        )
+        if str(line or "").strip()
+    ]
+    if recipient_lines:
+        story.append(Paragraph(escape("\n".join(recipient_lines)).replace("\n", "<br />"), addr_style))
     story.append(Spacer(1, 8))
     
     # The subject fills the REF line: what the writer titles the letter is
@@ -2466,6 +2477,17 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     def pen_column(entry):
         entry = entry or {}
         col = []
+        # The name first, the way the template lays it out; the pen space
+        # runs between name and role, so a hand signs under the name it
+        # belongs to and above the office it signs as. The pastor's pen
+        # carries the ministry's own courtesy title, as the template writes
+        # it — "Pr. George Mwenda" — unless the name already wears one.
+        name = str(entry.get("name") or "").strip()
+        office_title = str(entry.get("office") or "").strip()
+        if name and "pastor" in office_title.lower() and not name.lower().startswith(("pr.", "pastor")):
+            name = f"Pr. {name}"
+        if name:
+            col.append(Paragraph(escape(name), addr_style))
         image_bytes = entry.get("image")
         if image_bytes:
             try:
@@ -2477,10 +2499,7 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
                 col.append(Spacer(1, 1.6 * cm))
         else:
             col.append(Spacer(1, 1.6 * cm))
-        name = str(entry.get("name") or "").strip()
-        if name:
-            col.append(Paragraph(escape(name), addr_style))
-        office = str(entry.get("office") or "").strip() or "Signatory"
+        office = office_title or "Signatory"
         col.append(Paragraph(escape(office), addr_style))
         # The office's own number beneath its title, the way the template's
         # sign-off does — a reader who needs to raise the office has it there.
@@ -2505,7 +2524,7 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     # The letter's own QR, printed once both pens have signed: a scan opens
     # the letter itself on the church's site, so the sheet can be verified.
     status = letter_record.get("status") if isinstance(letter_record, dict) else getattr(letter_record, "status", None)
-    both_signed = status == "completed" or (pastor_sig and clerk_sig)
+    both_signed = status == "completed"
     
     if both_signed:
         try:

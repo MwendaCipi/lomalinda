@@ -2385,6 +2385,9 @@ class DepartmentLetterRequestSerializer(serializers.ModelSerializer):
             'requested_by', 'requested_by_name',
             'title', 'content', 'status',
             'letter_date', 'recipient_address',
+            'recipient_name', 'recipient_town', 'recipient_phone', 'recipient_email',
+            'recipient_response', 'recipient_comment', 'responded_at',
+            'share_token',
             'pastor_signed_by', 'pastor_name', 'pastor_signed_at',
             'clerk_signed_by', 'clerk_name', 'clerk_signed_at',
             'reply', 'declined_by', 'declined_by_name',
@@ -2395,6 +2398,7 @@ class DepartmentLetterRequestSerializer(serializers.ModelSerializer):
             'pastor_signed_by', 'pastor_signed_at',
             'clerk_signed_by', 'clerk_signed_at',
             'reply', 'declined_by', 'created_at', 'updated_at',
+            'share_token', 'recipient_response', 'recipient_comment', 'responded_at',
         )
 
     def get_requested_by_name(self, obj):

@@ -14986,6 +14986,10 @@ class DepartmentLetterListCreateView(APIView):
             status='pending_pastor',
             letter_date=str(request.data.get('letter_date') or '').strip()[:40],
             recipient_address=str(request.data.get('recipient_address') or '').strip()[:255],
+            recipient_name=str(request.data.get('recipient_name') or '').strip()[:120],
+            recipient_town=str(request.data.get('recipient_town') or '').strip()[:80],
+            recipient_phone=str(request.data.get('recipient_phone') or '').strip()[:40],
+            recipient_email=str(request.data.get('recipient_email') or '').strip()[:120],
         )
 
         # Notify Pastor and Administration (SMS, email, push, in-app)
@@ -15224,6 +15228,25 @@ class ChurchLetterheadView(APIView):
         return Response({'has_letterhead': False, 'letterhead_url': ''})
 
 
+def _default_letter_signatory(code, office_title):
+    """One officer who holds this office, written on the sheet as the pen.
+
+    An office the church shares hands its paper to whichever holder comes
+    first — a keeper for the pen line while nobody has signed yet, so a
+    letter in flight still shows who will sign it. When someone else finally
+    puts their pen down, the signer's own details (from ``user_signature_entry``)
+    then replace whatever the keeper showed — the paper is never wrong.
+    """
+    from .signatures import office_holder, signer_name
+    profile = office_holder(code)
+    return {
+        'office': office_title,
+        'name': signer_name(profile) if profile else '',
+        'image': None,
+        'phone': (getattr(profile, 'phone_number', '') or '') if profile else '',
+    }
+
+
 class DepartmentLetterPdfView(APIView):
     """Generate and download the official letterhead PDF for a department letter."""
 
@@ -15250,8 +15273,11 @@ class DepartmentLetterPdfView(APIView):
         from .signatures import user_signature_entry
         from .pdf_generator import generate_department_letter_pdf
 
-        pastor_sig = user_signature_entry(row.pastor_signed_by, "Church Pastor") if row.pastor_signed_by else None
-        clerk_sig = user_signature_entry(row.clerk_signed_by, "Church Clerk") if row.clerk_signed_by else None
+        # The pens on the sheet: whoever has signed signs in their own
+        # details; before that the sheet carries the office's holder, so a
+        # letter in flight already shows the pen it waits for.
+        pastor_sig = user_signature_entry(row.pastor_signed_by, "Church Pastor") if row.pastor_signed_by else _default_letter_signatory('pastor', 'Church Pastor')
+        clerk_sig = user_signature_entry(row.clerk_signed_by, "Church Clerk") if row.clerk_signed_by else _default_letter_signatory('clerk', 'Church Clerk')
 
         serializer = DepartmentLetterRequestSerializer(row)
         church_name = current_church_name()
@@ -15270,6 +15296,166 @@ class DepartmentLetterPdfView(APIView):
         filename = f"Letter_{row.department.code}_{row.id}.pdf"
         response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
+
+
+class DepartmentLetterSignatoriesView(APIView):
+    """The pen pair a new letter previews beneath its closing.
+
+    The writing desk asks for one clerk and one pastor to name on the
+    paper's own sign-off — the church's offices, whoever holds them — before
+    any pen is down. When the letter is then signed, the signer's own entry
+    replaces the keeper shown here, so the preview never turns out to be a
+    promise the sheet breaks.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .signatures import office_holder, signer_name
+
+        def entry(code, office_title):
+            profile = office_holder(code)
+            if not profile:
+                return {'name': '', 'office': office_title, 'phone': ''}
+            return {
+                'name': signer_name(profile),
+                'office': office_title,
+                'phone': getattr(profile, 'phone_number', '') or '',
+            }
+
+        return Response({'clerk': entry('clerk', 'Church Clerk'), 'pastor': entry('pastor', 'Church Pastor')})
+
+
+class DepartmentLetterShareView(APIView):
+    """Hand a fully signed letter its share links.
+
+    Sharing is a completed letter's own move: a token mints the first time
+    the shelf shares it and stays the same afterwards, so a link already
+    passed to a recipient keeps opening the same sheet. It returns both ways
+    a letter travels — the paper itself and the link the recipient opens to
+    read and answer it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        row = DepartmentLetterRequest.objects.filter(pk=pk).first()
+        if not row:
+            return Response({'detail': 'Letter request not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if row.status != 'completed':
+            return Response({'detail': 'Only a fully signed letter can be shared.'}, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        may_share = (
+            user.pk == row.requested_by_id or
+            is_pastor_or_admin(user) or
+            is_clerk_or_admin(user) or
+            DepartmentMembership.objects.filter(department=row.department, member=user).exists()
+        )
+        if not may_share:
+            return Response({'detail': 'You do not have permission to share this letter.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if not row.share_token:
+            row.share_token = uuid.uuid4()
+            row.save(update_fields=['share_token'])
+        return Response({'share_token': str(row.share_token)})
+
+
+class DepartmentLetterPublicView(APIView):
+    """What someone who holds a letter's link reads.
+
+    A token-sized doorway to one signed sheet: anyone who holds the link —
+    the recipient need no account with the church — reads the letter and
+    answers it. An unsigned or unshared letter answers nothing.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        row = DepartmentLetterRequest.objects.select_related(
+            'department', 'requested_by', 'pastor_signed_by', 'clerk_signed_by'
+        ).filter(share_token=token).first()
+        if not row or row.status != 'completed':
+            return Response({'detail': 'This letter link is not open.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = DepartmentLetterRequestSerializer(row)
+        return Response({
+            'title': serializer.data['title'],
+            'content': serializer.data['content'],
+            'letter_date': serializer.data['letter_date'],
+            'department_name': serializer.data['department_name'],
+            'requested_by_name': serializer.data['requested_by_name'],
+            'church_name': current_church_name(),
+            'pastor_name': serializer.data['pastor_name'],
+            'clerk_name': serializer.data['clerk_name'],
+            # The offices' own numbers, so the reading page can close the
+            # letter the way the paper does — name, office, phone.
+            'pastor_phone': (getattr(getattr(row.pastor_signed_by, 'member_profile', None), 'phone_number', '') or ''),
+            'clerk_phone': (getattr(getattr(row.clerk_signed_by, 'member_profile', None), 'phone_number', '') or ''),
+            'recipient_name': serializer.data['recipient_name'],
+            'recipient_town': serializer.data['recipient_town'],
+            'recipient_response': serializer.data['recipient_response'],
+            'recipient_comment': serializer.data['recipient_comment'],
+            'responded_at': serializer.data['responded_at'],
+        })
+
+
+class DepartmentLetterPublicPdfView(APIView):
+    """The signed sheet itself, by token — the letter as its link shares it,
+    readable and printable without an account."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        row = DepartmentLetterRequest.objects.select_related(
+            'department', 'pastor_signed_by', 'clerk_signed_by'
+        ).filter(share_token=token).first()
+        if not row or row.status != 'completed':
+            return Response({'detail': 'This letter link is not open.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from .signatures import user_signature_entry
+        from .pdf_generator import generate_department_letter_pdf
+        pastor_sig = user_signature_entry(row.pastor_signed_by, "Church Pastor") if row.pastor_signed_by else _default_letter_signatory('pastor', 'Church Pastor')
+        clerk_sig = user_signature_entry(row.clerk_signed_by, "Church Clerk") if row.clerk_signed_by else _default_letter_signatory('clerk', 'Church Clerk')
+        letterhead = None
+        settings_row = ChurchSettings.objects.filter(pk=1).first()
+        if settings_row and settings_row.letterhead:
+            try:
+                letterhead = settings_row.letterhead.read()
+            except Exception:
+                letterhead = None
+        pdf_bytes = generate_department_letter_pdf(
+            DepartmentLetterRequestSerializer(row).data,
+            current_church_name(), pastor_sig, clerk_sig, letterhead=letterhead,
+        )
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="Letter_{row.department.code}_{row.id}.pdf"'
+        return response
+
+
+class DepartmentLetterPublicRespondView(APIView):
+    """The recipient's answer to a shared letter.
+
+    They read the sheet, then accept the request or turn it down, adding any
+    comment they like; the answer lands on the letter for the desk and its
+    writer to read.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, token):
+        row = DepartmentLetterRequest.objects.filter(share_token=token).first()
+        if not row or row.status != 'completed':
+            return Response({'detail': 'This letter link is not open.'}, status=status.HTTP_404_NOT_FOUND)
+        choice = str(request.data.get('response') or '').strip()
+        if choice not in ('accepted', 'turned_down'):
+            return Response({'response': 'Answer accept or turn down.'}, status=status.HTTP_400_BAD_REQUEST)
+        row.recipient_response = choice
+        row.recipient_comment = str(request.data.get('comment') or '').strip()
+        row.responded_at = timezone.now()
+        row.save(update_fields=['recipient_response', 'recipient_comment', 'responded_at'])
+        return Response({
+            'recipient_response': row.recipient_response,
+            'recipient_comment': row.recipient_comment,
+        })
 
 
 

@@ -2601,6 +2601,25 @@ class DepartmentLetterRequest(models.Model):
     # nothing is composed into the body to carry them.
     letter_date = models.CharField(max_length=40, blank=True, default='')
     recipient_address = models.CharField(max_length=255, blank=True, default='')
+    # The recipient set out in pieces, the way the template writes it: who
+    # the letter addresses, where they receive it, the town after the
+    # address, and how to reach them.
+    recipient_name = models.CharField(max_length=120, blank=True, default='')
+    recipient_town = models.CharField(max_length=80, blank=True, default='')
+    recipient_phone = models.CharField(max_length=40, blank=True, default='')
+    recipient_email = models.CharField(max_length=120, blank=True, default='')
+
+    # Sharing. A fully signed letter can leave the church by its link: the
+    # token hands the holder the paper and lets them answer it — accept the
+    # request or turn it down, with a word of their own. Created when the
+    # shelf first shares, stable afterwards so shared links never break.
+    share_token = models.UUIDField(null=True, blank=True, unique=True)
+    recipient_response = models.CharField(
+        max_length=20, blank=True, default='',
+        choices=[('', 'Not yet answered'), ('accepted', 'Accepted'), ('turned_down', 'Turned down')],
+    )
+    recipient_comment = models.TextField(blank=True, default='')
+    responded_at = models.DateTimeField(null=True, blank=True)
 
     pastor_signed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,

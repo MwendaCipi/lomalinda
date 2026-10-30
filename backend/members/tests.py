@@ -19430,3 +19430,81 @@ class DepartmentLetterheadTests(DepartmentLetterFlowTests):
         on_head = generate_department_letter_pdf(record, 'SDA Church Loma Linda', None, None, letterhead=fake)
         plain = generate_department_letter_pdf(record, 'SDA Church Loma Linda', None, None)
         self.assertEqual(len(on_head), len(plain))
+
+
+class DepartmentLetterShareTests(DepartmentLetterFlowTests):
+    """A fully signed letter travels to its recipient two ways.
+
+    The desk hands back the paper itself — PDF on the browser's own tab —
+    and, when the shelf shares it, a link that stands on its own: anyone
+    holding the link reads the letter without an account and answers it,
+    accepting the request or turning it down with a comment. These tests
+    walk both travels and the recipient's reply.
+    """
+
+    def _share(self, pk, as_user=None):
+        """The desk's Share move on a letter, as signed letters allow."""
+        if as_user:
+            self.client.force_authenticate(as_user)
+        shared = self.client.post(f'/api/members/department-letters/{pk}/share/')
+        self.assertEqual(shared.status_code, status.HTTP_200_OK, shared.data)
+        return shared
+
+    def test_sharing_forces_the_letter_through_both_signatures_first(self):
+        """Only a fully signed letter can be shared — one without both
+        pens is not yet an official sheet, so the share is refused."""
+        pk = self._write().data['id']
+        self.client.force_authenticate(self.writer)
+        refused = self.client.post(f'/api/members/department-letters/{pk}/share/')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_sharing_gives_back_a_api_and_a_letter_link_holding_the_same_token(self):
+        """The share returns both ways the letter travels and the link that
+        carries the data: a token-signed URL for the recipient, and the
+        endpoint the desk can call to hand it over."""
+        pk = self._write().data['id']
+        self._sign(self.pastor, 'pastor_sign', pk)
+        self._sign(self.clerk, 'clerk_sign', pk)
+        self.client.force_authenticate(self.writer)
+        shared = self._share(pk)
+        token = shared.data['share_token']
+        self.assertEqual(len(token), 36)
+        shared_again = self.client.post(f'/api/members/department-letters/{pk}/share/')
+        self.assertEqual(shared_again.data['share_token'], token,
+                         'a link already handed to a recipient must keep opening the same letter')
+        public = self.client.get(f'/api/members/department-letters/shared/{token}/')
+        self.assertEqual(public.status_code, status.HTTP_200_OK, public.data)
+        self.assertEqual(public.data['title'], 'Request for choir robes')
+        self.assertEqual(public.data['church_name'], 'SDA Church Loma Linda, Meru')
+        self.assertIn(public.data['recipient_response'], (None, '', 'accepted'))
+
+    def test_the_recipient_needs_no_account_to_read_or_answer_the_letter(self):
+        """The link stands alone: a signed-out visitor reads the letter,
+        answers it accept or turn down with a comment, and the answer is
+        back on the letter for the desk."""
+        pk = self._write().data['id']
+        self._sign(self.pastor, 'pastor_sign', pk)
+        self._sign(self.clerk, 'clerk_sign', pk)
+        self.client.force_authenticate(self.writer)
+        token = self._share(pk).data['share_token']
+
+        # Dropping the authentication to stand outside the church: the link
+        # must serve a visitor who holds only the URL.
+        self.client.force_authenticate(None)
+        read = self.client.get(f'/api/members/department-letters/shared/{token}/')
+        self.assertEqual(read.status_code, status.HTTP_200_OK)
+        self.assertEqual(read.data['pastor_name'], 'Paul Pastor')
+        self.assertEqual(read.data['clerk_name'], 'Claire Clerk')
+
+        answered = self.client.post(f'/api/members/department-letters/shared/{token}/respond/', {
+            'response': 'turned_down',
+            'comment': 'The hall is booked that Sabbath.',
+        }, format='json')
+        self.assertEqual(answered.status_code, status.HTTP_200_OK, answered.data)
+        self.assertEqual(answered.data['recipient_response'], 'turned_down')
+
+        from .models import DepartmentLetterRequest
+        back = DepartmentLetterRequest.objects.get(pk=pk)
+        self.assertEqual(back.recipient_response, 'turned_down')
+        self.assertEqual(back.recipient_comment, 'The hall is booked that Sabbath.')
+        self.assertIsNotNone(back.responded_at)

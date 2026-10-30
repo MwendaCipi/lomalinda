@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, FileText, MoveLeft, PenLine, Stamp, X } from "lucide-react";
+import { Copy, Download, FileText, Link2, MoveLeft, PenLine, Send, Stamp, X } from "lucide-react";
 
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -53,6 +53,9 @@ type LetterRow = {
   clerk_signed_at: string | null;
   reply: string;
   declined_by_name: string | null;
+  recipient_response: null | "accepted" | "turned_down";
+  recipient_comment: string;
+  responded_at: string | null;
   created_at: string;
 };
 
@@ -60,6 +63,25 @@ type LetterRow = {
 function authHeaders(): Record<string, string> {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** One pen on the paper's sign-off, as the offices hand it to the preview. */
+type LetterSignatory = { name: string; office: string; phone: string };
+
+/** The name a pen prints — the pastor's pen wears the ministry's courtesy
+ *  title, as the template writes it, unless the name already carries one. */
+function penName(signatory: LetterSignatory | null | undefined) {
+  const name = (signatory?.name ?? "").trim();
+  if (!name) return "";
+  const office = (signatory?.office ?? "").toLowerCase();
+  if (office.includes("pastor") && !/^(pr\.|pastor)/i.test(name)) return `Pr. ${name}`;
+  return name;
+}
+
+/** The page a shared letter's link opens: the recipient reads and answers here. */
+function publicLetterUrl(token: string) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/letters/${token}`;
 }
 
 /** What a letter's row wears while it is on its way between the two pens. */
@@ -95,10 +117,48 @@ export function WriteLetterModal({
   onSent?: () => void;
 }) {
   const [letterDate, setLetterDate] = useState("");
+  const [recipientName, setRecipientName] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
+  const [recipientTown, setRecipientTown] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  // The pen pair the sheet previews before anyone signs: one clerk and one
+  // pastor, picked from the church's own offices. Whoever actually signs
+  // replaces their details at signing time (the paper prints the signer
+  // that day, not the keeper shown while the letter was being typed).
+  const [signatories, setSignatories] = useState<{ clerk: LetterSignatory | null; pastor: LetterSignatory | null } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch(`${API_URL}/api/members/department-letters/signatories/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setSignatories({ clerk: data.clerk ?? null, pastor: data.pastor ?? null });
+      })
+      .catch(() => {
+        // Without the pair the paper still signs: the blank pen lines print
+        // as they always have.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  // The block the paper composes under the salutation — the pieces in the
+  // order they print, blanks out.
+  const recipientBlock = () =>
+    [recipientName, recipientAddress, recipientTown, recipientPhone, recipientEmail]
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+  // The preview text, as it will print — but typed live, so the writer sees
+  // everything the sheet will carry while they write it.
+  const clerkName = penName(signatories?.clerk);
+  const pastorName = penName(signatories?.pastor);
 
   if (!open) return null;
 
@@ -118,7 +178,16 @@ export function WriteLetterModal({
     "",
     "Kind regards,",
     "",
-    "— signature space —",
+    // The two pens, clerk left and pastor right, exactly as the paper lays
+    // them out — name, the signing gap between it and the office, the
+    // office's own number beneath.
+    ...(clerkName ? [clerkName, ""] : []),
+    signatories?.clerk?.office || "Church Clerk",
+    ...(signatories?.clerk?.phone ? [signatories.clerk.phone] : []),
+    "",
+    ...(pastorName ? [pastorName, ""] : []),
+    signatories?.pastor?.office || "Church Pastor",
+    ...(signatories?.pastor?.phone ? [signatories.pastor.phone] : []),
   ].filter((line, index, lines) => !(line === "" && lines[index + 1] === "")).join("\n");
 
   const send = async (event: React.FormEvent) => {
@@ -134,7 +203,11 @@ export function WriteLetterModal({
           title: title.trim(),
           content: body.trim(),
           letter_date: letterDate.trim(),
+          recipient_name: recipientName.trim(),
           recipient_address: recipientAddress.trim(),
+          recipient_town: recipientTown.trim(),
+          recipient_phone: recipientPhone.trim(),
+          recipient_email: recipientEmail.trim(),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -199,11 +272,48 @@ export function WriteLetterModal({
                     />
                   </label>
                   <label className="block text-xs font-medium text-bark">
-                    Address
+                    Recipient name
                     <input
+                      value={recipientName}
+                      onChange={(event) => setRecipientName(event.target.value)}
+                      placeholder="e.g. Isiolo Central Point Church"
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark">
+                    Address
+                    <textarea
+                      rows={3}
                       value={recipientAddress}
                       onChange={(event) => setRecipientAddress(event.target.value)}
-                      placeholder="Type the receiving address..."
+                      placeholder="e.g. P.o Box 61-60300"
+                      className="mt-1 block w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark">
+                    Town
+                    <input
+                      value={recipientTown}
+                      onChange={(event) => setRecipientTown(event.target.value)}
+                      placeholder="e.g. Isiolo"
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark">
+                    Phone
+                    <input
+                      value={recipientPhone}
+                      onChange={(event) => setRecipientPhone(event.target.value)}
+                      placeholder="e.g. 0710570874"
+                      className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-bark">
+                    Email
+                    <input
+                      value={recipientEmail}
+                      onChange={(event) => setRecipientEmail(event.target.value)}
+                      placeholder="e.g. choir@isiolocentralpoint.org"
                       className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
                     />
                   </label>
@@ -257,8 +367,8 @@ export function WriteLetterModal({
               <article className="mx-auto mt-2 w-full max-w-2xl rounded-lg border border-sand-line bg-white px-7 py-9 font-serif text-[13px] leading-relaxed text-bark shadow-sm">
                 <p>{letterDate.trim() || dayFirst(new Date())}</p>
                 <p className="mt-4">To the Pastor/ Church clerk,</p>
-                <p className={`mt-4 whitespace-pre-line${recipientAddress.trim() ? "" : " text-moss-faint"}`}>
-                  {recipientAddress.trim() || "Receiving address"}
+                <p className={`mt-4 whitespace-pre-line${recipientBlock().length ? "" : " text-moss-faint"}`}>
+                  {recipientBlock().length ? recipientBlock().join("\n") : "Recipient name, address and town"}
                 </p>
                 <p className="mt-6">
                   <span className="font-semibold">REF: </span>
@@ -272,13 +382,24 @@ export function WriteLetterModal({
                     signed. */}
                 <p className="mt-8">Kind regards,</p>
                 <div className="mt-6 grid grid-cols-2 gap-8 text-[12px]">
+                  {/* The pen pair the offices hand the paper: name above the
+                      signing gap, office and its number beneath the gap —
+                      whoever signs last replaces the keeper shown here. */}
                   <div>
+                    {clerkName
+                      ? <p>{clerkName}</p>
+                      : <p className="text-moss-faint">Clerk's name</p>}
                     <div className="h-10" aria-hidden="true" />
-                    <p>Church Clerk</p>
+                    <p>{signatories?.clerk?.office || "Church Clerk"}</p>
+                    {signatories?.clerk?.phone && <p>{signatories.clerk.phone}</p>}
                   </div>
                   <div>
+                    {pastorName
+                      ? <p>{pastorName}</p>
+                      : <p className="text-moss-faint">Pastor's name</p>}
                     <div className="h-10" aria-hidden="true" />
-                    <p>Church Pastor</p>
+                    <p>{signatories?.pastor?.office || "Church Pastor"}</p>
+                    {signatories?.pastor?.phone && <p>{signatories.pastor.phone}</p>}
                   </div>
                 </div>
               </article>
@@ -327,11 +448,48 @@ export function WriteLetterModal({
               />
             </label>
             <label className="block text-xs font-medium text-bark">
-              Address
+              Recipient name
               <input
+                value={recipientName}
+                onChange={(event) => setRecipientName(event.target.value)}
+                placeholder="e.g. Isiolo Central Point Church"
+                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+              />
+            </label>
+            <label className="block text-xs font-medium text-bark">
+              Address
+              <textarea
+                rows={3}
                 value={recipientAddress}
                 onChange={(event) => setRecipientAddress(event.target.value)}
-                placeholder="e.g. Isiolo Central Point, P.o Box 61-60300, Isiolo."
+                placeholder="e.g. P.o Box 61-60300"
+                className="mt-1 block w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+              />
+            </label>
+            <label className="block text-xs font-medium text-bark">
+              Town
+              <input
+                value={recipientTown}
+                onChange={(event) => setRecipientTown(event.target.value)}
+                placeholder="e.g. Isiolo"
+                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+              />
+            </label>
+            <label className="block text-xs font-medium text-bark">
+              Phone
+              <input
+                value={recipientPhone}
+                onChange={(event) => setRecipientPhone(event.target.value)}
+                placeholder="e.g. 0710570874"
+                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
+              />
+            </label>
+            <label className="block text-xs font-medium text-bark">
+              Email
+              <input
+                value={recipientEmail}
+                onChange={(event) => setRecipientEmail(event.target.value)}
+                placeholder="e.g. choir@isiolocentralpoint.org"
                 className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
               />
             </label>
@@ -596,6 +754,10 @@ export function DepartmentLettersPanel({
   // pens that sign — a member reading the register has no head to manage.
   const [letterhead, setLetterhead] = useState<{ url: string } | null>(null);
   const [letterheadOpen, setLetterheadOpen] = useState(false);
+  // The letter being shared out, and the modal that shows its two travels:
+  // the paper for the desk to carry, the link the recipient reads and answers.
+  const [sharing, setSharing] = useState<number | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ row: LetterRow; token: string } | null>(null);
 
   const loadLetterhead = useCallback(() => {
     fetch(`${API_URL}/api/members/letterhead/`, { headers: authHeaders() })
@@ -696,6 +858,26 @@ export function DepartmentLettersPanel({
     });
   };
 
+  /** Share a fully signed letter: mint (or reuse) its public token, then
+   *  open the modal that shows both ways it travels — the paper and the
+   *  link the recipient reads and answers on. */
+  const shareLetter = async (row: LetterRow) => {
+    setSharing(row.id);
+    try {
+      const response = await fetch(`${API_URL}/api/members/department-letters/${row.id}/share/`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || "The letter could not be shared.");
+      setShareTarget({ row, token: data.share_token as string });
+    } catch (error) {
+      showAlert("Could not share the letter", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setSharing(null);
+    }
+  };
+
   return (
     <section className={className}>
       <header className="flex items-center justify-between gap-2 border-b border-sand-line bg-sand/20 px-4 py-2.5">
@@ -777,6 +959,14 @@ export function DepartmentLettersPanel({
                     <p className="mt-1 text-[11px] italic text-moss-faint">&quot;{row.reply}&quot;</p>
                   )}
 
+                  {/* What the recipient answered on a shared letter, if they have. */}
+                  {row.recipient_response && (
+                    <p className="mt-1 text-[11px] italic text-moss-faint">
+                      Recipient {row.recipient_response === "accepted" ? "accepted" : "turned down"} the request
+                      {row.recipient_comment ? `: “${row.recipient_comment}”` : ""}
+                    </p>
+                  )}
+
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {signAction && (
                       <button
@@ -806,6 +996,17 @@ export function DepartmentLettersPanel({
                     >
                       {busy ? "Preparing…" : "View letter"}
                     </button>
+                    {row.status === "completed" && (
+                      <button
+                        type="button"
+                        onClick={() => void shareLetter(row)}
+                        disabled={sharing === row.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+                      >
+                        <Link2 className="h-3 w-3" />
+                        {sharing === row.id ? "Preparing…" : "Share"}
+                      </button>
+                    )}
                     {row.status === "completed" && (
                       <button
                         type="button"
@@ -910,6 +1111,102 @@ export function DepartmentLettersPanel({
                 className="rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
               >
                 {savingSignature ? "Signing…" : "Sign this letter"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share — a fully signed letter's two travels: the paper to pass
+          around, or a link the recipient opens, reads and answers on. */}
+      {shareTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Share this letter"
+            className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-sand-line px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-bark">Share this letter</h3>
+                <p className="mt-0.5 truncate text-xs text-moss">{shareTarget.row.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareTarget(null)}
+                aria-label="Close"
+                className="rounded-lg p-1 text-moss transition hover:bg-sand hover:text-bark"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+              <div className="rounded-xl border border-sand-line p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Share the letter itself</p>
+                <p className="mt-1 text-xs text-moss">
+                  Open the signed sheet as a PDF — view it, print it or carry it to the stamp.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    openPdf(shareTarget.row);
+                    setShareTarget(null);
+                  }}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  <FileText className="h-3 w-3" />
+                  Open the letter
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-sand-line p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Share a link with the recipient</p>
+                <p className="mt-1 text-xs text-moss">
+                  Anyone holding this link reads the letter — they need no account — and can accept or turn down the
+                  request, with a comment. They can print the signed copy from the same page.
+                </p>
+                <div className="mt-2 flex items-stretch gap-1.5">
+                  <input
+                    readOnly
+                    value={publicLetterUrl(shareTarget.token)}
+                    onFocus={(event) => event.currentTarget.select()}
+                    className="min-w-0 flex-1 rounded-lg border border-sand-mute bg-sand/30 px-2.5 py-1.5 text-[11px] text-bark"
+                    aria-label="Shareable letter link"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = publicLetterUrl(shareTarget.token);
+                      try {
+                        if (navigator.share) {
+                          await navigator.share({ title: shareTarget.row.title, url });
+                        } else {
+                          await navigator.clipboard.writeText(url);
+                          showAlert("Link copied", "Paste it wherever the recipient will see it.", "success");
+                        }
+                      } catch {
+                        // Copy cancelled or unavailable — the box above still
+                        // shows the link for a manual copy.
+                      }
+                    }}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-bark px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-bark/90"
+                  >
+                    <Copy className="h-3 w-3" />
+                    Share
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 justify-end border-t border-sand-line px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setShareTarget(null)}
+                className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+              >
+                Done
               </button>
             </div>
           </div>
