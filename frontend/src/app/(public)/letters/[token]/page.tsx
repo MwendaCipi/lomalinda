@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCheck, FileText, Mail, Phone } from "lucide-react";
+import { CheckCheck, FileText } from "lucide-react";
 
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
@@ -281,8 +281,8 @@ export default function PublicLetterPage({ params }: { params: Promise<{ token: 
           </section>
 
           <p className="mt-4 text-center text-[11px] text-moss-faint">
-            This link was shared by {letter.department_name} at {letter.church_name} — the letter above is the church's
-            official word.
+            This link was shared by {letter.department_name} at {letter.church_name} — the letter above is the
+            church&apos;s official word.
           </p>
         </>
       )}

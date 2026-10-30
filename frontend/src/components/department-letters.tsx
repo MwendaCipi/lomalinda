@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Download, FileText, Link2, MoveLeft, PenLine, Send, Stamp, X } from "lucide-react";
+import { Copy, Download, FileText, Link2, MoveLeft, PenLine, Stamp, X } from "lucide-react";
 
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -388,7 +388,7 @@ export function WriteLetterModal({
                   <div>
                     {clerkName
                       ? <p>{clerkName}</p>
-                      : <p className="text-moss-faint">Clerk's name</p>}
+                      : <p className="text-moss-faint">Clerk&apos;s name</p>}
                     <div className="h-10" aria-hidden="true" />
                     <p>{signatories?.clerk?.office || "Church Clerk"}</p>
                     {signatories?.clerk?.phone && <p>{signatories.clerk.phone}</p>}
@@ -396,7 +396,7 @@ export function WriteLetterModal({
                   <div>
                     {pastorName
                       ? <p>{pastorName}</p>
-                      : <p className="text-moss-faint">Pastor's name</p>}
+                      : <p className="text-moss-faint">Pastor&apos;s name</p>}
                     <div className="h-10" aria-hidden="true" />
                     <p>{signatories?.pastor?.office || "Church Pastor"}</p>
                     {signatories?.pastor?.phone && <p>{signatories.pastor.phone}</p>}
