@@ -78,10 +78,12 @@ function penName(signatory: LetterSignatory | null | undefined) {
   return name;
 }
 
-/** The page a shared letter's link opens: the recipient reads and answers here. */
+/** The page a shared letter's link opens: the recipient reads and answers here.
+ *  The site exports statically, so the token rides the URL's query — the
+ *  same shape the reset-password page reads. */
 function publicLetterUrl(token: string) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/letters/${token}`;
+  return `${origin}/letters?t=${token}`;
 }
 
 /** What a letter's row wears while it is on its way between the two pens. */
