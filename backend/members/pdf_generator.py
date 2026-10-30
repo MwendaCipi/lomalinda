@@ -278,7 +278,7 @@ class DepartmentLetterCanvas(NumberedCanvas):
             self.drawString(right_x + 0.12 * cm, top - 2 * 6.15 * mm, 'TEL:0708069827/0711340087')
             self.setFillColor(colors.HexColor('#2E8BA6'))
             self.setFont('Times-Bold', 10.6)
-            self.drawString(right_x - 0.45 * cm, top - 3 * 6.15 * mm, 'EMAIL: sdalomalindachurch@gail.com')
+            self.drawString(right_x - 0.45 * cm, top - 3 * 6.15 * mm, 'EMAIL: info@sdalomalinda.or.ke')
 
         self.restoreState()
         self.saveState()
