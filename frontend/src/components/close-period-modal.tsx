@@ -66,6 +66,22 @@ export function closingDay(iso: string): string {
 }
 
 /**
+ * The day a period opens on — the mirror of closingDay.
+ *
+ * A close at the last minute of a day leaves that day whole in the period it
+ * ends, so the next period begins the day after. A close named at midnight
+ * ends its period the day before (closingDay), and the next one opens on the
+ * close's own day, nothing lost in between.
+ */
+export function startingDay(iso: string): string {
+  const { date, time } = closeParts(iso);
+  if (time === "00:00") return date;
+  const next = new Date(`${date}T00:00:00${CHURCH_OFFSET}`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: CHURCH_TZ }).format(next);
+}
+
+/**
  * The Close Period sheet.
  *
  * Closing names the day the books stop: a close lands at that day's last
