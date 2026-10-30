@@ -7110,8 +7110,10 @@ function DepartmentDetail({
 
       {/* The Requests view: the fund ledger and the money the desk asks for,
           full width. Writing a letter belongs with those outgoing asks, at
-          the bottom of this view rather than in the strip or member register. */}
-      {subTab === "accounts" && (
+          the bottom of this view rather than in the strip or member register.
+          While the letter sheet is open, the ledger stands down on a desk —
+          the letter page takes the view, and the way back is its own bar. */}
+      {subTab === "accounts" && !showWriteLetter && (
         <div className="flex min-h-0 flex-1 flex-col">
           <DepartmentAccountsPanel
             department={department}
@@ -7662,11 +7664,27 @@ function DepartmentDetail({
         />
       )}
       {showWriteLetter && (
-        <WriteLetterModal
-          open={showWriteLetter}
-          department={department}
-          onClose={() => setShowWriteLetter(false)}
-        />
+        <>
+          {/* The phone keeps the modal it knew: one card over a dimmed sheet. */}
+          <div className="md:hidden">
+            <WriteLetterModal
+              open={showWriteLetter}
+              department={department}
+              onClose={() => setShowWriteLetter(false)}
+            />
+          </div>
+          {/* A desk reads the letter where it writes it: the sheet takes the
+              view as a page, typing on the left, the paper it prints on the
+              right. Both copies stay in the DOM at once — one hidden by CSS. */}
+          <div className="hidden min-h-0 flex-1 md:flex">
+            <WriteLetterModal
+              open={showWriteLetter}
+              department={department}
+              variant="page"
+              onClose={() => setShowWriteLetter(false)}
+            />
+          </div>
+        </>
       )}
       {showShareComposer && canOpenOfficeViews && (
         // The compose modal rides the desk: the same fields the console's
@@ -7929,6 +7947,15 @@ export function DepartmentHub({
   }, [onBack]);
   useEffect(() => {
     if (embedded || selected) return;
+    // A desk deep-linked — the rail's row, a notice's link, or one opened
+    // from the directory — is on its way: the heading band holds nothing for
+    // it yet, and it used to say the directory's name (the console's
+    // leadership tab reads Eldership) no matter whose desk was loading. The
+    // page says only "Loading…" until the desk arrives to name itself.
+    if (loading && departmentDeskCode(initialDept)) {
+      setCustomHeader({ label: "Loading…" });
+      return () => setCustomHeader(null);
+    }
     // A phone asks for the heading first here just as it does on the desks:
     // arriving at the directory used to leave its heading behind, so only the
     // search answered above the strip in a hand.
@@ -7951,7 +7978,7 @@ export function DepartmentHub({
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [directoryHeading, embedded, selected, setCustomHeader, setHeadingFirst]);
+  }, [directoryHeading, embedded, loading, initialDept, selected, setCustomHeader, setHeadingFirst]);
   const directoryNeedle = directorySearch.trim().toLowerCase();
   const visibleDepartments = directoryNeedle
     ? departments.filter((d) =>
