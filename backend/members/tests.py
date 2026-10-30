@@ -19242,6 +19242,28 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertEqual(preview.data['clerk']['name'], 'Claire Clerk')
         self.assertEqual(preview.data['clerk']['phone'], '0711340087')
 
+    def test_preview_uses_the_existing_clerkship_leader(self):
+        """A Clerkship leader from before role synchronisation still prints
+        as the church clerk on new letter previews."""
+        self.clerk.member_profile.role = 'member'
+        self.clerk.member_profile.roles = 'member'
+        self.clerk.member_profile.phone_number = '0710570874'
+        self.clerk.member_profile.save(update_fields=['role', 'roles', 'phone_number'])
+        clerkship = Department.objects.get(code='clerkship')
+        DepartmentAssignment.objects.create(
+            department=clerkship,
+            role=clerkship.roles.get(name='Leader'),
+            member=self.clerk,
+            kind='leader',
+        )
+
+        self.client.force_authenticate(self.writer)
+        preview = self.client.get('/api/members/department-letters/signatories/')
+
+        self.assertEqual(preview.status_code, status.HTTP_200_OK)
+        self.assertEqual(preview.data['clerk']['name'], 'Claire Clerk')
+        self.assertEqual(preview.data['clerk']['phone'], '0710570874')
+
     def test_either_pen_may_sign_first_and_a_member_signs_nothing(self):
         """Two pens, either order. The clerk may put theirs down before the
         pastor's, and a member standing outside both offices is refused
@@ -19309,6 +19331,10 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertIn('ClaireClerk', flat)
         self.assertIn('ChurchPastor', flat)
         self.assertIn('ChurchClerk', flat)
+        self.assertNotIn('OfficialFinancial&AdministrativeRecord', flat)
+        from .models import DepartmentLetterRequest
+        row = DepartmentLetterRequest.objects.get(pk=pk)
+        self.assertIsNotNone(row.share_token)
 
     def test_a_letter_is_only_its_own_departments_business_to_the_writer(self):
         """The register is read by area: a desk sees its own letters, and a

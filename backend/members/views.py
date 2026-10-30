@@ -75,7 +75,7 @@ from . import sms
 from .requests import notify_request_safely, send_membership_approval_email
 # Who signs the church's paper: the two office holders whose saved signatures
 # the receipts and reports print (see members/signatures.py).
-from .signatures import office_for, receipt_signatures, report_signatures
+from .signatures import office_for, office_holder, receipt_signatures, report_signatures
 from .treasury import account_for_purpose, apply_credit, canonical_purpose_name, credit_account, credit_contribution_lines, display_purpose, enrich_transaction_descriptions
 from .throttling import PublicTokenThrottle
 from .roles import (
@@ -848,7 +848,12 @@ def is_clerk_or_admin(user):
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('clerk', 'admin'))
+    if profile and profile.has_role('clerk', 'admin'):
+        return True
+    # Existing Clerkship leadership appointments made before the Clerkship →
+    # clerk role mapping are still a valid church-clerk appointment.
+    clerk = office_holder('clerk')
+    return bool(profile and clerk and clerk.pk == profile.pk)
 
 
 
@@ -11668,6 +11673,10 @@ def department_office_profile(user):
 #: department's generic Leader/Assistant grants the same role flag the old
 #: system carried, so permission checks and audiences follow the person.
 DEPARTMENT_LEAD_ROLE = {
+    # Clerkship's Leader is the church's Clerk.  Older Clerkship assignments
+    # predate this mapping, so signatures.py also resolves them directly
+    # until their next leadership save synchronises the role flag.
+    'clerkship': 'clerk',
     'amm': 'men_ministry',
     'awm': 'women_ministry',
     'aym': 'youth_leader',
@@ -15074,6 +15083,16 @@ class DepartmentLetterReviewView(APIView):
                     Q(member_profile__roles__contains='admin'),
                     is_active=True,
                 ).distinct()
+                clerk_profile = office_holder('clerk')
+                if clerk_profile:
+                    # Avoid combining a DISTINCT queryset with the plain
+                    # profile lookup: Django rejects that union.  A subquery
+                    # retains the normal role audience and adds the legacy
+                    # Clerkship leader in one query.
+                    clerk_audience = User.objects.filter(
+                        Q(pk__in=clerk_audience.values('pk')) |
+                        Q(pk=clerk_profile.user_id),
+                    ).distinct()
                 desk_link = f'{settings.FRONTEND_URL}/administration?tab=clerk-letters'
                 subject = f'Pastor Signed: Letter from {row.department.name} awaiting Clerk signature'
                 pastor_name = giver_display_name('', member=request.user)
@@ -15247,6 +15266,16 @@ def _default_letter_signatory(code, office_title):
     }
 
 
+def _department_letter_verification_url(row):
+    """Mint the stable public verification link for a completed letter."""
+    if row.status != 'completed':
+        return None
+    if not row.share_token:
+        row.share_token = uuid.uuid4()
+        row.save(update_fields=['share_token'])
+    return f'{settings.FRONTEND_URL}/letters?t={row.share_token}'
+
+
 class DepartmentLetterPdfView(APIView):
     """Generate and download the official letterhead PDF for a department letter."""
 
@@ -15290,7 +15319,11 @@ class DepartmentLetterPdfView(APIView):
                 letterhead = settings_row.letterhead.read()
             except Exception:
                 letterhead = None
-        pdf_bytes = generate_department_letter_pdf(serializer.data, church_name, pastor_sig, clerk_sig, letterhead=letterhead)
+        pdf_bytes = generate_department_letter_pdf(
+            serializer.data, church_name, pastor_sig, clerk_sig,
+            letterhead=letterhead,
+            verification_url=_department_letter_verification_url(row),
+        )
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         filename = f"Letter_{row.department.code}_{row.id}.pdf"
@@ -15383,9 +15416,8 @@ class DepartmentLetterSignatoriesView(APIView):
 class DepartmentLetterShareView(APIView):
     """Hand a fully signed letter its share links.
 
-    Sharing is a completed letter's own move: a token mints the first time
-    the shelf shares it and stays the same afterwards, so a link already
-    passed to a recipient keeps opening the same sheet. It returns both ways
+    A completed letter holds one stable public token, minted when its paper
+    first needs verification or when the shelf shares it. It returns both ways
     a letter travels — the paper itself and the link the recipient opens to
     read and answer it.
     """
@@ -15408,9 +15440,7 @@ class DepartmentLetterShareView(APIView):
         if not may_share:
             return Response({'detail': 'You do not have permission to share this letter.'}, status=status.HTTP_403_FORBIDDEN)
 
-        if not row.share_token:
-            row.share_token = uuid.uuid4()
-            row.save(update_fields=['share_token'])
+        _department_letter_verification_url(row)
         return Response({'share_token': str(row.share_token)})
 
 
@@ -15478,7 +15508,9 @@ class DepartmentLetterPublicPdfView(APIView):
                 letterhead = None
         pdf_bytes = generate_department_letter_pdf(
             DepartmentLetterRequestSerializer(row).data,
-            current_church_name(), pastor_sig, clerk_sig, letterhead=letterhead,
+            current_church_name(), pastor_sig, clerk_sig,
+            letterhead=letterhead,
+            verification_url=_department_letter_verification_url(row),
         )
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="Letter_{row.department.code}_{row.id}.pdf"'

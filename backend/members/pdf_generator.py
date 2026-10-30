@@ -134,9 +134,10 @@ def _draw_logo(c, center_x, top_y, height, line_2=_LOCKUP_LINE_2):
 
 
 class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, letterhead=None, **kwargs):
+    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, letterhead=None, verification_url=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._footer_text = footer_text
+        self._verification_url = verification_url
         # The church's uploaded letterhead, when the letters desk has created
         # one: drawn across the head of page 1 (see draw_page_decorations),
         # the paper's own mark standing in elsewhere and when there is none.
@@ -181,18 +182,33 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor("#617068"))
         
-        # Draw bottom line
-        self.setStrokeColor(colors.HexColor("#dfdbd1"))
-        self.setLineWidth(0.5)
-        self.line(1.5 * cm, 1.8 * cm, A4[0] - 1.5 * cm, 1.8 * cm)
-        
-        # Footer text
-        footer_text = self._footer_text
-        page_text = f"Page {self._pageNumber} of {page_count}"
-        
-        self.drawString(1.5 * cm, 1.2 * cm, footer_text)
-        self.drawRightString(A4[0] - 1.5 * cm, 1.2 * cm, page_text)
+        if self._footer_text:
+            self.setStrokeColor(colors.HexColor("#dfdbd1"))
+            self.setLineWidth(0.5)
+            self.line(1.5 * cm, 1.8 * cm, A4[0] - 1.5 * cm, 1.8 * cm)
+            self.drawString(1.5 * cm, 1.2 * cm, self._footer_text)
+            self.drawRightString(A4[0] - 1.5 * cm, 1.2 * cm, f"Page {self._pageNumber} of {page_count}")
         self.restoreState()
+        self._draw_verification_qr(page_count)
+
+    def _draw_verification_qr(self, page_count, right_edge=None):
+        """Place one scan-only authenticity mark in a signed letter's footer."""
+        if not self._verification_url or self._pageNumber != page_count:
+            return
+        try:
+            qr = qrcode.QRCode(version=None, box_size=6, border=1)
+            qr.add_data(self._verification_url)
+            qr.make(fit=True)
+            image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+            image_bytes = io.BytesIO()
+            image.save(image_bytes, format="PNG")
+            image_bytes.seek(0)
+            size = 1.35 * cm
+            x = (right_edge if right_edge is not None else A4[0] - 1.5 * cm) - size
+            self.drawImage(ImageReader(image_bytes), x, 0.3 * cm, size, size, mask='auto')
+        except Exception:
+            # Verification adornment must never hold the signed paper back.
+            pass
 
 
 #: The head an uploaded letterhead may cover. The letters desk creates the
@@ -266,14 +282,16 @@ class DepartmentLetterCanvas(NumberedCanvas):
 
         self.restoreState()
         self.saveState()
-        self.setFont('Helvetica', 8)
-        self.setFillColor(colors.HexColor('#617068'))
-        self.setStrokeColor(colors.HexColor('#dfdbd1'))
-        self.setLineWidth(0.5)
-        self.line(1.5 * cm, 1.8 * cm, strip_x - 0.35 * cm, 1.8 * cm)
-        self.drawString(1.5 * cm, 1.2 * cm, self._footer_text)
-        self.drawRightString(strip_x - 0.35 * cm, 1.2 * cm, f'Page {self._pageNumber} of {page_count}')
+        if self._footer_text:
+            self.setFont('Helvetica', 8)
+            self.setFillColor(colors.HexColor('#617068'))
+            self.setStrokeColor(colors.HexColor('#dfdbd1'))
+            self.setLineWidth(0.5)
+            self.line(1.5 * cm, 1.8 * cm, strip_x - 0.35 * cm, 1.8 * cm)
+            self.drawString(1.5 * cm, 1.2 * cm, self._footer_text)
+            self.drawRightString(strip_x - 0.35 * cm, 1.2 * cm, f'Page {self._pageNumber} of {page_count}')
         self.restoreState()
+        self._draw_verification_qr(page_count, right_edge=strip_x - 0.35 * cm)
 
 
 def _letterhead_geometry(image):
@@ -2370,7 +2388,10 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 # 4. Remove greeting and closing and signatures
 # 5. Add QR code at bottom if both pastor and clerk signed
 
-def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=None, clerk_sig=None, letterhead=None) -> bytes:
+def generate_department_letter_pdf(
+    letter_record, church_name: str, pastor_sig=None, clerk_sig=None,
+    letterhead=None, verification_url=None,
+) -> bytes:
     """The official department letter / requisition on church letterhead.
     
     Carries:
@@ -2390,7 +2411,6 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     from reportlab.pdfbase import pdfmetrics
     import io
     from datetime import datetime
-    import qrcode
     from django.conf import settings
     from xml.sax.saxutils import escape
     
@@ -2619,47 +2639,18 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     ]))
     story.append(pen_row)
     
-    # The letter's own QR, printed once both pens have signed: a scan opens
-    # the letter itself on the church's site, so the sheet can be verified.
-    status = letter_record.get("status") if isinstance(letter_record, dict) else getattr(letter_record, "status", None)
-    both_signed = status == "completed"
-    
-    if both_signed:
-        try:
-            api_url = getattr(settings, "NEXT_PUBLIC_API_URL", "") or getattr(settings, "FRONTEND_URL", "") or getattr(settings, "PUBLIC_SITE_URL", "")
-            if api_url:
-                lid = letter_record.get("id") if isinstance(letter_record, dict) else getattr(letter_record, "id", 0)
-                try:
-                    lid_int = int(lid) if lid is not None else 0
-                except Exception:
-                    lid_int = 0
-                url = f"{api_url}/api/members/department-letters/{lid_int}/pdf/"
-                qr = qrcode.QRCode(version=None, box_size=6, border=1)
-                qr.add_data(url)
-                qr.make(fit=True)
-                img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-                img_buf = io.BytesIO()
-                img.save(img_buf, format="PNG")
-                img_buf.seek(0)
-                qr_img = _IR(img_buf)
-                qr_table = Table(
-                    [[qr_img]], colWidths=[2.5 * cm], rowHeights=[2.5 * cm], hAlign="RIGHT",
-                )
-                qr_table.setStyle(TableStyle([
-                    ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ]))
-                story.append(Spacer(1, 12))
-                story.append(qr_table)
-        except Exception:
-            pass  # A QR that cannot be drawn never holds the letter back.
-    
     # Build the PDF
     # Continue overflowing content in the page-two frame.
     story.insert(0, NextPageTemplate('later'))
-    doc.build(story, canvasmaker=NumberedCanvas if head else DepartmentLetterCanvas)
+    canvas_class = NumberedCanvas if head else DepartmentLetterCanvas
+    doc.build(
+        story,
+        canvasmaker=functools.partial(
+            canvas_class,
+            footer_text='',
+            verification_url=verification_url,
+        ),
+    )
     
     buffer.seek(0)
     result = buffer.getvalue()

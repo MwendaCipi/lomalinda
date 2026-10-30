@@ -128,7 +128,33 @@ def office_holder(code):
     for profile in holders:
         if profile.signature:
             return profile
-    return holders[0] if holders else None
+    if holders:
+        return holders[0]
+
+    # Clerkship's leader is the church clerk.  Churches that appointed that
+    # leader before the role synchroniser learned this mapping have the
+    # person's name and phone in the leadership record but no ``clerk`` flag
+    # yet.  Read that existing appointment here so the live letter preview
+    # does not leave the clerk blank; the next leadership save adds the
+    # normal role flag through ``sync_role_flags_from_assignments``.
+    if code == 'clerk':
+        from .models import DepartmentAssignment
+
+        assignment = (
+            DepartmentAssignment.objects.select_related('member__member_profile')
+            .filter(
+                department__code='clerkship',
+                department__is_active=True,
+                kind='leader',
+                role__name__iexact='Leader',
+                member__is_active=True,
+            )
+            .order_by('id')
+            .first()
+        )
+        if assignment:
+            return getattr(assignment.member, 'member_profile', None)
+    return None
 
 
 def _entry(code, profile):
