@@ -163,10 +163,12 @@ export function WriteLetterModal({
 
   // The block the paper composes under the salutation. Recipient phone and
   // email stay in the clerk's request record for delivery, not on the paper.
-  const recipientBlock = () =>
-    [recipientName, recipientAddress, recipientTown]
+  const recipientBlock = () => {
+    const lines = [recipientName, recipientAddress, recipientTown]
       .map((line) => line.trim())
       .filter(Boolean);
+    return lines.map((line, index) => index < lines.length - 1 ? `${line.replace(/,+$/, "")},` : line);
+  };
 
   // The preview text, as it will print — but typed live, so the writer sees
   // everything the sheet will carry while they write it.

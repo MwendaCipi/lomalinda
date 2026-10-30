@@ -4443,6 +4443,27 @@ class ChurchRoleTests(APITestCase):
         self.assertEqual(profile.get_roles(), ['member'])
         self.assertEqual(profile.role, 'member')
 
+    def test_manual_member_accepts_the_live_picker_ministry_and_department(self):
+        """The manual-register form sends active area codes, not only the
+        four retired profile-choice codes."""
+        self.client.force_authenticate(user=self.admin_user)
+        response = self.client.post('/api/members/users/', {
+            'name': 'Chloe Chaplaincy',
+            'email': 'chloe.chaplaincy@example.com',
+            'username': 'chloe.chaplaincy',
+            'gender': 'Female',
+            'ministry': 'chaplaincy',
+            'ministries': ['chaplaincy'],
+            'department': 'ambassadors',
+            'department_ref': 'ambassadors',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        profile = MemberProfile.objects.get(user__username='chloe.chaplaincy')
+        self.assertEqual(profile.ministry, 'chaplaincy')
+        self.assertEqual(profile.department, 'ambassadors')
+        self.assertEqual(profile.department_ref.code, 'ambassadors')
+        self.assertEqual(list(profile.ministries.values_list('code', flat=True)), ['chaplaincy'])
+
     def test_manual_member_rejects_an_unknown_ministry_code(self):
         self.client.force_authenticate(user=self.admin_user)
         response = self.client.post('/api/members/users/', {
@@ -19196,7 +19217,9 @@ class DepartmentLetterFlowTests(APITestCase):
             'title': 'Request for choir robes',
             'content': 'The choir needs new robes before the term begins.',
             'letter_date': '21/10/2026',
-            'recipient_address': 'Isiolo Central Point, P.O Box 61-60300, Isiolo.',
+            'recipient_name': 'Isiolo Central Point Church',
+            'recipient_address': 'P.O Box 61-60300',
+            'recipient_town': 'Isiolo',
             'recipient_phone': '0712345678',
             'recipient_email': 'office@example.org',
         }, format='json')
@@ -19324,7 +19347,9 @@ class DepartmentLetterFlowTests(APITestCase):
         # salutation, the subject written into the REF line, the body and
         # closing, and both officers under their own pen spaces.
         self.assertIn('21/10/2026', flat)
-        self.assertIn('IsioloCentralPoint', flat)
+        self.assertIn('IsioloCentralPointChurch,', flat)
+        self.assertIn('P.OBox61-60300,', flat)
+        self.assertIn('Isiolo', flat)
         self.assertNotIn('0712345678', flat)
         self.assertNotIn('office@example.org', flat)
         self.assertIn('TothePastor/Churchclerk,', flat)

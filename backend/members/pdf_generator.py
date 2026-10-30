@@ -2532,13 +2532,21 @@ def generate_department_letter_pdf(
     # The salutation every letter of this kind carries.
     story.append(Paragraph("To the Pastor/ Church clerk,", addr_style))
     recipient_lines = [
-        line.strip()
+        str(line or "").strip()
         for line in (
             letter_record.get("recipient_name"),
             address_text,
             letter_record.get("recipient_town"),
         )
         if str(line or "").strip()
+    ]
+    # An address is read as a sequence of address lines, not one run-on
+    # phrase: the name and postal line keep their commas, with the town
+    # closing the block.  Strip only a trailing comma first so an already
+    # punctuated entry never prints a doubled one.
+    recipient_lines = [
+        f"{line.rstrip().rstrip(',')}," if index < len(recipient_lines) - 1 else line
+        for index, line in enumerate(recipient_lines)
     ]
     if recipient_lines:
         story.append(Paragraph(escape("\n".join(recipient_lines)).replace("\n", "<br />"), addr_style))

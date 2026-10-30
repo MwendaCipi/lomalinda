@@ -1504,6 +1504,10 @@ function ProgramEditorModal({
   const dragSource = useRef<ProgramDragSource | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // A number is the calm alternative to carrying a card through a long
+  // service. Its text stays local until Enter or blur, so typing `12` never
+  // performs an accidental intermediate move to activity 1.
+  const [activityNumberDrafts, setActivityNumberDrafts] = useState<Record<string, string>>({});
   // The card ids ride the copy's own prefix — a phone's modal and a desk's
   // page render this sheet twice, one hidden — so the pickup finds the card
   // of the copy the hand took it from.
@@ -1765,6 +1769,41 @@ function ProgramEditorModal({
       }
       return next;
     });
+  };
+  /** Move one activity to its numbered place within this session.  Times
+      travel with the order of service: from the first changed row onward,
+      each activity begins where the preceding one ends. */
+  const renumberPart = (sessionIndex: number, partIndex: number, raw: string) => {
+    const draftKey = `${sessionIndex}:${partIndex}`;
+    setActivityNumberDrafts((drafts) => {
+      const next = { ...drafts };
+      delete next[draftKey];
+      return next;
+    });
+    const wanted = Number.parseInt(raw, 10);
+    const count = items[sessionIndex]?.parts.length ?? 0;
+    if (!Number.isFinite(wanted) || wanted < 1 || wanted > count || wanted === partIndex + 1) return;
+    setItems((current) => current.map((session, index) => {
+      if (index !== sessionIndex) return session;
+      const parts = session.parts.map((part) => ({ ...part, participants: [...part.participants] }));
+      const [moved] = parts.splice(partIndex, 1);
+      if (!moved) return session;
+      const destination = wanted - 1;
+      const firstChanged = Math.min(partIndex, destination);
+      const firstStart = hourMinutes(session.parts[firstChanged]?.start || "");
+      parts.splice(destination, 0, moved);
+      let cursor = firstStart;
+      for (let row = firstChanged; row < parts.length && cursor !== null; row++) {
+        const start = hourMinutes(parts[row].start);
+        const end = hourMinutes(parts[row].end);
+        if (start === null || end === null || end < start) break;
+        const length = end - start;
+        parts[row].start = minuteHour(cursor);
+        parts[row].end = minuteHour(cursor + length);
+        cursor += length;
+      }
+      return { ...session, parts };
+    }));
   };
   /** Two sessions fold into one. The session typed into after the merge pen
       was pressed receives the other: it keeps its name and its place, gains
@@ -2397,9 +2436,30 @@ function ProgramEditorModal({
                                 aria-hidden="true"
                               />
                               </span>
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
-                                Activity {partIndex + 1}
-                              </p>
+                              <label className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-moss-faint">
+                                Activity
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={session.parts.length}
+                                  inputMode="numeric"
+                                  value={activityNumberDrafts[`${index}:${partIndex}`] ?? String(partIndex + 1)}
+                                  onChange={(event) => setActivityNumberDrafts((drafts) => ({
+                                    ...drafts,
+                                    [`${index}:${partIndex}`]: event.target.value,
+                                  }))}
+                                  onBlur={(event) => renumberPart(index, partIndex, event.currentTarget.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      renumberPart(index, partIndex, event.currentTarget.value);
+                                    }
+                                  }}
+                                  aria-label={`Activity number for ${part.title || `activity ${partIndex + 1}`} in session ${index + 1}`}
+                                  title="Change the number, then press Enter or click away to move this activity"
+                                  className="w-10 rounded border border-sand-line bg-sand px-1 py-0.5 text-center text-[11px] font-semibold normal-case tracking-normal text-bark focus:border-ember focus:outline-none"
+                                />
+                              </label>
                             </span>
                             <button
                               type="button"

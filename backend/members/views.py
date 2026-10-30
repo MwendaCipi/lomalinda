@@ -8243,10 +8243,31 @@ class UserManagementView(generics.ListCreateAPIView):
         if account_type not in ('member', 'friend', 'sabbath_school'):
             account_type = 'member'
         ministry = (request.data.get('ministry') or '').strip()
-        if ministry and ministry not in {code for code, _label in MemberProfile.MINISTRY_CHOICES}:
+        # The manual-register picker is populated from the active department
+        # register, while these two profile columns still retain their small
+        # legacy choice lists.  Accept the same live codes the picker shows;
+        # otherwise an officer could select Chaplaincy or a newer department
+        # and immediately be told it was not listed.
+        legacy_ministry_for_area = {
+            'amm': 'adventist_men',
+            'awm': 'adventist_women',
+            'aym': 'young_adults',
+            'ambassadors': 'ambassadors',
+        }
+        ministry_values = (
+            {code for code, _label in MemberProfile.MINISTRY_CHOICES}
+            | set(legacy_ministry_for_area)
+            | set(Department.objects.filter(group='ministry', is_active=True).values_list('code', flat=True))
+        )
+        if ministry and ministry not in ministry_values:
             return Response({'ministry': 'Choose one of the listed ministries.'}, status=status.HTTP_400_BAD_REQUEST)
+        ministry = legacy_ministry_for_area.get(ministry, ministry)
         department = (request.data.get('department') or '').strip()
-        if department and department not in {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}:
+        department_values = (
+            {code for code, _label in MemberProfile.DEPARTMENT_CHOICES}
+            | set(Department.objects.filter(group='department', is_active=True).values_list('code', flat=True))
+        )
+        if department and department not in department_values:
             return Response({'department': 'Choose one of the listed departments.'}, status=status.HTTP_400_BAD_REQUEST)
         department_ref_code = (request.data.get('department_ref') or '').strip()
         department_ref_row = None
