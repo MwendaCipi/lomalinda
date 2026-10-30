@@ -26,7 +26,8 @@ export type TreasuryPeriodWindow = {
 const CHURCH_TZ = "Africa/Nairobi";
 const CHURCH_OFFSET = "+03:00";
 
-const pad = (value: number) => String(value).padStart(2, "0");
+/** The last second of a day: every close ends the day it names. */
+const END_OF_DAY = "23:59:59";
 
 /** The church's date and clock a stored close reads as. */
 export function closeParts(iso: string): { date: string; time: string } {
@@ -67,11 +68,10 @@ export function closingDay(iso: string): string {
 /**
  * The Close Period sheet.
  *
- * Closing names the instant the books stop: the period being read ends there
- * and the next one opens, so the report that follows runs from this close to
- * the next. The treasurer either schedules that instant or closes now; either
- * way the same instant is what an Edit Close moves afterwards, when a gift
- * landed on the wrong side of the cut-off.
+ * Closing names the day the books stop: a close lands at that day's last
+ * minute, so the whole sabbath it names counts with its period. The next
+ * report opens there, and the from date follows it. Editing a close moves
+ * that same day — the day a gift landed on decides the period it belongs to.
  */
 export function ClosePeriodModal({
   mode,
@@ -87,14 +87,11 @@ export function ClosePeriodModal({
   onSaved: (payload: { period: TreasuryPeriodWindow | null; periods: TreasuryPeriodWindow[] }) => void;
 }) {
   // The sheet opens on the period it was called for: a close being edited
-  // shows the instant already on the record, a fresh close opens on today at
-  // midnight — the day the desks count, before any of it has happened. The
+  // shows the day already on the record, a fresh close opens on today. The
   // caller mounts the sheet afresh each time it is opened, so these defaults
   // are read once and never need an effect to reset them.
   const recorded = mode === "edit" && period?.closed_at ? closeParts(period.closed_at) : null;
-  const [choice, setChoice] = useState<"schedule" | "now">("schedule");
   const [date, setDate] = useState(recorded?.date ?? localDate());
-  const [time, setTime] = useState(recorded?.time ?? "00:00");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -106,13 +103,9 @@ export function ClosePeriodModal({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    // "Close now" is the instant of the click; a scheduled close is the day
-    // and hour named, read in this browser's own clock and sent as an instant
-    // so the server never has to guess the church's time zone.
-    const closedAt =
-      mode === "close" && choice === "now"
-        ? new Date().toISOString()
-        : new Date(`${date}T${time}:00${CHURCH_OFFSET}`).toISOString();
+    // The close is the named day's last minute, sent as an instant so the
+    // server never has to guess the church's time zone.
+    const closedAt = new Date(`${date}T${END_OF_DAY}${CHURCH_OFFSET}`).toISOString();
     setSaving(true);
     try {
       const editing = mode === "edit" && period?.id;
@@ -161,8 +154,8 @@ export function ClosePeriodModal({
             </h2>
             <p className="mt-1 text-xs leading-5 text-moss">
               {mode === "edit"
-                ? "Move this period's close so a gift cut off at the wrong side of it lands in the period it belongs to."
-                : "Close the books at this instant. The period ends here, the next report opens here, and the from date follows it."}
+                ? "Move the day this period ended, so a gift cut off at the wrong side of it lands in the period it belongs to."
+                : "Pick the day the books stop. The period ends that night, the next report opens there, and the from date follows it."}
             </p>
           </div>
           <button
@@ -177,69 +170,22 @@ export function ClosePeriodModal({
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            {mode === "close" && (
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-moss">When</span>
-                <label className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${choice === "schedule" ? "border-ember bg-sand-linen" : "border-sand-mute bg-white"}`}>
-                  <input
-                    type="radio"
-                    name="close-when"
-                    value="schedule"
-                    checked={choice === "schedule"}
-                    onChange={() => setChoice("schedule")}
-                    className="mt-0.5 h-4 w-4 accent-[var(--color-ember)]"
-                  />
-                  <span>
-                    <span className="block font-semibold text-bark">Schedule close</span>
-                    <span className="block text-xs text-moss">Name the day and hour the books stop.</span>
-                  </span>
-                </label>
-                <label className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${choice === "now" ? "border-ember bg-sand-linen" : "border-sand-mute bg-white"}`}>
-                  <input
-                    type="radio"
-                    name="close-when"
-                    value="now"
-                    checked={choice === "now"}
-                    onChange={() => setChoice("now")}
-                    className="mt-0.5 h-4 w-4 accent-[var(--color-ember)]"
-                  />
-                  <span>
-                    <span className="block font-semibold text-bark">Close now</span>
-                    <span className="block text-xs text-moss">Close it at this minute, with nothing left out.</span>
-                  </span>
-                </label>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-semibold text-bark">
-                Date
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  disabled={mode === "close" && choice === "now"}
-                  className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember disabled:bg-sand disabled:text-moss"
-                />
-              </label>
-              <label className="text-xs font-semibold text-bark">
-                Time
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(event) => setTime(event.target.value)}
-                  disabled={mode === "close" && choice === "now"}
-                  className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember disabled:bg-sand disabled:text-moss"
-                />
-              </label>
-            </div>
+            <label className="block text-xs font-semibold text-bark">
+              Date
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember"
+              />
+            </label>
 
             <p className="flex items-start gap-2 rounded-xl bg-sand px-3 py-2.5 text-[11px] leading-5 text-moss">
               <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember" aria-hidden="true" />
               <span>
                 {mode === "edit"
-                  ? "Moving the close re-cuts the period either side of it. Nothing is rewritten — every report is read from these instants."
-                  : "The next report will begin where this one ends, and the from date resets to it."}
+                  ? "Moving the day re-cuts the period either side of it. Nothing is rewritten — every report is read from these instants."
+                  : "The end of that day closes the period: the day itself counts with it, nothing after it counts against it."}
               </span>
             </p>
 
