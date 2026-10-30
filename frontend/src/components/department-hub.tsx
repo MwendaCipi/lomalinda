@@ -31,6 +31,7 @@ import {
   Church,
   Clock,
   FileText,
+  GitMerge,
   HandHeart,
   Handshake,
   Heart,
@@ -125,6 +126,7 @@ import {
   serializeProgramItems,
   sessionRange,
   type ProgramItem,
+  type ProgramPart,
   type ProgramParticipant,
 } from "@/components/program-document";
 
@@ -1238,6 +1240,9 @@ function ProgramEditorModal({
   // One at a time, so opening a session closes whichever other was open and
   // the desk reads one part of the day rather than all of them at once.
   const [openSession, setOpenSession] = useState<number | null>(null);
+  // Merging: the session whose merge pen was pressed, waiting for the one it
+  // folds into. Pressed a second time, the pen goes back down.
+  const [merging, setMerging] = useState<number | null>(null);
   // Every "Add" on this sheet appends at the foot of its list, below the
   // fold once a day grows long — the typing column keeps its own scroll on
   // a desk, and on a phone the sheet scrolls as one page, and both carry
@@ -1730,6 +1735,98 @@ function ProgramEditorModal({
       return next;
     });
   };
+  /** Two sessions fold into one. The session typed into after the merge pen
+      was pressed receives the other: it keeps its name and its place, gains
+      the other's activities (a free-text block becomes one activity carrying
+      its text), and the pair's shared hours run from the earlier start to
+      the later end. Sessions after it — where these were typed, as they are
+      everywhere on this sheet — begin where the merged card now ends, their
+      own lengths kept. */
+  const mergeSessions = (from: number, into: number) => {
+    if (from === into) {
+      setMerging(null);
+      return;
+    }
+    setItems((current) => {
+      const next = current.map((item) => ({
+        ...item,
+        participants: [...item.participants],
+        parts: item.parts.map((part) => ({ ...part, participants: [...part.participants] })),
+      }));
+      const absorbed = next[from];
+      const holder = next[into];
+      if (!absorbed || !holder) return current;
+      // Reading order of the two blocks on the day: the earlier index's own
+      // words first. Bookkeeping — the removal below shifts indexes.
+      const earlier = from < into ? absorbed : holder;
+      const later = from < into ? holder : absorbed;
+      // The pair's shared stand in the day, when both were timed.
+      const starts = [startOfSession(absorbed), startOfSession(holder)].filter((t) => t !== null) as number[];
+      const ends = [endOfSession(absorbed), endOfSession(holder)].filter((t) => t !== null) as number[];
+      const mergedStart = starts.length ? minuteHour(Math.min(...starts)) : "";
+      const mergedEnd = ends.length ? minuteHour(Math.max(...ends)) : "";
+
+      // The free-text body rides as one activity, its title and text what
+      // it carried as a block. An hour of its own it never held.
+      const fromText = (block: ProgramItem): { part: ProgramPart; makePart: boolean } => {
+        if (block.text === undefined) {
+          return { part: block as ProgramPart, makePart: false };
+        }
+        return {
+          makePart: true,
+          part: { start: "", end: "", title: block.title || "", participants: [], text: block.text },
+        };
+      };
+      const combined: ProgramItem = (() => {
+        // Two text blocks: one block, the words in the order they ran.
+        if (absorbed.text !== undefined && holder.text !== undefined) {
+          return { ...holder, title: holder.title || absorbed.title, text: `${earlier.text}\n${later.text}` };
+        }
+        // One text block folds into a timed session beside it: the words
+        // become one activity on that session, placed before or after its
+        // own parts as the day reads — the earlier block first.
+        const free = absorbed.text !== undefined ? fromText(absorbed) : fromText(holder);
+        const base = (absorbed.text !== undefined ? holder : absorbed) as ProgramItem;
+        const freeIsEarlier = (from < into) === (absorbed.text !== undefined);
+        const parts = free.makePart
+          ? freeIsEarlier
+            ? [free.part, ...base.parts]
+            : [...base.parts, free.part]
+          : base.parts;
+        return {
+          ...base,
+          title: base.title || absorbed.title || "",
+          start: mergedStart,
+          end: mergedEnd,
+          text: undefined,
+          parts,
+        };
+      })();
+      // The slot the merged card takes: the pair's own place, the earlier of
+      // the two standing first on the sheet.
+      const slot = Math.min(from, into);
+      next.splice(Math.max(from, into), 1);
+      next[slot] = combined;
+      // The walk after the merged card: sessions with timing begin where it
+      // now ends, length kept — the same rule a drag set down.
+      let previousEnd: number | null = endOfSession(combined);
+      for (let i = slot + 1; i < next.length && previousEnd !== null; i++) {
+        const item = next[i];
+        const start = startOfSession(item);
+        const end = endOfSession(item);
+        // An hour nobody typed is a boundary the walk stops at — a session
+        // without one keeps its hours exactly as they were typed.
+        if (start === null || end === null || end < start) break;
+        const length = end - start;
+        if (previousEnd !== start) next[i] = shiftSession(item, previousEnd - start);
+        previousEnd = previousEnd + length;
+      }
+      return next;
+    });
+    setOpenSession((open) => (open === null ? null : Math.min(from, into)));
+    setMerging(null);
+  };
+
   /** Two facilitators trade places — each keeping the role she came in
       with. The role belongs to the person, not to the line she stands on,
       so the swap carries the pair across and leaves the roles alone. */
@@ -2041,8 +2138,22 @@ function ProgramEditorModal({
           <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
             <div className="min-w-0 flex-1 md:overflow-y-auto md:pr-1.5 custom-hover-scrollbar">
             <p className="text-xs text-moss">
-              Each session is one part of the day. Drag a session onto another: it takes that session&apos;s start time, and the ones after it are pushed along — each starting where the one before it ends, every length kept. Open a session to add the activities inside it.
+              Each session is one part of the day. Drag a session onto another: it takes that session&apos;s start time, and the ones after it are pushed along — each starting where the one before it ends, every length kept. Two sessions join into one with the merge pen on a session&apos;s strip: press it, then tap the session to fold into it. Open a session to add the activities inside it.
             </p>
+            {merging !== null && (
+              <p className="flex items-center justify-between gap-2 rounded-xl border border-ember bg-sand-linen px-3 py-2 text-[11px] font-semibold text-ember">
+                <span>
+                  Merging session {merging + 1} — tap the session to fold it into, then the pair is one. Tap the merge pen again to stop.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMerging(null)}
+                  className="shrink-0 rounded-lg border border-ember px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                >
+                  Stop
+                </button>
+              </p>
+            )}
             <div className="mt-3 space-y-3">
           {items.map((session, index) => {
             const open = openSession === index;
@@ -2064,7 +2175,7 @@ function ProgramEditorModal({
                 }}
                 className={`overflow-hidden rounded-2xl border bg-white transition ${
                   dragOverId === sessionCardId(index) ? "border-ember" : "border-sand-line"
-                }${draggingId === sessionCardId(index) ? " opacity-40" : ""}`}
+                }${merging === index ? " border-ember" : ""}${draggingId === sessionCardId(index) ? " opacity-40" : ""}`}
               >
                 {/* The session shut: its hours and its name on the outside.
                     Opening one closes the other, so only one part of the day
@@ -2087,6 +2198,14 @@ function ProgramEditorModal({
                   <button
                     type="button"
                     onClick={() => {
+                      // A merge pen is down: tapping another session folds
+                      // them into one, and tapping the one already marked
+                      // takes the pen back up.
+                      if (merging !== null) {
+                        if (merging === index) setMerging(null);
+                        else mergeSessions(merging, index);
+                        return;
+                      }
                       // Opening a session walks the reading column to that
                       // part of the day as well — the sheet beside answers
                       // the same click the way its Add buttons already do.
@@ -2114,6 +2233,20 @@ function ProgramEditorModal({
                           number of the row it sits on. */}
                       {session.title || firstLineOf(session.text) || (session.text !== undefined ? "Free text" : "Untitled session")}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMerging((current) => (current === index ? null : index))}
+                    aria-pressed={merging === index}
+                    aria-label={merging === index ? `Cancel merging session ${index + 1}` : `Merge session ${index + 1} into another session`}
+                    title={merging === index ? "Cancel this merge" : "Merge into another session"}
+                    className={`shrink-0 rounded-xl border bg-white p-2 transition ${
+                      merging === index
+                        ? "border-ember bg-sand-linen text-ember"
+                        : "border-sand-line text-moss hover:border-ember hover:text-ember"
+                    }`}
+                  >
+                    <GitMerge className="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
