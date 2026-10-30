@@ -60,24 +60,30 @@ function LetterReadingRoom() {
   const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setError("No letter link was given. Open the link exactly as it was shared.");
-      return;
-    }
+    let cancelled = false;
     void Promise.resolve().then(async () => {
+      if (!token) {
+        if (!cancelled) setError("No letter link was given. Open the link exactly as it was shared.");
+        return;
+      }
       try {
         const response = await fetch(`${API_URL}/api/members/department-letters/shared/${token}/`);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          setError(data.detail || "This letter link is not open.");
+          if (!cancelled) setError(data.detail || "This letter link is not open.");
           return;
         }
-        setLetter(data as PublicLetter);
-        if (data.recipient_comment) setComment(data.recipient_comment);
+        if (!cancelled) {
+          setLetter(data as PublicLetter);
+          if (data.recipient_comment) setComment(data.recipient_comment);
+        }
       } catch {
-        setError("The letter could not be read right now. Try again.");
+        if (!cancelled) setError("The letter could not be read right now. Try again.");
       }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const openPdf = () => {
