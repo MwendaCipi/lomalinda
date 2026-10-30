@@ -55,7 +55,7 @@ const ANNOUNCEMENT_TEXT_LIMIT = 500;
  *  fixed footer, outside the form they submit. */
 const COMPOSER_FORM_ID = "announcement-composer-form";
 
-type Announcement = {
+export type Announcement = {
   id: number;
   title: string;
   text: string;
@@ -332,7 +332,16 @@ export function AnnouncementManager({
       page, the way every other desk's search rides the band, rather than
       below the sheet's chrome. */
   hostSearch = false,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean; hostSearch?: boolean } = {}) {
+  /** Thought mode: render only the Share a Thought modal, open from the
+      start — the desk's Sharing panel opens the word/thought composer
+      without the whole board behind it. Closing it (cancelled or saved)
+      hands control back to the host through `onDone`. */
+  thoughtOnly = false,
+  /** An announcement the host's feed asked to edit: the compose modal opens
+      loaded from that row, so a post edited from the feed changes only
+      itself. Null means a fresh post. */
+  editItem = null,
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean; hostSearch?: boolean; thoughtOnly?: boolean; editItem?: Announcement | null } = {}) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   // The board's own search — title and the words of the post, narrowing the
@@ -382,7 +391,7 @@ export function AnnouncementManager({
   };
 
   const [todayThought, setTodayThought] = useState<DailyWordRow | null>(null);
-  const [showThoughtModal, setShowThoughtModal] = useState(false);
+  const [showThoughtModal, setShowThoughtModal] = useState(thoughtOnly);
   const [thoughtDraft, setThoughtDraft] = useState("");
   const [savingThought, setSavingThought] = useState(false);
 
@@ -421,6 +430,22 @@ export function AnnouncementManager({
       window.removeEventListener("daily-word-updated", handleUpdate);
     };
   }, [fetchDailyWord]);
+
+  // Thought mode stands down the moment its modal closes — cancelled or
+  // saved — so the host that mounted it can take the desk back.
+  useEffect(() => {
+    if (thoughtOnly && !showThoughtModal) onDone?.();
+  }, [thoughtOnly, showThoughtModal, onDone]);
+
+  // A post brought from the host's feed opens the composer loaded from that
+  // row: one press on the feed's Edit lands the office in the form, not on
+  // the board the edits came from.
+  useEffect(() => {
+    if (editItem) handleEdit(editItem);
+    // The shape of the row never changes identity-wise while mounted; only
+    // a new row from the host should reopen the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editItem]);
 
   const handleSaveThought = async () => {
     const text = thoughtDraft.trim();
@@ -1439,6 +1464,12 @@ export function AnnouncementManager({
         </div>
       </div>
     );
+  }
+
+  if (thoughtOnly) {
+    // Thought mode: the Share a Thought modal alone — its save and its
+    // close both stand it down, and the effect above walks the host out.
+    return renderThoughtModal();
   }
 
   if (composerOnly) {

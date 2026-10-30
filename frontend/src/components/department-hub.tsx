@@ -14,6 +14,7 @@
  */
 
 import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useUndoHistory } from "@/lib/undo-history";
 import { createPortal } from "react-dom";
 import { brand } from "@/lib/brand";
 import {
@@ -64,6 +65,8 @@ import {
   SlidersHorizontal,
   Wallet,
   X,
+  Redo2,
+  Undo2,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { showOfflineGuard } from "@/components/toast";
@@ -105,7 +108,7 @@ import { DailyWordPanel } from "@/components/daily-word-panel";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { MessageComposeModal, MessagingPanel } from "@/components/messages-desk";
 import { DeaconateManager, useRotaFilters } from "@/components/deaconate-manager";
-import { AnnouncementManager } from "@/components/announcement-manager";
+import { AnnouncementManager, type Announcement } from "@/components/announcement-manager";
 import { WithdrawalRequestsPanel } from "@/components/treasury-accounts-manager";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -1232,7 +1235,17 @@ function ProgramEditorModal({
   // sheet carries nothing until that click — no default session is assumed
   // on their behalf; an existing programme opens as it stood.
   const initialItems = parseProgramItems(event.program_items);
-  const [items, setItems] = useState<ProgramItem[]>(initialItems);
+  // The day is kept under office-style undo and redo: every structural
+  // move — a session added, dragged, merged, removed — leaves a checkpoint,
+  // and a streak of typing folds into one, so the two buttons in the
+  // foot's panel step back and forward a thought at a time.
+  const itemsHistory = useUndoHistory<ProgramItem[]>(initialItems);
+  const items = itemsHistory.current;
+  const setItems = useCallback(
+    (updater: ProgramItem[] | ((current: ProgramItem[]) => ProgramItem[]), coalesce = false) =>
+      itemsHistory.commit(updater, coalesce),
+    [itemsHistory.commit]
+  );
   // Every session starts folded: the sheet opens on the day as a list of
   // its parts, and a part unfolds only when the desk reaches for it — so a
   // programme never lands with one card thrown open halfway down it, and a
@@ -1284,7 +1297,12 @@ function ProgramEditorModal({
     // sheet beside it, and closing one must leave it wherever it already was.
   }, [items, openSession]);
   const setSession = (index: number, patch: Partial<ProgramItem>) =>
-    setItems((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+    setItems(
+      (current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+      // Typed on the fields: a streak of keystrokes is one checkpoint, so
+      // Undo steps back a thought rather than a letter.
+      true,
+    );
   /** Removing a session also settles which one is left open. */
   const removeSession = (index: number) => {
     setItems((current) => current.filter((_, i) => i !== index));
@@ -1350,10 +1368,13 @@ function ProgramEditorModal({
   const previewIndex = (index: number) => items.slice(0, index).filter(programItemHasContent).length;
   /** One change to one part of one session — the row every edit below makes. */
   const mapPart = (index: number, partIndex: number, edit: (part: ProgramItem["parts"][number]) => ProgramItem["parts"][number]) =>
-    setItems((current) =>
-      current.map((item, i) =>
-        i === index ? { ...item, parts: item.parts.map((part, p) => (p === partIndex ? edit(part) : part)) } : item,
-      ),
+    setItems(
+      (current) =>
+        current.map((item, i) =>
+          i === index ? { ...item, parts: item.parts.map((part, p) => (p === partIndex ? edit(part) : part)) } : item,
+        ),
+      // The activity's own words and names — one checkpoint per streak.
+      true,
     );
   /** An hour as minutes past midnight — null when it names no hour. */
   const hourMinutes = (hour: string): number | null => {
@@ -1436,6 +1457,9 @@ function ProgramEditorModal({
         }
         return { ...item, parts };
       }),
+      // Hours typed by hand, one checkpoint per streak — same rule the
+      // activity's words carry.
+      true,
     );
   };
   const dropPart = (index: number, partIndex: number) =>
@@ -1681,7 +1705,8 @@ function ProgramEditorModal({
     });
   };
   /**
-   * An activity set down on another, same walk one row smaller: the mover
+   * An activity set down on another, same walk one row smaller: the card
+   * leaves its row and takes the row it was dropped on — trading nothing —
    * takes the hour it lands on and keeps its own length, and every
    * activity after it — across the session line too — then begins where
    * the one before it now ends. Nothing before the drop moves; an activity
@@ -1694,36 +1719,42 @@ function ProgramEditorModal({
         ...session,
         parts: session.parts.map((part) => ({ ...part, participants: [...part.participants] })),
       }));
-      // The entire programme's activities, in the order the sheet reads
-      // them: the drop walks this line, so the push crosses from one
-      // session's rows into the next as the day itself does.
-      const order: { session: number; part: number }[] = [];
-      current.forEach((session, sessionIndex) => session.parts.forEach((_, partIndex) => order.push({ session: sessionIndex, part: partIndex })));
-      const fromPos = order.findIndex((row) => row.session === from.session && row.part === from.part);
-      const toPos = order.findIndex((row) => row.session === to.session && row.part === to.part);
-      if (fromPos < 0 || toPos < 0) return current;
       const dragged = next[from.session].parts[from.part];
-      if (!dragged) return current;
+      if (!dragged || !next[to.session].parts[to.part]) return current;
+      // The hour it met was typed on the original rows — read it before
+      // anything is lifted or shifted.
       const draggedStart = hourMinutes(dragged.start);
       const draggedEnd = hourMinutes(dragged.end);
       const draggedLength = draggedStart !== null && draggedEnd !== null && draggedEnd >= draggedStart ? draggedEnd - draggedStart : null;
-      const targetStart = hourMinutes(current[to.session].parts[to.part]?.start);
-      const slot = fromPos < toPos ? toPos - 1 : toPos;
-      order.splice(fromPos, 1);
-      order.splice(slot, 0, from);
-      if (targetStart === null || draggedLength === null) return next;
-      next[from.session].parts[from.part] = {
-        ...next[from.session].parts[from.part],
-        start: minuteHour(targetStart),
-        end: hourMinutes(next[from.session].parts[from.part].end) === null ? "" : minuteHour(targetStart + draggedLength),
-        text: next[from.session].parts[from.part].text,
-      };
+      const targetStart = hourMinutes(next[to.session].parts[to.part].start);
+      // The card really moves: lifted out of its session's rows and set
+      // down in the target's own place — trading nothing — inside the
+      // target session, above the target when dragging down (the removal
+      // above closed the gap one row), otherwise right on it, pushing the
+      // one it met below. Its own length kept.
+      next[from.session].parts.splice(from.part, 1);
+      const insertAt = from.session === to.session && from.part < to.part ? to.part - 1 : to.part;
+      next[to.session].parts.splice(insertAt, 0, dragged);
+      if (targetStart === null || draggedLength === null || draggedStart === null) return next;
+      // The mover begins where the one it met began; its end is carried
+      // with it, so the walk after it starts from where it now ends.
+      const landed = next[to.session].parts[insertAt];
+      landed.start = minuteHour(targetStart);
+      landed.end = draggedEnd === null ? "" : minuteHour(targetStart + draggedLength);
+      // The walk reads the sheet as it now stands, so the push crosses
+      // from one session's rows into the next as the day itself does.
+      const order: { session: number; part: number }[] = [];
+      next.forEach((session, sessionIndex) => session.parts.forEach((_, partIndex) => order.push({ session: sessionIndex, part: partIndex })));
+      const slot = order.findIndex((row) => row.session === to.session && row.part === insertAt);
+      if (slot < 0) return next;
       let previousEnd: number | null = targetStart + draggedLength;
       for (let i = slot + 1; i < order.length && previousEnd !== null; i++) {
         const row = order[i];
         const part = next[row.session].parts[row.part];
         const start = hourMinutes(part.start);
         const end = hourMinutes(part.end);
+        // An hour nobody typed is a boundary the walk stops at — an
+        // activity without one keeps its hours exactly as they were typed.
         if (start === null || end === null || end < start) break;
         const length = end - start;
         if (previousEnd !== start) {
@@ -2600,6 +2631,31 @@ function ProgramEditorModal({
               <PenLine className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Add Free Text</span>
               <span className="sm:hidden">Free Text</span>
+            </button>
+            {/* The office's own memory: the two buttons walk the day back and
+                forward the way a word processor's do — every structured move
+                is a step, and a streak of typing is one step. */}
+            <button
+              type="button"
+              onClick={itemsHistory.undo}
+              disabled={!itemsHistory.canUndo}
+              title="Undo the last step"
+              aria-label="Undo"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Undo</span>
+            </button>
+            <button
+              type="button"
+              onClick={itemsHistory.redo}
+              disabled={!itemsHistory.canRedo}
+              title="Redo the step just undone"
+              aria-label="Redo"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Redo</span>
             </button>
             {isPage && (
               <>
@@ -5455,6 +5511,11 @@ function DepartmentDetail({
   // remounts on a posted announcement so the desk sees it at once.
   const [showShareComposer, setShowShareComposer] = useState(false);
   const [shareFeedKey, setShareFeedKey] = useState(0);
+  // The feed's Edit opens the same composer loaded from that post, and the
+  // panel's word/thought button opens the daily word on its own — the two
+  // sharing acts the office has, beside the feed they act on.
+  const [shareEditItem, setShareEditItem] = useState<Announcement | null>(null);
+  const [showThoughtComposer, setShowThoughtComposer] = useState(false);
   const [churchName, setChurchName] = useState("SDA Church Loma Linda, Meru");
   const [showLeadership, setShowLeadership] = useState(false);
   // A member reading the area who is not on its roll can ask to join from
@@ -7666,20 +7727,41 @@ function DepartmentDetail({
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           {/* The posts themselves, read the simple way they are read in the
               fellowship feed — flat cards, no manager chrome, no nesting.
-              The feed scrolls within the card; nothing above it moves. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-3 sm:p-4">
-            <AnnouncementsFeed key={shareFeedKey} embedded />
+              The feed scrolls within the barely-framed card; nothing above
+              it moves, and the desk's own edge is the card's. */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-1 sm:p-2">
+            <AnnouncementsFeed
+              key={shareFeedKey}
+              embedded
+              canManage={canOpenOfficeViews}
+              onEdit={(item) => {
+                setShareEditItem(item);
+                setShowShareComposer(true);
+              }}
+              onChanged={() => setShareFeedKey((key) => key + 1)}
+            />
           </div>
           {/* The buttons panel: separate from the card and held at the foot
               of the desk, the way every other desk keeps its actions — the
-              feed above grows without moving the bar below it. */}
-          <div className="flex shrink-0 items-center gap-2">
+              feed above grows without moving the bar below it, and the
+              panel keeps a gap of its own beneath. */}
+          <div className="mb-3 mt-1 flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowShareComposer(true)}
+              onClick={() => {
+                setShareEditItem(null);
+                setShowShareComposer(true);
+              }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember"
             >
               <Sparkles className="h-3.5 w-3.5" /> New Announcement
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowThoughtComposer(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+            >
+              <BookOpen className="h-3.5 w-3.5" /> Share Word/Thought
             </button>
           </div>
         </div>
@@ -7848,14 +7930,25 @@ function DepartmentDetail({
             <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
               <AnnouncementManager
                 composerOnly
+                editItem={shareEditItem}
                 onDone={() => {
                   setShowShareComposer(false);
+                  setShareEditItem(null);
                   setShareFeedKey((key) => key + 1);
                 }}
               />
             </div>
           </div>
         </div>
+      )}
+      {showThoughtComposer && canOpenOfficeViews && (
+        // The daily word's own composer: the same Share a Thought modal the
+        // board carries, mounted on its own — closing it (cancelled or
+        // shared) takes the desk back.
+        <AnnouncementManager
+          thoughtOnly
+          onDone={() => setShowThoughtComposer(false)}
+        />
       )}
       {assignFor && typeof assignFor.id === "number" && (
         <AssignRoleModal

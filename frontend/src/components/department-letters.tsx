@@ -24,12 +24,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Download, FileText, Link2, MoveLeft, PenLine, Stamp, X } from "lucide-react";
+import { Copy, Download, FileText, Link2, MoveLeft, PenLine, Redo2, Stamp, Undo2, X } from "lucide-react";
 
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
+import { useUndoHistory } from "@/lib/undo-history";
 import { openPdfTab } from "@/lib/pdf-lightbox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -124,8 +125,13 @@ export function WriteLetterModal({
   const [recipientTown, setRecipientTown] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  // The letter's writing lives in office-style undo and redo: the subject
+  // and the body share one memory — every edit is a step, and a streak of
+  // typing folds into a single one — so the two buttons walk the letter back
+  // and forward the way a word processor's do.
+  const draftHistory = useUndoHistory<{ subject: string; body: string }>({ subject: "", body: "" });
+  const subject = draftHistory.current.subject;
+  const body = draftHistory.current.body;
   const [sending, setSending] = useState(false);
   // The pen pair the sheet previews before anyone signs: one clerk and one
   // pastor, picked from the church's own offices. Whoever actually signs
@@ -324,7 +330,7 @@ export function WriteLetterModal({
                     <input
                       required
                       value={subject}
-                      onChange={(event) => setSubject(event.target.value)}
+                      onChange={(event) => draftHistory.commit((cur) => ({ ...cur, subject: event.target.value }), true)}
                       placeholder="e.g. Invitation to Choir Day"
                       className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
                     />
@@ -335,14 +341,41 @@ export function WriteLetterModal({
                       required
                       rows={14}
                       value={body}
-                      onChange={(event) => setBody(event.target.value)}
+                      onChange={(event) => draftHistory.commit((cur) => ({ ...cur, body: event.target.value }), true)}
                       placeholder="Write the main body of the letter..."
                       className="mt-1 block min-h-[18rem] w-full resize-none rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs leading-relaxed outline-none focus:border-ember"
                     />
                   </label>
                 </div>
               </div>
-              <div className="mt-3 flex shrink-0 justify-end gap-2">
+              <div className="mt-3 flex shrink-0 justify-between gap-2">
+                {/* The office's own memory: typing is a step, and the two
+                    buttons walk the letter back and forward. */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={draftHistory.undo}
+                    disabled={!draftHistory.canUndo}
+                    title="Undo the last edit"
+                    aria-label="Undo"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Undo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={draftHistory.redo}
+                    disabled={!draftHistory.canRedo}
+                    title="Redo the edit just undone"
+                    aria-label="Redo"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Redo2 className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Redo</span>
+                  </button>
+                </div>
+                <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={onClose}
@@ -357,6 +390,7 @@ export function WriteLetterModal({
                 >
                   {sending ? "Sending…" : "Send for signature"}
                 </button>
+                </div>
               </div>
             </div>
             {/* The paper, on the right: the letter laid out the way the church
@@ -500,7 +534,7 @@ export function WriteLetterModal({
               <input
                 required
                 value={subject}
-                onChange={(event) => setSubject(event.target.value)}
+                onChange={(event) => draftHistory.commit((cur) => ({ ...cur, subject: event.target.value }), true)}
                 placeholder="e.g. Invitation to Choir Day"
                 className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs outline-none focus:border-ember"
               />
@@ -511,7 +545,7 @@ export function WriteLetterModal({
                 required
                 rows={8}
                 value={body}
-                onChange={(event) => setBody(event.target.value)}
+                onChange={(event) => draftHistory.commit((cur) => ({ ...cur, body: event.target.value }), true)}
                 placeholder="Write the main body of the letter..."
                 className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs leading-relaxed outline-none focus:border-ember"
               />
@@ -525,7 +559,32 @@ export function WriteLetterModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-5 py-3">
+        <div className="flex shrink-0 justify-between gap-2 border-t border-sand-line px-5 py-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={draftHistory.undo}
+              disabled={!draftHistory.canUndo}
+              title="Undo the last edit"
+              aria-label="Undo"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Undo</span>
+            </button>
+            <button
+              type="button"
+              onClick={draftHistory.redo}
+              disabled={!draftHistory.canRedo}
+              title="Redo the edit just undone"
+              aria-label="Redo"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Redo</span>
+            </button>
+          </div>
+          <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -540,6 +599,7 @@ export function WriteLetterModal({
           >
             {sending ? "Sending…" : "Send for signature"}
           </button>
+          </div>
         </div>
       </form>
     </div>
