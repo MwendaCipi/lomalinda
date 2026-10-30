@@ -405,9 +405,9 @@ export function WithdrawalRequestsPanel({
               <p className="truncate font-semibold text-bark" title={row.department}>{row.department}</p>
               <p className="truncate text-[11px] text-moss-faint" title={row.account_name}>{row.account_name}</p>
             </td>
-            <td className={`w-52 max-w-[13rem] px-4 ${rowPad} text-moss`}>
-              <p className="truncate font-medium text-bark" title={row.reason}>{row.reason}</p>
-              <p className="truncate text-[11px] text-moss-faint" title={`Asked by ${row.requested_by} · Bal: ${money(row.account_balance)}`}>
+            <td className={`px-4 ${rowPad} text-moss`}>
+              <p className="font-medium text-bark">{row.reason}</p>
+              <p className="text-[11px] text-moss-faint">
                 Asked by {row.requested_by} · Bal: {money(row.account_balance)}
               </p>
               {trail(row)}

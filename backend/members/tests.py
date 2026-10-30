@@ -3104,7 +3104,7 @@ class PdfGenerationAPITests(APITestCase):
             individual_rows=[],
         ))
 
-        heading = 'CHURCH GIVINGS REPORT FROM 2026-01-01 TO 2026-01-31'
+        heading = 'CHURCH GIVINGS REPORT FROM 01012026 TO 31012026'
         self.assertIn(''.join(heading.split()), text)
         self.assertNotIn(
             ''.join('INDIVIDUAL MEMBER & COLLECTION CONTRIBUTIONS REPORT'.split()),
@@ -3127,7 +3127,7 @@ class PdfGenerationAPITests(APITestCase):
             field_name="North East Kenya Field",
         ))
 
-        heading = 'CASH COUNT AND OFFERING REPORT SUMMARY FROM 2026-01-01 TO 2026-01-31'
+        heading = 'CASH COUNT AND OFFERING REPORT SUMMARY FROM 01012026 TO 31012026'
         self.assertIn(''.join(heading.split()), text)
         # The month-only wording it replaces is gone.
         self.assertNotIn(''.join('CASH COUNT AND OFFERING REPORT SUMMARY (JANUARY 2026)'.split()), text)
@@ -19226,6 +19226,21 @@ class DepartmentLetterFlowTests(APITestCase):
         listed = self.client.get('/api/members/department-letters/', {'department': 'music'})
         self.assertEqual(listed.status_code, status.HTTP_200_OK)
         self.assertEqual([row['title'] for row in listed.data], ['Request for choir robes'])
+
+    def test_preview_finds_a_clerk_kept_only_in_the_legacy_role_field(self):
+        """The live preview must include existing clerk profiles as well as
+        profiles that have already had their role list synchronized."""
+        self.clerk.member_profile.roles = 'member'
+        self.clerk.member_profile.role = 'clerk'
+        self.clerk.member_profile.phone_number = '0711340087'
+        self.clerk.member_profile.save(update_fields=['roles', 'role', 'phone_number'])
+
+        self.client.force_authenticate(self.writer)
+        preview = self.client.get('/api/members/department-letters/signatories/')
+
+        self.assertEqual(preview.status_code, status.HTTP_200_OK)
+        self.assertEqual(preview.data['clerk']['name'], 'Claire Clerk')
+        self.assertEqual(preview.data['clerk']['phone'], '0711340087')
 
     def test_either_pen_may_sign_first_and_a_member_signs_nothing(self):
         """Two pens, either order. The clerk may put theirs down before the

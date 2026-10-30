@@ -40,11 +40,11 @@ export type AccountOption = {
   department_id: number | null;
 };
 
-/** dd/mm/yyyy from an ISO timestamp — the desk's own date reading. */
+/** ddmmyyyy from an ISO timestamp — the desk's own date reading. */
 function dmy(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}${String(d.getMonth() + 1).padStart(2, "0")}${d.getFullYear()}`;
 }
 
 /** An account the treasurer has checked, with the amount credited to it. */

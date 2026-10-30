@@ -1,5 +1,5 @@
 /**
- * Dates read day first — dd/mm/yyyy — the way the church writes them.
+ * Dates read day first — ddmmyyyy — the way the church writes them.
  *
  * Every display site goes through here, so no page keeps its own private
  * formatter that drifts into month-first mush. Wire format (what the API
@@ -46,13 +46,13 @@ function parseDateish(value: Dateish): { date: Date; dateOnly: boolean } | null 
 }
 
 /**
- * A day as dd/mm/yyyy. Reads the shapes the API and the pages send: a
+ * A day as ddmmyyyy. Reads the shapes the API and the pages send: a
  * date-only string ("2026-10-03", parsed by hand so no timezone can walk it
  * a day), a full timestamp ("2026-10-03T14:05:00Z", rendered in the church's
  * timezone), or an already-built Date. Undated or unparseable is the fallback.
  *
  * Uses `formatToParts` so the output is strictly day-first: a 2-digit day,
- * a 2-digit month, and a 4-digit year, joined by slashes. This avoids
+ * a 2-digit month, and a 4-digit year, joined without separators. This avoids
  * relying on the `en-GB` locale, which some browsers and OSes ignore and
  * fall back to a month-first order.
  */
@@ -66,7 +66,7 @@ export function dayFirst(value?: Dateish, fallback = "—"): string {
     year: "numeric",
   }).formatToParts(parsed.date);
   const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${find("day")}/${find("month")}/${find("year")}`;
+  return `${find("day")}${find("month")}${find("year")}`;
 }
 
 /** The day's name — Monday … Sunday — without dragging in a date library. */
@@ -79,7 +79,7 @@ export function weekdayOf(value: Dateish): string {
   }).format(parsed.date);
 }
 
-/** An instant as dd/mm/yyyy, HH:MM — for ledgers and logs that carry hours. */
+/** An instant as ddmmyyyy, HH:MM — for ledgers and logs that carry hours. */
 export function dayFirstTime(value?: Dateish, fallback = "—"): string {
   const parsed = parseDateish(value);
   if (!parsed) return fallback;
@@ -94,7 +94,7 @@ export function dayFirstTime(value?: Dateish, fallback = "—"): string {
     hour12: false,
   }).formatToParts(parsed.date);
   const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${find("day")}/${find("month")}/${find("year")} ${find("hour")}:${find("minute")}`;
+  return `${find("day")}${find("month")}${find("year")} ${find("hour")}:${find("minute")}`;
 }
 
 /** The time of day as HH:MM in the church's timezone. Empty string if date-only or missing. */
@@ -110,4 +110,3 @@ export function timeOnly(value?: Dateish, fallback = ""): string {
   const find = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${find("hour")}:${find("minute")}`;
 }
-

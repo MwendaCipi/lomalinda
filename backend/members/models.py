@@ -2861,7 +2861,7 @@ class DutyRota(models.Model):
         ordering = ['duty_date', 'id']
 
     def __str__(self):
-        return f"{self.title} — {self.duty_date:%d/%m/%Y}"
+        return f"{self.title} — {self.duty_date:%d%m%Y}"
 
 
 class ProfileChangeRequest(models.Model):

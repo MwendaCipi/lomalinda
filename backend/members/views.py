@@ -340,7 +340,7 @@ def send_invitation_email(invitation):
         "Your invitation code is:\n\n"
         f"{code}\n\n"
         f"Go to {settings.FRONTEND_URL}/accept-invite, enter this code, and choose your username and password.\n\n"
-        f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d %B %Y')}.\n"
+        f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d%m%Y')}.\n"
         "Once your account is ready you can sign in at "
         f"{settings.FRONTEND_URL}/login\n\n"
         f"Warm regards,\n{church_name}"
@@ -509,7 +509,7 @@ def send_contribution_receipt(contribution, receipt_email=''):
         amount_display,
         contribution.purpose,
     )
-    date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d %B %Y, %H:%M')
+    date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d%m%Y, %H:%M')
     summary = receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
     email = (
         usable_email(contribution.donor_email)
@@ -583,7 +583,7 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
         first.purpose,
         extra={'distribution': distribution},
     )
-    date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
+    date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d%m%Y, %H:%M')
     receipt_reference = first.mpesa_receipt_number or first.paystack_reference or str(first.id)
     account_list = ' / '.join(row.purpose for row in completed)
     email = (
@@ -632,7 +632,7 @@ def send_honoree_receipt(contribution):
         return
     amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
-    date_display = timezone.localtime(contribution.paid_at or timezone.now()).strftime('%d %B %Y, %H:%M')
+    date_display = timezone.localtime(contribution.paid_at or timezone.now()).strftime('%d%m%Y, %H:%M')
     if contribution.anonymous:
         giver_line = 'A gift has been given for you'
     elif contribution.donor_name:
@@ -875,7 +875,7 @@ YA_LESSON_SITE = 'https://inverse.sspmadventist.org'
 YA_LESSON_QUARTERLIES_URL = 'https://sabbath-school.adventech.io/api/v2/en/quarterlies/index.json'
 YA_LESSON_QUARTERLY_URL = 'https://sabbath-school.adventech.io/api/v2/en/quarterlies/{quarter}/index.json'
 YA_LESSON_GROUP = 'InVerse'
-YA_LESSON_DATE_FORMAT = '%d/%m/%Y'
+YA_LESSON_DATE_FORMAT = '%d%m%Y'
 CHILDREN_LESSON_SOURCES = {
     'beginner': 'https://beginner.aliveinjesus.info/students',
     'kindergarten': 'https://kindergarten.aliveinjesus.info/students',
@@ -2541,7 +2541,7 @@ class AnnouncementActionView(APIView):
             event_end = announcement.event_date_to or announcement.event_date_from
             if event_end and pledge_due_date > event_end:
                 return Response(
-                    {'pledge_due_date': f'Choose a day on or before the event date, {event_end.strftime("%d %B %Y")}.'},
+                    {'pledge_due_date': f'Choose a day on or before the event date, {event_end.strftime("%d%m%Y")}.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if pledge_due_date < timezone.localdate():
@@ -2838,7 +2838,7 @@ class CampaignPledgeView(APIView):
                 )
             if campaign.end_date and due_date > campaign.end_date:
                 return Response(
-                    {'due_date': f'Choose a day on or before the drive ends, {campaign.end_date.strftime("%d %B %Y")}.'},
+                    {'due_date': f'Choose a day on or before the drive ends, {campaign.end_date.strftime("%d%m%Y")}.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -5203,7 +5203,7 @@ class ResendContributionReceiptView(APIView):
             body = f"{receipt_message}\n\n"
             if len(grouped) == 1:
                 body += (
-                    f"{receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d %B %Y'))}\n\n"
+                    f"{receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d%m%Y'))}\n\n"
                 )
             body += receipt_email_signature()
             delivery = _deliver_receipt_message(
@@ -5611,7 +5611,7 @@ def alert_payment_callback_failure(label, payload, exc):
         ).exists()
         if already_told:
             return
-        when = timezone.localtime().strftime('%d %b %Y, %H:%M')
+        when = timezone.localtime().strftime('%d%m%Y, %H:%M')
         body = (
             f'Safaricom called back at {when} and the server could not record the payment.\n\n'
             f'{stable}\n\n'
@@ -6434,7 +6434,7 @@ class AssignContributionAccountView(APIView):
             account_list,
         )
         reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
-        date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d %B %Y, %H:%M')
+        date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d%m%Y, %H:%M')
         # A split's letter already reads the whole figure against the account
         # list it names (and rides the itemised slip), so its Receipt Summary
         # stays off; a single-account letter keeps it — there it is the only
@@ -10220,7 +10220,7 @@ class TreasurySpreadsheetView(APIView):
         week_cols = ['B', 'C', 'D', 'E', 'F']
         for i, col in enumerate(week_cols):
             if i < len(saturdays):
-                ws[f'{col}8'] = saturdays[i].strftime('%d.%m.%Y')
+                ws[f'{col}8'] = saturdays[i].strftime('%d%m%Y')
             else:
                 ws[f'{col}8'] = 'NA'
 
@@ -10349,7 +10349,7 @@ class TreasurySpreadsheetView(APIView):
         ws['C42'] = 0
 
         # ── Signature / presentation dates ────────────────────────────────────────
-        report_date_str = end_date.strftime('%d.%m.%Y')
+        report_date_str = end_date.strftime('%d%m%Y')
         ws['G45'] = report_date_str
         ws['G48'] = report_date_str
 

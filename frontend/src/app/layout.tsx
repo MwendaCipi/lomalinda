@@ -65,7 +65,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // lang carries Kenya's English dialect: it also makes every native date
-  // input read day-first (dd/mm/yyyy), the way the church writes dates.
+  // input read day-first (ddmmyyyy), the way the church writes dates.
   return (
     <html lang="en-KE" className="h-full antialiased" suppressHydrationWarning>
       <head>

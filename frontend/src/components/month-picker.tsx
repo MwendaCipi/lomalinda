@@ -1,7 +1,7 @@
 /**
  * One month chosen from a grid, the way the desk picks a month.
  *
- * The church writes dd/mm/yyyy and the designee is the church, not the
+ * The church writes ddmmyyyy and the designee is the church, not the
  * browser: this month grid is day-first (October, not 10), and it reads
  * the same in every locale. `YearPicker` is the same grid under a year.
  */

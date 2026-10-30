@@ -144,7 +144,7 @@ def invitation_context(meeting, user, church_name):
         'name': recipient_name(user),
         'title': meeting.title,
         'day': meeting_date.strftime('%A') if hasattr(meeting_date, 'strftime') else '',
-        'date': meeting_date.strftime('%d %B %Y') if hasattr(meeting_date, 'strftime') else str(meeting_date),
+        'date': meeting_date.strftime('%d%m%Y') if hasattr(meeting_date, 'strftime') else str(meeting_date),
         'start_time': format_clock(getattr(meeting, 'start_time', None)) or meeting_time_display(meeting),
         'end_time': format_clock(getattr(meeting, 'end_time', None)),
         'meeting_time': meeting_time_display(meeting),

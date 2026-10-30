@@ -13,6 +13,8 @@ has not saved a signature yet, simply leaves the paper's ruled line as it has
 always been — a receipt is not held back because the treasurer is new.
 """
 
+from django.db.models import Q
+
 from .models import MemberProfile
 
 #: The offices a giving receipt may be signed by, in the order they print:
@@ -110,13 +112,16 @@ def office_holder(code):
     never printed twice on the same sheet: the elder authorises, the
     treasurer issues, and one person can only hold one pen.
     """
-    # A cheap column match narrows the roster; the office check below is what
-    # actually decides, so the comma-and-space spelling of the stored roles
-    # (which older rows do not all share) never hides a holder.
+    # ``role`` is still the source of truth for some older profiles, while
+    # newer profiles keep the same office in the comma-separated ``roles``
+    # field.  Do not narrow this query by ``roles``: doing so made a clerk
+    # with an otherwise complete legacy profile disappear from letter previews.
+    # The office check below deliberately reads both fields through
+    # ``get_roles``.
     holders = [
         profile
         for profile in MemberProfile.objects.select_related('user')
-        .filter(roles__contains=code, user__is_active=True)
+        .filter(Q(roles__contains=code) | Q(role=code), user__is_active=True)
         .order_by('id')
         if office_code_for(profile) == code
     ]
@@ -197,4 +202,3 @@ def user_signature_entry(user, office_title=None):
         'image': signature_bytes(profile),
         'phone': getattr(profile, 'phone_number', '') or '',
     }
-

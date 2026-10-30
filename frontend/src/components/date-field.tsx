@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
 
 /**
- * A date filter that reads the way the desk reads dates: dd/mm/yyyy.
+ * A date filter that reads the way the desk reads dates: ddmmyyyy.
  *
  * The native date input renders in the browser's locale — mm/dd/yyyy on an
  * en-US machine — which sent at least one treasurer reading day and month the
@@ -15,7 +15,7 @@ import { CalendarDays } from "lucide-react";
  *
  * The calendar beside the text is the browser's own picker, opened by the
  * icon: picking a day hands over the ISO date straight away, while the text
- * field keeps accepting dd/mm/yyyy typed by hand. A complete valid date is
+ * field keeps accepting ddmmyyyy typed by hand. A complete valid date is
  * committed the moment its eighth digit lands, and a finished draft is also
  * committed on blur rather than thrown away.
  */
@@ -35,7 +35,7 @@ export function DateField({
 }) {
   const isoToDisplay = (iso: string) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
-    return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+    return m ? `${m[3]}${m[2]}${m[1]}` : "";
   };
   // What the member is mid-way through typing. Null means the field simply
   // shows the caller's own value, so a change from outside (a preset window,
@@ -50,11 +50,11 @@ export function DateField({
     const d = digits.slice(0, 2);
     const mo = digits.slice(2, 4);
     const y = digits.slice(4, 8);
-    if (digits.length < 8) return [d, mo, y].filter(Boolean).join("/"); // still typing
+    if (digits.length < 8) return `${d}${mo}${y}`; // still typing
     const year = Number(y);
     const month = Number(mo);
     const day = Number(d);
-    if (year < 2000 || month < 1 || month > 12 || day < 1 || day > 31) return `${d}/${mo}/${y}`;
+    if (year < 2000 || month < 1 || month > 12 || day < 1 || day > 31) return `${d}${mo}${y}`;
     onChange(`${y}-${mo}-${d}`);
     return null; // complete and valid — show the caller's value again
   };
@@ -113,7 +113,7 @@ export function DateField({
         value={draft ?? isoToDisplay(value)}
         onChange={(e) => setDraft(handle(e.target.value))}
         onBlur={commitDraft}
-        placeholder="dd/mm/yyyy"
+        placeholder="ddmmyyyy"
         aria-label={label}
         className="w-[6.75rem] rounded-xl border border-sand-mute bg-white py-1 pl-2 pr-7 text-xs outline-none focus:border-ember"
       />

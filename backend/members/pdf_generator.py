@@ -39,6 +39,22 @@ from svglib.svglib import svg2rlg
 _SYMBOL_DRAWING = svg2rlg(str(Path(__file__).resolve().parent / "sda_symbol.svg"))
 _SYMBOL_RATIO = _SYMBOL_DRAWING.width / _SYMBOL_DRAWING.height
 
+
+def date_compact(value):
+    """A day the paper writes the way the church writes her dates: ddmmyyyy.
+
+    The reports receive their window as ISO strings — ``YYYY-MM-DD`` — and
+    other sheets as dates. Every display point passes through this one
+    formatting, so a sheet never shows two different spellings of the same
+    day — the dotted ``dd.mm.yyyy`` the summary once carried reads no more.
+    """
+    if hasattr(value, "strftime"):
+        return value.strftime("%d%m%Y")
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").strftime("%d%m%Y")
+    except Exception:
+        return str(value)
+
 #: The church's poster: the artwork the congregation downloaded — its own
 #: letterhead, the pastoral lines it speaks and the bible beneath them — kept
 #: beside this module like the symbol above it, so the cover wears the
@@ -186,6 +202,78 @@ class NumberedCanvas(canvas.Canvas):
 _LETTERHEAD_MAX_HEIGHT = 4.5 * cm
 _LETTERHEAD_TOP_GAP = 0.7 * cm
 _LETTERHEAD_BODY_GAP = 0.4 * cm
+
+# The church letter is a distinct paper: its office details sit in two quiet
+# columns across the top, while the Adventist mark remains visible in the
+# narrow band at the right.  Keeping this separate from the generic document
+# lock-up prevents the short "SDA Church Loma Linda" header from leaking back
+# into official correspondence.
+_DEPARTMENT_LETTERHEAD_HEIGHT = 4.0 * cm
+_DEPARTMENT_LETTER_STRIP_WIDTH = 2.65 * cm
+
+
+class DepartmentLetterCanvas(NumberedCanvas):
+    """Canvas for correspondence on the church's printed letter paper."""
+
+    def draw_page_decorations(self, page_count):
+        self.saveState()
+
+        # The full-height right edge is intentionally retained on every page:
+        # it is part of the church's stationery, not a decorative header that
+        # disappears when a letter runs to a second page.
+        strip_x = A4[0] - _DEPARTMENT_LETTER_STRIP_WIDTH
+        self.setFillColor(colors.HexColor('#4CABC3'))
+        self.rect(strip_x, 0, _DEPARTMENT_LETTER_STRIP_WIDTH, A4[1], fill=1, stroke=0)
+
+        # A pale mark keeps the right strip recognisably Adventist while
+        # remaining legible when the letter is printed in grayscale.
+        logo_box = 2.55 * cm
+        logo_x = strip_x + (_DEPARTMENT_LETTER_STRIP_WIDTH - logo_box) / 2
+        logo_y = A4[1] - 5.2 * cm
+        self.setFillColor(colors.white)
+        self.rect(logo_x, logo_y, logo_box, logo_box, fill=1, stroke=0)
+        symbol_h = 2.2 * cm
+        symbol_scale = symbol_h / _SYMBOL_DRAWING.height
+        self.saveState()
+        self.translate(strip_x + (_DEPARTMENT_LETTER_STRIP_WIDTH - _SYMBOL_DRAWING.width * symbol_scale) / 2, logo_y + (logo_box - symbol_h) / 2)
+        self.scale(symbol_scale, symbol_scale)
+        _SYMBOL_DRAWING.drawOn(self, 0, 0)
+        self.restoreState()
+
+        if self._pageNumber == 1:
+            left_x = 1.05 * cm
+            right_x = 12.1 * cm
+            top = A4[1] - 1.25 * cm
+            self.setFillColor(colors.HexColor('#2E8BA6'))
+            self.setFont('Times-Bold', 15.2)
+            for offset, line in enumerate((
+                'SEVENTH DAY ADVENTIST CHURCH',
+                'LOMA LINDA',
+                'NORTH EAST KENYA FIELD',
+            )):
+                self.drawString(left_x, top - offset * 6.15 * mm, line)
+            for offset, line in enumerate((
+                'P.O BOX 1373-60200',
+                'MERU-KENYA',
+            )):
+                self.drawString(right_x, top - offset * 6.15 * mm, line)
+            self.setFillColor(colors.blue)
+            self.setFont('Times-Bold', 10.6)
+            self.drawString(right_x + 0.12 * cm, top - 2 * 6.15 * mm, 'TEL:0708069827/0711340087')
+            self.setFillColor(colors.HexColor('#2E8BA6'))
+            self.setFont('Times-Bold', 10.6)
+            self.drawString(right_x - 0.45 * cm, top - 3 * 6.15 * mm, 'EMAIL: sdalomalindachurch@gail.com')
+
+        self.restoreState()
+        self.saveState()
+        self.setFont('Helvetica', 8)
+        self.setFillColor(colors.HexColor('#617068'))
+        self.setStrokeColor(colors.HexColor('#dfdbd1'))
+        self.setLineWidth(0.5)
+        self.line(1.5 * cm, 1.8 * cm, strip_x - 0.35 * cm, 1.8 * cm)
+        self.drawString(1.5 * cm, 1.2 * cm, self._footer_text)
+        self.drawRightString(strip_x - 0.35 * cm, 1.2 * cm, f'Page {self._pageNumber} of {page_count}')
+        self.restoreState()
 
 
 def _letterhead_geometry(image):
@@ -559,12 +647,12 @@ def generate_treasury_pdf(
         if purpose_title:
             subtitle_text = f"CHURCH GIVINGS REPORT - {purpose_title.upper()}"
         else:
-            subtitle_text = f"CHURCH GIVINGS REPORT FROM {start_date} TO {end_date}"
+            subtitle_text = f"CHURCH GIVINGS REPORT FROM {date_compact(start_date)} TO {date_compact(end_date)}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
         if start_date == end_date:
-            date_str = f"Date: {start_date}"
+            date_str = f"Date: {date_compact(start_date)}"
         else:
-            date_str = f"Period: {start_date} to {end_date}"
+            date_str = f"Period: {date_compact(start_date)} to {date_compact(end_date)}"
         meta_str = f"Field: {field_name or 'North East Kenya Field'}"
         if district:
             meta_str += f" &nbsp;&nbsp;|&nbsp;&nbsp; District: {district}"
@@ -721,12 +809,12 @@ def generate_treasury_pdf(
     from datetime import datetime as _dt
     try:
         dt_end = _dt.strptime(end_date, "%Y-%m-%d")
-        end_date_str = dt_end.strftime("%d.%m.%Y")
+        end_date_str = dt_end.strftime("%d%m%Y")
     except Exception:
         end_date_str = end_date
 
     story.append(Paragraph(
-        f"CASH COUNT AND OFFERING REPORT SUMMARY FROM {start_date} TO {end_date}",
+        f"CASH COUNT AND OFFERING REPORT SUMMARY FROM {date_compact(start_date)} TO {date_compact(end_date)}",
         st["title_big"],
     ))
     meta_text = f"Name of Church: {church_name}"
@@ -734,9 +822,9 @@ def generate_treasury_pdf(
     if district:
         meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; District: {district}"
     if start_date == end_date:
-        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Date: {start_date}"
+        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Date: {date_compact(start_date)}"
     else:
-        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Period: {start_date} to {end_date}"
+        meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Period: {date_compact(start_date)} to {date_compact(end_date)}"
     story.append(Paragraph(meta_text, st["meta"]))
     story.append(Spacer(1, 10))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#26352f"), spaceAfter=12))
@@ -750,7 +838,7 @@ def generate_treasury_pdf(
         weekly_data = {}
 
     num_weeks = len(saturdays)
-    week_labels = [saturdays[i].strftime('%d.%m.%Y') if i < num_weeks else 'NA' for i in range(5)]
+    week_labels = [saturdays[i].strftime('%d%m%Y') if i < num_weeks else 'NA' for i in range(5)]
 
     # Header: Week 1, Week 2, ..., Totals
     cash_header_row = [Paragraph('Date', st["header"])]
@@ -1116,7 +1204,7 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
     info_data = [
         [
             Paragraph(f"<b>Member Name:</b> {member_name}<br/><b>Email:</b> {member_email or 'N/A'}", st["cell"]),
-            Paragraph(f"<b>Statement Period:</b> {start_date} to {end_date}<br/><b>Date Issued:</b> {datetime.now().strftime('%Y-%m-%d')}", st["cell"]),
+            Paragraph(f"<b>Statement Period:</b> {date_compact(start_date)} to {date_compact(end_date)}<br/><b>Date Issued:</b> {datetime.now().strftime('%d%m%Y')}", st["cell"]),
         ]
     ]
     info_table = Table(info_data, colWidths=[9.0 * cm, 9.0 * cm])
@@ -1243,7 +1331,7 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
         pastor_cell.append(Paragraph("<b>Signature:</b> ___________________________", st["cell"]))
     sign_data = [
         [treasurer_cell, pastor_cell],
-        [Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d')}", st["cell"]), Paragraph("", st["cell"])],
+        [Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d%m%Y')}", st["cell"]), Paragraph("", st["cell"])],
     ]
     sign_table = Table(sign_data, colWidths=[9.0 * cm, 9.0 * cm])
     story.append(KeepTogether([sign_table]))
@@ -1382,7 +1470,7 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     # opens on the directory's own title.
     story.append(Paragraph("OFFICIAL USERS DIRECTORY" if friend_count else "OFFICIAL MEMBER DIRECTORY", st["title_big"]))
     story.append(Spacer(1, 4))
-    generated_date = datetime.now().strftime("%d %B %Y, %I:%M %p")
+    generated_date = datetime.now().strftime("%d%m%Y, %I:%M %p")
     story.append(Paragraph(f"Generated: {generated_date}", st["meta"]))
     story.append(Spacer(1, 12))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
@@ -1550,7 +1638,7 @@ def generate_contribution_thermal_receipt_pdf(
     if first.phone_number:
         line_out(f"Phone: {first.phone_number}")
     payment_dt = _to_eat(first.paid_at or first.created_at)
-    date_str = payment_dt.strftime("%d %b %Y %H:%M") if payment_dt else ""
+    date_str = payment_dt.strftime("%d%m%Y %H:%M") if payment_dt else ""
     line_out(f"Date: {date_str}")
     method = (first.payment_method or "mpesa").replace("_", " ").upper()
     line_out(f"Method: {method}")
@@ -1592,7 +1680,7 @@ def generate_contribution_thermal_receipt_pdf(
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
     issued_eat = _to_eat(issued_at)
-    line_out(f"Issued {issued_eat.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    line_out(f"Issued {issued_eat.strftime('%d%m%Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
     # Leave a distinct visual break after the verse and issue details before
     # the treasurer's signature block begins.
     y = _thermal_signatures(c, y - 6 * mm, WIDTH, margin, signatures)
@@ -1671,7 +1759,7 @@ def generate_in_kind_thermal_receipt_pdf(
     line_out(f"Received from: {(donor_name or 'Friend')[:38]}")
     if phone_number:
         line_out(f"Phone: {phone_number}")
-    line_out(f"Received on: {received_on.strftime('%d %b %Y')}")
+    line_out(f"Received on: {received_on.strftime('%d%m%Y')}")
     line_out(f"For: {(purpose or 'In-Kind Giving')[:34]}")
     dashed()
 
@@ -1695,7 +1783,7 @@ def generate_in_kind_thermal_receipt_pdf(
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
     issued_eat = _to_eat(issued_at)
-    line_out(f"Issued {issued_eat.strftime('%d %b %Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    line_out(f"Issued {issued_eat.strftime('%d%m%Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
     # Match the cash receipt's breathing room before the signature block.
     y = _thermal_signatures(c, y - 6 * mm, WIDTH, margin, signatures)
 
@@ -1737,8 +1825,8 @@ def generate_financial_report_pdf(church_name, report, signatures=None) -> bytes
     st = get_pdf_styles()
 
     period = (
-        f"{report.period_start.strftime('%d %b %Y')} – "
-        f"{report.period_end.strftime('%d %b %Y')}"
+        f"{report.period_start.strftime('%d%m%Y')} – "
+        f"{report.period_end.strftime('%d%m%Y')}"
     )
 
     story.append(Paragraph("CHURCH FINANCIAL REPORT", st["title_big"]))
@@ -1754,7 +1842,7 @@ def generate_financial_report_pdf(church_name, report, signatures=None) -> bytes
         ),
         Paragraph(
             f"<b>Period:</b> {period}<br/>"
-            f"<b>Prepared:</b> {report.created_at.strftime('%d %b %Y')}",
+            f"<b>Prepared:</b> {report.created_at.strftime('%d%m%Y')}",
             st["cell"],
         ),
     ]]
@@ -1973,7 +2061,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
     story = []
 
     story.append(Paragraph("WITHDRAWAL REQUESTS REPORT", st["title_big"]))
-    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}", st["meta"]))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d%m%Y, %I:%M %p')}", st["meta"]))
     filter_line = f"Shown: {status_label}"
     if search:
         filter_line += f" · Search: {escape(search)}"
@@ -1996,7 +2084,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
 
         def fmt_date(value):
             if hasattr(value, "strftime"):
-                return value.strftime("%d/%m/%Y")
+                return value.strftime("%d%m%Y")
             text = str(value or "")
             return f"{text[8:10]}/{text[5:7]}/{text[0:4]}" if len(text) >= 10 else text
 
@@ -2174,7 +2262,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     story.append(Paragraph("WITHDRAWAL REQUEST", st["title_big"]))
     story.append(Paragraph(
-        f"Request #{row.get('id')} · Printed {datetime.now().strftime('%d %B %Y, %I:%M %p')}",
+        f"Request #{row.get('id')} · Printed {datetime.now().strftime('%d%m%Y, %I:%M %p')}",
         st["meta"],
     ))
     story.append(Spacer(1, 8))
@@ -2192,7 +2280,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     def fmt_date(value):
         if hasattr(value, "strftime"):
-            return value.strftime("%d/%m/%Y")
+            return value.strftime("%d%m%Y")
         text = str(value or "")
         return f"{text[8:10]}/{text[5:7]}/{text[0:4]}" if len(text) >= 10 else text
 
@@ -2308,24 +2396,20 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     
     church_name = church_name  # already resolved
     
-    head = _letterhead_geometry(letterhead)
     buffer = io.BytesIO()
-    
-    # One page two ways. Without the church's own head the letter follows the
-    # usual single margin. With it, page 1's body frame starts beneath the
-    # drawn head (so the letter clears its top instead of running behind it)
-    # and the second template carries the later pages back under the small
-    # drawn mark — the story's first flowable asks for that switch.
+    head = _letterhead_geometry(letterhead)
+
+    # A clerk may still choose a fully designed image letterhead through the
+    # existing Letters desk.  In its absence, every official letter uses the
+    # prescribed stationery reproduced from the supplied church sample.
     if head:
         head_w, head_h = head
-        doc = BaseDocTemplate(buffer, pagesize=(21*cm, 29.7*cm))
+        doc = BaseDocTemplate(buffer, pagesize=(21 * cm, 29.7 * cm))
         body_bottom = 2.2 * cm
         body_left = 1.8 * cm
-        body_w = 21*cm - body_left - 1.8 * cm
-        first_top = 29.7*cm - 0.7*cm - head_h - 0.4*cm
-        later_top = 29.7*cm - 2.0 * cm
-        # Real template objects: a page template the printer can actually
-        # drive, its frame exactly the body box the head leaves beneath it.
+        body_w = 21 * cm - body_left - 1.8 * cm
+        first_top = 29.7 * cm - _LETTERHEAD_TOP_GAP - head_h - _LETTERHEAD_BODY_GAP
+        later_top = 29.7 * cm - 2.0 * cm
         doc.addPageTemplates([
             RLPageTemplate('letterhead', [RLFrame(
                 body_left, body_bottom, body_w, first_top - body_bottom,
@@ -2337,14 +2421,25 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
             )]),
         ])
     else:
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=(21*cm, 29.7*cm),
-            rightMargin=1.8 * cm,
-            leftMargin=1.8 * cm,
-            topMargin=2.0 * cm,
-            bottomMargin=2.2 * cm,
-        )
+        # The stock letterhead's right-hand strip needs a clear gutter, and
+        # page one reserves room for its two columns of office details.
+        doc = BaseDocTemplate(buffer, pagesize=(21 * cm, 29.7 * cm))
+        body_bottom = 2.2 * cm
+        body_left = 1.8 * cm
+        strip_left = 21 * cm - _DEPARTMENT_LETTER_STRIP_WIDTH
+        body_w = strip_left - 0.45 * cm - body_left
+        first_top = 29.7 * cm - _DEPARTMENT_LETTERHEAD_HEIGHT - 0.35 * cm
+        later_top = 29.7 * cm - 1.15 * cm
+        doc.addPageTemplates([
+            RLPageTemplate('letterhead', [RLFrame(
+                body_left, body_bottom, body_w, first_top - body_bottom,
+                leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+            )]),
+            RLPageTemplate('later', [RLFrame(
+                body_left, body_bottom, body_w, later_top - body_bottom,
+                leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0,
+            )]),
+        ])
     
     st = getSampleStyleSheet()
     
@@ -2395,11 +2490,11 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     else:
         created_date = letter_record.get("created_at")
         if hasattr(created_date, "strftime"):
-            date_str = created_date.strftime("%d/%m/%Y")
+            date_str = created_date.strftime("%d%m%Y")
         elif created_date:
             date_str = str(created_date)[:10]
         else:
-            date_str = timezone.localtime(timezone.now()).strftime("%d/%m/%Y")
+            date_str = timezone.localtime(timezone.now()).strftime("%d%m%Y")
 
     address_text = str(letter_record.get("recipient_address") or "").strip()
 
@@ -2436,9 +2531,9 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     subject_style = ParagraphStyle(
         "LetterSubject", parent=styles_map["cell_bold"],
         fontName="Helvetica-Bold", fontSize=11, leading=15,
-        textColor=colors.HexColor("#26352f"), spaceAfter=10,
+        textColor=colors.black, spaceAfter=10,
     )
-    story.append(Paragraph(f"REF: {escape(title_text).upper()}", subject_style))
+    story.append(Paragraph(f"<u>REF: {escape(title_text).upper()}</u>", subject_style))
     story.append(Spacer(1, 2))
     
     # Letter body — the writer's own paragraphs, from the left margin.
@@ -2510,7 +2605,10 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
     
     pen_row = Table(
         [[pen_column(clerk_sig), pen_column(pastor_sig)]],
-        colWidths=[8.7 * cm, 8.7 * cm],
+        # The stationery strip is a protected right gutter, so the two pen
+        # columns share the remaining writing measure rather than running
+        # beneath the mark.
+        colWidths=[body_w / 2, body_w / 2],
         hAlign="LEFT",
     )
     pen_row.setStyle(TableStyle([
@@ -2559,12 +2657,9 @@ def generate_department_letter_pdf(letter_record, church_name: str, pastor_sig=N
             pass  # A QR that cannot be drawn never holds the letter back.
     
     # Build the PDF
-    if head:
-        # Insert the later template at start if using letterhead
-        story.insert(0, NextPageTemplate('later'))
-        doc.build(story, canvasmaker=NumberedCanvas)
-    else:
-        doc.build(story, canvasmaker=NumberedCanvas)
+    # Continue overflowing content in the page-two frame.
+    story.insert(0, NextPageTemplate('later'))
+    doc.build(story, canvasmaker=NumberedCanvas if head else DepartmentLetterCanvas)
     
     buffer.seek(0)
     result = buffer.getvalue()
@@ -3441,7 +3536,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     try:
         parsed_day = datetime.strptime(date_text, '%Y-%m-%d')
         cover_meta.append(parsed_day.strftime('%A'))
-        cover_meta.append(parsed_day.strftime('%d/%m/%Y'))
+        cover_meta.append(parsed_day.strftime('%d%m%Y'))
     except ValueError:
         if date_text:
             cover_meta.append(date_text)
@@ -3806,15 +3901,15 @@ def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=
     story = []
 
     story.append(Paragraph("DUTY ROTA SCHEDULE", st["title_big"]))
-    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d %B %Y, %I:%M %p')}", st["meta"]))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d%m%Y, %I:%M %p')}", st["meta"]))
 
     filter_parts = []
     if start_date and end_date:
-        filter_parts.append(f"Period: {start_date} to {end_date}")
+        filter_parts.append(f"Period: {date_compact(start_date)} to {date_compact(end_date)}")
     elif start_date:
-        filter_parts.append(f"From: {start_date}")
+        filter_parts.append(f"From: {date_compact(start_date)}")
     elif end_date:
-        filter_parts.append(f"Up to: {end_date}")
+        filter_parts.append(f"Up to: {date_compact(end_date)}")
     else:
         filter_parts.append("Period: Full Schedule")
 
@@ -3835,7 +3930,7 @@ def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=
             if len(text) >= 10:
                 try:
                     dt = datetime.strptime(text[:10], "%Y-%m-%d")
-                    return dt.strftime("%d/%m/%Y")
+                    return dt.strftime("%d%m%Y")
                 except Exception:
                     return text[:10]
             return text
