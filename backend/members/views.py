@@ -13163,7 +13163,15 @@ def clean_program_items(raw):
             'participants': people(entry),
             'parts': parts,
         }
-        if shaped['title'] or shaped['participants'] or parts:
+        # A free-text block — a song, a Bible verse — carries its written
+        # lines on the key the editor sends. They are printed to the
+        # congregation, so they are kept whole: the spacing the desk
+        # pressed travels with them, and a block with nothing but text
+        # still counts as a row.
+        if entry.get('text') is not None:
+            shaped['text'] = str(entry.get('text'))[:4000]
+        has_text = isinstance(shaped.get('text'), str) and shaped['text'].strip()
+        if shaped['title'] or shaped['participants'] or parts or has_text:
             shaped_items.append(shaped)
     return shaped_items
 

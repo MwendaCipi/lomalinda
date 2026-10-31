@@ -2012,10 +2012,10 @@ function ProgramEditorModal({
   // buttons sit on — so both sides of the sheet close with one coherent
   // line of actions; in the modal it stays pinned at the reading column's
   // foot, under the sheet it reads.
-  // On the page variant the two papers ride the typing foot and share its
-  // width equally with Add session; in the modal they keep
-  // their own measure where they are pinned.
-  const viewPdfClasses = `inline-flex items-center justify-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember${isPage ? " min-w-0 flex-1" : ""}`;
+  // On a page the papers ride the strip at the whole sheet's foot —
+  // centred with the other buttons — in the modal they keep their own
+  // measure where they are pinned.
+  const viewPdfClasses = `inline-flex items-center justify-center rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember`;
   // The two papers, side by side: the plain sheet to hand on, the bifold to
   // print. The brochure belongs to a saved typed programme — before the rows
   // exist on the event there is nothing for it to fold — so it shows when
@@ -2754,18 +2754,14 @@ function ProgramEditorModal({
           </aside>
         </div>
 
-          {/* The buttons' row spans the whole sheet now — under both
-              columns, not just the typing one: the day grows above it on the
-              left, the sheet answers on the right, and the row stays put at
-              the foot while either scrolls. Pinned under the columns on a
-              desk, sticky to the foot of the modal's own scroll on a phone.
-              Undo and redo have moved to the sheet's head, where the hand
-              reaches first; Share keeps its place here, beside the papers
-              the sheet hands out. There is no Save to press: the rows go up
-              on their own a moment after the hand stops, and the footnote
-              beside the buttons says where they stand. */}
-<div
-            className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5 shadow-sm"
+          {/* The buttons' strip runs the whole sheet now — under both
+              columns, the day typed above it on the left, the sheet answering
+              on the right — and its buttons are centred on the strip, with
+              the saved-word pinned to the right edge so the row never moves.
+              Sticky under the columns on a desk; sticky to the foot of the
+              modal's own scroll on a phone. */}
+          <div
+            className="sticky bottom-0 z-10 relative mt-3 flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5 shadow-sm"
           >
             <button
               type="button"
@@ -2779,7 +2775,7 @@ function ProgramEditorModal({
                 // that keystroke is the change this walks in on.
                 followPreview(`preview-${uid}-session-${items.filter(programItemHasContent).length}`);
               }}
-              className={`inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep${isPage ? " min-w-0 flex-1 justify-center" : ""}`}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep"
             >
               <Plus className="h-3.5 w-3.5" /> Add session
             </button>
@@ -2827,7 +2823,7 @@ function ProgramEditorModal({
               <span
                 role="status"
                 aria-live="polite"
-                className={`shrink-0 text-[11px] font-semibold${
+                className={`absolute right-3 shrink-0 text-[11px] font-semibold${
                   saveState === "error" ? " text-red-600" : " text-moss"
                 }`}
               >
