@@ -367,6 +367,10 @@ SEED_DEPARTMENTS = (
     ('junior', 'Junior', 23),
     ('teens', 'Teens', 24),
     ('pathfinders', 'Pathfinders', 25),
+    # Adventurers stands beside Pathfinders: the clubs ride the Children
+    # Ministry's records as classes, and each answers for its own fund on
+    # the treasury's desk.
+    ('adventurers', 'Adventurers', 26),
     # The fellowships that used to ride AMM and AWM as sub-units, now rows of
     # their own; the frontend groups them back under the men's and women's
     # desks for ease of management.

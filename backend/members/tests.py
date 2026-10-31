@@ -14616,6 +14616,48 @@ class ChildrenUnitsMigrationTests(APITestCase):
         self.assertEqual(children.units, 'Memory Verse')
 
 
+class AdventurersDepartmentTests(APITestCase):
+    """Adventurers is a club department of its own, beside Pathfinders.
+
+    0250 gives it the same seat Pathfinders got (0176): a desk, a Leader who
+    takes an assistant, and a treasury fund the treasurer assigns on the
+    Assign Accounts modal — the two clubs stop reading through the Children
+    Ministry's assignment while staying reachable under that desk.
+    """
+
+    def test_the_department_exists_with_a_leader_role(self):
+        adventurers = Department.objects.filter(code='adventurers', is_active=True).first()
+        self.assertIsNotNone(adventurers, 'Adventurers should be a seeded department')
+        self.assertEqual(adventurers.name, 'Adventurers')
+        self.assertEqual(adventurers.group, 'department')
+        self.assertTrue(
+            DepartmentRole.objects.filter(department=adventurers, name='Leader').exists(),
+            'Adventurers should start with a Leader role',
+        )
+
+    def test_the_desk_lists_it_under_the_department_heading(self):
+        elder = User.objects.create_user('adv.elder', 'adv.elder@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=elder, role='elder', roles='elder,member')
+        self.client.force_authenticate(elder)
+        rows = {row['code']: row for row in self.client.get('/api/members/departments/').data['departments']}
+        self.assertEqual(rows['adventurers']['group'], 'department')
+        self.assertEqual(rows['adventurers']['label'], 'Adventurers')
+
+    def test_each_club_answers_for_the_fund_of_its_own_name(self):
+        """The Pathfinders fund and the Adventurers fund are two accounts, one
+        per club — 0250 mints whichever the books never carried, so neither
+        desk reads through the other's or the Children Ministry's assignment.
+        """
+        for code, fund_names in (
+            ('pathfinders', ('Pathfinder', 'Pathfinders')),
+            ('adventurers', ('Adventurer', 'Adventurers')),
+        ):
+            department = Department.objects.get(code=code)
+            fund = TreasuryAccount.objects.filter(department=department).first()
+            self.assertIsNotNone(fund, f"{code} should have its own treasury fund")
+            self.assertIn(fund.name, fund_names)
+
+
 class PathfindersDepartmentTests(APITestCase):
     """Pathfinders is a department of its own, filed with the children's bands.
 
@@ -14694,6 +14736,7 @@ class DepartmentGroupAndUnitTests(APITestCase):
         self.assertEqual(rows['children']['units'], [])
         self.assertEqual(rows['kindergarten']['group'], 'department')
         self.assertEqual(rows['pathfinders']['group'], 'department')
+        self.assertEqual(rows['adventurers']['group'], 'department')
 
     def test_the_desk_adds_a_ministry_and_names_its_units(self):
         created = self.client.post('/api/members/departments/create/', {
@@ -16610,7 +16653,7 @@ class ProfileAreaRefTests(APITestCase):
         MemberProfile.objects.create(user=self.admin, role='admin', roles='admin,member')
 
     def test_the_bands_and_fellowships_are_seeded_areas(self):
-        for code in ('beginners', 'kindergarten', 'primary', 'junior', 'teens', 'pathfinders', 'young_couples', 'single_parents'):
+        for code in ('beginners', 'kindergarten', 'primary', 'junior', 'teens', 'pathfinders', 'adventurers', 'young_couples', 'single_parents'):
             department = Department.objects.filter(code=code, is_active=True).first()
             self.assertIsNotNone(department, f"{code} should be seeded")
             self.assertTrue(

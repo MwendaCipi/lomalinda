@@ -289,10 +289,11 @@ export function WriteLetterModal({
           <p className="text-sm font-semibold text-bark">Write a letter</p>
         </header>
         <form onSubmit={send} className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col bg-white px-4 pb-5 pt-4 shadow-sm sm:px-6">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 md:grid md:grid-cols-2">
-            {/* The typing, on the left — its own scroll on a desk, and a panel
-                of buttons nailed to its foot, so Send is where the hand stops. */}
-            <div className="flex min-w-0 flex-col md:h-full md:min-h-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 md:grid md:grid-cols-2 md:gap-0 md:divide-x md:divide-sand-line">
+            {/* The typing, on the left — its own scroll on a desk, ruled off
+                from the reading side by the line running the two columns
+                down the middle. */}
+            <div className="flex min-w-0 flex-col md:h-full md:min-h-0 md:pr-6">
               <p className="shrink-0 text-xs text-moss">
                 Typed on the left; on the right, the letter as the church will print it.
               </p>
@@ -375,66 +376,14 @@ export function WriteLetterModal({
                   </label>
                 </div>
               </div>
-              <div className="mt-3 flex shrink-0 justify-between gap-2">
-                {/* The office's own memory: typing is a step, and the two
-                    buttons walk the letter back and forward. */}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={draftHistory.undo}
-                    disabled={!draftHistory.canUndo}
-                    title="Undo the last edit"
-                    aria-label="Undo"
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Undo</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={draftHistory.redo}
-                    disabled={!draftHistory.canRedo}
-                    title="Redo the edit just undone"
-                    aria-label="Redo"
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Redo2 className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Redo</span>
-                  </button>
-                </div>
-                <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={viewDocument}
-                  disabled={!subject.trim() || !body.trim()}
-                  title="See the letter as the church will print it"
-                  className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-50"
-                >
-                  View Document
-                </button>
-                <button
-                  type="submit"
-                  disabled={sending || !subject.trim() || !body.trim()}
-                  className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
-                >
-                  {sending ? "Sending…" : "Send for signature"}
-                </button>
-                </div>
-              </div>
             </div>
+
             {/* The paper, on the right: the letter laid out the way the church
                 prints it — the date alone, the salutation, the receiving
                 address beneath it, the subject as its REF line, the body,
                 the closing and the two pens' spaces — travelling with every
                 word typed on the left. */}
-            <div className="shrink-0 md:min-h-0 md:flex-1 md:overflow-y-auto custom-hover-scrollbar">
+            <div className="shrink-0 md:min-h-0 md:flex-1 md:overflow-y-auto custom-hover-scrollbar md:pl-6">
               <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Letter preview</p>
               <article className="mx-auto mt-2 w-full max-w-2xl rounded-lg border border-sand-line bg-white px-7 py-9 font-serif text-[13px] leading-relaxed text-bark shadow-sm">
                 <p>{letterDate.trim() || dayFirst(new Date())}</p>
@@ -475,6 +424,61 @@ export function WriteLetterModal({
                   </div>
                 </div>
               </article>
+            </div>
+          </div>
+
+          {/* The buttons' strip runs across both sides now — the form they
+              answer sits above them on the left, the paper answering on the
+              right — and its buttons are centred on the strip. */}
+          <div className="mt-3 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={draftHistory.undo}
+                disabled={!draftHistory.canUndo}
+                title="Undo the last edit"
+                aria-label="Undo"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Undo</span>
+              </button>
+              <button
+                type="button"
+                onClick={draftHistory.redo}
+                disabled={!draftHistory.canRedo}
+                title="Redo the edit just undone"
+                aria-label="Redo"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Redo</span>
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={viewDocument}
+                disabled={!subject.trim() || !body.trim()}
+                title="See the letter as the church will print it"
+                className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-50"
+              >
+                View Document
+              </button>
+              <button
+                type="submit"
+                disabled={sending || !subject.trim() || !body.trim()}
+                className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+              >
+                {sending ? "Sending…" : "Send for signature"}
+              </button>
             </div>
           </div>
         </form>

@@ -12546,6 +12546,7 @@ class DepartmentMembersView(APIView):
                 'junior': 'Junior',
                 'teens': 'Teens',
                 'pathfinders': 'Pathfinders',
+                'adventurers': 'Adventurers',
             }
             child_qs = ChildRecord.objects.filter(is_active=True).select_related('group')
             if unit:
@@ -14174,7 +14175,7 @@ def department_accounts(user, code):
         - education: LCB (Local Church Budget) — the ministry's work is the
           church's own budget line, not an offering of its own
         - personal_ministries: Evangelism
-        - children, youth, pathfinders: Department fund + Camporee / Campout accounts
+        - children, youth, pathfinders, adventurers: Department fund + Camporee / Campout accounts
         - Other departments: Their linked treasury account
     - The camp funds are kept off the Ambassadors and AYM desks: neither
       ministry raises a camp offering, so each reads its own fund alone.
@@ -14263,10 +14264,10 @@ def department_accounts(user, code):
             if acc not in accounts:
                 accounts.append(acc)
 
-    # 5. Children, Youth and Pathfinders: department fund + camporee & camp
-    #    out accounts. Ambassadors and AYM sit outside this: they raise no
-    #    camp offering, so their desks read only their own fund.
-    if code in ('children', 'youth', 'pathfinders'):
+    # 5. Children, Youth, Pathfinders and Adventurers: department fund +
+    #    camporee & camp out accounts. Ambassadors and AYM sit outside this:
+    #    they raise no camp offering, so their desks read only their own fund.
+    if code in ('children', 'youth', 'pathfinders', 'adventurers'):
         camp_accounts = TreasuryAccount.objects.filter(
             Q(name__icontains='camp') | Q(description__icontains='camp') |
             Q(name__icontains='camporee') | Q(description__icontains='camporee') |

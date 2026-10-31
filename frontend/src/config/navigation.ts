@@ -9,6 +9,7 @@ import {
   Building2,
   Calendar,
   ClipboardList,
+  Compass,
   Crown,
   Droplets,
   Briefcase,
@@ -26,6 +27,7 @@ import {
   Megaphone,
   MessagesSquare,
   Music,
+  Radio,
   Receipt,
   Scale,
   ShieldCheck,
@@ -1018,6 +1020,8 @@ const DEPARTMENT_ICONS: Record<string, LucideIcon> = {
   education: GraduationCap,
   dorcas: Sparkles,
   development: Landmark,
+  pathfinders: Compass,
+  adventurers: Sun,
 };
 
 /**
@@ -1043,6 +1047,8 @@ export const DEPARTMENT_BLURBS: Record<string, string> = {
   education: "Christian education in the church and its schools: the study of God's word, our schools, and the students they serve.",
   dorcas: "Providing food, clothing, and compassionate service in the spirit of Dorcas.",
   development: "Planning, infrastructure, sanctuary building, and church plot development.",
+  pathfinders: "The Pathfinder Club: juniors and teens growing in faith, service and the outdoors.",
+  adventurers: "The Adventurer Club: the church's youngest club, growing in faith, adventure and service.",
   music: "The church's music.",
   // Loma Linda calls the choir the Church Choir — the name rides the
   // department's own row (`use-departments` reads it as Church Choir) — and it
@@ -1355,7 +1361,9 @@ const RAIL_AREA_CODES_MOVED = new Set([
   "primary",
   "junior",
   "teens",
-  "pathfinders",
+  // Pathfinders and Adventurers keep their own rows beside the Children row
+  // — the clubs answer for themselves — while the Children desk still reads
+  // them beside its classes, so they remain reachable there as before.
   // The men's and women's fellowships' sub-units. They belong inside the AMM
   // and AWM desks (whose `units` field names them), not as rows of their own.
   "young_couples",
@@ -1409,6 +1417,8 @@ const RAIL_AREA_LABELS: Record<string, string> = {
   education: "Education",
   dorcas: "Dorcas",
   development: "Development",
+  pathfinders: "Pathfinders",
+  adventurers: "Adventurers",
 };  /**
    * The areas every member may visit on the rail, whatever roles they hold:
    * the music ministry, the deaconate and the Possibility Ministries desk are
