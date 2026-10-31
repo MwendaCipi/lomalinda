@@ -1,5 +1,7 @@
 import base64
 import csv
+import hashlib
+from contextlib import contextmanager
 from io import StringIO
 
 from django.conf import settings
@@ -76,7 +78,7 @@ from .requests import notify_request_safely, send_membership_approval_email
 # Who signs the church's paper: the two office holders whose saved signatures
 # the receipts and reports print (see members/signatures.py).
 from .signatures import office_for, office_holder, receipt_signatures, report_signatures
-from .treasury import account_for_purpose, apply_credit, canonical_purpose_name, credit_account, credit_contribution_lines, display_purpose, enrich_transaction_descriptions
+from .treasury import account_for_purpose, apply_credit, canonical_purpose_name, credit_account, credit_contribution_lines, display_purpose, enrich_transaction_descriptions, is_split_account_reference, split_reference_label
 from .throttling import PublicTokenThrottle
 from .roles import (
     DEFAULT_ROLE,
@@ -340,7 +342,7 @@ def send_invitation_email(invitation):
         "Your invitation code is:\n\n"
         f"{code}\n\n"
         f"Go to {settings.FRONTEND_URL}/accept-invite, enter this code, and choose your username and password.\n\n"
-        f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d%m%Y')}.\n"
+        f"This invitation is valid until {timezone.localtime(invitation.expires_at).strftime('%d/%m/%Y')}.\n"
         "Once your account is ready you can sign in at "
         f"{settings.FRONTEND_URL}/login\n\n"
         f"Warm regards,\n{church_name}"
@@ -509,7 +511,7 @@ def send_contribution_receipt(contribution, receipt_email=''):
         amount_display,
         contribution.purpose,
     )
-    date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d%m%Y, %H:%M')
+    date_display = timezone.localtime(contribution.paid_at or local_now).strftime('%d/%m/%Y, %H:%M')
     summary = receipt_summary(account=contribution.purpose, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_reference, date_display=date_display)
     email = (
         usable_email(contribution.donor_email)
@@ -583,7 +585,7 @@ def send_grouped_contribution_receipts(group, receipt_email=''):
         first.purpose,
         extra={'distribution': distribution},
     )
-    date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d%m%Y, %H:%M')
+    date_display = timezone.localtime(first.paid_at or timezone.localtime()).strftime('%d/%m/%Y, %H:%M')
     receipt_reference = first.mpesa_receipt_number or first.paystack_reference or str(first.id)
     account_list = ' / '.join(row.purpose for row in completed)
     email = (
@@ -632,7 +634,7 @@ def send_honoree_receipt(contribution):
         return
     amount_display = f"{contribution.currency} {contribution.amount:,.2f}"
     receipt_reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
-    date_display = timezone.localtime(contribution.paid_at or timezone.now()).strftime('%d%m%Y, %H:%M')
+    date_display = timezone.localtime(contribution.paid_at or timezone.now()).strftime('%d/%m/%Y, %H:%M')
     if contribution.anonymous:
         giver_line = 'A gift has been given for you'
     elif contribution.donor_name:
@@ -2546,7 +2548,7 @@ class AnnouncementActionView(APIView):
             event_end = announcement.event_date_to or announcement.event_date_from
             if event_end and pledge_due_date > event_end:
                 return Response(
-                    {'pledge_due_date': f'Choose a day on or before the event date, {event_end.strftime("%d%m%Y")}.'},
+                    {'pledge_due_date': f'Choose a day on or before the event date, {event_end.strftime("%d/%m/%Y")}.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if pledge_due_date < timezone.localdate():
@@ -2843,7 +2845,7 @@ class CampaignPledgeView(APIView):
                 )
             if campaign.end_date and due_date > campaign.end_date:
                 return Response(
-                    {'due_date': f'Choose a day on or before the drive ends, {campaign.end_date.strftime("%d%m%Y")}.'},
+                    {'due_date': f'Choose a day on or before the drive ends, {campaign.end_date.strftime("%d/%m/%Y")}.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -5208,7 +5210,7 @@ class ResendContributionReceiptView(APIView):
             body = f"{receipt_message}\n\n"
             if len(grouped) == 1:
                 body += (
-                    f"{receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d%m%Y'))}\n\n"
+                    f"{receipt_summary(account=account_display, amount=amount_display, payment_channel=contribution.get_payment_method_display(), receipt_ref=receipt_ref, date_display=timezone.localtime(contribution.paid_at or contribution.created_at).strftime('%d/%m/%Y'))}\n\n"
                 )
             body += receipt_email_signature()
             delivery = _deliver_receipt_message(
@@ -5616,7 +5618,7 @@ def alert_payment_callback_failure(label, payload, exc):
         ).exists()
         if already_told:
             return
-        when = timezone.localtime().strftime('%d%m%Y, %H:%M')
+        when = timezone.localtime().strftime('%d/%m/%Y, %H:%M')
         body = (
             f'Safaricom called back at {when} and the server could not record the payment.\n\n'
             f'{stable}\n\n'
@@ -5733,54 +5735,61 @@ class MpesaCallbackView(APIView):
             honoree = None
             if context.get('honoree_id'):
                 honoree = User.objects.filter(pk=context['honoree_id'], is_active=True).first()
-            lines = allocation_lines(context)
-            # The same money may already be in the ledger: a treasurer's
-            # pull (or Safaricom's C2B confirmation) records the payment the
-            # moment it shows on the statement, and this result can land
-            # after that — a slow callback, or Safaricom's retry of one
-            # that failed. Recording the gift again would print one payment
-            # twice: once held in the Unassigned queue and once completed
-            # in the givings. The row the desk already sees is adopted
-            # instead — never a second one.
-            existing = (
-                Contribution.objects.filter(mpesa_receipt_number=receipt_number).first()
-                if receipt_number else None
-            )
-            if existing is not None:
-                self._adopt_recorded_payment(
-                    existing,
-                    context=context,
-                    lines=lines,
-                    checkout_request_id=checkout_request_id,
-                    phone=phone,
-                    payer_name=payer_name,
-                    honoree=honoree,
+            lines = allocation_lines(context)                # The pull, the C2B confirmation and this result all race to write the same receipt number; "
+                # The same money may already be in the ledger: a treasurer's
+                # pull (or Safaricom's C2B confirmation) records the payment the
+                # moment it shows on the statement, and this result can land
+                # after that — a slow callback, or Safaricom's retry of one
+                # that failed. Recording the gift again would print one payment
+                # twice: once held in the Unassigned queue and once completed
+                # in the givings. The row the desk already sees is adopted
+                # instead — never a second one. Under the receipt's write
+                # lock, so a twin arriving in the same half-second waits and
+                # re-checks inside the lock rather than answering "no" to it.
+            adopted_payment = None
+            with receipt_write_lock(receipt_number or ''):
+                existing = (
+                    Contribution.objects.filter(mpesa_receipt_number=receipt_number).first()
+                    if receipt_number else None
                 )
+                if existing is not None:
+                    self._adopt_recorded_payment(
+                        existing,
+                        context=context,
+                        lines=lines,
+                        checkout_request_id=checkout_request_id,
+                        phone=phone,
+                        payer_name=payer_name,
+                        honoree=honoree,
+                    )
+                    adopted_payment = existing
+                else:
+                    group = uuid.uuid4() if len(lines) > 1 else None
+                    for row in lines:
+                        contribution = Contribution.objects.create(
+                            amount=Decimal(str(row['amount'])),
+                            giving_type='financial',
+                            # The ledger records the wording the giver read (the
+                            # description); the account stays what M-Pesa showed.
+                            purpose=row['purpose'],
+                            phone_number=phone,
+                            donor_name=(context.get('donor_name') or '').strip() or payer_name,
+                            donor_email=context.get('donor_email', ''),
+                            item_description=context.get('item_description', ''),
+                            payment_method='mpesa',
+                            status='completed',
+                            mpesa_receipt_number=receipt_number,
+                            checkout_request_id=checkout_request_id,
+                            payment_group=group,
+                            paid_at=timezone.now(),
+                            honoree=honoree,
+                            honoree_name=(context.get('honoree_name') or '').strip(),
+                            relationship=(context.get('relationship') or '').strip(),
+                            anonymous=bool(context.get('anonymous')),
+                        )
+                        self._link_giver(contribution, context)
+            if adopted_payment is not None:
                 return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
-            group = uuid.uuid4() if len(lines) > 1 else None
-            for row in lines:
-                contribution = Contribution.objects.create(
-                    amount=Decimal(str(row['amount'])),
-                    giving_type='financial',
-                    # The ledger records the wording the giver read (the
-                    # description); the account stays what M-Pesa showed.
-                    purpose=row['purpose'],
-                    phone_number=phone,
-                    donor_name=(context.get('donor_name') or '').strip() or payer_name,
-                    donor_email=context.get('donor_email', ''),
-                    item_description=context.get('item_description', ''),
-                    payment_method='mpesa',
-                    status='completed',
-                    mpesa_receipt_number=receipt_number,
-                    checkout_request_id=checkout_request_id,
-                    payment_group=group,
-                    paid_at=timezone.now(),
-                    honoree=honoree,
-                    honoree_name=(context.get('honoree_name') or '').strip(),
-                    relationship=(context.get('relationship') or '').strip(),
-                    anonymous=bool(context.get('anonymous')),
-                )
-                self._link_giver(contribution, context)
             # One gift, one receipt: a split payment sends one letter listing
             # its distribution; a single-account gift keeps its own letter.
             # An anonymous gift's letter still has somewhere to go: the
@@ -5975,6 +5984,32 @@ def member_for_giver_name(safaricom_name):
     return None
 
 
+@contextmanager
+def receipt_write_lock(receipt_number):
+    """One writer at a time for one paybill receipt's check-then-create.
+
+    The C2B confirmation and the STK result of the same payment can land in
+    the same half-second — a live double-record proved it: the confirmation
+    asked "is this receipt recorded?", answered no because the callback's
+    rows were still uncommitted, and recorded a held twin beside the five
+    split rows. Both writers run this same check-then-create, so the race
+    is closed by making the second writer wait: an advisory lock keyed by
+    the receipt number itself (md5 is only the key — every writer hashes
+    the same receipt the same way, which is all a lock needs). Postgres's
+    ``pg_advisory_xact_lock`` is transaction-scoped, so it releases itself
+    at the commit; where no advisory lock exists (the test ledger) the
+    context is simply the transaction it wraps and the re-check inside it
+    still runs.
+    """
+    hashed = hashlib.md5((receipt_number or '').encode('utf-8')).hexdigest()
+    key = int(hashed[:15], 16)
+    with transaction.atomic():
+        if 'postgres' in connection.settings_dict.get('ENGINE', ''):
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT pg_advisory_xact_lock(%s)', [key])
+        yield
+
+
 def record_direct_paybill_payment(payload):
     """Record one direct paybill (C2B) payment from a Safaricom payload.
 
@@ -6011,62 +6046,75 @@ def record_direct_paybill_payment(payload):
     except (ValueError, TypeError):
         amount = Decimal('0')
 
-    purpose = (payload.get('BillRefNumber') or 'Combined Offering').strip()
-    purpose = purpose[:Contribution._meta.get_field('purpose').max_length]
+    bill_reference = (payload.get('BillRefNumber') or '').strip()
+    purpose = bill_reference[:Contribution._meta.get_field('purpose').max_length]
+    if is_split_account_reference(bill_reference):
+        # "5ACCOUNTS"/"2ACCOUNTS" — the payer says the ONE payment belongs on
+        # SEVERAL accounts, so it names none of them. Storing the raw words
+        # as a purpose would let the ledger read like a fund called
+        # "5ACCOUNTS" exists; instead the row is held for a treasurer and
+        # labelled in the payer's own words until the Unassigned tab splits
+        # it across the accounts the payer met.
+        purpose = split_reference_label(bill_reference)
+    elif not purpose:
+        purpose = 'Combined Offering'
 
-    # Check if already recorded.
+    # Check if already recorded — under the receipt's write lock, so the
+    # confirmation and the STK result racing for the same receipt cannot
+    # both answer "no" and print one payment twice.
     # A receipt number may already belong to a split STK gift (several rows
     # sharing one payment_group) or to a single unsplit row. Either way a
     # re-delivered C2B confirmation — or a paybill payment that Safaricom
     # also delivered as an STK result for the same transaction — must not
     # create a second gift. Look for any row that already carries this
     # receipt number; only when none exists is this a new payment.
-    contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
-    was_new_record = contribution is None
-    if not was_new_record and contribution.checkout_request_id:
-        # An STK gift the push callback already recorded (split or not): this
-        # C2B twin of the same transaction must not overwrite what the
-        # giver's form chose — the amount, the account, or the receipt they
-        # were sent.
-        return contribution
-    if not contribution:
-        contribution = Contribution(
-            payment_method='mpesa',
-            giving_type='financial',
-            purpose=purpose,
-        )
+    with receipt_write_lock(trans_id):
+        contribution = Contribution.objects.filter(mpesa_receipt_number=trans_id).first()
+        was_new_record = contribution is None
+        if not was_new_record and contribution.checkout_request_id:
+            # An STK gift the push callback already recorded (split or not): this
+            # C2B twin of the same transaction must not overwrite what the
+            # giver's form chose — the amount, the account, or the receipt they
+            # were sent.
+            return contribution
+        if not contribution:
+            contribution = Contribution(
+                payment_method='mpesa',
+                giving_type='financial',
+                purpose=purpose,
+            )
 
-    contribution.status = 'completed'
-    contribution.mpesa_receipt_number = trans_id
-    contribution.amount = amount
-    if msisdn:
-        contribution.phone_number = msisdn
-    if full_name:
-        contribution.donor_name = full_name
-    if not contribution.paid_at:
-        contribution.paid_at = timezone.now()
+        contribution.status = 'completed'
+        contribution.mpesa_receipt_number = trans_id
+        contribution.amount = amount
+        if msisdn:
+            contribution.phone_number = msisdn
+        if full_name:
+            contribution.donor_name = full_name
+        if not contribution.paid_at:
+            contribution.paid_at = timezone.now()
 
-    # Link to member user if exists and not set
-    if not contribution.member:
-        matched_user = member_for_msisdn(msisdn) if msisdn else None
-        # Do NOT match transactions by sender name because many individuals share
-        # first or partial names, which causes wrong attribution and misdirected receipts.
-        # Only attach to a member account when the payer's phone number matches.
-        if matched_user:
-            contribution.member = matched_user
-            if not contribution.donor_email and matched_user.email:
-                contribution.donor_email = matched_user.email
+        # Link to member user if exists and not set
+        if not contribution.member:
+            matched_user = member_for_msisdn(msisdn) if msisdn else None
+            # Do NOT match transactions by sender name because many individuals share
+            # first or partial names, which causes wrong attribution and misdirected receipts.
+            # Only attach to a member account when the payer's phone number matches.
+            if matched_user:
+                contribution.member = matched_user
+                if not contribution.donor_email and matched_user.email:
+                    contribution.donor_email = matched_user.email
 
-    # A reference that names no treasury account (a typo, a blank, a ministry
-    # kept outside the treasury) is held for a treasurer rather than credited
-    # to nothing: the money is safely in the ledger, flagged "needs review",
-    # and the Unassigned tab is where it waits for the account it belongs to.
-    # The flag is set only when the row is first recorded — a re-delivered
-    # confirmation must never undo an assignment the treasurer already made.
-    if was_new_record:
-        contribution.needs_review = account_for_purpose(purpose) is None
+        # A reference that names no treasury account (a typo, a blank, a ministry
+        # kept outside the treasury) is held for a treasurer rather than credited
+        # to nothing: the money is safely in the ledger, flagged "needs review",
+        # and the Unassigned tab is where it waits for the account it belongs to.
+        # The flag is set only when the row is first recorded — a re-delivered
+        # confirmation must never undo an assignment the treasurer already made.
+        if was_new_record:
+            contribution.needs_review = is_split_account_reference(bill_reference) or account_for_purpose(purpose) is None
 
-    contribution.save()
+        contribution.save()
     send_contribution_receipt(contribution)
     # The paybill money is in; the account it names moves too. A repeated
     # confirmation finds the saved row first and never reaches a second
@@ -6439,7 +6487,7 @@ class AssignContributionAccountView(APIView):
             account_list,
         )
         reference = contribution.mpesa_receipt_number or contribution.paystack_reference or str(contribution.id)
-        date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d%m%Y, %H:%M')
+        date_display = timezone.localtime(contribution.paid_at or timezone.localtime()).strftime('%d/%m/%Y, %H:%M')
         # A split's letter already reads the whole figure against the account
         # list it names (and rides the itemised slip), so its Receipt Summary
         # stays off; a single-account letter keeps it — there it is the only
@@ -10246,7 +10294,7 @@ class TreasurySpreadsheetView(APIView):
         week_cols = ['B', 'C', 'D', 'E', 'F']
         for i, col in enumerate(week_cols):
             if i < len(saturdays):
-                ws[f'{col}8'] = saturdays[i].strftime('%d%m%Y')
+                ws[f'{col}8'] = saturdays[i].strftime('%d/%m/%Y')
             else:
                 ws[f'{col}8'] = 'NA'
 
@@ -10375,7 +10423,7 @@ class TreasurySpreadsheetView(APIView):
         ws['C42'] = 0
 
         # ── Signature / presentation dates ────────────────────────────────────────
-        report_date_str = end_date.strftime('%d%m%Y')
+        report_date_str = end_date.strftime('%d/%m/%Y')
         ws['G45'] = report_date_str
         ws['G48'] = report_date_str
 

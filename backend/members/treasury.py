@@ -16,6 +16,7 @@ gift it belongs to, and the same payment can never be credited twice.
 """
 from __future__ import annotations
 
+import re
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -53,6 +54,26 @@ def account_for_purpose(purpose):
             if candidate and _folded(candidate) == needle:
                 return account
     return _account_for_drive_wording(needle)
+
+
+#: A paybill reference that says the ONE payment that follows belongs on
+#: SEVERAL accounts — "5ACCOUNTS", "2 accounts", "ACCOUNTS" on its own —
+#: names no account at all. Such a payment must never be stored as a purpose
+#: line or credited to a fund; the treasurer allocates it across accounts by
+#: hand. The payer's words still stay readable in the label the ledger keeps.
+_SPLIT_ACROSS_ACCOUNTS_PATTERN = re.compile(r'^\s*(?:\d{1,2}[\s/-]*)?accounts?\s*$', re.IGNORECASE)
+
+
+def is_split_account_reference(reference):
+    """True when a paybill reference says "N accounts" — a split, not a name."""
+    return bool(_SPLIT_ACROSS_ACCOUNTS_PATTERN.match(reference or ''))
+
+
+def split_reference_label(reference):
+    """The label a split-across-accounts payment carries, payer's words kept."""
+    typed = (reference or '').strip()
+    detail = f' ({typed})' if typed else ''
+    return f'Split across accounts{detail}'[:120]
 
 
 def _account_for_drive_wording(needle):

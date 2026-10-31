@@ -158,7 +158,7 @@ def duty_title(entry) -> str:
 
 def duty_when(entry) -> str:
     """The day and the shift, as the reminder says them."""
-    day = entry.duty_date.strftime('%A, %d%m%Y')
+    day = entry.duty_date.strftime('%A, %d/%m/%Y')
     shift = (entry.shift or '').strip()
     return f'{day} · {shift}' if shift else day
 
@@ -227,7 +227,7 @@ def duty_context(entry, officer, user, church_name: str = '') -> dict:
         'name': recipient_name(user) if user is not None else (str(officer.get('name') or '').split(' ')[0] or 'friend'),
         'duty': duty_title(entry),
         'day': entry.duty_date.strftime('%A'),
-        'date': entry.duty_date.strftime('%d%m%Y'),
+        'date': entry.duty_date.strftime('%d/%m/%Y'),
         'shift': (entry.shift or '').strip(),
         'role': str(officer.get('role') or '').strip(),
         'desk': desk_name(desk) or 'church duty desk',

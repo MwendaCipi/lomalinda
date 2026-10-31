@@ -225,7 +225,7 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     }
     subject = f'New {label} from {context_common["user_name"]}'
     if submitted_at is not None:
-        subject = f'{subject} · {submitted_at.strftime("%d%m%Y")}'
+        subject = f'{subject} · {submitted_at.strftime("%d/%m/%Y")}'
 
     desk_link = f'/administration?tab={request_desk_tab(kind)}&request={kind}-{request_id}'
     full_link = request_desk_link(kind, request_id)

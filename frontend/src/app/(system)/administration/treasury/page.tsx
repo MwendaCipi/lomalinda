@@ -2284,6 +2284,19 @@ export default function TreasuryPage() {
                                             ) : (
                                               <>
                                             {isReceivedGiving(giving) && (
+                                              <>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setActiveActionMenuId(null);
+                                                  void openAssign(giving);
+                                                }}
+                                                title="File this gift under a different account"
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                                              >
+                                                <FolderCheck className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
+                                                <span>Reassign</span>
+                                              </button>
                                               <button
                                                 type="button"
                                                 disabled={resendingId === giving.id}
@@ -2298,8 +2311,9 @@ export default function TreasuryPage() {
                                                 ) : (
                                                   <Send className="h-3.5 w-3.5 text-ember" />
                                                 )}
-                                                <span>Resend Receipt</span>
+                                                <span>Receipt</span>
                                               </button>
+                                              </>
                                             )}
 
                                             {/* Only an M-Pesa gift that actually

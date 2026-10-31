@@ -49,9 +49,9 @@ def date_compact(value):
     day — the dotted ``dd.mm.yyyy`` the summary once carried reads no more.
     """
     if hasattr(value, "strftime"):
-        return value.strftime("%d%m%Y")
+        return value.strftime("%d/%m/%Y")
     try:
-        return datetime.strptime(str(value)[:10], "%Y-%m-%d").strftime("%d%m%Y")
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
     except Exception:
         return str(value)
 
@@ -827,7 +827,7 @@ def generate_treasury_pdf(
     from datetime import datetime as _dt
     try:
         dt_end = _dt.strptime(end_date, "%Y-%m-%d")
-        end_date_str = dt_end.strftime("%d%m%Y")
+        end_date_str = dt_end.strftime("%d/%m/%Y")
     except Exception:
         end_date_str = end_date
 
@@ -856,7 +856,7 @@ def generate_treasury_pdf(
         weekly_data = {}
 
     num_weeks = len(saturdays)
-    week_labels = [saturdays[i].strftime('%d%m%Y') if i < num_weeks else 'NA' for i in range(5)]
+    week_labels = [saturdays[i].strftime('%d/%m/%Y') if i < num_weeks else 'NA' for i in range(5)]
 
     # Header: Week 1, Week 2, ..., Totals
     cash_header_row = [Paragraph('Date', st["header"])]
@@ -1222,7 +1222,7 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
     info_data = [
         [
             Paragraph(f"<b>Member Name:</b> {member_name}<br/><b>Email:</b> {member_email or 'N/A'}", st["cell"]),
-            Paragraph(f"<b>Statement Period:</b> {date_compact(start_date)} to {date_compact(end_date)}<br/><b>Date Issued:</b> {datetime.now().strftime('%d%m%Y')}", st["cell"]),
+            Paragraph(f"<b>Statement Period:</b> {date_compact(start_date)} to {date_compact(end_date)}<br/><b>Date Issued:</b> {datetime.now().strftime('%d/%m/%Y')}", st["cell"]),
         ]
     ]
     info_table = Table(info_data, colWidths=[9.0 * cm, 9.0 * cm])
@@ -1349,7 +1349,7 @@ def generate_member_giving_statement_pdf(church_name, member_name, member_email,
         pastor_cell.append(Paragraph("<b>Signature:</b> ___________________________", st["cell"]))
     sign_data = [
         [treasurer_cell, pastor_cell],
-        [Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d%m%Y')}", st["cell"]), Paragraph("", st["cell"])],
+        [Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y')}", st["cell"]), Paragraph("", st["cell"])],
     ]
     sign_table = Table(sign_data, colWidths=[9.0 * cm, 9.0 * cm])
     story.append(KeepTogether([sign_table]))
@@ -1488,7 +1488,7 @@ def generate_member_list_pdf(church_name: str, members: list, friend_count: int 
     # opens on the directory's own title.
     story.append(Paragraph("OFFICIAL USERS DIRECTORY" if friend_count else "OFFICIAL MEMBER DIRECTORY", st["title_big"]))
     story.append(Spacer(1, 4))
-    generated_date = datetime.now().strftime("%d%m%Y, %I:%M %p")
+    generated_date = datetime.now().strftime("%d/%m/%Y, %I:%M %p")
     story.append(Paragraph(f"Generated: {generated_date}", st["meta"]))
     story.append(Spacer(1, 12))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f")))
@@ -1656,7 +1656,7 @@ def generate_contribution_thermal_receipt_pdf(
     if first.phone_number:
         line_out(f"Phone: {first.phone_number}")
     payment_dt = _to_eat(first.paid_at or first.created_at)
-    date_str = payment_dt.strftime("%d%m%Y %H:%M") if payment_dt else ""
+    date_str = payment_dt.strftime("%d/%m/%Y %H:%M") if payment_dt else ""
     line_out(f"Date: {date_str}")
     method = (first.payment_method or "mpesa").replace("_", " ").upper()
     line_out(f"Method: {method}")
@@ -1698,7 +1698,7 @@ def generate_contribution_thermal_receipt_pdf(
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
     issued_eat = _to_eat(issued_at)
-    line_out(f"Issued {issued_eat.strftime('%d%m%Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    line_out(f"Issued {issued_eat.strftime('%d/%m/%Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
     # Leave a distinct visual break after the verse and issue details before
     # the treasurer's signature block begins.
     y = _thermal_signatures(c, y - 6 * mm, WIDTH, margin, signatures)
@@ -1777,7 +1777,7 @@ def generate_in_kind_thermal_receipt_pdf(
     line_out(f"Received from: {(donor_name or 'Friend')[:38]}")
     if phone_number:
         line_out(f"Phone: {phone_number}")
-    line_out(f"Received on: {received_on.strftime('%d%m%Y')}")
+    line_out(f"Received on: {received_on.strftime('%d/%m/%Y')}")
     line_out(f"For: {(purpose or 'In-Kind Giving')[:34]}")
     dashed()
 
@@ -1801,7 +1801,7 @@ def generate_in_kind_thermal_receipt_pdf(
     line_out("Thank you for your giving.", "Helvetica-Oblique", 8, "center", gap=2)
     line_out('"God loves a cheerful giver." 2 Cor 9:7', "Helvetica-Oblique", 7, "center", gap=2)
     issued_eat = _to_eat(issued_at)
-    line_out(f"Issued {issued_eat.strftime('%d%m%Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
+    line_out(f"Issued {issued_eat.strftime('%d/%m/%Y %H:%M')}", "Helvetica", 6.5, "center", gap=2)
     # Match the cash receipt's breathing room before the signature block.
     y = _thermal_signatures(c, y - 6 * mm, WIDTH, margin, signatures)
 
@@ -1843,8 +1843,8 @@ def generate_financial_report_pdf(church_name, report, signatures=None) -> bytes
     st = get_pdf_styles()
 
     period = (
-        f"{report.period_start.strftime('%d%m%Y')} – "
-        f"{report.period_end.strftime('%d%m%Y')}"
+        f"{report.period_start.strftime('%d/%m/%Y')} – "
+        f"{report.period_end.strftime('%d/%m/%Y')}"
     )
 
     story.append(Paragraph("CHURCH FINANCIAL REPORT", st["title_big"]))
@@ -1860,7 +1860,7 @@ def generate_financial_report_pdf(church_name, report, signatures=None) -> bytes
         ),
         Paragraph(
             f"<b>Period:</b> {period}<br/>"
-            f"<b>Prepared:</b> {report.created_at.strftime('%d%m%Y')}",
+            f"<b>Prepared:</b> {report.created_at.strftime('%d/%m/%Y')}",
             st["cell"],
         ),
     ]]
@@ -2079,7 +2079,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
     story = []
 
     story.append(Paragraph("WITHDRAWAL REQUESTS REPORT", st["title_big"]))
-    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d%m%Y, %I:%M %p')}", st["meta"]))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d/%m/%Y, %I:%M %p')}", st["meta"]))
     filter_line = f"Shown: {status_label}"
     if search:
         filter_line += f" · Search: {escape(search)}"
@@ -2102,7 +2102,7 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
 
         def fmt_date(value):
             if hasattr(value, "strftime"):
-                return value.strftime("%d%m%Y")
+                return value.strftime("%d/%m/%Y")
             text = str(value or "")
             return f"{text[8:10]}/{text[5:7]}/{text[0:4]}" if len(text) >= 10 else text
 
@@ -2280,7 +2280,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     story.append(Paragraph("WITHDRAWAL REQUEST", st["title_big"]))
     story.append(Paragraph(
-        f"Request #{row.get('id')} · Printed {datetime.now().strftime('%d%m%Y, %I:%M %p')}",
+        f"Request #{row.get('id')} · Printed {datetime.now().strftime('%d/%m/%Y, %I:%M %p')}",
         st["meta"],
     ))
     story.append(Spacer(1, 8))
@@ -2298,7 +2298,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     def fmt_date(value):
         if hasattr(value, "strftime"):
-            return value.strftime("%d%m%Y")
+            return value.strftime("%d/%m/%Y")
         text = str(value or "")
         return f"{text[8:10]}/{text[5:7]}/{text[0:4]}" if len(text) >= 10 else text
 
@@ -2500,21 +2500,21 @@ def generate_department_letter_pdf(
     
     story = []
     
-    # The paper follows the template as written: the date on its own line,
-    # the standard salutation, the receiving church's address beneath it, the
-    # subject written into the REF line it occupies, then the body — and the
-    # closing with the two pens' spaces after it (below).
+    # The paper follows the template as written: the date and the receiving
+    # church share the same row on the left, the letter's subject on its own
+    # line, then the body, and — once both pastor and clerk have signed — the
+    # clerk and pastor details at the foot with room for their signatures.
     letter_date = str(letter_record.get("letter_date") or "").strip()
     if letter_date:
         date_str = letter_date
     else:
         created_date = letter_record.get("created_at")
         if hasattr(created_date, "strftime"):
-            date_str = created_date.strftime("%d%m%Y")
+            date_str = created_date.strftime("%d/%m/%Y")
         elif created_date:
             date_str = str(created_date)[:10]
         else:
-            date_str = timezone.localtime(timezone.now()).strftime("%d%m%Y")
+            date_str = timezone.localtime(timezone.now()).strftime("%d/%m/%Y")
 
     address_text = str(letter_record.get("recipient_address") or "").strip()
 
@@ -2523,44 +2523,50 @@ def generate_department_letter_pdf(
         fontSize=10, leading=14, textColor=colors.HexColor("#1f2937"),
     )
 
-    # The date, alone on its first line, then the salutation, then the
-    # recipient set out as the template writes it: their name, postal address
-    # and town.  The phone and email remain on the request for the clerk to
-    # use when delivering the letter; they are not part of the correspondence.
-    story.append(Paragraph(escape(date_str), addr_style))
-    story.append(Spacer(1, 8))
-    # The salutation every letter of this kind carries.
-    story.append(Paragraph("To the Pastor/ Church clerk,", addr_style))
-    recipient_lines = [
-        str(line or "").strip()
-        for line in (
-            letter_record.get("recipient_name"),
-            address_text,
-            letter_record.get("recipient_town"),
-        )
-        if str(line or "").strip()
-    ]
-    # An address is read as a sequence of address lines, not one run-on
-    # phrase: the name and postal line keep their commas, with the town
-    # closing the block.  Strip only a trailing comma first so an already
-    # punctuated entry never prints a doubled one.
-    recipient_lines = [
-        f"{line.rstrip().rstrip(',')}," if index < len(recipient_lines) - 1 else line
-        for index, line in enumerate(recipient_lines)
-    ]
-    if recipient_lines:
-        story.append(Paragraph(escape("\n".join(recipient_lines)).replace("\n", "<br />"), addr_style))
-    story.append(Spacer(1, 8))
+    # The date on the left of its row, the recipient church on the right;
+    # the same line as the sample lays it out — the date sits on the left,
+    # the recipient church on the right of that line, the way the sample
+    # writes it.
+    # the template writes the date and the address on the same line, the way
+    # the sample lays it out. An empty address is treated as absent, so a
+    # letter with no recipient yet just carries its date line.
+    date_para = Paragraph(escape(date_str), ParagraphStyle(
+        "LetterDate", parent=addr_style, fontSize=10, leading=14,
+    ))
+    # The recipient block the template's right-hand side carries: the church
+    # name, then its postal address, then the town — one line each, exactly
+    # as the sample writes them, and absent only when nothing was entered.
+    recipient_name = str(letter_record.get("recipient_name") or "").strip()
+    recipient_town = str(letter_record.get("recipient_town") or "").strip()
+    address_block = [line for line in (recipient_name, address_text, recipient_town) if line]
+    address_para = Paragraph(
+        "<br />".join([escape(line) for line in address_block]) if address_block else "", addr_style,
+    )
+    date_address_row = Table(
+        [[date_para, address_para]],
+        colWidths=[1.1 * cm, body_w - 1.1 * cm],
+        hAlign="LEFT",
+        splitByRow=False,
+    )
+    date_address_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(date_address_row)
+    story.append(Spacer(1, 10))
     
-    # The subject fills the REF line: what the writer titles the letter is
-    # what the paper references it by.
+    # The subject on its own line: the title the writer gave the letter,
+    # underlined as the template writes it.
     title_text = str(letter_record.get("title") or "Letter").strip()
     subject_style = ParagraphStyle(
         "LetterSubject", parent=styles_map["cell_bold"],
         fontName="Helvetica-Bold", fontSize=11, leading=15,
         textColor=colors.black, spaceAfter=10,
     )
-    story.append(Paragraph(f"<u>REF: {escape(title_text).upper()}</u>", subject_style))
+    story.append(Paragraph(f"<u>{escape(title_text)}</u>", subject_style))
     story.append(Spacer(1, 2))
     
     # Letter body — the writer's own paragraphs, from the left margin.
@@ -2586,65 +2592,68 @@ def generate_department_letter_pdf(
         story.append(Paragraph(escape(cleaned).replace("\n", "<br />"), body_style))
         story.append(Spacer(1, 6))
     
-    # The closing, then the two pens beneath it: the clerk signs on the
-    # left, the pastor on the right — a saved pen prints its image, and a
-    # pen not yet saved leaves the paper's own space for the hand.
-    story.append(Spacer(1, 18))
-    story.append(Paragraph("Kind regards,", addr_style))
-    story.append(Spacer(1, 10))
-    
-    from reportlab.platypus import Image as RLImage
-    from reportlab.lib.utils import ImageReader as _IR
-    
-    def pen_column(entry):
-        entry = entry or {}
-        col = []
-        # The name first, the way the template lays it out; the pen space
-        # runs between name and role, so a hand signs under the name it
-        # belongs to and above the office it signs as. The pastor's pen
-        # carries the ministry's own courtesy title, as the template writes
-        # it — "Pr. George Mwenda" — unless the name already wears one.
-        name = str(entry.get("name") or "").strip()
-        office_title = str(entry.get("office") or "").strip()
-        if name and "pastor" in office_title.lower() and not name.lower().startswith(("pr.", "pastor")):
-            name = f"Pr. {name}"
-        if name:
-            col.append(Paragraph(escape(name), addr_style))
-        image_bytes = entry.get("image")
-        if image_bytes:
-            try:
-                reader = _IR(io.BytesIO(image_bytes))
-                iw, ih = reader.getSize()
-                scale = min((3.4 * cm) / iw, (1.6 * cm) / ih, 1.0)
-                col.append(RLImage(reader, width=iw * scale, height=ih * scale))
-            except Exception:
-                col.append(Spacer(1, 1.6 * cm))
-        else:
-            col.append(Spacer(1, 1.6 * cm))
-        office = office_title or "Signatory"
-        col.append(Paragraph(escape(office), addr_style))
-        # The office's own number beneath its title, the way the template's
-        # sign-off does — a reader who needs to raise the office has it there.
-        phone = str(entry.get("phone") or "").strip()
-        if phone:
-            col.append(Paragraph(escape(phone), addr_style))
-        return col
-    
-    pen_row = Table(
-        [[pen_column(clerk_sig), pen_column(pastor_sig)]],
-        # The stationery strip is a protected right gutter, so the two pen
-        # columns share the remaining writing measure rather than running
-        # beneath the mark.
-        colWidths=[body_w / 2, body_w / 2],
-        hAlign="LEFT",
-    )
-    pen_row.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(pen_row)
+    # Once both pastor and clerk have signed the request, the letter carries
+    # the authenticity mark at the foot — the clerk's and pastor's details
+    # with room between name and role for the hand to sign, as the template
+    # writes them. When one of them is still missing, the paper prints the
+    # two-pen space that remains for the hand.
+    signatures_complete = bool(clerk_sig and pastor_sig)
+    if signatures_complete:
+        story.append(Spacer(1, 18))
+        from reportlab.platypus import Image as RLImage
+        from reportlab.lib.utils import ImageReader as _IR
+        
+        def pen_column(entry):
+            entry = entry or {}
+            col = []
+            name = str(entry.get("name") or "").strip()
+            office_title = str(entry.get("office") or "").strip()
+            if name and "pastor" in office_title.lower() and not name.lower().startswith(("pr.", "pastor")):
+                name = f"Pr. {name}"
+            if name:
+                col.append(Paragraph(escape(name), addr_style))
+            # Room between the name and the office for the hand to sign.
+            col.append(Spacer(1, 1.0 * cm))
+            office = office_title or "Signatory"
+            col.append(Paragraph(escape(office), addr_style))
+            phone = str(entry.get("phone") or "").strip()
+            if phone:
+                col.append(Paragraph(escape(phone), addr_style))
+            return col
+        
+        pen_row = Table(
+            [[pen_column(clerk_sig), pen_column(pastor_sig)]],
+            colWidths=[body_w / 2, body_w / 2],
+            hAlign="LEFT",
+        )
+        pen_row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(pen_row)
+    else:
+        story.append(Spacer(1, 14))
+        pen_space_style = ParagraphStyle(
+            "PenSpace", parent=addr_style,
+            textColor=colors.HexColor("#9ca3af"), fontSize=9.5, leading=12,
+        )
+        pen_row = Table(
+            [[Paragraph("Clerk's signature: ________________________", pen_space_style),
+              Paragraph("Pastor's signature: ________________________", pen_space_style)]],
+            colWidths=[body_w / 2, body_w / 2],
+            hAlign="LEFT",
+        )
+        pen_row.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(pen_row)    
     
     # Build the PDF
     # Continue overflowing content in the page-two frame.
@@ -3555,7 +3564,7 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
     try:
         parsed_day = datetime.strptime(date_text, '%Y-%m-%d')
         cover_meta.append(parsed_day.strftime('%A'))
-        cover_meta.append(parsed_day.strftime('%d%m%Y'))
+        cover_meta.append(parsed_day.strftime('%d/%m/%Y'))
     except ValueError:
         if date_text:
             cover_meta.append(date_text)
@@ -3920,7 +3929,7 @@ def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=
     story = []
 
     story.append(Paragraph("DUTY ROTA SCHEDULE", st["title_big"]))
-    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d%m%Y, %I:%M %p')}", st["meta"]))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%d/%m/%Y, %I:%M %p')}", st["meta"]))
 
     filter_parts = []
     if start_date and end_date:
@@ -3949,7 +3958,7 @@ def generate_duty_rota_pdf(church_name, rota_entries, start_date=None, end_date=
             if len(text) >= 10:
                 try:
                     dt = datetime.strptime(text[:10], "%Y-%m-%d")
-                    return dt.strftime("%d%m%Y")
+                    return dt.strftime("%d/%m/%Y")
                 except Exception:
                     return text[:10]
             return text

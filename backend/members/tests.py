@@ -856,6 +856,46 @@ class MpesaC2BAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(Contribution.objects.filter(mpesa_receipt_number='REV11TEST').count(), 1)
 
+    def test_c2b_split_account_reference_is_held_not_named_an_account(self):
+        # "5ACCOUNTS" says the ONE payment belongs on SEVERAL accounts, so it
+        # named none. It must not be stored as a purpose line or credited to
+        # any fund: the treasurer allocates it across accounts by hand, and
+        # the ledger keeps a label that carries the payer's words instead of
+        # pretending an account called "5ACCOUNTS" exists.
+        for reference in ('5ACCOUNTS', '2 accounts', 'ACCOUNTS', '3-ACCOUNTS'):
+            trans_id = f'SPLTA{reference[:4].upper()}'
+            payload = {
+                'TransID': trans_id,
+                'TransAmount': '8700.00',
+                'BillRefNumber': reference,
+                'MSISDN': '254769830623',
+                'FirstName': 'Rehema',
+            }
+            response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+            self.assertEqual(response.status_code, status.HTTP_200_OK, reference)
+
+            contribution = Contribution.objects.get(mpesa_receipt_number=trans_id)
+            self.assertTrue(contribution.needs_review, reference)
+            self.assertNotEqual(contribution.purpose, reference, reference)
+            self.assertIn('Split across accounts', contribution.purpose, reference)
+            self.assertIn(reference.upper(), contribution.purpose.upper(), reference)
+            from .models import TreasuryAccountTransaction
+            self.assertFalse(TreasuryAccountTransaction.objects.filter(reference=trans_id).exists(), reference)
+
+        # A reference a treasury account would not claim stays as typed.
+        payload = {
+            'TransID': 'SPLTB0001',
+            'TransAmount': '10.00',
+            'BillRefNumber': '5 account',
+            'MSISDN': '254769830624',
+            'FirstName': 'Split',
+        }
+        response = self.client.post('/api/members/payments/c2b/confirmation/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        contribution = Contribution.objects.get(mpesa_receipt_number='SPLTB0001')
+        self.assertTrue(contribution.needs_review)
+        self.assertIn('Split across accounts', contribution.purpose)
+
     def test_c2b_known_reference_is_credited_and_not_flagged(self):
         account = TreasuryAccount.objects.create(name='TITHE', description='Tithe', account_type='mobile_money')
         payload = {
@@ -19386,19 +19426,24 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
         self.assertTrue(pdf.content.startswith(b'%PDF'))
         flat = _pdf_text(pdf.content)
-        # The template the letter mirrors: date beside the address, the
-        # salutation, the subject written into the REF line, the body and
-        # closing, and both officers under their own pen spaces.
+        # The template the letter mirrors: the date on the same row as the
+        # recipient church, the subject on its own line, the body, and both
+        # officers beneath it with room between name and role for their
+        # signatures.
+        # Date on the left, recipient church on the right of the same row,
+        # then the subject on its own line, the body, and both officers below.
         self.assertIn('21/10/2026', flat)
-        self.assertIn('IsioloCentralPointChurch,', flat)
-        self.assertIn('P.OBox61-60300,', flat)
+        self.assertIn('IsioloCentralPointChurch', flat)
+        self.assertIn('P.OBox61-60300', flat)
         self.assertIn('Isiolo', flat)
         self.assertNotIn('0712345678', flat)
         self.assertNotIn('office@example.org', flat)
-        self.assertIn('TothePastor/Churchclerk,', flat)
-        self.assertIn('REF:REQUESTFORCHOIRROBES', flat)
+        self.assertNotIn('ToThePastor/ChurchClerk', flat)
+        self.assertNotIn('Ref:', flat)
+        self.assertNotIn('Re:', flat)
+        self.assertIn('Requestforchoirrobes', flat)
         self.assertIn('Thechoirneedsnewrobesbeforethetermbegins', flat)
-        self.assertIn('Kindregards,', flat)
+        self.assertNotIn('KindRegards', flat)
         self.assertIn('PaulPastor', flat)
         self.assertIn('ClaireClerk', flat)
         self.assertIn('ChurchPastor', flat)

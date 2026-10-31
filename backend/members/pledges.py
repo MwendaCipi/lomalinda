@@ -204,11 +204,11 @@ def pledge_reminder_body(pledge, church_name: str) -> str:
     member_name = (member.get_full_name() or member.username).strip()
     announcement = pledge.announcement
     towards = announcement.support_account or announcement.get_action_type_display() or announcement.title
-    due = pledge.pledge_due_date.strftime('%d%m%Y') if pledge.pledge_due_date else ''
+    due = pledge.pledge_due_date.strftime('%d/%m/%Y') if pledge.pledge_due_date else ''
 
     return (
         f"Dear {member_name},\n\n"
-        f"On {pledge.created_at.strftime('%d%m%Y')} you pledged {money(pledge.pledge_amount)} "
+        f"On {pledge.created_at.strftime('%d/%m/%Y')} you pledged {money(pledge.pledge_amount)} "
         f"towards {towards} for \"{announcement.title}\", promising it by {due}.\n\n"
         "Tomorrow is that day, and we have not yet seen the gift come in. If you have "
         "already given it, please ignore this note — or open the announcement and tick "
