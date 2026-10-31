@@ -352,11 +352,14 @@ export function ProgramDocument({
               // the desk wrote it: each typed line its own line. If it has
               // a title it appears like a session; otherwise it starts from
               // the left margin with no time-column indent.
-              const freeTextLines = (item.text ?? "")
+              // A free-text block — a song, a Bible verse — prints the way
+              // the desk wrote it, blank lines and all: every press of Enter
+              // is read as spacing on the paper. Leading and trailing blank
+              // lines are trimmed so the block doesn't open or close on air.
+              const freeText = (item.text ?? "")
                 .replace(/\r\n/g, "\n")
-                .split("\n")
-                .map((line) => line.trimEnd())
-                .filter((line, idx, arr) => line.trim() !== "" || idx === 0 && arr.some((l) => l.trim() !== ""));
+                .replace(/^\n+/, "")
+                .replace(/\n+$/, "");
               const freeTextOnly =
                 (item.text !== undefined) && !item.title && item.participants.length === 0 && item.parts.length === 0;
               const isFreeText = item.text !== undefined;
@@ -367,13 +370,9 @@ export function ProgramDocument({
                   className="py-3"
                 >
                   {freeTextOnly ? (
-                    <ul className="space-y-0.5">
-                      {freeTextLines.filter((line) => line.trim() !== "").map((line, lineIndex) => (
-                        <li key={lineIndex} className="whitespace-pre-wrap text-sm font-semibold leading-6 text-bark">
-                          {line.trim()}
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="whitespace-pre-wrap text-sm font-semibold leading-6 text-bark">
+                      {freeText}
+                    </p>
                   ) : isFreeText && item.title ? (
                     <>
                       <div className="flex items-baseline gap-4">
@@ -387,14 +386,10 @@ export function ProgramDocument({
                           {item.title}
                         </span>
                       </div>
-                      {freeTextLines.filter((line) => line.trim() !== "").length > 0 && (
-                        <ul className={`mt-1.5 space-y-0.5 ${TIME_INDENT}`}>
-                          {freeTextLines.filter((line) => line.trim() !== "").map((line, lineIndex) => (
-                            <li key={lineIndex} className="whitespace-pre-wrap text-sm leading-6 text-bark">
-                              {line.trim()}
-                            </li>
-                          ))}
-                        </ul>
+                      {freeText && (
+                        <p className={`mt-1.5 whitespace-pre-wrap text-sm leading-6 text-bark ${TIME_INDENT}`}>
+                          {freeText}
+                        </p>
                       )}
                     </>
                   ) : (
@@ -445,15 +440,12 @@ export function ProgramDocument({
                       )}
 
                       {/* Typed lines beside a named row — the verses a session
-                          carries under it — print beneath its people. */}
-                      {freeTextLines.length > 0 && !freeTextOnly && (
-                        <ul className={`mt-1.5 space-y-0.5 ${TIME_INDENT}`}>
-                          {freeTextLines.map((line, lineIndex) => (
-                            <li key={lineIndex} className="whitespace-pre-wrap text-xs leading-5 text-moss">
-                              {line}
-                            </li>
-                          ))}
-                        </ul>
+                          carries under it — print beneath its people, the
+                          spacing the desk pressed carried with them. */}
+                      {freeText && !freeTextOnly && (
+                        <p className={`mt-1.5 whitespace-pre-wrap text-xs leading-5 text-moss ${TIME_INDENT}`}>
+                          {freeText}
+                        </p>
                       )}
                     </>
                   )}

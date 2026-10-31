@@ -53,6 +53,7 @@ import {
   Pencil,
   Search,
   Send,
+  Share2,
   ListMusic,
   Sparkles,
   Sun,
@@ -2178,6 +2179,29 @@ function ProgramEditorModal({
                 Actions menu beside each event keeps the choices about the
                 event itself, and the upload travels with the sheet it
                 lands on. */}
+            {/* The two office buttons, at the sheet's head: what was
+                typed and moved steps back — and forward again — without
+                hunting for a button at the foot. */}
+            <div className="mr-2 flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={itemsHistory.undo}
+                disabled={!itemsHistory.canUndo}
+                aria-label="Undo"
+                className="rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-ember hover:text-ember disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={itemsHistory.redo}
+                disabled={!itemsHistory.canRedo}
+                aria-label="Redo"
+                className="rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-ember hover:text-ember disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
             {onUpload && (
               <button
                 type="button"
@@ -2193,6 +2217,26 @@ function ProgramEditorModal({
             <div>
               <h3 className="text-lg font-bold text-bark">{eventHasProgram(event) ? "Edit program" : "Create program"}</h3>
               <p className="text-xs text-moss">{event.title}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={itemsHistory.undo}
+                disabled={!itemsHistory.canUndo}
+                aria-label="Undo"
+                className="rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-ember hover:text-ember disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={itemsHistory.redo}
+                disabled={!itemsHistory.canRedo}
+                aria-label="Redo"
+                className="rounded-xl border border-sand-line bg-white p-2 text-moss transition hover:border-ember hover:text-ember disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Redo2 className="h-3.5 w-3.5" />
+              </button>
             </div>
             <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
               <X className="h-5 w-5" />
@@ -2365,7 +2409,7 @@ function ProgramEditorModal({
                 <label className="block">
                   <span className="block text-[11px] font-semibold text-moss">Text</span>
                   <textarea
-                    rows={4}
+                    rows={10}
                     value={session.text}
                     onChange={(e) => setSession(index, { text: e.target.value })}
                     aria-label={`Text of block ${index + 1}`}
@@ -2376,7 +2420,7 @@ function ProgramEditorModal({
               </>
             ) : (
               <label className="block">
-                <span className="block text-(11px] font-semibold text-moss">Name</span>
+                <span className="block text-[11px] font-semibold text-moss">Name</span>
                 <input
                   type="text"
                   value={session.title}
@@ -2645,102 +2689,6 @@ function ProgramEditorModal({
           })}
             </div>
             </div>
-          {/* The buttons keep a panel of their own at the column's foot: Add
-              session, and on a page View PDF and View Brochure — the day
-              grows above it, the papers open in the middle, and the sheet
-              speaks for itself where the hand ends. There is no Save to
-              press: the rows go up on their own a moment after the hand
-              stops, and the foot's own word says where they stand. The panel
-              is its own box rather than a row among the cards, and it stays
-              at the foot: pinned by the column's stack on a page, sticky to
-              the foot of the modal's own scroll on a phone. The modal keeps
-              Add session and that word here; its other actions live on its
-              bar beneath the sheet. */}
-          <div
-            className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5 shadow-sm"
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setItems((current) => [...current, emptySession]);
-                setOpenSession(items.length);
-                // Land on the card just minted — its opened panel rides
-                // below the fold once the day is long.
-                pendingScrollRef.current = sessionCardId(items.length);
-                // Its row on the sheet appears the moment it is named, and
-                // that keystroke is the change this walks in on.
-                followPreview(`preview-${uid}-session-${items.filter(programItemHasContent).length}`);
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep${isPage ? " min-w-0 flex-1 justify-center" : ""}`}
-            >
-              <Plus className="h-3.5 w-3.5" /> Add session
-            </button>
-            {/* A free-text block of the day: one box for whatever the
-                programme should carry as written — a song, a Bible verse —
-                with no hour asked for. It stands like a session, so it is
-                dragged anywhere the same grip drags the others. */}
-            <button
-              type="button"
-              onClick={() => {
-                setItems((current) => [...current, { ...emptySession, text: "" }]);
-                setOpenSession(items.length);
-                pendingScrollRef.current = sessionCardId(items.length);
-              }}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-            >
-              <PenLine className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Add Free Text</span>
-              <span className="sm:hidden">Free Text</span>
-            </button>
-            {/* The office's own memory: the two buttons walk the day back and
-                forward the way a word processor's do — every structured move
-                is a step, and a streak of typing is one step. */}
-            <button
-              type="button"
-              onClick={itemsHistory.undo}
-              disabled={!itemsHistory.canUndo}
-              title="Undo the last step"
-              aria-label="Undo"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Undo2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Undo</span>
-            </button>
-            <button
-              type="button"
-              onClick={itemsHistory.redo}
-              disabled={!itemsHistory.canRedo}
-              title="Redo the step just undone"
-              aria-label="Redo"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Redo2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Redo</span>
-            </button>
-            {isPage && (
-              <>
-                {viewPdfControl}
-                {viewBrochureControl}
-              </>
-            )}
-            {/* Where the sheet stands, in the place the save used to sit —
-                the phone read it here, and still does: a desk's page says
-                the same word by its heading instead. An empty word takes no
-                room at all. */}
-            {!isPage && saveWord && (
-              <span
-                role="status"
-                aria-live="polite"
-                className={`shrink-0 text-[11px] font-semibold${
-                  saveState === "error" ? " text-red-600" : " text-moss"
-                }`}
-              >
-                {saveWord}
-              </span>
-            )}
-          </div>
-          </div>
-
           {/* The sheet as it will be read, live, beside the typing: what is
               typed is what is seen — with the uploaded file above it when the
               event carries one. On a phone this stacks under the form. */}
@@ -2805,6 +2753,89 @@ function ProgramEditorModal({
             )}
           </aside>
         </div>
+
+          {/* The buttons' row spans the whole sheet now — under both
+              columns, not just the typing one: the day grows above it on the
+              left, the sheet answers on the right, and the row stays put at
+              the foot while either scrolls. Pinned under the columns on a
+              desk, sticky to the foot of the modal's own scroll on a phone.
+              Undo and redo have moved to the sheet's head, where the hand
+              reaches first; Share keeps its place here, beside the papers
+              the sheet hands out. There is no Save to press: the rows go up
+              on their own a moment after the hand stops, and the footnote
+              beside the buttons says where they stand. */}
+<div
+            className="sticky bottom-0 z-10 mt-3 flex shrink-0 items-center gap-2 rounded-2xl border border-sand-line bg-white px-2.5 py-2.5 shadow-sm"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setItems((current) => [...current, emptySession]);
+                setOpenSession(items.length);
+                // Land on the card just minted — its opened panel rides
+                // below the fold once the day is long.
+                pendingScrollRef.current = sessionCardId(items.length);
+                // Its row on the sheet appears the moment it is named, and
+                // that keystroke is the change this walks in on.
+                followPreview(`preview-${uid}-session-${items.filter(programItemHasContent).length}`);
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-xl bg-lake px-3 py-2 text-xs font-semibold text-white transition hover:bg-lake-deep${isPage ? " min-w-0 flex-1 justify-center" : ""}`}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add session
+            </button>
+            {/* A free-text block of the day: one box for whatever the
+                programme should carry as written — a song, a Bible verse —
+                with no hour asked for. It stands like a session, so it is
+                dragged anywhere the same grip drags the others. */}
+            <button
+              type="button"
+              onClick={() => {
+                setItems((current) => [...current, { ...emptySession, text: "" }]);
+                setOpenSession(items.length);
+                pendingScrollRef.current = sessionCardId(items.length);
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Add Free Text</span>
+              <span className="sm:hidden">Free Text</span>
+            </button>
+            {isPage && (
+              <>
+                {viewPdfControl}
+                {viewBrochureControl}
+              </>
+            )}
+            {/* Share the printed programme or its link — the finished
+                sheet's last move, beside the papers at the foot. */}
+            {onShare && programDownloadHref && (
+              <button
+                type="button"
+                onClick={onShare}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Share program</span>
+                <span className="sm:hidden">Share</span>
+              </button>
+            )}
+            {/* Where the sheet stands, in the place the save used to sit —
+                the phone read it here, and still does: a desk's page says
+                the same word by its heading instead. An empty word takes no
+                room at all. */}
+            {!isPage && saveWord && (
+              <span
+                role="status"
+                aria-live="polite"
+                className={`shrink-0 text-[11px] font-semibold${
+                  saveState === "error" ? " text-red-600" : " text-moss"
+                }`}
+              >
+                {saveWord}
+              </span>
+            )}
+          </div>
+          </div>
 
         {!isPage && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line pt-3">

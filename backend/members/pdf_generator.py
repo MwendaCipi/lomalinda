@@ -2862,12 +2862,17 @@ def _program_rows(event):
         session_people = people_of(session.get('participants'))
         # A free-text block — a song, a Bible verse — the resource session
         # carries as text lines rather than as activities. Each typed line
-        # reads as its own row, the way the verse is laid on the paper.
-        text_lines = [
-            line
-            for line in str(session.get('text') or '').replace('\r\n', '\n').split('\n')
-            if line.strip()
-        ]
+        # reads as its own row, the way the verse is laid on the paper —
+        # and the spacing the desk pressed is carried with it: a run of
+        # blank lines travels as a gap before the line that follows, so
+        # both papers read it. The block's own head and tail of blank
+        # lines are trimmed, so it opens on ink and closes on ink.
+        text_lines = str(session.get('text') or '').replace('\r\n', '\n').split('\n')
+        text_lines = [line.rstrip() for line in text_lines]
+        while text_lines and not text_lines[0].strip():
+            text_lines.pop(0)
+        while text_lines and not text_lines[-1].strip():
+            text_lines.pop()
         children = []
         for part in (session.get('parts') or [])[:40]:
             if not isinstance(part, dict):
@@ -2891,12 +2896,19 @@ def _program_rows(event):
             'indent': 0,
         })
         rows.extend(children)
-        rows.extend({
-            'hours': '',
-            'title': line,
-            'people': [],
-            'indent': INDENT,
-        } for line in text_lines)
+        pending_gap = 0
+        for line in text_lines:
+            if not line.strip():
+                pending_gap += 1
+                continue
+            rows.append({
+                'hours': '',
+                'title': line,
+                'people': [],
+                'indent': INDENT,
+                'gap': pending_gap,
+            })
+            pending_gap = 0
 
     if not rows:
         rows.append({'hours': '', 'title': 'The order of service has not been typed yet.',
@@ -3198,6 +3210,11 @@ def generate_event_program_plain_pdf(
         title = row['title'] or '\u2014'
         hour = row['hours'] or ''
         lines = []
+        # A run of blank lines the desk pressed before this row — each one
+        # raised as its own invisible step, so the paper reads the spacing
+        # the verse or the song asked for.
+        for _ in range(int(row.get('gap') or 0)):
+            lines.append(('', 'Helvetica', size, DARK, 2.5, name_x))
         if hour:
             # The hour leads the row in its own colour, right up against the
             # name's edge; the name begins there on the same baseline — a
@@ -3438,6 +3455,10 @@ def generate_event_program_pdf(event, department_name: str = '', contact=None, d
         # the row's left, so every name — and the people carrying it —
         # begins at the same place whatever that row's hour said.
         name_x = PROGRAM_TIME_COL
+        # A run of blank lines the desk pressed before this row — the same
+        # spacing the plain sheet carries, so both papers read alike.
+        for _ in range(int(row.get('gap') or 0)):
+            lines.append(('', font, size, DARK, 2.5, name_x))
         if hour:
             hour_x = max(0, name_x - PROGRAM_TIME_GAP - stringWidth(hour, font, size))
             lines.append((hour, font, size, DARK, -size, hour_x))
