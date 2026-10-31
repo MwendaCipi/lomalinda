@@ -2689,6 +2689,7 @@ function ProgramEditorModal({
           })}
             </div>
             </div>
+          </div>
           {/* The sheet as it will be read, live, beside the typing: what is
               typed is what is seen — with the uploaded file above it when the
               event carries one. On a phone this stacks under the form. */}
@@ -2831,7 +2832,8 @@ function ProgramEditorModal({
               </span>
             )}
           </div>
-          </div>
+
+        {/* The strip is closed below; the grid above owns the two columns. */}
 
         {!isPage && (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-sand-line pt-3">
