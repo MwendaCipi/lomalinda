@@ -7639,6 +7639,20 @@ function DepartmentDetail({
                 : `${filteredEvents.length} ${filteredEvents.length === 1 ? "event" : "events"}`}
             </p>
             <div className="flex items-center gap-2">
+              {/* The pulpit team is scheduled per day, from its rota: for the
+                  desk that keeps the week, the calendar carries the jump there
+                  beside its own actions, so setting the Sabbath's team is one
+                  press away from the day's events. */}
+              {keepsTheWeek && (
+                <button
+                  type="button"
+                  onClick={() => setSubTab("pulpit-team")}
+                  title="Set the pulpit team for the day"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  <Mic className="h-3.5 w-3.5" aria-hidden="true" /> Pulpit team
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowAddEvent(true)}

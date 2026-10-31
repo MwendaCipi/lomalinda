@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  Eye,
   Images,
   MessageCircle,
   Pencil,
@@ -1769,7 +1768,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-sand-line/60 pt-2">
+                    <div className="flex flex-nowrap items-center justify-end gap-1.5 border-t border-sand-line/60 pt-2">
                       <button
                         type="button"
                         onClick={() => openShareModal(item)}
@@ -1785,7 +1784,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                         onClick={() => void printRotaPdf(item)}
                         aria-label={`Print ${titleOf(item)}`}
                         title="Print this duty entry"
-                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[10px] font-semibold text-moss transition hover:border-ember hover:text-ember sm:text-[11px]"
                       >
                         <Printer className="h-3.5 w-3.5" aria-hidden="true" />
                         Print
@@ -1793,12 +1792,13 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                       <button
                         type="button"
                         onClick={() => openRota(item)}
-                        aria-label={`View the duty \"${titleOf(item)}\"`}
-                        title="View this duty — change the day, the time or the team, or remind the officers"
-                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                        aria-label={`Edit the duty \"${titleOf(item)}\"`}
+                        title="Edit this duty — change the day, the time or the team, or remind the officers"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-sand-line bg-white px-2 py-1.5 text-[10px] font-semibold text-moss transition hover:border-ember hover:text-ember sm:text-[11px]"
                       >
-                        <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                        View
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span className="hidden sm:inline">Edit rota</span>
+                        <span className="sm:hidden">Edit</span>
                       </button>
                       <button
                         type="button"
