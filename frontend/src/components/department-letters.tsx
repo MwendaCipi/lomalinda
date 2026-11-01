@@ -438,7 +438,7 @@ export function WriteLetterModal({
                 disabled={!draftHistory.canUndo}
                 title="Undo the last edit"
                 aria-label="Undo"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-sand px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Undo2 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Undo</span>
@@ -449,7 +449,7 @@ export function WriteLetterModal({
                 disabled={!draftHistory.canRedo}
                 title="Redo the edit just undone"
                 aria-label="Redo"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-sand px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Redo2 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Redo</span>
@@ -459,7 +459,7 @@ export function WriteLetterModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+                className="rounded-xl border border-sand-mute bg-sand px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand-line"
               >
                 Cancel
               </button>
@@ -468,7 +468,7 @@ export function WriteLetterModal({
                 onClick={viewDocument}
                 disabled={!subject.trim() || !body.trim()}
                 title="See the letter as the church will print it"
-                className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-50"
+                className="rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-50"
               >
                 View Document
               </button>
@@ -606,7 +606,7 @@ export function WriteLetterModal({
               disabled={!draftHistory.canUndo}
               title="Undo the last edit"
               aria-label="Undo"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-sand px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Undo2 className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Undo</span>
@@ -617,7 +617,7 @@ export function WriteLetterModal({
               disabled={!draftHistory.canRedo}
               title="Redo the edit just undone"
               aria-label="Redo"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-sand px-3 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Redo2 className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Redo</span>
@@ -627,7 +627,7 @@ export function WriteLetterModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+            className="rounded-xl border border-sand-mute bg-sand px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand-line"
           >
             Cancel
           </button>
@@ -636,7 +636,7 @@ export function WriteLetterModal({
             onClick={viewDocument}
             disabled={!subject.trim() || !body.trim()}
             title="See the letter as the church will print it"
-            className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-bark transition enabled:hover:border-ember enabled:hover:text-ember disabled:opacity-50"
+            className="rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-50"
           >
             View Document
           </button>
@@ -792,7 +792,7 @@ function LetterheadModal({
               type="button"
               onClick={() => void remove()}
               disabled={saving}
-              className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-red-700 transition hover:border-red-400 disabled:opacity-60"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
             >
               Remove
             </button>
@@ -803,7 +803,7 @@ function LetterheadModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+              className="rounded-xl border border-sand-mute bg-sand px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand-line"
             >
               Cancel
             </button>
@@ -1006,7 +1006,7 @@ export function DepartmentLettersPanel({
               loadLetterhead();
               setLetterheadOpen(true);
             }}
-            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-sand-mute px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-sand-mute bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:bg-sand-line"
           >
             <Stamp className="h-3.5 w-3.5" aria-hidden="true" />
             Letterhead
@@ -1112,7 +1112,7 @@ export function DepartmentLettersPanel({
                       type="button"
                       onClick={() => void openPdf(row)}
                       disabled={busy}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-bark px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
                     >
                       {busy ? "Preparing…" : "View letter"}
                     </button>
@@ -1121,7 +1121,7 @@ export function DepartmentLettersPanel({
                         type="button"
                         onClick={() => void shareLetter(row)}
                         disabled={sharing === row.id}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-ember/10 px-3 py-1.5 text-[11px] font-semibold text-ember transition hover:bg-ember hover:text-white disabled:opacity-60"
                       >
                         <Link2 className="h-3 w-3" />
                         {sharing === row.id ? "Preparing…" : "Share"}
@@ -1132,7 +1132,7 @@ export function DepartmentLettersPanel({
                         type="button"
                         onClick={() => void openPdf(row)}
                         disabled={busy}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-sand px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand-line disabled:opacity-60"
                       >
                         <Download className="h-3 w-3" />
                         Download
@@ -1220,7 +1220,7 @@ export function DepartmentLettersPanel({
               <button
                 type="button"
                 onClick={() => setSigning(null)}
-                className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+                className="rounded-xl border border-sand-mute bg-sand px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand-line"
               >
                 Cancel
               </button>
@@ -1274,7 +1274,7 @@ export function DepartmentLettersPanel({
                     openPdf(shareTarget.row);
                     setShareTarget(null);
                   }}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-bark px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-bark/90"
                 >
                   <FileText className="h-3 w-3" />
                   Open the letter
@@ -1324,7 +1324,7 @@ export function DepartmentLettersPanel({
               <button
                 type="button"
                 onClick={() => setShareTarget(null)}
-                className="rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+                className="rounded-xl border border-sand-mute bg-sand px-4 py-2 text-xs font-semibold text-bark transition hover:bg-sand-line"
               >
                 Done
               </button>

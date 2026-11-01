@@ -192,7 +192,7 @@ function LetterReadingRoom() {
               type="button"
               onClick={openPdf}
               disabled={pdfBusy}
-              className="mt-6 inline-flex items-center gap-1.5 rounded-xl border border-sand-mute px-4 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+              className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
             >
               <FileText className="h-4 w-4" />
               {pdfBusy ? "Opening…" : "Open / print the letter"}
