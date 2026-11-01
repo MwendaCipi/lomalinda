@@ -3517,10 +3517,10 @@ function ChoirPanel({
               : "No choir member matches that search."}
           </p>
         ) : (
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-center sm:text-left text-xs">
             <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
               <tr className="border-b border-sand-line">
-                <th className="px-4 pb-3 pt-3 font-bold">Name</th>
+                <th className="px-4 pb-3 pt-3 text-center sm:text-left font-bold">Name</th>
                 <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Contact</th>
                 {canManage && <th className="px-4 pb-3 pt-3 text-right font-bold">Actions</th>}
               </tr>
@@ -3528,8 +3528,8 @@ function ChoirPanel({
             <tbody className="divide-y divide-sand-soft">
               {visibleChoir.map((singer) => (
                 <tr key={singer.id}>
-                  <td className={`px-4 ${rowPad} align-middle`}>
-                    <p className="truncate font-semibold text-bark">{singer.name}</p>
+                  <td className={`px-4 ${rowPad} text-center sm:text-left align-middle`}>
+                    <p className="break-words whitespace-normal font-semibold text-bark">{singer.name}</p>
                   </td>
                   <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
                     <span className="truncate text-moss">{singer.phone_number || singer.email || `@${singer.username}`}</span>
