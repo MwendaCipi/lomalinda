@@ -17,6 +17,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import EmailMultiAlternatives, send_mail
+from django.db.models import Q
 
 from .mailing import IDENTITY, connection_for, sender_for
 
@@ -120,7 +121,17 @@ def request_audience(kind='', audience=''):
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
         if set(profile.get_roles()) & wanted:
             audience_ids.add(profile.user_id)
-    return User.objects.filter(id__in=audience_ids, is_active=True).distinct()
+    listeners = User.objects.filter(id__in=audience_ids, is_active=True).distinct()
+    if kind in JOIN_OR_TRANSFER_KINDS:
+        # The office accounts decide who is a member, but their seat is the
+        # account itself rather than a role code on a profile — a superuser
+        # holding no church role at all would otherwise hear nothing when
+        # someone asked to join. They ride along with the role holders.
+        listeners = User.objects.filter(
+            Q(id__in=audience_ids) | Q(is_staff=True) | Q(is_superuser=True),
+            is_active=True,
+        ).distinct()
+    return listeners
 
 
 def request_desk_tab(kind: str) -> str:
