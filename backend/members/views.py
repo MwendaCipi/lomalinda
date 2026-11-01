@@ -10340,7 +10340,12 @@ class TreasurySpreadsheetView(APIView):
         # Local Church Offering rows 31–35
         local_purpose_map = {
             # 31 handled separately (50% split)
-            32: ['building/development', 'building', 'building development'],
+            # The Field's sheet fixes its five local rows, so the church plot
+            # fund (account ChurchPlot, described 'Church Plot/Building')
+            # rides the Building/Development row — named on the sheet as it is
+            # there — instead of vanishing into the Others residual.
+            32: ['building/development', 'building', 'building development',
+                 'churchplot', 'church plot', 'church plot/building', 'church building'],
             33: ['camp expenses'],
             34: ['local church budget', 'lcb'],
             # 35 (Others) computed as residual below

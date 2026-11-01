@@ -982,6 +982,13 @@ def generate_treasury_pdf(
     local_fund_purposes = [
         ("Combined (50%)", "combined_split"),
         ("Building/Development", ['building/development', 'building', 'building development']),
+        # The church's plot fund carries its own line, read the way the
+        # account is described ('Church Plot/Building'); before it stood
+        # here the plot gifts folded silently into 'Others' and the sheet
+        # never showed a Church Plot account. The names claim the account's
+        # short name ('ChurchPlot', folded 'churchplot') and the wordings a
+        # giver may key with.
+        ("Church Plot/Building", ['churchplot', 'church plot', 'church plot/building', 'church building', 'churchplotbuilding']),
         ("Camp Expenses", ['camp expenses']),
         # The sheet names this fund by its short form, as the account is
         # kept: LCB.
