@@ -397,10 +397,11 @@ export function EmailsDesk() {
               type="button"
               onClick={() => void checkMail()}
               disabled={syncing}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-white px-3 py-1.5 text-xs font-semibold text-bark transition-colors hover:bg-sand-tint disabled:opacity-50"
+              aria-label="Check mail"
+              title="Check mail"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
-              {syncing ? "Checking…" : "Check mail"}
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
             </button>
             <button
               type="button"

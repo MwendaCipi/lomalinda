@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Undo2, Smartphone, Receipt, CircleAlert } from "lucide-react";
+import { Undo2, Smartphone, Receipt, CircleAlert, RefreshCw } from "lucide-react";
 import { RecordList } from "./record-list";
 import { densityCellPad } from "@/lib/table-density";
 import { dayFirstTime } from "@/lib/dates";
@@ -188,9 +188,12 @@ export function MpesaRefundManager() {
             await fetchData();
             setLoading(false);
           }}
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-sand-mute bg-white px-4 py-2 text-xs font-bold text-bark transition hover:bg-sand sm:self-auto"
+          disabled={loading}
+          aria-label="Refresh refunds"
+          title="Refresh"
+          className="inline-flex h-9 w-9 shrink-0 self-start items-center justify-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
         >
-          {loading ? "Refreshing…" : "Refresh"}
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
         </button>
       </div>
 

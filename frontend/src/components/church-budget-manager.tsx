@@ -178,10 +178,9 @@ export function ChurchBudgetManager() {
             disabled={refreshing}
             aria-label="Refresh church budgets"
             title="Refresh"
-            className="inline-flex items-center gap-1.5 rounded-full border border-sand-mute bg-white px-3.5 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-            <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
           </button>
           <button
             type="button"

@@ -579,19 +579,18 @@ export function CampaignManagement({
           aria-label="Search fund drives"
         />
         {/* The desk re-read: a gift added by phone, a pull from the ledger,
-            or another officer's edit shows up the moment the hand asks. The
-            labelled form on a wide screen, the icon alone where one row of
-            controls must still fit beside the search. */}
+            or another officer's edit shows up the moment the hand asks —
+            the lone icon every refresh on the system wears, on a phone as
+            much as on a desk. */}
         <button
           type="button"
           onClick={() => void refreshDesk()}
           disabled={refreshing}
           aria-label="Refresh fund drives"
           title="Refresh"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:w-auto sm:px-3"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
-          <span className="hidden text-xs font-semibold sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
         </button>
         {/* One row on a phone: the search takes the line's spare width and the
             door to a new drive keeps its own — stacked, they cost two rows. */}

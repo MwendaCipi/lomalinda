@@ -92,6 +92,7 @@ export function WithdrawalRequestsPanel({
   toDate = "",
   onChanged,
   onLoaded,
+  registerRefresh,
 }: {
   search?: string;
   statusFilter?: "all" | "pending" | "approved" | "rejected";
@@ -110,6 +111,10 @@ export function WithdrawalRequestsPanel({
       window can open it on the oldest unresponded ask rather than a
       calendar guess this panel knows nothing about. */
   onLoaded?: (rows: WithdrawalRequestRow[]) => void;
+  /** Handed the queue's own re-read: the shell's header refresh button
+      calls it, so the roll's refresh lives beside the filters in the top
+      band instead of at the foot of the table. */
+  registerRefresh?: (fn: (() => void) | null) => void;
 } = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +127,7 @@ export function WithdrawalRequestsPanel({
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
+    return fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
       .then((res) => (res.ok ? res.json() : { requests: [] }))
       .then((data) => {
         const loaded = Array.isArray(data?.requests) ? data.requests : [];
@@ -138,6 +143,13 @@ export function WithdrawalRequestsPanel({
     void Promise.resolve().then(() => { if (alive) load(); });
     return () => { alive = false; };
   }, [load]);
+
+  // The shell's header refresh button reads through this hook: the panel
+  // hands its own roll reader up once mounted and clears it on the way out.
+  useEffect(() => {
+    registerRefresh?.(load);
+    return () => registerRefresh?.(null);
+  }, [load, registerRefresh]);
 
   const act = async (id: number, action: string, extraReply?: string) => {
     setBusy(true);
@@ -644,16 +656,8 @@ export function WithdrawalRequestsPanel({
           <span className="text-moss">  <span className="text-moss">{filteredRows.filter((r) => ["pending", "pastor_approved", "elder_approved"].includes(r.status)).length} awaiting action</span></span>
         </div>
         {/* Refresh re-reads the request roll: gives a pending withdrawal its
-            answer the instant it is approved elsewhere. First in the row. */}
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60"
-          aria-label="Refresh withdrawal requests"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-        </button>
+            answer the instant it is approved elsewhere. Its icon lives in
+            the header band now, beside the filters it serves. */}
         <button
           type="button"
           onClick={printReport}
@@ -976,6 +980,14 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // they ride the same header slot as the accounts' search, one row for both.
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseCategory, setExpenseCategory] = useState("all");
+  // The header refresh reaches the rolls the views own: each panel hands
+  // its re-read up when it mounts, and the band's lone icon spins while it
+  // runs. One busy mark serves the desk — only one view stands at a time.
+  const withdrawalRefreshRef = useRef<(() => void) | null>(null);
+  const expenseRefreshRef = useRef<(() => void) | null>(null);
+  const [deskRefreshBusy, setDeskRefreshBusy] = useState(false);
+  const readWithdrawalRoll = useCallback(() => { void (async () => { setDeskRefreshBusy(true); try { await withdrawalRefreshRef.current?.(); } finally { setDeskRefreshBusy(false); } })(); }, []);
+  const readExpenseRoll = useCallback(() => { void (async () => { setDeskRefreshBusy(true); try { await expenseRefreshRef.current?.(); } finally { setDeskRefreshBusy(false); } })(); }, []);
   // Withdrawal requests search and status filter (all / pending / approved / rejected)
   const [withdrawalSearch, setWithdrawalSearch] = useState("");
   const [withdrawalFilter, setWithdrawalFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
@@ -1084,6 +1096,20 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
             className="w-full min-w-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-64"
             aria-label="Search withdrawal requests"
           />
+          {/* The request roll's refresh, read the way every refresh on the
+              system reads: a lone icon at the band's far right, beside the
+              filters — a pending answer approved elsewhere shows the moment
+              this is tapped. */}
+          <button
+            type="button"
+            onClick={readWithdrawalRoll}
+            disabled={deskRefreshBusy}
+            aria-label="Refresh withdrawal requests"
+            title="Refresh"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${deskRefreshBusy ? "animate-spin" : ""}`} />
+          </button>
         </div>
       );
       return () => setHeaderRightAction(null);
@@ -1146,6 +1172,18 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
               <DateField value={expenseTo} onChange={setExpenseTo} label="Expenditures to date" />
             </label>
           </div>
+          {/* The spending roll's refresh, beside the filters like every
+              other refresh: the reader hands it the view's own re-read. */}
+          <button
+            type="button"
+            onClick={readExpenseRoll}
+            disabled={deskRefreshBusy}
+            aria-label="Refresh expenditures"
+            title="Refresh"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${deskRefreshBusy ? "animate-spin" : ""}`} />
+          </button>
         </div>
       );
       return () => setHeaderRightAction(null);
@@ -1160,17 +1198,17 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs outline-none focus:border-ember sm:w-60 sm:flex-none"
           aria-label="Search church accounts"
         />
-        {/* Refresh rides the top band on a phone, at the search row's far
-            right — the bottom bar is left to the writes it guards, and a
+        {/* Refresh rides the top band on every screen width — at the
+            search row's far right, the lone icon the whole system's
+            refreshes wear. The foot carries the writes it guards, and a
             gift made on the go (M-Pesa, the giving desk) still shows the
-            moment a hand taps this. The wider screens keep it in the foot,
-            first in the row the actions begin. */}
+            moment a hand taps this. */}
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={fetchAccounts}
           disabled={loading}
-          className="h-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:hidden"
+          className="h-9 w-9 inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
           aria-label="Refresh treasury accounts"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -1178,7 +1216,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       </div>
     );
     return () => setHeaderRightAction(null);
-  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter, withdrawalFrom, withdrawalTo, loading]);
+  }, [setHeaderRightAction, view, accountSearch, expenseSearch, expenseCategory, expenseFrom, expenseTo, withdrawalSearch, withdrawalFilter, withdrawalFrom, withdrawalTo, loading, deskRefreshBusy, readWithdrawalRoll, readExpenseRoll]);
 
   /**
    * Publish a statement from the desk the treasurer is already sitting at.
@@ -1460,9 +1498,9 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} onLoaded={handleWithdrawalRowsLoaded} />
+          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} onLoaded={handleWithdrawalRowsLoaded} registerRefresh={(fn) => { withdrawalRefreshRef.current = fn; }} />
         ) : view === "expenditure" ? (
-          <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
+          <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} registerRefresh={(fn) => { expenseRefreshRef.current = fn; }} />
         ) : (
         /* Table on desktop, cards on phones — RecordList owns the breakpoint pair. */
         <RecordList
@@ -1657,21 +1695,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-              {/* Refreshing re-reads the books without leaving the desk: a gift
-                  made on the go (M-Pesa, the giving desk) shows up the moment
-                  the treasurer taps this, first in the row so the hand finds
-                  it where the action buttons begin. On a phone it lives at
-                  the top band instead, beside the search it clears into. */}
-              <button
-                type="button"
-                onClick={fetchAccounts}
-                disabled={loading}
-                className="h-9 hidden sm:inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60 sm:px-3.5"
-                aria-label="Refresh treasury accounts"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline">{loading ? "Refreshing…" : "Refresh"}</span>
-              </button>
+              {/* Refreshing re-reads the books without leaving the desk —
+                  its icon lives in the header band now, beside the search
+                  and the filters it serves, so the foot below carries only
+                  the writes it guards. */}
               {/* The congregation's statement is written from the same desk that
                   keeps the accounts: publishing it is what tells members what
                   the month's giving and spending came to. */}

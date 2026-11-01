@@ -131,15 +131,20 @@ export default function TreasuryPage() {
   const searchParams = useSearchParams();
   const modeParam = searchParams.get("mode");
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<"summary" | "all_givings" | "failed_givings">("all_givings");
 
   useEffect(() => {
-    if (modeParam === "summary") {
-      setViewMode("summary");
-    } else if (modeParam === "all_givings") {
-      setViewMode("all_givings");
-    } else if (modeParam === "failed") {
-      setViewMode("failed_givings");
-    }
+    // The swap rides the microtask — the shape every desk's loads use — so
+    // the effect's own synchronous body sets nothing.
+    void Promise.resolve().then(() => {
+      if (modeParam === "summary") {
+        setViewMode("summary");
+      } else if (modeParam === "all_givings") {
+        setViewMode("all_givings");
+      } else if (modeParam === "failed") {
+        setViewMode("failed_givings");
+      }
+    });
   }, [modeParam]);
 
   const { setHeaderRightAction, setCustomToggles, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
@@ -161,6 +166,11 @@ export default function TreasuryPage() {
   // keeps one row of controls where it used to spend two. The fields
   // themselves live in the popover; this is only whether it is standing.
   const [showDates, setShowDates] = useState(false);
+  // The header's refresh re-reads the ledgers in place; its mark spins
+  // while the read is in flight, the way the requests roll's own
+  // refresh does. It lives in the header band now — the bottom panel
+  // keeps only the writes it guards.
+  const [refreshingLedger, setRefreshingLedger] = useState(false);
   const datesRef = useRef<HTMLDivElement>(null);
   const datesPanelRef = useRef<HTMLDivElement>(null);
   const customWindow = fromDate !== firstDayOfMonth() || toDate !== localDate();
@@ -168,9 +178,9 @@ export default function TreasuryPage() {
   // the server draws it, then its own tab shows the paper.
   const [preparing, setPreparing] = useState<null | "pdf">(null);
 
-  // Purpose Expansion & View Mode State
+  // Purpose Expansion & View Mode State — `viewMode` sits up top, beside the
+  // `?mode=` effect that reads it before anything else on the desk mounts.
   const [expandedPurpose, setExpandedPurpose] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"summary" | "all_givings" | "failed_givings">("all_givings");
   const [allGivingsList, setAllGivingsList] = useState<IndividualGiving[]>(
     // TEMPORARY PREVIEW SEED — REVERT BEFORE COMMIT.
     typeof window !== "undefined" && new URLSearchParams(window.location.search).has("seedtable")
@@ -456,7 +466,7 @@ export default function TreasuryPage() {
     if (!giving.member_id) return;
     try {
       await openConversation({ kind: "dm", member_id: giving.member_id });
-      window.location.href = `/chat?dm=${giving.member_id}`;
+      router.push(`/chat?dm=${giving.member_id}`);
     } catch (error) {
       showAlert("Could not open chat", error instanceof Error ? error.message : "Try again.", "error");
     }
@@ -607,6 +617,12 @@ export default function TreasuryPage() {
   // folds away behind the button, which wears a mark while a window other than
   // this month stands. The wider screens keep the fields in the open, beside
   // the search where there is room for them.
+
+  // The desk's date-window changes sit here, before the header band that
+  // renders them — the band both fields and the re-read live in.
+  async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
+  async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
+
   useEffect(() => {
     setHeaderRightAction(
       <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -689,9 +705,24 @@ export default function TreasuryPage() {
             <DateField value={toDate} onChange={changeToDate} label="Ledger to date" />
           </label>
         </div>
+
+        {/* The desk re-read: a gift made on the go (the giving desk, M-Pesa)
+            shows the moment this is tapped — the lone refresh icon at the
+            band's far right, the same mark every refresh on the system
+            carries, on a phone as much as on a desk. */}
+        <button
+          type="button"
+          onClick={() => { void (async () => { setRefreshingLedger(true); try { await load(); } finally { setRefreshingLedger(false); } })(); }}
+          disabled={refreshingLedger}
+          aria-label="Refresh"
+          title="Refresh"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-sand-mute bg-white text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshingLedger ? "animate-spin text-ember" : ""}`} aria-hidden="true" />
+        </button>
       </div>
     );
-  }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow]);
+  }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow, refreshingLedger]);
 
   // The treasury's views, as one line. The ledger answers for Individual
   // Givings and Summary in place; every other chip walks to the page that
@@ -925,9 +956,6 @@ export default function TreasuryPage() {
     if (next < 0 || next >= periods.length) return;
     await openPeriodOnDesk(next);
   }
-
-  async function changeFromDate(nextFrom: string) { setFromDate(nextFrom); setStatus("loading"); await load(nextFrom, toDate); }
-  async function changeToDate(nextTo: string) { setToDate(nextTo); setStatus("loading"); await load(fromDate, nextTo); }
 
   // Opening the Failed tab, or switching the page open there, swaps the
   // Individual tab's rows out for the Failed tab's own read of the desk's
@@ -2500,14 +2528,9 @@ export default function TreasuryPage() {
                               <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" aria-hidden="true" />
                               <span className="truncate">{editingThisPeriod ? "Edit Period" : "Close Period"}</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => { void load(); }}
-                              className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
-                              <span className="truncate">Refresh</span>
-                            </button>
+                          {/* Refresh has moved up to the header band, beside
+                              the search and the dates it re-reads — the
+                              bottom panel keeps only the writes it guards. */}
                           </div>
                         </div>
                           </div>

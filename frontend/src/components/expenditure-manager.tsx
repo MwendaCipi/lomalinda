@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Printer, Receipt, RefreshCw, Trash2, X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
@@ -62,6 +62,7 @@ export function ExpenditureManager({
   category = "all",
   fromDate = "",
   toDate = "",
+  registerRefresh,
 }: {
   /** The desk's search, drawn in the shell's header row beside the page name. */
   search?: string;
@@ -71,6 +72,10 @@ export function ExpenditureManager({
   fromDate?: string;
   /** The last day of that window (ISO date). */
   toDate?: string;
+  /** Handed the roll's own re-read: the shell's header refresh button
+      calls it, so the refresh lives beside the filters in the top band
+      instead of at the foot of the table. */
+  registerRefresh?: (fn: (() => void) | null) => void;
 } = {}) {
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
@@ -134,6 +139,15 @@ export function ExpenditureManager({
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The shell's header refresh button reads through this hook: the manager
+  // hands its own roll reader up once mounted and clears it on the way out.
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => { fetchDataRef.current = fetchData; });
+  useEffect(() => {
+    registerRefresh?.(() => fetchDataRef.current());
+    return () => registerRefresh?.(null);
+  }, [registerRefresh]);
 
   const handleCreateExpenditure = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -359,18 +373,9 @@ export function ExpenditureManager({
           <strong className="text-alert">KES {filteredTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong>
         </p>
         <div className="flex shrink-0 gap-2">
-        {/* Refresh re-reads the roll: an expense entered at the giving desk
-            or an approval that debits a fund lands the moment it is tapped.
-            First in the row, before Print and Record. */}
-        <button
-          type="button"
-          onClick={fetchData}
-          disabled={loading}
-          className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3.5 text-xs font-semibold text-bark transition hover:border-ember disabled:opacity-45"
-          aria-label="Refresh expenditures"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
+        {/* The roll's refresh has moved up to the header band, beside the
+            search and the filters it serves — the foot below carries only
+            the writes it guards (Print, Record). */}
         <button
           type="button"
           onClick={printExpenditures}
