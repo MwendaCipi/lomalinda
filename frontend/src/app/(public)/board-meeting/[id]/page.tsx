@@ -46,7 +46,11 @@ function BoardMeetingRsvpContent() {
   useEffect(() => {
     let alive = true;
     if (!meetingId || !userId || !token) {
-      setLoadError("This invitation link is incomplete — ask the secretary to send it again.");
+      // The complaint rides the microtask — the shape every desk's loads
+      // use — so the effect's own synchronous body sets nothing.
+      void Promise.resolve().then(() => {
+        setLoadError("This invitation link is incomplete — ask the secretary to send it again.");
+      });
       return;
     }
     (async () => {
