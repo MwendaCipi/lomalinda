@@ -12,8 +12,13 @@ import {
   FileText,
   Mail,
   MapPin,
+  Pause,
+  Pencil,
   Plus,
+  Play,
+  Receipt,
   ShieldCheck,
+  Send,
   Trash2,
   UserCheck,
   X,
@@ -130,7 +135,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
   // Expanded meeting key ("board-1", "business-2")
   const [expandedMeetingKey, setExpandedMeetingKey] = useState<string | null>(null);
 
-  // The confirmations panel: a scheduled board meeting read attendance —
+  // The approvals panel: a scheduled board meeting read attendance —
   // who answered the invitation, who has not.
   const [confirmationsFor, setConfirmationsFor] = useState<UnifiedMeeting | null>(null);
   const [confirmRows, setConfirmRows] = useState<Array<{
@@ -142,6 +147,233 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
   }>>([]);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState("");
+
+  // The meeting actions popover, shared by the desktop row and the mobile
+  // card. It replaces the old inline "Open Fund Drive" / "Confirmations"
+  // buttons with every action the desk can take on this meeting.
+  const [openMeetingActionsId, setOpenMeetingActionsId] = useState<number | null>(null);
+  const [meetingActionsMenuPos, setMeetingActionsMenuPos] = useState<{
+    right: number;
+    dropUp: boolean;
+    top: number;
+    bottom: number;
+  } | null>(null);
+
+  const toggleMeetingActionsMenu = (id: number, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (openMeetingActionsId === id) {
+      setMeetingActionsMenuPos(null);
+      setOpenMeetingActionsId(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const dropUp = window.innerHeight - rect.bottom < 260;
+    setMeetingActionsMenuPos({
+      right: window.innerWidth - rect.right,
+      dropUp,
+      top: rect.bottom + 6,
+      bottom: window.innerHeight - rect.top + 6,
+    });
+    setOpenMeetingActionsId(id);
+  };
+
+  const closeMeetingActionsMenu = () => {
+    setOpenMeetingActionsId(null);
+    setMeetingActionsMenuPos(null);
+  };
+
+  useEffect(() => {
+    if (openMeetingActionsId === null) return;
+    const close = () => {
+      setOpenMeetingActionsId(null);
+      setMeetingActionsMenuPos(null);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [openMeetingActionsId]);
+
+  /** The meeting actions' menu. The caller owns the box the menu sits in,
+      since the row anchors it to its card and the phone card anchors it to
+      itself. */
+  const meetingMenuBody = (m: UnifiedMeeting) => (
+    <>
+      <Link
+        href={`${API_URL}/api/members/board-meetings/${m.id}/pdf/`}
+        onClick={closeMeetingActionsMenu}
+        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
+      >
+        <FileText size={13} className="inline" aria-hidden="true" /> View Packet
+      </Link>
+
+      {m.kind === "board" && m.status === "upcoming" && (
+        <button
+          type="button"
+          onClick={() => {
+            closeMeetingActionsMenu();
+            void openConfirmations(m);
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+        >
+          <UserCheck size={13} className="inline" aria-hidden="true" /> Confirmations
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={() => {
+          closeMeetingActionsMenu();
+          void handleResendInvitation(m);
+        }}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand transition-colors"
+      >
+        <Send size={13} className="inline" aria-hidden="true" /> Resend Invitation
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          closeMeetingActionsMenu();
+          void handlePostponeMeeting(m);
+        }}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+      >
+        <CalendarDays size={13} className="inline" aria-hidden="true" /> Postpone Meeting
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          closeMeetingActionsMenu();
+          void handleCancelMeeting(m);
+        }}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+      >
+        <X size={13} className="inline" aria-hidden="true" /> Cancel Meeting
+      </button>
+
+      {!m.status.startsWith("archived") && (
+        <button
+          type="button"
+          onClick={() => {
+            closeMeetingActionsMenu();
+            void handleToggleMeetingStatus(m.id, m.status === "completed" ? "archived" : "completed");
+          }}
+          className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
+            m.status === "completed"
+              ? "text-emerald-700 hover:bg-emerald-50"
+              : "text-sage hover:bg-sand"
+          }`}
+      >
+        {m.status === "completed" ? (
+          <><Play size={13} className="inline" aria-hidden="true" /> Reopen</>
+        ) : (
+          <><Pause size={13} className="inline" aria-hidden="true" /> Mark Completed</>
+        )}
+      </button>
+    </>
+  );
+
+  /** Handlers that start from the actions menu. */
+  const handleResendInvitation = async (m: UnifiedMeeting) => {
+    if (m.kind !== "board") {
+      showAlert("Not available", "Invitation resend is available for scheduled board meetings only.", "error");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/board-meetings/${m.id}/resend-invitation/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : {},
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showAlert(
+          "Invitation Resent",
+          data.summary ? data.summary : `The ${m.title} invitation was resent to the board.",
+          "success",
+        );
+        fetchMeetings();
+      } else {
+        showAlert(data.detail || data.error || "Could not resend the invitation.", "error");
+      }
+    } catch {
+      showAlert("Could not reach the server. Try again.", "error");
+    }
+  };
+
+  const handlePostponeMeeting = async (m: UnifiedMeeting) => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/board-meetings/${m.id}/postpone/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : {},
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showAlert(
+          "Postponed",
+          data.summary || `The ${m.title} meeting has been postponed.`,
+          "success",
+        );
+        fetchMeetings();
+      } else {
+        showAlert(data.detail || data.error || "Could not postpone the meeting.", "error");
+      }
+    } catch {
+      showAlert("Could not reach the server. Try again.", "error");
+    }
+  };
+
+  const handleCancelMeeting = async (m: UnifiedMeeting) => {
+    if (!confirm(`Cancel the ${m.title} meeting? Invited members will be notified.`)) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/board-meetings/${m.id}/cancel/`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : {},
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showAlert(
+          "Cancelled",
+          data.summary || `The ${m.title} meeting has been cancelled.`,
+          "success",
+        );
+        fetchMeetings();
+      } else {
+        showAlert(data.detail || data.error || "Could not cancel the meeting.", "error");
+      }
+    } catch {
+      showAlert("Could not reach the server. Try again.", "error");
+    }
+  };
+
+  const handleToggleMeetingStatus = async (id: number, status: "completed" | "archived") => {
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/board-meetings/${id}/`, {
+        method: "PATCH",
+        headers: token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : {},
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        fetchMeetings();
+      } else {
+        showAlert(data.detail || data.error || "Could not update the meeting.", "error");
+      }
+    } catch {
+      showAlert("Could not reach the server. Try again.", "error");
+    }
+  };
 
   const fetchMeetings = async () => {
     setLoading(true);
@@ -703,18 +935,17 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                         <Plus size={14} aria-hidden="true" />
                         <span>Add Agenda</span>
                       </button>
-                      {/* The attendance answer a scheduled board meeting owns:
-                          who has confirmed the invitation and who has not. */}
-                      {isBoard && meeting.status === "upcoming" && (
-                        <button
-                          type="button"
-                          onClick={() => void openConfirmations(meeting)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-white px-3 py-1.5 text-xs font-bold text-bark shadow-xs transition hover:bg-sand"
-                        >
-                          <UserCheck size={13} aria-hidden="true" />
-                          <span>Confirmations</span>
-                        </button>
-                      )}
+                      {/* The meeting's actions live behind one popover, on desktop and
+                          on the phone card, instead of as separate inline buttons. */}
+                      <button
+                        type="button"
+                        onClick={(e) => toggleMeetingActionsMenu(meeting.id, e)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-sand px-3 py-1.5 text-xs font-bold text-bark shadow-xs transition hover:bg-sand-shade"
+                      >
+                        <UserCheck size={13} aria-hidden="true" />
+                        <span>Actions</span>
+                        <ChevronDown size={11} className="inline" aria-hidden="true" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setExpandedMeetingKey(isExpanded ? null : meetingKey)}
@@ -822,6 +1053,21 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                           </p>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Meeting actions popover, positioned by the button that opened it. */}
+                  {openMeetingActionsId === meeting.id && meetingActionsMenuPos && (
+                    <div
+                      className="fixed z-50 mt-1 shadow-xl rounded-2xl border border-sand-line bg-white p-2"
+                      style={{
+                        ...(meetingActionsMenuPos.dropUp
+                          ? { bottom: meetingActionsMenuPos.bottom }
+                          : { top: meetingActionsMenuPos.top }),
+                        right: meetingActionsMenuPos.right,
+                      }}
+                    >
+                      <div className="max-h-[70vh] overflow-y-auto">{meetingMenuBody(meeting)}</div>
                     </div>
                   )}
                 </div>

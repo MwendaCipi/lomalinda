@@ -155,4 +155,6 @@ class Command(BaseCommand):
             contribution = record_direct_paybill_payment(row)
             if contribution is not None:
                 recorded += 1
+            else:
+                skipped += 1
         return recorded, skipped, healed

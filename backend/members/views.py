@@ -6123,7 +6123,7 @@ def record_direct_paybill_payment(payload):
     # credit, because the credit only follows a fresh completion. Unassigned
     # gifts are held — not credited — until a treasurer assigns an account
     # from the Unassigned tab.
-    if was_new_record and not contribution.needs_review:
+    if not was_new_record and not contribution.needs_review:
         credit_contribution_lines(contribution)
     return contribution
 
@@ -8131,6 +8131,172 @@ class BoardMeetingRsvpView(APIView):
             meeting=meeting, member=member, defaults={'response': choice},
         )
         return Response({'response': row.response})
+
+
+class BoardMeetingResendView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, pk):
+        """Resend the board invitation that was already sent for this meeting.
+
+        Not a new broadcast — the same audience, the same message, the same
+        channels the desk picked when the meeting was scheduled. Useful when
+        the secretary realises the first round went to the wrong phone or
+        never reached someone.
+        """
+        from .models import BoardMeeting, ChurchNotification
+        from .meetings import broadcast_invitation
+
+        meeting = generics.get_object_or_404(BoardMeeting, pk=pk)
+        if meeting.status != 'upcoming':
+            return Response({'error': 'Only an upcoming board meeting can be invited again.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        count = ChurchNotification.objects.filter(meeting=meeting).count()
+        if count == 0:
+            return Response({'error': 'This meeting has no invitation on record to resend.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        invited, sms_sent, emailed = broadcast_invitation(
+            meeting,
+            BOARD_KIND,
+            current_church_name(),
+            template=None,
+            notify_sms=meeting.notify_sms,
+            notify_email=meeting.notify_email,
+        )
+
+        return Response(
+            {
+                'summary': f"Resent the {meeting.title} invitation to {invited} board member{'s' if invited != 1 else ''} ({sms_sent} SMS, {emailed} email).",
+                'invited': invited,
+                'sms_sent': sms_sent,
+                'emailed': emailed,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BoardMeetingPostponeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, pk):
+        """Move a scheduled board meeting to the soonest free slot the same week.
+
+        Finds the nearest weekday after today that is still free for this
+        board meeting's stated time, updates the meeting and re-invites the
+        board on the new date.
+        """
+        from datetime import timedelta
+
+        meeting = generics.get_object_or_404(BoardMeeting, pk=pk)
+        if meeting.status != 'upcoming':
+            return Response({'error': 'Only an upcoming board meeting can be postponed.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not meeting.start_time or not meeting.end_time:
+            return Response({'error': 'Only a meeting with a stated time range can be postponed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        candidate = _next_free_board_slot(meeting)
+        if not candidate:
+            return Response({'error': 'No free board slot found for the coming two weeks. Pick a new date manually.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_date = meeting.meeting_date
+        meeting.meeting_date = candidate
+        meeting.save(update_fields=['meeting_date'])
+
+        invited, sms_sent, emailed = broadcast_invitation(
+            meeting,
+            BOARD_KIND,
+            current_church_name(),
+            template=None,
+            notify_sms=meeting.notify_sms,
+            notify_email=meeting.notify_email,
+        )
+
+        return Response(
+            {
+                'summary': f"Postponed {meeting.title} from {old_date} to {candidate} and re-invited {invited} board member{'s' if invited != 1 else ''}.",
+                'meeting_date': candidate.isoformat(),
+                'invited': invited,
+                'sms_sent': sms_sent,
+                'emailed': emailed,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class BoardMeetingCancelView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, pk):
+        """Cancel a scheduled board meeting and notify the board it will not happen."""
+        from .models import BoardMeeting, ChurchNotification, ChurchSettings
+        from .meetings import board_audience, recipient_name, eat_greeting
+
+        meeting = generics.get_object_or_404(BoardMeeting, pk=pk)
+        if meeting.status != 'upcoming':
+            return Response({'error': 'Only an upcoming board meeting can be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        meeting.status = 'completed'
+        meeting.save(update_fields=['status'])
+
+        church_name = current_church_name()
+        settings_obj = ChurchSettings.objects.first()
+        message_template = getattr(settings_obj, 'board_meeting_cancelled_message', '') if settings_obj else ''
+        if not message_template.strip():
+            message_template = (
+                '{greeting}, {name}. {church} has cancelled the board meeting '
+                'scheduled for {day}, {date}, {time_range}. '
+                'A new date will be shared once the board settles on one. '
+                'God bless you.'
+            )
+        cancelled_count = 0
+        for user in list(board_audience()):
+            from .meetings import render_message, invitation_context
+            context = invitation_context(meeting, user, church_name)
+            msg = render_message(message_template, context)
+            ChurchNotification.objects.create(
+                user=user,
+                title=f'Board Meeting Cancelled: {meeting.title}',
+                message=msg,
+                link='',
+            )
+            cancelled_count += 1
+
+        return Response(
+            {
+                'summary': f"Cancelled {meeting.title} and notified {cancelled_count} board member{'s' if cancelled_count != 1 else ''}.",
+                'meeting_id': meeting.pk,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def _next_free_board_slot(meeting):
+    """The first weekday on or after tomorrow with no board meeting at this time."""
+    from datetime import timedelta
+
+    if not meeting.start_time or not meeting.end_time:
+        return None
+
+    start = timezone.now().date() + timedelta(days=1)
+    for offset in range(14):
+        candidate = start + timedelta(days=offset)
+        if candidate.weekday() >= 5:
+            continue
+        clash = BoardMeeting.objects.filter(
+            meeting_date=candidate,
+            status='upcoming',
+            start_time__lt=meeting.end_time,
+            end_time__gt=meeting.start_time,
+        ).exclude(pk=meeting.pk).first()
+        if not clash:
+            return candidate
+    return None
+
+
+def current_church_name():
+    """The church name the desk is broadcasting into."""
+    from .models import ChurchSettings
+    settings_obj = ChurchSettings.objects.first()
+    return (getattr(settings_obj, 'church_name', '') or '').strip() or 'SDA Church Loma Linda'
 
 
 class BoardMeetingConfirmationsView(APIView):

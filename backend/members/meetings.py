@@ -33,7 +33,7 @@ EAT = ZoneInfo('Africa/Nairobi')
 
 DEFAULT_BOARD_INVITATION_MESSAGE = (
     '{greeting}, {name}. {church} is inviting you to a board meeting '
-    'scheduled for {day}, {date} from {start_time} to {end_time}. '
+    'scheduled for {day}, {date}, {time_range}. '
     'God bless you as you purpose to attend.'
 )
 DEFAULT_BUSINESS_INVITATION_MESSAGE = (
@@ -177,6 +177,7 @@ def invitation_context(meeting, user, church_name):
         'start_time': format_clock(getattr(meeting, 'start_time', None)) or meeting_time_display(meeting),
         'end_time': format_clock(getattr(meeting, 'end_time', None)),
         'meeting_time': meeting_time_display(meeting),
+        'time_range': meeting_time_display(meeting),
         'location': meeting.location or '',
         'church': church_name,
     }
@@ -246,7 +247,8 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
     already_emailed = set()
 
     for user in audience:
-        message = render_message(template, invitation_context(meeting, user, church_name))
+        context = invitation_context(meeting, user, church_name)
+        message = render_message(template, context)
         # The board answers its invite from the phone: the confirm link rides
         # every channel — the in-app bell, the SMS, the fallback email — so
         # whatever the hand opens first can answer.
@@ -263,20 +265,17 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
         invited += 1
         # SMS first — try sending SMS, fall back to email if it fails
         phone = getattr(getattr(user, 'member_profile', None), 'phone_number', '')
-        sms_ok = False
         if notify_sms and phone:
             try:
                 from . import sms
                 meet_url = (
                     f"{settings.FRONTEND_URL}/administration?tab=board-agenda&meeting={meeting.id}"
                 )
-                context = invitation_context(meeting, user, church_name)
                 sms_text = (
-                    f"{church_name}: {subject_kind} invitation: {meeting.title} on {context['date']}. "
+                    f"{church_name}: {subject_kind} invitation: {meeting.title} on {context['date']}, {context['time_range']}. "
                     f"Agenda: {meet_url}. Confirm attendance: {confirm_link}"
                 )
                 sms_sent += sms.send(phone, sms_text)
-                sms_ok = True
             except Exception:
                 pass
         # Email falls back if SMS was not sent
