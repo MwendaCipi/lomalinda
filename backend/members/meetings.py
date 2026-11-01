@@ -8,6 +8,8 @@ two meetings cannot drift apart again.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import re
 from datetime import datetime
@@ -56,6 +58,26 @@ PLACEHOLDERS = (
 
 BOARD_KIND = 'board'
 BUSINESS_KIND = 'business'
+
+# An invitation's link carries a token no guest of the page could forge: a
+# board member taps "I will attend" from their phone with no account signed
+# in, and the pair (meeting, member) inside the link is what the RSVP
+# endpoint verifies before it writes anything.
+def rsvp_token(meeting_id, user_id):
+    payload = f'rsvp:{int(meeting_id)}:{int(user_id)}'
+    return hmac.new(
+        str(settings.SECRET_KEY).encode(),
+        payload.encode(),
+        hashlib.sha256,
+    ).hexdigest()[:24]
+
+
+def rsvp_link(meeting, user):
+    """The sign-in-free address where one invitation is answered."""
+    return (
+        f"{settings.FRONTEND_URL}/board-meeting/{meeting.id}"
+        f"?u={user.id}&t={rsvp_token(meeting.id, user.id)}"
+    )
 
 # The letters a leadership change causes (see send_appointment_emails in
 # members/views.py): everyone newly seated is welcomed into their position,
@@ -144,7 +166,9 @@ def invitation_context(meeting, user, church_name):
         'name': recipient_name(user),
         'title': meeting.title,
         'day': meeting_date.strftime('%A') if hasattr(meeting_date, 'strftime') else '',
-        'date': meeting_date.strftime('%d/%m/%Y') if hasattr(meeting_date, 'strftime') else str(meeting_date),
+        # The invitation's date reads the way a person says it out loud —
+        # "19 September 2026" — not the way the desk files it.
+        'date': meeting_date.strftime('%d %B %Y').lstrip('0') if hasattr(meeting_date, 'strftime') else str(meeting_date),
         'start_time': format_clock(getattr(meeting, 'start_time', None)) or meeting_time_display(meeting),
         'end_time': format_clock(getattr(meeting, 'end_time', None)),
         'meeting_time': meeting_time_display(meeting),
@@ -218,10 +242,18 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
 
     for user in audience:
         message = render_message(template, invitation_context(meeting, user, church_name))
+        # The board answers its invite from the phone: the confirm link rides
+        # every channel — the in-app bell, the SMS, the fallback email — so
+        # whatever the hand opens first can answer.
+        confirm_link = rsvp_link(meeting, user) if kind == BOARD_KIND else ''
+        notify_body = (
+            f"{message}\n\nConfirm your attendance: {confirm_link}" if confirm_link else message
+        )
         ChurchNotification.objects.create(
             user=user,
             title=f'{subject_kind} Invitation: {meeting.title}',
-            message=message,
+            message=notify_body,
+            link=f'/board-meeting/{meeting.id}?u={user.id}&t={rsvp_token(meeting.id, user.id)}' if confirm_link else '',
         )
         invited += 1
         # SMS first — try sending SMS, fall back to email if it fails
@@ -230,7 +262,14 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
         if notify_sms and phone:
             try:
                 from . import sms
-                sms_text = f"{church_name}: Board meeting invitation: {meeting.title}. Review: {settings.FRONTEND_URL}/my-areas?area=pastorate&view=letter-approvals"
+                meet_url = (
+                    f"{settings.FRONTEND_URL}/administration?tab=board-agenda&meeting={meeting.id}"
+                )
+                context = invitation_context(meeting, user, church_name)
+                sms_text = (
+                    f"{church_name}: {subject_kind} invitation: {meeting.title} on {context['date']}. "
+                    f"Agenda: {meet_url}. Confirm attendance: {confirm_link}"
+                )
                 sms_sent += sms.send(phone, sms_text)
                 sms_ok = True
             except Exception:
@@ -242,7 +281,7 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
             try:
                 send_mail(
                     f'{subject_kind} Invitation: {meeting.title}',
-                    message,
+                    notify_body,
                     settings.DEFAULT_FROM_EMAIL,
                     [user.email],
                     fail_silently=True,

@@ -15,6 +15,7 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  UserCheck,
   X,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
@@ -129,6 +130,19 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
   // Expanded meeting key ("board-1", "business-2")
   const [expandedMeetingKey, setExpandedMeetingKey] = useState<string | null>(null);
 
+  // The confirmations panel: a scheduled board meeting read attendance —
+  // who answered the invitation, who has not.
+  const [confirmationsFor, setConfirmationsFor] = useState<UnifiedMeeting | null>(null);
+  const [confirmRows, setConfirmRows] = useState<Array<{
+    member_id: number;
+    name: string;
+    full_name: string;
+    roles: string[];
+    response: "" | "yes" | "no";
+  }>>([]);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState("");
+
   const fetchMeetings = async () => {
     setLoading(true);
     setError(null);
@@ -215,6 +229,27 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       })
       .catch(() => {});
   }, []);
+
+  /** Read one scheduled board meeting's attendance straight from the desk. */
+  const openConfirmations = async (meeting: UnifiedMeeting) => {
+    setConfirmationsFor(meeting);
+    setConfirmRows([]);
+    setConfirmError("");
+    setConfirmLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/board-meetings/${meeting.id}/confirmations/`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setConfirmRows(Array.isArray(data.rows) ? data.rows : []);
+      } else {
+        setConfirmError(data.detail || "Could not read the confirmations.");
+      }
+    } catch {
+      setConfirmError("Could not reach the server. Try again.");
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
 
   const resetForm = (kind: MeetingKind = "board") => {
     setModalMeetingType(kind);
@@ -668,6 +703,18 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                         <Plus size={14} aria-hidden="true" />
                         <span>Add Agenda</span>
                       </button>
+                      {/* The attendance answer a scheduled board meeting owns:
+                          who has confirmed the invitation and who has not. */}
+                      {isBoard && meeting.status === "upcoming" && (
+                        <button
+                          type="button"
+                          onClick={() => void openConfirmations(meeting)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-white px-3 py-1.5 text-xs font-bold text-bark shadow-xs transition hover:bg-sand"
+                        >
+                          <UserCheck size={13} aria-hidden="true" />
+                          <span>Confirmations</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setExpandedMeetingKey(isExpanded ? null : meetingKey)}
@@ -1171,6 +1218,81 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmations panel: the board read attendance before it meets. */}
+      {confirmationsFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-sand-line px-5 py-4">
+              <div>
+                <h3 className="text-sm font-bold text-bark">Meeting Confirmations</h3>
+                <p className="mt-0.5 text-xs text-moss">
+                  {confirmationsFor.title} · {dayFirst(confirmationsFor.meeting_date)} · {confirmationsFor.location}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmationsFor(null)}
+                aria-label="Close confirmations"
+                className="rounded-full p-1.5 text-moss transition hover:bg-sand hover:text-bark"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {confirmLoading ? (
+                <p className="py-10 text-center text-xs font-semibold text-moss">Reading the confirmations…</p>
+              ) : confirmError ? (
+                <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700">{confirmError}</p>
+              ) : (
+                (() => {
+                  const confirmed = confirmRows.filter((row) => row.response == "yes");
+                  const notConfirmed = confirmRows.filter((row) => row.response != "yes");
+                  const seat = (row: { member_id: number; name: string; full_name: string; roles: string[]; response: string }) => (
+                    <li key={row.member_id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-bark">{row.full_name}</p>
+                        <p className="truncate text-[10px] text-moss">{row.roles.join(", ")}</p>
+                      </div>
+                      {row.response == "no" && (
+                        <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-700">Declined</span>
+                      )}
+                    </li>
+                  );
+                  return (
+                    <>
+                      <div className="rounded-2xl border border-sage/30 bg-sage/10">
+                        <h4 className="px-3 pt-3 text-[10px] font-bold uppercase tracking-wider text-sage-deep">
+                          Confirmed to attend ({confirmed.length})
+                        </h4>
+                        {confirmed.length > 0 ? (
+                          <ul className="divide-y divide-sand-line py-1">{confirmed.map(seat)}</ul>
+                        ) : (
+                          <p className="px-3 pb-3 text-xs text-moss">No one has confirmed yet.</p>
+                        )}
+                      </div>
+                      <div className="mt-3 rounded-2xl border border-sand-line bg-sand/50">
+                        <h4 className="px-3 pt-3 text-[10px] font-bold uppercase tracking-wider text-moss">
+                          Not confirmed ({notConfirmed.length})
+                        </h4>
+                        {notConfirmed.length > 0 ? (
+                          <ul className="divide-y divide-sand-line py-1">{notConfirmed.map(seat)}</ul>
+                        ) : (
+                          <p className="px-3 pb-3 text-xs text-moss">Everyone on the board has confirmed.</p>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()
+              )}
+            </div>
+            <p className="border-t border-sand-line bg-sand/50 px-5 py-3 text-[11px] text-moss">
+              The invitation carries a confirm link by SMS, email and the in-app notice; answers land here as they are tapped.
+            </p>
           </div>
         </div>
       )}

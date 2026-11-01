@@ -2306,6 +2306,32 @@ class BoardMeetingAgenda(models.Model):
         return f"Board Agenda: {self.title} ({self.meeting.title})"
 
 
+class BoardMeetingRsvp(models.Model):
+    """A board member's answer to an invitation: coming, or not.
+
+    The invitation carries a link to a small page where the hand taps one of
+    two answers; this sits between the meeting and the member, so the
+    meeting's confirmations view can read the whole board in one query.
+    A re-answer replaces the first: the latest word is the truth.
+    """
+    RESPONSE_CHOICES = [('yes', 'Will attend'), ('no', 'Cannot attend')]
+
+    meeting = models.ForeignKey(BoardMeeting, on_delete=models.CASCADE, related_name='rsvps')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='board_meeting_rsvps')
+    response = models.CharField(max_length=8, choices=RESPONSE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('meeting', 'member'), name='uniq_rsvp_per_board_member')
+        ]
+        ordering = ['updated_at']
+
+    def __str__(self):
+        return f"RSVP: {self.member.username} -> {self.meeting.title} ({self.response})"
+
+
 class ChurchNotification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=160)

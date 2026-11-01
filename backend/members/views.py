@@ -24,6 +24,7 @@ import logging
 import uuid
 import re
 import json
+import hmac
 from functools import wraps
 import os
 import io
@@ -104,6 +105,7 @@ from .meetings import (
     broadcast_invitation,
     create_agendas,
     eat_greeting,
+    meeting_audience,
     parse_clock,
     recipient_name,
     render_message,
@@ -8076,6 +8078,92 @@ class BusinessMeetingDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [AllowAny]
     serializer_class = BusinessMeetingSerializer
     queryset = BusinessMeeting.objects.all().prefetch_related('agendas')
+
+
+class BoardMeetingRsvpView(APIView):
+    """The small public page behind an invitation's confirm link.
+
+    GET tells the page what it is answering (the meeting, one member's
+    standing answer) and POST records the tap of "I will attend" or "I
+    cannot attend". The link carries a per-member token, so a signed-in
+    account is not required: most board members will answer off the SMS.
+    A wrong or missing token is a 403, not a silent no-op.
+    """
+    permission_classes = [AllowAny]
+
+    def _member_and_meeting(self, request, pk):
+        from .models import BoardMeetingRsvp
+        from .meetings import rsvp_token
+
+        meeting = generics.get_object_or_404(BoardMeeting, pk=pk)
+        user_id = request.query_params.get('u') or request.data.get('u')
+        token = request.query_params.get('t') or request.data.get('t')
+        member = None
+        if user_id and token and user_id.isdigit():
+            candidate = User.objects.filter(id=int(user_id), is_active=True).first()
+            if candidate and hmac.compare_digest(token, rsvp_token(meeting.pk, candidate.id)):
+                member = candidate
+        if member is None:
+            return meeting, None, None
+        existing = BoardMeetingRsvp.objects.filter(meeting=meeting, member=member).first()
+        return meeting, member, existing
+
+    def get(self, request, pk):
+        meeting, member, existing = self._member_and_meeting(request, pk)
+        if member is None:
+            return Response({'detail': "This invitation link is no longer valid."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({
+            'title': meeting.title,
+            'meeting_date': meeting.meeting_date,
+            'time_display': meeting.time_range_display(),
+            'location': meeting.location,
+            'response': existing.response if existing else '',
+        })
+
+    def post(self, request, pk):
+        meeting, member, _ = self._member_and_meeting(request, pk)
+        if member is None:
+            return Response({'detail': "This invitation link is no longer valid."}, status=status.HTTP_403_FORBIDDEN)
+        choice = str(request.data.get('response', '')).strip().lower()
+        if choice not in ('yes', 'no'):
+            return Response({'response': "Answer with 'yes' or 'no'."}, status=status.HTTP_400_BAD_REQUEST)
+        row, _ = BoardMeetingRsvp.objects.update_or_create(
+            meeting=meeting, member=member, defaults={'response': choice},
+        )
+        return Response({'response': row.response})
+
+
+class BoardMeetingConfirmationsView(APIView):
+    """The confirmations view a scheduled board meeting's action opens.
+
+    One row per board member — the invitation audience — with the answer
+    their link has recorded, so the secretary sees at a glance who is
+    coming and whom to chase.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        from .models import BoardMeetingRsvp
+
+        meeting = generics.get_object_or_404(BoardMeeting, pk=pk)
+        answered = {rsvp.member_id: rsvp for rsvp in BoardMeetingRsvp.objects.filter(meeting=meeting).select_related('member')}
+        rows = []
+        for user in meeting_audience(BOARD_KIND):
+            profile = getattr(user, 'member_profile', None)
+            first = (user.first_name or '').strip()
+            full = user.get_full_name() or user.username
+            rsvp = answered.get(user.id)
+            rows.append({
+                'member_id': user.id,
+                'name': first or full,
+                'full_name': full,
+                'roles': (profile.get_roles() if profile else ['member']),
+                'response': rsvp.response if rsvp else '',
+                'answered_at': rsvp.updated_at if rsvp else None,
+            })
+        confirmed = sum(1 for row in rows if row['response'] == 'yes')
+        return Response({'title': meeting.title, 'meeting_date': meeting.meeting_date,
+                         'confirmed': confirmed, 'rows': rows})
 
 
 class BusinessMeetingAddAgendaView(APIView):
