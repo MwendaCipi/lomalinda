@@ -5649,7 +5649,13 @@ function DepartmentDetail({
         viewerRoles.includes("admin") ||
         (isDeaconate && onRoll)),
   );
-  const [subTab, setSubTab] = useState<DeptSubTab>(initialTab);
+  // The pastorate carries no Event Calendar of its own — the touch on its
+  // strip the other desks share is not a page this desk keeps, so a call for
+  // one opens the treasury's asks instead: the view the office actually
+  // answers first.
+  const [subTab, setSubTab] = useState<DeptSubTab>(
+    initialTab === "calendar" && isPastorate ? "treasury-approvals" : initialTab
+  );
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
   const officeViewBlocked =
@@ -6022,7 +6028,11 @@ function DepartmentDetail({
       // well: the first chip a reader meets is the one the desk is showing.
       // A desk that runs as units still reads its roll beside it; the roll
       // chips follow, one step down the strip instead of leading it.
-      { key: "calendar", label: isMusic ? "Events" : "Event Calendar", short: "Events", icon: CalendarDays },
+      // The pastorate keeps no calendar: the office answers the church's
+      // asks, not the church's days, so its strip opens on Treasury instead.
+      ...(isPastorate
+        ? []
+        : [{ key: "calendar", label: isMusic ? "Events" : "Event Calendar", short: "Events", icon: CalendarDays }]),
       // A department that runs as units reads one at a time — the roll and
       // the calendar follow the toggle — so the units ride the strip beside
       // the views: All Members, then the desk's own fellowships.
@@ -7874,8 +7884,11 @@ function DepartmentDetail({
           pastor writes none of them — they arrive here to be signed or sent
           back with a reason. */}
       {subTab === "treasury-approvals" && isPastorate && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
-          <div className="min-h-0 flex-1">
+        /* Phones read this card at its own height under the scrolling page
+           — the bounded height is a desk treatment, and clipping the panel
+           on a phone left the queue out of reach of a thumb. */
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs md:min-h-0 md:flex-1">
+          <div className="min-h-0">
             <WithdrawalRequestsPanel statusFilter="all" />
           </div>
         </div>
@@ -7889,8 +7902,10 @@ function DepartmentDetail({
         </div>
       )}
       {subTab === "spiritual" && isPastorate && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs">
-          <div className="min-h-0 flex-1">
+        /* Same treatment as the treasury asks: the phone keeps the page
+           scrolling, the desk keeps the bounded card. */
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs md:min-h-0 md:flex-1">
+          <div className="min-h-0">
             <RequestsAdminManager initialTab="all" />
           </div>
         </div>
