@@ -3144,7 +3144,8 @@ class PdfGenerationAPITests(APITestCase):
             individual_rows=[],
         ))
 
-        heading = 'CHURCH GIVINGS REPORT FROM 01012026 TO 31012026'
+        # The paper writes its day the separator way: day-first, 01/01/2026.
+        heading = 'CHURCH GIVINGS REPORT FROM 01/01/2026 TO 31/01/2026'
         self.assertIn(''.join(heading.split()), text)
         self.assertNotIn(
             ''.join('INDIVIDUAL MEMBER & COLLECTION CONTRIBUTIONS REPORT'.split()),
@@ -3167,13 +3168,13 @@ class PdfGenerationAPITests(APITestCase):
             field_name="North East Kenya Field",
         ))
 
-        heading = 'CASH COUNT AND OFFERING REPORT SUMMARY FROM 01012026 TO 31012026'
+        heading = 'CASH COUNT AND OFFERING REPORT SUMMARY FROM 01/01/2026 TO 31/01/2026'
         self.assertIn(''.join(heading.split()), text)
         # The month-only wording it replaces is gone.
         self.assertNotIn(''.join('CASH COUNT AND OFFERING REPORT SUMMARY (JANUARY 2026)'.split()), text)
         # Field moves out of the headline and into that meta line.
         meta = 'Name of Church: SDA Church Test | Field: North East Kenya Field' \
-            ' | District: Meru | Period: 2026-01-01 to 2026-01-31'
+            ' | District: Meru | Period: 01/01/2026 to 31/01/2026'
         self.assertIn(''.join(meta.split()), text)
 
     def test_summary_report_reads_the_nekf_template_row_for_row(self):
