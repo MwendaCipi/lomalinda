@@ -91,6 +91,7 @@ export function WithdrawalRequestsPanel({
   fromDate = "",
   toDate = "",
   onChanged,
+  onLoaded,
 }: {
   search?: string;
   statusFilter?: "all" | "pending" | "approved" | "rejected";
@@ -105,6 +106,10 @@ export function WithdrawalRequestsPanel({
    * a full reload.
    */
   onChanged?: () => void;
+  /** Told what arrived when the queue refetches, so the desk holding the
+      window can open it on the oldest unresponded ask rather than a
+      calendar guess this panel knows nothing about. */
+  onLoaded?: (rows: WithdrawalRequestRow[]) => void;
 } = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,10 +124,14 @@ export function WithdrawalRequestsPanel({
     setLoading(true);
     fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
       .then((res) => (res.ok ? res.json() : { requests: [] }))
-      .then((data) => setRows(Array.isArray(data?.requests) ? data.requests : []))
+      .then((data) => {
+        const loaded = Array.isArray(data?.requests) ? data.requests : [];
+        setRows(loaded);
+        onLoaded?.(loaded);
+      })
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [onLoaded]);
 
   useEffect(() => {
     let alive = true;
@@ -970,15 +979,49 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // Withdrawal requests search and status filter (all / pending / approved / rejected)
   const [withdrawalSearch, setWithdrawalSearch] = useState("");
   const [withdrawalFilter, setWithdrawalFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
-  // Withdrawal requests date window — the same from/to pair the Givings page
-  // opens on: the month to date, until the treasurer narrows or clears it.
-  const [withdrawalFrom, setWithdrawalFrom] = useState(firstDayOfMonth);
+  // Withdrawal requests date window — opened on the oldest ask still
+  // waiting for the treasury's answer rather than a calendar guess, so an
+  // unresponded request from any day is never hidden below the fold of the
+  // month. Until the queue reports, the window stays open and unchecked.
+  const [withdrawalFrom, setWithdrawalFrom] = useState("");
   const [withdrawalTo, setWithdrawalTo] = useState(localDate);
+  // The default the queue itself opened the window on, so the filter summary
+  // only calls the desk "filtered" once the treasurer leaves the default.
+  const [withdrawalDefaultFrom, setWithdrawalDefaultFrom] = useState("");
+  // The treasurer who moves the from date by hand keeps their own window:
+  // once touched, loading the queue never rewrites it underneath them.
+  const [withdrawalWindowTouched, setWithdrawalWindowTouched] = useState(false);
   // The spending window opens on the church's month to date — the same window
   // the treasury ledger and the report composer open on — so the desk
   // lands on what it is reviewing rather than on the whole history.
   const [expenseFrom, setExpenseFrom] = useState(firstDayOfMonth);
   const [expenseTo, setExpenseTo] = useState(localDate);
+
+  /* What the queue is filtered under when it opens: the day the oldest ask
+     still without the treasury's verdict was written — trail statuses are
+     pending (pastor), pending (elder) and pending (treasurer) — falling back
+     to the month to date when nothing waits. Rewritten on each queue load
+     until the treasurer has moved the window by hand. */
+  const askedOn = (row: { created_at: string }) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(row.created_at));
+  const oldestPendingDate = (loaded: { status: string; created_at: string }[]) => {
+    let oldest = "";
+    for (const row of loaded) {
+      if (!["pending", "pastor_approved", "elder_approved"].includes(row.status)) continue;
+      const day = askedOn(row);
+      if (!oldest || day < oldest) oldest = day;
+    }
+    return oldest || firstDayOfMonth();
+  };
+  const handleWithdrawalRowsLoaded = useCallback(
+    (loaded: WithdrawalRequestRow[]) => {
+      if (withdrawalWindowTouched) return;
+      const from = oldestPendingDate(loaded);
+      setWithdrawalDefaultFrom(from);
+      setWithdrawalFrom(from);
+    },
+    [withdrawalWindowTouched]
+  );
 
   // The desk's search — and, on Expenses/Requests, its filters — rides the shell's
   // header beside the page's name, so the heading and its search share a row
@@ -1003,7 +1046,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
       );
       const statusLabel =
         withdrawalFilter === "all" ? "All requests" : withdrawalFilter === "pending" ? "Pending" : withdrawalFilter === "approved" ? "Approved" : "Rejected";
-      const windowed = withdrawalFrom !== firstDayOfMonth() || withdrawalTo !== localDate();
+      const windowed = withdrawalFrom !== withdrawalDefaultFrom || withdrawalTo !== localDate();
       setHeaderRightAction(
         <div className="flex w-full items-center gap-2 sm:w-auto">
           {/* The phone: one button, the same three controls inside. */}
@@ -1015,7 +1058,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           >
             <FilterSet label="Status">{statusControl}</FilterSet>
             <FilterSet label="From">
-              <DateField value={withdrawalFrom} onChange={setWithdrawalFrom} label="Requests from date" />
+              <DateField value={withdrawalFrom} onChange={(iso) => { setWithdrawalFrom(iso); setWithdrawalWindowTouched(true); }} label="Requests from date" />
             </FilterSet>
             <FilterSet label="To">
               <DateField value={withdrawalTo} onChange={setWithdrawalTo} label="Requests to date" />
@@ -1026,7 +1069,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
             <div className="w-40">{statusControl}</div>
             <label className="flex items-center gap-1 text-xs font-medium text-moss">
               <span>From</span>
-              <DateField value={withdrawalFrom} onChange={setWithdrawalFrom} label="Requests from date" />
+              <DateField value={withdrawalFrom} onChange={(iso) => { setWithdrawalFrom(iso); setWithdrawalWindowTouched(true); }} label="Requests from date" />
             </label>
             <label className="flex items-center gap-1 text-xs font-medium text-moss">
               <span>To</span>
@@ -1417,7 +1460,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} />
+          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} onLoaded={handleWithdrawalRowsLoaded} />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} />
         ) : (
