@@ -73,10 +73,15 @@ def rsvp_token(meeting_id, user_id):
 
 
 def rsvp_link(meeting, user):
-    """The sign-in-free address where one invitation is answered."""
+    """The sign-in-free address where one invitation is answered.
+
+    The meeting rides the query string — the site ships as a static export,
+    and a parametrised directory cannot exist there without enumerating
+    every meeting on the books.
+    """
     return (
-        f"{settings.FRONTEND_URL}/board-meeting/{meeting.id}"
-        f"?u={user.id}&t={rsvp_token(meeting.id, user.id)}"
+        f"{settings.FRONTEND_URL}/board-meeting?m={meeting.id}"
+        f"&u={user.id}&t={rsvp_token(meeting.id, user.id)}"
     )
 
 # The letters a leadership change causes (see send_appointment_emails in
@@ -253,7 +258,7 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
             user=user,
             title=f'{subject_kind} Invitation: {meeting.title}',
             message=notify_body,
-            link=f'/board-meeting/{meeting.id}?u={user.id}&t={rsvp_token(meeting.id, user.id)}' if confirm_link else '',
+            link=f'/board-meeting?m={meeting.id}&u={user.id}&t={rsvp_token(meeting.id, user.id)}' if confirm_link else '',
         )
         invited += 1
         # SMS first — try sending SMS, fall back to email if it fails

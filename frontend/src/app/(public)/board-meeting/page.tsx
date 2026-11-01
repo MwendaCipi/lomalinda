@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, Clock, MapPin, ShieldCheck, UserCheck, UserX } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -25,14 +25,16 @@ function day_first(iso: string): string {
  *
  * A board member reads the meeting — title, sabbath, time, venue — and taps
  * one of two answers. The link carries the member's identification (`u` and
- * the token the invitation wrote), so no sign-in is needed; a signed-in
- * member who is not the invitation's addressee still answers from the link
- * they were given. The answer posts to the same credentials.
+ * the token the invitation wrote) and the meeting (`m`), so no sign-in is
+ * needed; a signed-in member who is not the invitation's addressee still
+ * answers from the link they were given. The meeting rides the query string
+ * because the site ships as a static export — a `[id]` directory cannot be
+ * parametrised without enumerating every meeting. The answer posts to the
+ * same credentials.
  */
 function BoardMeetingRsvpContent() {
   const params = useSearchParams();
-  const routeParams = useParams<{ id: string }>();
-  const meetingId = routeParams?.id ?? "";
+  const meetingId = params.get("m") ?? "";
   const userId = params.get("u") ?? "";
   const token = params.get("t") ?? "";
 
