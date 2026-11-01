@@ -277,7 +277,7 @@ export function WithdrawalRequestsPanel({
 
       {row.decided_by && (row.status === "approved" || row.status === "declined") && (
         <p className="text-[10px] italic text-moss-faint">
-          {row.status === "approved" ? "Approved by" : "Rejected"} by {row.decided_by}
+          {row.status === "approved" ? "Treasurer approved by" : "Rejected"} by {row.decided_by}
           {row.reply ? `: "${row.reply}"` : ""}
         </p>
       )}
