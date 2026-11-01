@@ -7311,11 +7311,19 @@ function DepartmentDetail({
               {rollQuery ? ` of ${memberRows.length}` : ""} shown · {roll.length} on the roll
             </p>
             {canManageRoll ? (
-              /* Leader / assistant: Chat (group) + Add Member. Two per row
-                  in a hand — the four actions a leader holds fill the foot
-                  as a 2×2 — and one trailing row of natural buttons on the
-                  wider screens. */
-              <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:justify-end">
+              /* Leader / assistant: Chat (group) + Add Member. Three actions
+                  sit in one row on a phone; four fill it as a 2×2 — and the
+                  row is natural on the wider screens. */
+              <div
+                className={`grid w-full ${
+                  2 +
+                    (areaHasMessaging(department.code) ? 1 : 0) +
+                    (department.code === "children" ? 1 : 0) ===
+                  3
+                    ? "grid-cols-3"
+                    : "grid-cols-2"
+                } items-center gap-2 sm:flex sm:w-auto sm:justify-end`}
+              >
                 <button
                   type="button"
                   onClick={async () => {
@@ -7422,7 +7430,7 @@ function DepartmentDetail({
                   <button
                     type="button"
                     onClick={() => setShowWriteLetter(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep"
                   >
                     <PenLine className="h-3.5 w-3.5" /> Write Letter
                   </button>
