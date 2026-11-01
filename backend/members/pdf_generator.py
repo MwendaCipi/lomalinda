@@ -576,6 +576,20 @@ def pdf_church_name(church_name):
     return re.sub(r"^SDA\b", "SDA Church", text, flags=re.IGNORECASE)
 
 
+#: The Field's trust-fund lines, shared with the view that builds the local
+#: account rows: an account whose wording answers here (or belongs to the
+#: 50/50 combined split) is already carried by one of these rows, so it does
+#: not repeat as a local account line beneath them.
+TRUST_FUND_PURPOSES = [
+    ("Tithe", ['tithe']),
+    ("Combined (50%)", "combined_split"),
+    ("Camp Offering", ['camp goal', 'camp offering']),
+    ("Evangelism - Field", ['msamaria mwema', 'evangelism', 'evangelism - field', 'good samaritan']),
+    ("Station Dev. Funds", ['development', 'station dev. funds', 'station development']),
+    ("Thirteenth", ['13th sabbath', 'thirteenth']),
+]
+
+
 def generate_treasury_pdf(
     church_name,
     start_date,
@@ -586,6 +600,7 @@ def generate_treasury_pdf(
     individual_rows=None,
     saturdays=None,
     weekly_data=None,
+    local_account_rows=None,
     district="",
     field_name="North East Kenya Field",
     purpose_title="",
@@ -970,31 +985,32 @@ def generate_treasury_pdf(
 
     COMBINED_PURPOSES = {'combined offering', 'combined (50%)', 'combined (50%'}
 
-    trust_fund_purposes = [
-        ("Tithe", ['tithe']),
-        ("Combined (50%)", "combined_split"),
-        ("Camp Offering", ['camp goal', 'camp offering']),
-        ("Evangelism - Field", ['msamaria mwema', 'evangelism', 'evangelism - field', 'good samaritan']),
-        ("Station Dev. Funds", ['development', 'station dev. funds', 'station development']),
-        ("Thirteenth", ['13th sabbath', 'thirteenth']),
-    ]
+    trust_fund_purposes = TRUST_FUND_PURPOSES
 
+    # The local offering rows are the church's own books when the caller
+    # hands them in (the view reads TreasuryAccount and passes the list):
+    # every account the church keeps offers its own line, so a fund the
+    # template never named — the church plot among them — reads as the
+    # account it is instead of folding silently into 'Others'. Without a
+    # passed set the template's lines stand, so a direct caller still
+    # prints the sheet on its face; the Church Plot row there claims the
+    # account's own wordings, which its gifts key under.
     local_fund_purposes = [
         ("Combined (50%)", "combined_split"),
-        ("Building/Development", ['building/development', 'building', 'building development']),
-        # The church's plot fund carries its own line, read the way the
-        # account is described ('Church Plot/Building'); before it stood
-        # here the plot gifts folded silently into 'Others' and the sheet
-        # never showed a Church Plot account. The names claim the account's
-        # short name ('ChurchPlot', folded 'churchplot') and the wordings a
-        # giver may key with.
-        ("Church Plot/Building", ['churchplot', 'church plot', 'church plot/building', 'church building', 'churchplotbuilding']),
-        ("Camp Expenses", ['camp expenses']),
-        # The sheet names this fund by its short form, as the account is
-        # kept: LCB.
-        ("LCB", ['local church budget', 'lcb']),
-        ("Others", "others_residual"),
     ]
+    if local_account_rows:
+        local_fund_purposes.extend(
+            (label, list(names)) for label, names in local_account_rows if names
+        )
+        local_fund_purposes.append(("Others", "others_residual"))
+    else:
+        local_fund_purposes.extend([
+            ("Building/Development", ['building/development', 'building', 'building development']),
+            ("Church Plot/Building", ['churchplot', 'church plot', 'church plot/building', 'church building', 'churchplotbuilding']),
+            ("Camp Expenses", ['camp expenses']),
+            ("LCB", ['local church budget', 'lcb']),
+        ])
+        local_fund_purposes.append(("Others", "others_residual"))
 
     claimed_lower = set()
     for _, names in trust_fund_purposes:
@@ -1168,7 +1184,13 @@ def generate_treasury_pdf(
     remit = Table([remit_header], colWidths=[3.5 * cm] + [2.8 * cm] * 5 + [3.0 * cm])
     remit.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f4ee")), ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#dfdbd1")), ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
     local_block.append(remit)
-    story.append(KeepTogether(local_block))
+    # With the rows grown to the church's full account roll, the block can
+    # no longer promise a page of its own — keep-together on a taller-than-
+    # page block breaks the layout outright, so only a short table keeps
+    # its whole tribe together; a long one flows over the page break the
+    # way any table does.
+    block = KeepTogether(local_block) if len(local_data) <= 15 else local_block
+    story.append(block)
     story.append(Spacer(1, 12))
 
     # --- Deposit Slips ---
