@@ -111,6 +111,18 @@ export const MINISTRIES: Ministry[] = [
     ],
   },
   {
+    slug: "family-life",
+    title: "Family Life",
+    givingPurpose: "Family Life",
+    description: "Strengthening marriages, families and homes in Christ through fellowship, counsel and shared worship.",
+    department: "Family Life",
+    sections: [
+      { title: "Marriage & Couples", text: "Enriching marriages through fellowship, counsel and shared spiritual growth." },
+      { title: "Parenting & Home", text: "Equipping parents and guardians to raise children in the love and discipline of the Lord." },
+      { title: "Family Worship & Support", text: "Walking with families through every season — joy, strain and loss — with prayer and practical care." },
+    ],
+  },
+  {
     slug: "welfare",
     title: "Welfare Ministry",
     givingPurpose: "Msamaria Mwema",
