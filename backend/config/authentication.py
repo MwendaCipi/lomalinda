@@ -7,6 +7,7 @@ here rather than being reassembled by each caller.
 """
 
 from django.contrib.auth.models import update_last_login
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
@@ -16,6 +17,15 @@ class ChurchTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
+        # The password was right, so this answer tells nobody anything they
+        # did not already know. An account the office typed in owes its email
+        # address a confirmation; until then the password opens nothing.
+        profile = getattr(self.user, 'member_profile', None)
+        if profile and not profile.email_verified_at and (self.user.email or '').strip():
+            raise AuthenticationFailed(
+                'Confirm your email address before signing in. We sent a link to '
+                f'{self.user.email}. Open it, or ask for another one on the confirmation page.'
+            )
         data.update(onboarding_flags(self.user))
         return data
 

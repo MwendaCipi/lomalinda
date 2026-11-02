@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
+from django.core import signing
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage, send_mail
 from django.core.validators import validate_email
@@ -34,7 +35,7 @@ import threading
 import time
 from decimal import Decimal, InvalidOperation
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, urljoin
+from urllib.parse import parse_qs, quote, urljoin
 import requests
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -419,6 +420,67 @@ def send_password_reset_email(user, uid, token):
         connection=connection_for(IDENTITY),
         fail_silently=False,
     )
+
+
+# An account the office types in has an address nobody has proven they own,
+# so it confirms that address before its first sign-in. The token is signed
+# against the address itself, which means an address that later changes
+# invalidates the old link instead of confirming the new one.
+EMAIL_VERIFICATION_SALT = 'members.account-email-verification'
+EMAIL_VERIFICATION_LIFETIME = 60 * 60 * 24 * 3
+
+
+def email_verification_token(user):
+    """A signed, expiring word naming one account and one address."""
+    payload = f"{user.pk}:{(user.email or '').strip().lower()}"
+    return signing.TimestampSigner(salt=EMAIL_VERIFICATION_SALT).sign(payload)
+
+
+def read_email_verification_token(token):
+    """The (user id, address) a token stands for, or None if it is not ours."""
+    try:
+        payload = signing.TimestampSigner(salt=EMAIL_VERIFICATION_SALT).unsign(
+            str(token or ''), max_age=EMAIL_VERIFICATION_LIFETIME,
+        )
+    except (signing.BadSignature, signing.SignatureExpired, TypeError, ValueError):
+        return None
+    user_id, _separator, email = payload.partition(':')
+    try:
+        return int(user_id), email
+    except ValueError:
+        return None
+
+
+def send_account_verification_email(user):
+    """Ask a member to confirm the address the office put on their account.
+
+    The password the office hands over signs nobody in until this link is
+    opened: a mistyped address is the office's to correct, not a stranger's
+    to discover, and an address somebody else owns must never receive the
+    church's letters about this person.
+    """
+    email = usable_email(user.email)
+    if not email:
+        raise ValueError('This account has no address to confirm.')
+    church_name = current_church_name()
+    token = email_verification_token(user)
+    link = f'{settings.FRONTEND_URL}/verify-email?uid={user.pk}&token={quote(token)}'
+    send_mail(
+        f'Confirm your email address — {church_name_plain(church_name)}',
+        f"Hello {user.first_name or user.username},\n\n"
+        f"The office of {church_name_plain(church_name)} has created an account for you, "
+        f"and this is the address on it.\n\n"
+        f"Open the link below to confirm it. After that you can sign in with the "
+        f"username and password the office gave you:\n{link}\n\n"
+        "If you were not expecting this, please tell the church office — the "
+        "account stays locked until this address is confirmed.\n\n"
+        f"Warm regards,\n{church_name}",
+        sender_for(IDENTITY),
+        [email],
+        connection=connection_for(IDENTITY),
+        fail_silently=False,
+    )
+    return email
 
 
 def wants_both_receipt_channels(member):
@@ -1291,6 +1353,9 @@ class EnrollmentCompleteView(APIView):
         from .models import MemberProfile
         MemberProfile.objects.create(
             user=user,
+            # The enrollment code was mailed to this address and typed back in,
+            # so the person proved it before the account existed at all.
+            email_verified_at=timezone.now(),
             phone_number=submitted_phone or enrollment.phone_number,
             account_type={'friend': 'friend', 'sabbath_school': 'sabbath_school'}.get(enrollment.joining_mode, 'member'),
             privacy_accepted_at=enrollment.privacy_accepted_at or timezone.now(),
@@ -1642,6 +1707,9 @@ class InvitationAcceptView(APIView):
             profile.role = codes[0] if codes else ''
             profile.roles = ', '.join(codes)
             profile.account_type = invitation.account_type
+            # Following the emailed invitation link is the proof: the letter
+            # only ever reached the address it was sent to.
+            profile.email_verified_at = timezone.now()
             consent_time = timezone.now()
             profile.privacy_accepted_at = consent_time
             profile.privacy_policy_version = CURRENT_PRIVACY_POLICY_VERSION
@@ -1664,6 +1732,85 @@ class InvitationAcceptView(APIView):
             'message': 'Your account is ready. You can now sign in with your username and password.',
             'username': user.username,
         }, status=status.HTTP_201_CREATED)
+
+
+class EmailVerificationConfirmView(APIView):
+    """Public: a member confirms the address the office typed for them.
+
+    The link in the letter carries both halves of the proof — the account and
+    the exact address that was written down — so a link mailed before the
+    office corrected a typo cannot confirm the corrected one.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PublicTokenThrottle]
+    throttle_scope = 'email_verification_public'
+
+    REFUSAL = 'This confirmation link is invalid or has expired. Ask the church office to send a new one.'
+
+    def get(self, request):
+        return self._confirm(request.query_params.get('uid'), request.query_params.get('token'))
+
+    def post(self, request):
+        return self._confirm(request.data.get('uid'), request.data.get('token'))
+
+    def _confirm(self, raw_uid, token):
+        parsed = read_email_verification_token(token)
+        if parsed is None:
+            return Response({'detail': self.REFUSAL}, status=status.HTTP_400_BAD_REQUEST)
+        user_id, signed_email = parsed
+        try:
+            announced = int(raw_uid)
+        except (TypeError, ValueError):
+            return Response({'detail': self.REFUSAL}, status=status.HTTP_400_BAD_REQUEST)
+        if announced != user_id:
+            return Response({'detail': self.REFUSAL}, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.filter(pk=user_id).first()
+        if user is None or (user.email or '').strip().lower() != signed_email:
+            # The address has moved since this link was written: the old link
+            # is spent, and the office sends a fresh one.
+            return Response({'detail': self.REFUSAL}, status=status.HTTP_400_BAD_REQUEST)
+        profile, _ = MemberProfile.objects.get_or_create(user=user)
+        if not profile.email_verified_at:
+            profile.email_verified_at = timezone.now()
+            profile.save(update_fields=['email_verified_at'])
+        return Response({
+            'message': 'Your email address is confirmed. You can now sign in.',
+            'email': user.email,
+            'username': user.username,
+        })
+
+
+class EmailVerificationResendView(APIView):
+    """Public: send the confirmation link again to an unconfirmed account.
+
+    The answer is the same whether or not the address exists, so the page can
+    never be used to learn who has an account at the church.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [PublicTokenThrottle]
+    throttle_scope = 'email_verification_public'
+
+    def post(self, request):
+        email = str(request.data.get('email') or '').strip()
+        if not email:
+            return Response(
+                {'email': 'Enter the email address the church has for you.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        answer = {
+            'message': 'If that address belongs to an account still waiting to be confirmed, a new link is on its way.',
+        }
+        user = User.objects.filter(email__iexact=email).first()
+        profile = MemberProfile.objects.filter(user=user).first() if user else None
+        if user is None or profile is None or profile.email_verified_at or not usable_email(user.email):
+            return Response(answer)
+        try:
+            send_account_verification_email(user)
+        except Exception:
+            logger.exception('Could not resend the account confirmation to %s.', email)
+        return Response(answer)
 
 
 class ChangePasswordView(APIView):
@@ -3537,6 +3684,12 @@ class EmailChangeVerifyView(APIView):
 
         request.user.email = pending.new_email
         request.user.save(update_fields=['email'])
+        # The code that just arrived proves the new address is theirs, which
+        # clears any confirmation the account was still owing.
+        profile = MemberProfile.objects.filter(user=request.user).first()
+        if profile is not None and not profile.email_verified_at:
+            profile.email_verified_at = timezone.now()
+            profile.save(update_fields=['email_verified_at'])
         pending.verified = True
         pending.save(update_fields=['verified'])
 
@@ -8708,7 +8861,20 @@ class UserManagementView(generics.ListCreateAPIView):
             profile_obj.ministries.set(ministry_rows)
         sync_role_groups(user, roles_param)
 
+        # The address was typed by an officer, not proven by the person, so
+        # the account confirms it before the first sign-in. A failure here is
+        # reported rather than raised: the record exists, and the office can
+        # resend once the mail channel is back.
+        verification_sent = False
+        if email:
+            try:
+                send_account_verification_email(user)
+                verification_sent = True
+            except Exception:
+                logger.exception('Could not send the account confirmation to %s.', email)
+
         response_data = UserDetailSerializer(user).data
+        response_data['email_verification_sent'] = verification_sent
         if password_generated:
             # Surface the one-time password: the console has no password field, so
             # without this the new account would exist but nobody could sign in.

@@ -280,6 +280,10 @@ REST_FRAMEWORK = {
         # for one person clicking their emailed link — and re-pasting a
         # mistyped token — far below what probing for 122-bit tokens needs.
         'invitation_public': os.getenv('INVITATION_THROTTLE_RATE', '30/hour'),
+        # Confirming an office-typed address, and asking for the link again:
+        # the same wall against guessing, generous enough for a member who
+        # opens the link on a phone and a laptop.
+        'email_verification_public': os.getenv('EMAIL_VERIFICATION_THROTTLE_RATE', '30/hour'),
     },
 }
 

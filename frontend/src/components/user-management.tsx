@@ -1050,6 +1050,18 @@ function invitationCredentials(data: { invite_url?: string; invite_code?: string
     .join("   ");
 }
 
+/**
+ * What to say about the confirmation email that goes with a new account.
+ *
+ * The office types the address, so the person on it has to prove it is theirs
+ * before the password they were handed opens anything.
+ */
+function verificationNote(data: { email_verification_sent?: boolean }): string {
+  return data.email_verification_sent
+    ? " A confirmation link was emailed to them — they open it before they can sign in."
+    : " The confirmation email could not be sent just now, so they cannot sign in yet; they can ask for another link at /verify-email.";
+}
+
 /** Invitation name with the email as the fallback when no name was captured. */
 function invitationName(invitation: InvitationRow): string {
   return [invitation.first_name, invitation.last_name].filter(Boolean).join(" ") || invitation.email;
@@ -1626,10 +1638,10 @@ export function UserManagement() {
           data.temporary_password
             ? {
                 type: "success",
-                text: `Member '${data.username}' registered. Share these sign-in details now. The password is shown only once.`,
+                text: `Member '${data.username}' registered. Share these sign-in details now. The password is shown only once.${verificationNote(data)}`,
                 credentials: `Username: ${data.username}   Password: ${data.temporary_password}`,
               }
-            : { type: "success", text: `Member '${data.username}' registered successfully with full record.` },
+            : { type: "success", text: `Member '${data.username}' registered successfully with full record.${verificationNote(data)}` },
         );
         setFormData(initialForm);
         setAge("");
@@ -1709,10 +1721,10 @@ export function UserManagement() {
           data.temporary_password
             ? {
                 type: "success",
-                text: `Friend '${data.username}' added. Share these sign-in details now. The password is shown only once.`,
+                text: `Friend '${data.username}' added. Share these sign-in details now. The password is shown only once.${verificationNote(data)}`,
                 credentials: `Username: ${data.username}   Password: ${data.temporary_password}`,
               }
-            : { type: "success", text: `Friend '${data.username}' added successfully.` },
+            : { type: "success", text: `Friend '${data.username}' added successfully.${verificationNote(data)}` },
         );
         setFriendFormData(friendFormInitial);
         setShowAddFriendForm(false);

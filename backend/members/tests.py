@@ -4533,6 +4533,89 @@ class ChurchRoleTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(username='bad.ministry').exists())
 
+    def _add_member_by_office(self, email='typed.in@example.com', username='typed.in'):
+        """Register somebody the way the office does: an address they typed."""
+        from django.core import mail
+
+        self.client.force_authenticate(user=self.admin_user)
+        mail.outbox.clear()
+        response = self.client.post('/api/members/users/', {
+            'name': 'Typed In',
+            'email': email,
+            'username': username,
+            'gender': 'Male',
+        }, format='json')
+        return response, mail.outbox
+
+    def _sign_in(self, username, password):
+        from rest_framework.test import APIClient
+
+        return APIClient().post(
+            '/api/auth/token/', {'username': username, 'password': password}, format='json'
+        )
+
+    def test_an_office_typed_account_must_confirm_its_address_first(self):
+        """The office types the address; the person proves it is theirs.
+
+        Until that link is opened the password the office handed over opens
+        nothing — a mistyped or borrowed address must never be the door into
+        somebody's church record.
+        """
+        response, outbox = self._add_member_by_office()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertTrue(response.data['email_verification_sent'])
+        created = User.objects.get(username='typed.in')
+        self.assertIsNone(MemberProfile.objects.get(user=created).email_verified_at)
+        self.assertTrue(any('typed.in@example.com' in message.to for message in outbox))
+
+        blocked = self._sign_in('typed.in', response.data['temporary_password'])
+        self.assertEqual(blocked.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('Confirm your email address', str(blocked.data))
+
+    def test_the_confirmation_link_opens_the_account_and_then_sign_in_works(self):
+        from .views import email_verification_token
+
+        response, _outbox = self._add_member_by_office(email='confirm.me@example.com', username='confirm.me')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        created = User.objects.get(username='confirm.me')
+
+        confirmed = self.client.post('/api/members/auth/verify-email/', {
+            'uid': created.pk,
+            'token': email_verification_token(created),
+        }, format='json')
+        self.assertEqual(confirmed.status_code, status.HTTP_200_OK, confirmed.data)
+        self.assertIsNotNone(MemberProfile.objects.get(user=created).email_verified_at)
+
+        signed_in = self._sign_in('confirm.me', response.data['temporary_password'])
+        self.assertEqual(signed_in.status_code, status.HTTP_200_OK)
+        self.assertIn('access', signed_in.data)
+
+    def test_a_link_written_for_another_address_confirms_nothing(self):
+        """The link names the address it was mailed to, so a corrected typo
+        spends the old link rather than confirming the new address."""
+        from .views import email_verification_token
+
+        response, _outbox = self._add_member_by_office(email='old.address@example.com', username='old.address')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        created = User.objects.get(username='old.address')
+        token = email_verification_token(created)
+        created.email = 'new.address@example.com'
+        created.save(update_fields=['email'])
+
+        refused = self.client.post('/api/members/auth/verify-email/', {
+            'uid': created.pk, 'token': token,
+        }, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(MemberProfile.objects.get(user=created).email_verified_at)
+
+    def test_a_resend_says_the_same_thing_for_an_address_with_no_account(self):
+        known = self.client.post(
+            '/api/members/auth/resend-verification/', {'email': 'nobody@example.com'}, format='json'
+        )
+        self.assertEqual(known.status_code, status.HTTP_200_OK)
+        self.assertIn('on its way', known.data['message'])
+
 
 class ChurchRoleRegistryTests(TestCase):
     """The hard-coded role registry, the admin tick list and full admin access."""
@@ -8928,19 +9011,25 @@ class AccountActivationTests(APITestCase):
     """
 
     def setUp(self):
+        # Everybody here is an account already on record, so their addresses
+        # carry the confirmation the migration gave the existing roster — the
+        # step an office-typed account settles before its first sign-in.
+        def on_record(user, **fields):
+            return MemberProfile.objects.create(user=user, email_verified_at=timezone.now(), **fields)
+
         self.admin = User.objects.create_user('active.admin', 'active.admin@example.com', 'AdminPass#2026')
-        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        on_record(self.admin, role='admin', roles='admin')
         self.clerk = User.objects.create_user('active.clerk', 'active.clerk@example.com', 'ClerkPass#2026')
-        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        on_record(self.clerk, role='clerk', roles='clerk')
         self.person = User.objects.create_user('active.person', 'active.person@example.com', 'PersonPass#2026')
         self.person.first_name = 'Peter'
         self.person.save()
-        MemberProfile.objects.create(user=self.person, role='member', roles='member')
+        on_record(self.person, role='member', roles='member')
         self.plain = User.objects.create_user('active.plain', 'active.plain@example.com', 'PlainPass#2026')
-        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        on_record(self.plain, role='member', roles='member')
         self.owner = User.objects.create_superuser('active.owner', 'active.owner@example.com', 'OwnerPass#2026')
         self.other_admin = User.objects.create_user('active.other', 'active.other@example.com', 'OtherPass#2026')
-        MemberProfile.objects.create(user=self.other_admin, role='admin', roles='admin')
+        on_record(self.other_admin, role='admin', roles='admin')
         self.client.force_authenticate(self.admin)
 
     def _set_activation(self, is_active, user=None):

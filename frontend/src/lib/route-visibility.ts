@@ -31,6 +31,7 @@ const SIGN_IN_SURFACES = [
   "/forgot-password",
   "/reset-password",
   "/accept-invite",
+  "/verify-email",
 ];
 
 /**

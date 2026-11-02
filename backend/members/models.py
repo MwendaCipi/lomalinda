@@ -197,6 +197,15 @@ class MemberProfile(models.Model):
         help_text="Whether a receipt's SMS accompanies its email or merely stands in when the email cannot go out",
     )
     must_change_password = models.BooleanField(default=False, help_text="Require a password change at the next login")
+    # An account the office types in is an address nobody has proven they own —
+    # the clerk may have mistyped it, or the person may not know the one on
+    # record. Such an account confirms its email before its first sign-in; every
+    # account that registered itself (or accepted an invitation) proved the
+    # address on the way in and carries the stamp already.
+    email_verified_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the member confirmed the email address on this account; office-typed accounts confirm it before their first sign-in",
+    )
     profile_update_pending = models.BooleanField(
         default=False,
         help_text="Require sex, gifts, ministry and disability to be completed at the next login",

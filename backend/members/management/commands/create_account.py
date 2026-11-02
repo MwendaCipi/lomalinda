@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 from django_tenants.utils import get_tenant_model, schema_context
 
 from members.models import MemberProfile
@@ -128,6 +129,12 @@ class Command(BaseCommand):
         for tenant in tenants:
             with schema_context(tenant.schema_name):
                 profile, created = MemberProfile.objects.get_or_create(user=user)
+                # This runs on the server, at an operator's hand, with no mail
+                # step behind it. The console's typed-in accounts confirm their
+                # address; a login minted here is the operator's own repair, so
+                # its address is taken as already spoken for.
+                if profile.email_verified_at is None:
+                    profile.email_verified_at = timezone.now()
                 profile.role = roles[0]
                 profile.roles = ', '.join(roles)
                 profile.account_type = options['account_type']
