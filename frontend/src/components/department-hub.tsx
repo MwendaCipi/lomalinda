@@ -7727,7 +7727,7 @@ function DepartmentDetail({
               className="rounded-2xl border border-sand-line bg-white"
             />
           </div>
-          <div className="flex shrink-0 items-center justify-center rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm">
+          <div className="flex shrink-0 items-center justify-center rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm mb-2 sm:mb-3">
             <button
               type="button"
               onClick={() => setShowWriteLetter(true)}
@@ -7977,7 +7977,7 @@ function DepartmentDetail({
               is pinned to the desk's foot while the rows scroll above it.
               The count on the left, and what the desk does with a calendar
               on the right — file one, share it, or save it. */}
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm print:hidden">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm print:hidden mb-2 sm:mb-3">
             <p className="text-xs text-moss">
               {calendarView === "calendar"
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
@@ -8239,11 +8239,9 @@ function DepartmentDetail({
               onChanged={() => setShareFeedKey((key) => key + 1)}
             />
           </div>
-          {/* The buttons panel: separate from the card and held at the very
-              foot of the desk, the way every other desk keeps its actions —
-              the feed above grows without moving the bar below it, and the
-              bar sits on the page's own edge, with no gap beneath it. */}
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* The buttons panel: fixed to the bottom with buttons centered
+              and a small margin below. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 mb-2 sm:mb-3">
             <button
               type="button"
               onClick={() => {
