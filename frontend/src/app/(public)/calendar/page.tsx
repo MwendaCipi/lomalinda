@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Printer } from "lucide-react";
+import { Download } from "lucide-react";
 import { usePageHeader } from "@/components/app-frame";
 import {
   CalendarViewToggle,
@@ -612,7 +612,7 @@ function CalendarPageContent() {
         {!loaded && <p className="mt-8 text-sm text-moss">Loading the church calendar...</p>}
         {/* The footer stays put — pinned flush to the foot of the page's
             own scroller (which the shell keeps just above the bottom tab
-            bar) so the count and the Print button never scroll away and no
+            bar) so the count and the Download button never scroll away and no
             calendar row shows beneath them, in either view. */}
         <div
           // margin-top:auto drops the footer to the foot of the scroller even
@@ -627,8 +627,10 @@ function CalendarPageContent() {
           <p className="text-xs text-moss">
             Showing {gridCount} {gridCount === 1 ? "entry" : "entries"}{gridCountLabel}.
           </p>
-          <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember print:hidden">
-            <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
+          {/* The calendar leaves the page as a file: the browser's own paper,
+              saved as a PDF from the print sheet the button opens. */}
+          <button type="button" onClick={() => window.print()} title="Save the calendar as a PDF" className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember print:hidden">
+            <Download className="h-3.5 w-3.5" aria-hidden="true" /> Download
           </button>
         </div>
       </div>

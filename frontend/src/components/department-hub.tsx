@@ -31,6 +31,8 @@ import {
   ChevronDown,
   Church,
   Clock,
+  Copy,
+  Download,
   FileText,
   GitMerge,
   HandHeart,
@@ -47,9 +49,9 @@ import {
   MoreVertical,
   Music,
   PenLine,
+  Mail,
   Phone,
   Plus,
-  Printer,
   Pencil,
   Search,
   Send,
@@ -1153,6 +1155,99 @@ function eventTimeRange(event: DeptEvent) {
   const end = sameDay ? clockTime(event.end_time) : "";
   if (start && end) return `${start} – ${end}`;
   return start || end;
+}
+
+/** The church a department's calendar belongs to, as a share writes it. */
+const SHARE_CHURCH = "SDA Church Loma Linda";
+
+/**
+ * A desk's calendar as one message: the count, then each day in order.
+ *
+ * WhatsApp, an email and the clipboard all carry this same text, so the
+ * message a keeper sends reads the same whichever door they chose. Only the
+ * first twenty-five events are listed — a whole year in one pasted message is
+ * unreadable — and the rest are counted rather than dropped silently.
+ */
+function calendarShareMessage(label: string, scope: string, events: DeptEvent[]) {
+  const shown = events.slice(0, 25);
+  const lines = [
+    `📅 *${SHARE_CHURCH} — ${label}*`,
+    `*${scope}:* ${events.length} ${events.length === 1 ? "event" : "events"}`,
+    "",
+    ...shown.map((event) => {
+      const when = [dayFirst(event.date), eventTimeRange(event)].filter(Boolean).join(" · ");
+      const where = event.mode === "virtual" ? "Online" : (event.location || "").trim();
+      // A keeper reading every ministry's calendar names the ministry the day
+      // belongs to; on one desk's own calendar that would only repeat the head.
+      const desk =
+        event.department_name && event.department_name !== label ? ` [${event.department_name}]` : "";
+      return `• ${when} — ${event.title}${where ? ` (${where})` : ""}${desk}`;
+    }),
+  ];
+  if (events.length > shown.length) lines.push(`…and ${events.length - shown.length} more.`);
+  return lines.join("\n");
+}
+
+/**
+ * The same calendar as a document: an .ics file the recipient adds to their
+ * phone, Outlook or Google calendar in one tap, every event included.
+ *
+ * The church keeps Kenya time — UTC+3 all year, no daylight saving — and each
+ * stamp is written in UTC, so the file lands on the right hour for a reader in
+ * any zone without carrying a timezone block or trusting this device's clock.
+ */
+function calendarIcsDocument(label: string, events: DeptEvent[]) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  // The church's own hour, read back as the instant it names.
+  const moment = (date: string, time: string, fallbackMinutes: number) => {
+    const [year, month, day] = (date || "").split("-").map(Number);
+    const match = (time || "").match(/^(\d{1,2}):(\d{2})/);
+    const minutes = match ? Number(match[1]) * 60 + Number(match[2]) : fallbackMinutes;
+    return new Date(Date.UTC(year || 1970, (month || 1) - 1, day || 1, 0, minutes - 180));
+  };
+  const stamp = (at: Date) =>
+    `${at.getUTCFullYear()}${pad(at.getUTCMonth() + 1)}${pad(at.getUTCDate())}T${pad(at.getUTCHours())}${pad(at.getUTCMinutes())}00Z`;
+  const escapeText = (value: string) =>
+    value.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+
+  const rows = events.flatMap((event) => {
+    if (!event.date) return [];
+    const start = moment(event.date, event.time, 9 * 60);
+    const asked = event.end_date || event.end_time
+      ? moment(event.end_date || event.date, event.end_time, 10 * 60)
+      : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    // An end that reads before its start (an hour typed without its date) is
+    // no span at all: the event keeps two hours rather than a negative one.
+    const end = asked > start ? asked : new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    const where = event.mode === "virtual" ? event.meeting_link || "Online" : event.location || "";
+    const details = [event.notes, event.department_name ? `Ministry: ${event.department_name}` : "", where]
+      .filter(Boolean)
+      .join("\n");
+    return [
+      "BEGIN:VEVENT",
+      `UID:dept-event-${event.id}@sdalomalinda.or.ke`,
+      `DTSTAMP:${stamp(new Date())}`,
+      `DTSTART:${stamp(start)}`,
+      `DTEND:${stamp(end)}`,
+      `SUMMARY:${escapeText(event.title)}`,
+      ...(where ? [`LOCATION:${escapeText(where)}`] : []),
+      `DESCRIPTION:${escapeText(details)}`,
+      "END:VEVENT",
+    ];
+  });
+
+  const body = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//SDA Church Loma Linda//Department Calendar//EN",
+    "CALSCALE:GREGORIAN",
+    `X-WR-CALNAME:${escapeText(`${SHARE_CHURCH} — ${label}`)}`,
+    ...rows,
+    "END:VCALENDAR",
+  ].join("\r\n");
+
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "calendar";
+  return { filename: `${slug}-calendar.ics`, body: `${body}\r\n` };
 }
 
 /**
@@ -5739,6 +5834,9 @@ function DepartmentDetail({
   // same form the desk files events with, but shaped by what it already holds.
   const [editEvent, setEditEvent] = useState<DeptEvent | null>(null);
   const [openEventMenuKey, setOpenEventMenuKey] = useState<string | null>(null);
+  // The calendar's own share menu — WhatsApp, an email, the file itself or
+  // the text — opened from the bar at the desk's foot.
+  const [calendarShareOpen, setCalendarShareOpen] = useState(false);
   // Where the table row's Actions button sits in the viewport at the moment
   // it opens its menu. The menu is drawn in a document-level portal (a fixed
   // box above everything) anchored there, because the overflow wrappers that
@@ -5776,6 +5874,19 @@ function DepartmentDetail({
       document.removeEventListener("scroll", handleScroll, true);
     };
   }, [openEventMenuKey]);
+  // The share menu closes on a press outside it, the way every other popover
+  // on the desk does — a menu left open over the calendar's foot would sit
+  // there through the next view the reader opens.
+  useEffect(() => {
+    if (!calendarShareOpen) return;
+    function handleDown(event: MouseEvent) {
+      if (!(event.target as Element | null)?.closest?.("[data-calendar-share-menu]")) {
+        setCalendarShareOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleDown);
+    return () => document.removeEventListener("mousedown", handleDown);
+  }, [calendarShareOpen]);
   // The list's rows honour the desk's search — an event's own words, and
   // the ministry whose calendar it sits on, since the keeper reading the
   // whole church's week narrows it by naming a ministry. The wall of
@@ -5803,6 +5914,58 @@ function DepartmentDetail({
     [events, calendarYear],
   );
   const yearEvents = useMemo(() => eventsByMonth.flat(), [eventsByMonth]);
+
+  // What a share carries: the wall hands on this year's events, the list the
+  // rows it is showing — the same set the bar's own count names — and both in
+  // the order the days come.
+  const shareableEvents = useMemo(
+    () =>
+      [...(calendarView === "calendar" ? yearEvents : filteredEvents)].sort((a, b) =>
+        `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`),
+      ),
+    [calendarView, yearEvents, filteredEvents],
+  );
+  const shareScope = calendarView === "calendar" ? `This year (${calendarYear})` : "Every event";
+
+  // The four ways out the calendar offers: the message on WhatsApp, the same
+  // message in an email, the calendar as a file the reader imports, or the
+  // text on the clipboard to paste wherever it is going.
+  const shareCalendarOnWhatsApp = () => {
+    const text = calendarShareMessage(department.label, shareScope, shareableEvents);
+    setCalendarShareOpen(false);
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  };
+  const shareCalendarByEmail = () => {
+    const text = calendarShareMessage(department.label, shareScope, shareableEvents);
+    const subject = `${SHARE_CHURCH} — ${department.label} calendar`;
+    setCalendarShareOpen(false);
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+  };
+  const shareCalendarAsDocument = () => {
+    const { filename, body } = calendarIcsDocument(department.label, shareableEvents);
+    const url = URL.createObjectURL(new Blob([body], { type: "text/calendar;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setCalendarShareOpen(false);
+    showAlert(
+      "Calendar downloaded",
+      "The file adds these events to any phone, Outlook or Google calendar.",
+      "success",
+    );
+  };
+  const shareCalendarAsText = () => {
+    const text = calendarShareMessage(department.label, shareScope, shareableEvents);
+    setCalendarShareOpen(false);
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      void navigator.clipboard.writeText(text);
+    }
+    showAlert("Calendar copied", "The events are on your clipboard, ready to paste.", "success");
+  };
 
   // The card is the calendar's own window: the months are sections inside it,
   // and this is the box that moves when the reader scrolls or a month is named.
@@ -7734,15 +7897,17 @@ function DepartmentDetail({
           </div>
           {/* The bar is its own surface, no longer the card's underside: it
               is pinned to the desk's foot while the rows scroll above it.
-              The count on the left, and the two things the desk does with a
-              calendar on the right — file one, or print what is here. */}
+              The count on the left, and what the desk does with a calendar
+              on the right — file one, share it, or save it. */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm print:hidden">
             <p className="text-xs text-moss">
               {calendarView === "calendar"
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
                 : `${filteredEvents.length} ${filteredEvents.length === 1 ? "event" : "events"}`}
             </p>
-            <div className="flex items-center gap-2">
+            {/* Four buttons fill a phone's row as two pairs rather than
+                spilling past its edge; on a desk they stand in one line. */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {/* The pulpit team is scheduled per day, from its rota: for the
                   desk that keeps the week, the calendar carries the jump there
                   beside its own actions, so setting the Sabbath's team is one
@@ -7764,12 +7929,66 @@ function DepartmentDetail({
               >
                 <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Add event
               </button>
+              {/* The calendar leaves the desk two ways: shared as a message,
+                  an email or a calendar file, or saved — the browser's own
+                  paper, printed or kept as a PDF. */}
+              <div className="relative" data-calendar-share-menu>
+                <button
+                  type="button"
+                  aria-expanded={calendarShareOpen}
+                  onClick={() => setCalendarShareOpen((open) => !open)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+                >
+                  <Share2 className="h-3.5 w-3.5" aria-hidden="true" /> Share
+                </button>
+                {calendarShareOpen && (
+                  <div className="absolute bottom-full right-0 z-20 mb-1.5 w-52 rounded-xl border border-sand-line bg-white p-1.5 shadow-lg">
+                    {[
+                      {
+                        key: "whatsapp",
+                        label: "Share on WhatsApp",
+                        icon: <WhatsAppIcon className="h-3.5 w-3.5 shrink-0" />,
+                        onClick: shareCalendarOnWhatsApp,
+                      },
+                      {
+                        key: "email",
+                        label: "Share by email",
+                        icon: <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
+                        onClick: shareCalendarByEmail,
+                      },
+                      {
+                        key: "document",
+                        label: "Share as a document",
+                        icon: <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
+                        onClick: shareCalendarAsDocument,
+                      },
+                      {
+                        key: "text",
+                        label: "Share as text",
+                        icon: <Copy className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
+                        onClick: shareCalendarAsText,
+                      },
+                    ].map((choice) => (
+                      <button
+                        key={choice.key}
+                        type="button"
+                        onClick={choice.onClick}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+                      >
+                        {choice.icon}
+                        {choice.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => window.print()}
+                title="Save the calendar as a PDF, or send it to the printer"
                 className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
               >
-                <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print Calendar
+                <Download className="h-3.5 w-3.5" aria-hidden="true" /> Download
               </button>
             </div>
           </div>
