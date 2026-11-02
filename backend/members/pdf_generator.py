@@ -134,10 +134,11 @@ def _draw_logo(c, center_x, top_y, height, line_2=_LOCKUP_LINE_2):
 
 
 class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, letterhead=None, verification_url=None, **kwargs):
+    def __init__(self, *args, footer_text=_RECORD_FOOTER_TEXT, letterhead=None, verification_url=None, tel_line=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._footer_text = footer_text
         self._verification_url = verification_url
+        self._tel_line = tel_line
         # The church's uploaded letterhead, when the letters desk has created
         # one: drawn across the head of page 1 (see draw_page_decorations),
         # the paper's own mark standing in elsewhere and when there is none.
@@ -275,7 +276,8 @@ class DepartmentLetterCanvas(NumberedCanvas):
                 self.drawString(right_x, top - offset * 6.15 * mm, line)
             self.setFillColor(colors.blue)
             self.setFont('Times-Bold', 10.6)
-            self.drawString(right_x + 0.12 * cm, top - 2 * 6.15 * mm, 'TEL:0708069827/0711340087')
+            tel_text = getattr(self, '_tel_line', None) or 'TEL:0708069827/0711340087'
+            self.drawString(right_x + 0.12 * cm, top - 2 * 6.15 * mm, tel_text)
             self.setFillColor(colors.HexColor('#2E8BA6'))
             self.setFont('Times-Bold', 10.6)
             self.drawString(right_x - 0.45 * cm, top - 3 * 6.15 * mm, 'EMAIL: info@sdalomalinda.or.ke')
@@ -2426,7 +2428,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
 def generate_department_letter_pdf(
     letter_record, church_name: str, pastor_sig=None, clerk_sig=None,
-    letterhead=None, verification_url=None,
+    letterhead=None, verification_url=None, tel_line=None,
 ) -> bytes:
     """The official department letter / requisition on church letterhead.
     
@@ -2559,40 +2561,31 @@ def generate_department_letter_pdf(
         fontSize=10, leading=14, textColor=colors.HexColor("#1f2937"),
     )
 
-    # The date on the left of its row, the recipient church on the right;
-    # the same line as the sample lays it out — the date sits on the left,
-    # the recipient church on the right of that line, the way the sample
-    # writes it.
-    # the template writes the date and the address on the same line, the way
-    # the sample lays it out. An empty address is treated as absent, so a
-    # letter with no recipient yet just carries its date line.
+    # The date on its own line, then the salutation and the receiving
+    # church block beneath it — the same order the desk preview lays out,
+    # so the paper prints what the writer already saw.
     date_para = Paragraph(escape(date_str), ParagraphStyle(
         "LetterDate", parent=addr_style, fontSize=10, leading=14,
     ))
-    # The recipient block the template's right-hand side carries: the church
-    # name, then its postal address, then the town — one line each, exactly
-    # as the sample writes them, and absent only when nothing was entered.
+    # The receiving church block: church name, then postal address, then
+    # town — one line each, commas closing every line but the last, exactly
+    # as the preview composes them. Absent only when nothing was entered.
     recipient_name = str(letter_record.get("recipient_name") or "").strip()
     recipient_town = str(letter_record.get("recipient_town") or "").strip()
-    address_block = [line for line in (recipient_name, address_text, recipient_town) if line]
-    address_para = Paragraph(
-        "<br />".join([escape(line) for line in address_block]) if address_block else "", addr_style,
-    )
-    date_address_row = Table(
-        [[date_para, address_para]],
-        colWidths=[1.1 * cm, body_w - 1.1 * cm],
-        hAlign="LEFT",
-        splitByRow=False,
-    )
-    date_address_row.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(date_address_row)
+    raw_block = [line for line in (recipient_name, address_text, recipient_town) if line]
+    address_block = [
+        (line.rstrip().rstrip(",") + "," if idx < len(raw_block) - 1 else line)
+        for idx, line in enumerate(raw_block)
+    ]
+    story.append(date_para)
     story.append(Spacer(1, 10))
+    story.append(Paragraph(escape("To the Pastor/ Church clerk,"), addr_style))
+    story.append(Spacer(1, 10))
+    if address_block:
+        story.append(Paragraph(
+            "<br />".join([escape(line) for line in address_block]), addr_style,
+        ))
+        story.append(Spacer(1, 10))
     
     # The subject on its own line: the title the writer gave the letter,
     # underlined as the template writes it.
@@ -2694,6 +2687,16 @@ def generate_department_letter_pdf(
     # Build the PDF
     # Continue overflowing content in the page-two frame.
     story.insert(0, NextPageTemplate('later'))
+    # The letterhead TEL line carries the current office holders' numbers
+    # from the database — the pastor first, then the clerk — through the
+    # signatory entries the caller already resolved. An explicit tel_line
+    # wins; with neither pen holding a number the stock line stays so the
+    # head never prints a bare "TEL:".
+    if tel_line is None:
+        pastor_phone = str((pastor_sig or {}).get("phone") or "").strip()
+        clerk_phone = str((clerk_sig or {}).get("phone") or "").strip()
+        numbers = [n for n in (pastor_phone, clerk_phone) if n]
+        tel_line = f"TEL:{'/'.join(numbers)}" if numbers else None
     canvas_class = NumberedCanvas if head else DepartmentLetterCanvas
     doc.build(
         story,
@@ -2701,6 +2704,7 @@ def generate_department_letter_pdf(
             canvas_class,
             footer_text='',
             verification_url=verification_url,
+            tel_line=tel_line,
         ),
     )
     

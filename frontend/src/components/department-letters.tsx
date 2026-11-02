@@ -124,7 +124,7 @@ export function WriteLetterModal({
   onClose: () => void;
   onSent?: () => void;
 }) {
-  const [letterDate, setLetterDate] = useState("");
+  const [letterDate, setLetterDate] = useState(() => dayFirst(new Date()));
   const [recipientName, setRecipientName] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
   const [recipientTown, setRecipientTown] = useState("");
@@ -183,9 +183,10 @@ export function WriteLetterModal({
   // the paper itself — the writer never types them.
   const preview = [
     letterDate.trim() || dayFirst(new Date()),
-    recipientAddress.trim(),
     "",
     "To the Pastor/ Church clerk,",
+    "",
+    ...recipientBlock(),
     "",
     `REF: ${(subject.trim() || "Subject").toUpperCase()}`,
     "",
@@ -309,7 +310,7 @@ export function WriteLetterModal({
                     />
                   </label>
                   <label className="block text-xs font-medium text-bark">
-                    Recipient name
+                    Receiving church
                     <input
                       value={recipientName}
                       onChange={(event) => setRecipientName(event.target.value)}
@@ -389,11 +390,13 @@ export function WriteLetterModal({
                 <p>{letterDate.trim() || dayFirst(new Date())}</p>
                 <p className="mt-4">To the Pastor/ Church clerk,</p>
                 <p className={`mt-4 whitespace-pre-line${recipientBlock().length ? "" : " text-moss-faint"}`}>
-                  {recipientBlock().length ? recipientBlock().join("\n") : "Recipient name, address and town"}
+                  {recipientBlock().length ? recipientBlock().join("\n") : "Receiving church, address and town"}
                 </p>
                 <p className="mt-6">
                   <span className="font-semibold">REF: </span>
-                  {subject.trim() || <span className="text-moss-faint">Subject</span>}
+                  <span className="underline">
+                    {subject.trim() || <span className="text-moss-faint">Subject</span>}
+                  </span>
                 </p>
                 <div className="mt-6 whitespace-pre-line">
                   {body.trim() || <span className="text-moss-faint">The body of the letter will appear here as you type it…</span>}
@@ -524,7 +527,7 @@ export function WriteLetterModal({
               />
             </label>
             <label className="block text-xs font-medium text-bark">
-              Recipient name
+              Receiving church
               <input
                 value={recipientName}
                 onChange={(event) => setRecipientName(event.target.value)}
