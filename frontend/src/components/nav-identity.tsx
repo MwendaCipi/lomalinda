@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Bell,
+  Check,
   CheckCircle2,
   ChevronRight,
   Download,
@@ -28,6 +29,7 @@ import {
   patchCachedMe,
   resetHeaderSession,
   useHeaderData,
+  type ChurchNotificationItem,
 } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -250,17 +252,53 @@ export function NavIdentity() {
     }).catch(() => {});
   };
 
-  const markServerNotificationsRead = () => {
-    const unread = notifications.filter((n) => !n.read);
-    if (unread.length === 0) return;
+  /**
+   * Mark exactly these notifications read — the ones the member opened, or
+   * the one they pressed "Mark as read" on.
+   *
+   * The bell used to sweep every unread row into read the moment the panel
+   * opened, which left the member no way to keep an item waiting: the badge
+   * cleared itself whether or not anything was acted on. Reading is now a
+   * choice per row, so `ids` is always the rows the member chose.
+   */
+  const markNotificationsRead = (ids: number[]) => {
+    if (ids.length === 0) return;
     const token = localStorage.getItem("access_token");
     if (!token) return;
-    markCachedNotificationsRead(unread.map((n) => n.id));
+    markCachedNotificationsRead(ids);
     fetch(`${API_URL}/api/members/notifications/`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: unread.map((n) => n.id) }),
+      body: JSON.stringify({ ids }),
     }).catch(() => {});
+  };
+
+  /** Open where the member can act on a notification, and read it on the way. */
+  const openNotification = (notification: ChurchNotificationItem) => {
+    markNotificationsRead([notification.id]);
+    setShowNotifications(false);
+    if (!notification.link) return;
+    // Most destinations are in-app paths; a few older notices carry the whole
+    // site address, which `router.push` would treat as a route of this app.
+    if (/^https?:\/\//i.test(notification.link)) {
+      window.location.assign(notification.link);
+      return;
+    }
+    router.push(notification.link);
+  };
+
+  /** An announcement opens the board it was posted on, and stops counting. */
+  const openAnnouncement = (id: number, href = "/announcements") => {
+    try {
+      const stored = localStorage.getItem(READ_IDS_KEY);
+      const read: number[] = stored ? JSON.parse(stored) : [];
+      localStorage.setItem(READ_IDS_KEY, JSON.stringify(Array.from(new Set([...read, id]))));
+      window.dispatchEvent(new Event("nav-notifications-read"));
+    } catch {
+      // Storage unavailable: the badge simply stays until the next visit.
+    }
+    setShowNotifications(false);
+    router.push(href);
   };
 
   const openNotifications = () => {
@@ -268,7 +306,6 @@ export function NavIdentity() {
     setShowNotifications(next);
     setShowUserMenu(false);
     if (!next) return;
-    markServerNotificationsRead();
     if (announcements.length > 0) {
       try {
         const stored = localStorage.getItem("read_notification_ids");
@@ -390,7 +427,10 @@ export function NavIdentity() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
+            <div className="absolute right-0 top-full z-50 mt-2 w-96 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
+              {/* A little wider than the old panel, so a notice reads as a
+                  notice rather than a headline: four lines of text fit, and
+                  the whole of it is still on the row's own title. */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-bark">Notifications</span>
@@ -409,29 +449,56 @@ export function NavIdentity() {
                 </button>
               </div>
 
-              <div className="max-h-72 space-y-2 overflow-y-auto">
+              <div className="max-h-80 space-y-2 overflow-y-auto">
                 {notifications.length > 0 && (
                   <div className="space-y-2">
                     {notifications.map((n) => (
-                      <button
+                      <div
                         key={n.id}
-                        type="button"
-                        onClick={() => {
-                          markServerNotificationsRead();
-                          setShowNotifications(false);
-                          if (n.link) router.push(n.link);
-                        }}
-                        className={`flex w-full items-start gap-2.5 rounded-xl border bg-sand p-2.5 text-left transition ${
-                          n.read ? "border-slate-200/70 hover:bg-slate-100/70" : "border-ember/40 ring-1 ring-ember/20"
+                        className={`rounded-xl border bg-sand p-2.5 transition ${
+                          n.read ? "border-slate-200/70" : "border-ember/40 ring-1 ring-ember/20"
                         }`}
                       >
-                        <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-ember" />
-                        <div className="min-w-0 flex-1">
-                          <strong className="block truncate text-xs text-bark">{n.title}</strong>
-                          <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{n.message}</p>
+                        {/* The notice itself is the door: pressing it opens the
+                            page the member can act on, and reads it on the
+                            way. The whole message stays on the title, for the
+                            one that runs past the four lines shown. */}
+                        <button
+                          type="button"
+                          onClick={() => openNotification(n)}
+                          title={n.message}
+                          className="flex w-full items-start gap-2.5 rounded-lg text-left transition hover:bg-white/70"
+                        >
+                          <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-ember" />
+                          <div className="min-w-0 flex-1">
+                            <strong className="block truncate text-xs text-bark" title={n.title}>
+                              {n.title}
+                            </strong>
+                            <p className="mt-0.5 line-clamp-4 text-[11px] leading-4 text-slate-500">{n.message}</p>
+                          </div>
+                          {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-ember" />}
+                        </button>
+                        <div className="mt-1.5 flex items-center justify-end gap-1.5 border-t border-slate-200/60 pt-1.5">
+                          {!n.read && (
+                            <button
+                              type="button"
+                              onClick={() => markNotificationsRead([n.id])}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold text-slate-500 transition hover:bg-white hover:text-bark"
+                            >
+                              <Check className="h-3 w-3" aria-hidden="true" /> Mark as read
+                            </button>
+                          )}
+                          {n.link && (
+                            <button
+                              type="button"
+                              onClick={() => openNotification(n)}
+                              className="inline-flex items-center gap-0.5 rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-ember transition hover:bg-ember hover:text-white"
+                            >
+                              Open <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                            </button>
+                          )}
                         </div>
-                        {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-ember" />}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -443,20 +510,39 @@ export function NavIdentity() {
                   </div>
                 )}
                 {announcements.length > 0 ? (
-                  announcements.map((ann) => (
-                    <div
-                      key={ann.id}
-                      className="flex items-start gap-2.5 rounded-xl border border-slate-200/70 bg-slate-50 p-2.5 transition hover:bg-slate-100/70"
-                    >
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ember" />
-                      <div className="min-w-0 flex-1">
-                        <strong className="block truncate text-xs text-bark">{ann.title}</strong>
-                        <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">
-                          {ann.text || ann.detail || "New church announcement posted."}
-                        </p>
+                  announcements.map((ann) => {
+                    const text = ann.text || ann.detail || "New church announcement posted.";
+                    return (
+                      <div
+                        key={ann.id}
+                        className="rounded-xl border border-slate-200/70 bg-slate-50 p-2.5 transition"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openAnnouncement(ann.id)}
+                          title={text}
+                          className="flex w-full items-start gap-2.5 rounded-lg text-left transition hover:bg-slate-100/70"
+                        >
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-ember" />
+                          <div className="min-w-0 flex-1">
+                            <strong className="block truncate text-xs text-bark" title={ann.title}>
+                              {ann.title}
+                            </strong>
+                            <p className="mt-0.5 line-clamp-4 text-[11px] leading-4 text-slate-500">{text}</p>
+                          </div>
+                        </button>
+                        <div className="mt-1.5 flex items-center justify-end border-t border-slate-200/60 pt-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openAnnouncement(ann.id)}
+                            className="inline-flex items-center gap-0.5 rounded-lg bg-white px-2 py-1 text-[10px] font-bold text-ember transition hover:bg-ember hover:text-white"
+                          >
+                            Read <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   notifications.length === 0 && (
                     <div className="py-4 text-center text-xs text-slate-500">No new notifications at this time.</div>

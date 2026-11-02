@@ -1364,6 +1364,7 @@ class EnrollmentDecisionView(APIView):
                 user=user,
                 title='Join Request Approved' if decision == 'approved' else 'Join Request Not Approved',
                 message=message,
+                link='/member',
             )
             if decision == 'approved':
                 # Mark any other pending enrollment requests for this person as approved
@@ -2330,6 +2331,7 @@ def dispatch_announcement_broadcast(announcement, request=None, schema_name=None
                     user=u,
                     title=f"SMS Announcement: {announcement.title}",
                     message=announcement.text or announcement.title,
+                    link='/announcements',
                 )
         except Exception:
             pass
@@ -7427,6 +7429,7 @@ def broadcast_campaign_message(campaign, custom_message=None):
             user=u,
             title=f"Campaign: {campaign.title or campaign.name}",
             message=msg_text,
+            link='/support/campaigns',
         )
         for u in users_to_notify
     ]
@@ -7631,6 +7634,7 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
                         user=u,
                         title=f"Fund Drive Invite Assigned: {campaign.name}",
                         message=f"You have been assigned a personal invite for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
+                        link='/support/campaigns',
                     )
 
         # Broadcast on create only when the office scheduled one: a drive's
@@ -7712,8 +7716,10 @@ class CampaignIssueCardsView(APIView):
             if created:
                 created_count += 1
                 ChurchNotification.objects.create(
+                    user=u,
                     title=f"Fund Drive Invite Issued: {campaign.name}",
                     message=f"You have been issued a personal invite for '{campaign.title or campaign.name}'. Open your card to share your personal link!",
+                    link='/support/campaigns',
                 )
 
         return Response({
@@ -7864,6 +7870,7 @@ class MembershipTransferRequestDetailView(generics.RetrieveUpdateDestroyAPIView)
                     user=target_user,
                     title="Transfer Request Approved",
                     message="Your transfer-out request has been approved.",
+                    link='/member',
                 )
         return response
 
@@ -7914,6 +7921,7 @@ class MembershipRemovalRequestDetailView(generics.RetrieveUpdateAPIView):
                 user=instance.member,
                 title="Membership Removal Approved",
                 message="Your membership removal has been approved. Please contact church leadership for more information.",
+                link='/member',
             )
         return Response(self.get_serializer(instance).data)
 
@@ -8269,7 +8277,7 @@ class BoardMeetingCancelView(APIView):
                 user=user,
                 title=f'Board Meeting Cancelled: {meeting.title}',
                 message=msg,
-                link='',
+                link='/administration?tab=meetings',
             )
             cancelled_count += 1
 
@@ -8920,6 +8928,7 @@ class UserDetailUpdateView(APIView):
                 f"The church office proposed updating your {changed_labels}. "
                 "Open your dashboard to approve the update or keep your current details."
             ),
+            link='/member',
         )
         return Response(
             {
@@ -9065,6 +9074,7 @@ class DisfellowshipView(APIView):
                 user=target_user,
                 title="Membership Status Update",
                 message="Your church membership status has been updated. Please contact the church clerk for more information.",
+                link='/member',
             )
             return Response({'detail': 'Member has been disfellowshipped.', 'is_disfellowshipped': True})
         elif action == 'refellowship':
@@ -9074,6 +9084,7 @@ class DisfellowshipView(APIView):
                 user=target_user,
                 title="Membership Restored",
                 message="Your church membership has been restored. Welcome back to the fellowship!",
+                link='/member',
             )
             return Response({'detail': 'Member has been refellowshipped.', 'is_disfellowshipped': False})
         else:
@@ -9188,6 +9199,7 @@ class UserRoleUpdateView(APIView):
                     user=target_user,
                     title=f"Church Roles Updated: {role_display}",
                     message=f"Your church roles have been updated to: {role_display}. Log into your account to access your updated workspace and leadership tools.",
+                    link='/member',
                 )
                 if target_user.email:
                     try:
@@ -9239,6 +9251,7 @@ class UserRoleUpdateView(APIView):
                 user=target_user,
                 title=f"New Church Role Assigned: {role_display}",
                 message=f"You have been assigned the role of '{role_display}' at {current_church_name()}. Log into your account to access your updated workspace and leadership tools.",
+                link='/member',
             )
 
             if target_user.email:
@@ -9327,6 +9340,7 @@ class UserAccountTypeUpdateView(APIView):
                     f"Your record at {current_church_name()} is now recorded as "
                     f"{ACCOUNT_TYPE_LABELS[requested]}. Speak to a church clerk if this is not right."
                 ),
+                link='/member',
             )
 
         serializer = UserDetailSerializer(target_user)
@@ -9436,6 +9450,7 @@ class UserActivationView(APIView):
                     f"Your account at {current_church_name()} has been reactivated. "
                     "You can sign in again with your usual password."
                 ),
+                link='/member',
             )
             # When an account is approved/activated, mark any pending join requests as approved
             # so they no longer show in unapproved requests.
