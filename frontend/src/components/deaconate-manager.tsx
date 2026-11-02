@@ -1611,7 +1611,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* ── TAB: DUTY ROTA — scheduled, edited and rostered here ── */}
       {activeTab === "rota" && (
         <>
-          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-4">
+          <div className={`flex-1 overflow-y-auto min-h-0 ${isEldership ? "p-0 space-y-4" : "p-4 sm:p-6 space-y-4"}`}>
             {(isPulpit || desk === "music" || isEldership) && !rotaFiltersHosted && (
               /* The rota views' filters, when no surface above hosts them.
                  The Personal Ministries desk keeps its own heading, so while it

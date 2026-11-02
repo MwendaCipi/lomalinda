@@ -989,7 +989,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     activeTab === "all" ? "All requests" : activeTab === "joins" ? JOINS_VIEW_LABEL : activeTab === "clerk" ? CLERK_VIEW_LABEL : KIND_META[activeTab].label;
 
   return (
-    <div className="flex h-full min-h-0 flex-col p-4 sm:p-6 lg:p-8">
+    <div className="flex h-full min-h-0 flex-col p-0">
       {/* No heading of its own and no way back: the shell's band names the
           page (heading first, the way the desk's other pages do) and its
           search and filters ride that band at the top. The table beneath

@@ -470,19 +470,19 @@ export function MyAreas() {
     // carries its own inset on the wider widths, where this wrapper's padding
     // is what frames it.
     //
-    // Sharing is the exception: its page is a wall of cards, and every pixel
-    // this wrapper and the reading measure spend on the frame is a pixel the
-    // cards do not have. It takes the whole panel and every width.
-    const sharingWall = opensEldershipDesk && eldershipView === "sharing";
+    // Eldership is edge-to-edge across all its pages: cards take the whole panel
+    // without margin or max-width gutters around them.
+    const isEldershipDesk = opensEldershipDesk || openArea.code === "eldership";
+    const noGutter = isEldershipDesk;
     return (
       <div
         className={`flex h-full min-w-0 w-full flex-col ${
-          sharingWall ? "" : "sm:px-8 sm:py-4 lg:px-10 lg:py-5"
+          noGutter ? "" : "sm:px-8 sm:py-4 lg:px-10 lg:py-5"
         }`}
       >
         <div
           className={`mx-auto flex h-full min-h-0 w-full flex-col ${
-            sharingWall ? "max-w-none" : "max-w-6xl"
+            noGutter ? "max-w-none" : "max-w-6xl"
           }`}
         >
           <div className="min-h-0 w-full flex-1">

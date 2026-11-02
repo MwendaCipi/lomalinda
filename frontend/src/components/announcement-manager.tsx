@@ -1486,7 +1486,7 @@ export function AnnouncementManager({
 
   return (
     <section
-      className={`flex h-full min-h-0 w-full flex-col gap-3 bg-white px-6 py-3.5 sm:px-8 sm:py-4 lg:px-10 lg:py-5 ${
+      className={`flex h-full min-h-0 w-full flex-col gap-3 bg-white p-0 ${
         embedded ? "" : "border-b border-sand-line"
       }`}
     >

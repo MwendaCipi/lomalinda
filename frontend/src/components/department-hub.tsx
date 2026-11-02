@@ -7289,11 +7289,15 @@ function DepartmentDetail({
       // it: it is a desk-sized surface too, and its pinned bar of buttons
       // only stays put while the column holds still beneath the strip.
       className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
-        sharingWall
-          ? "gap-2 overflow-hidden p-1"
-          : deskFillsPhone || subTab === "calendar"
-            ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
-            : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
+        isEldership
+          ? subTab === "baptismal-class" || subTab === "daily-word" || subTab === "moments"
+            ? "gap-3 overflow-y-auto p-0"
+            : "gap-3 overflow-hidden p-0"
+          : sharingWall
+            ? "gap-2 overflow-hidden p-1"
+            : deskFillsPhone || subTab === "calendar"
+              ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
+              : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
       }`}
     >
 
@@ -8223,7 +8227,7 @@ function DepartmentDetail({
               fellowship feed — flat cards, no manager chrome, no nesting.
               The feed scrolls within the barely-framed card; nothing above
               it moves, and the desk's own edge is the card's. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-0.5">
+          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white ${isEldership ? "p-0" : "p-0.5"}`}>
             <AnnouncementsFeed
               key={shareFeedKey}
               embedded
