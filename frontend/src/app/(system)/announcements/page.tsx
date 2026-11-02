@@ -96,6 +96,10 @@ export default function AnnouncementsPage() {
   const [methodFor, setMethodFor] = useState<FeedItem | null>(null);
   // Comments on announcements appear inline beneath the card.
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
+  // The notice the reader arrived for — `?id=` names it when the dashboard's
+  // card, or its "See more", was pressed. Its card is scrolled to and wears a
+  // highlight for a few seconds, then the feed reads as any other list.
+  const [focusedId, setFocusedId] = useState<number | null>(null);
   const toggleComment = (id: number) =>
     setExpandedComments((prev) => ({ ...prev, [id]: !prev[id] }));
   // A drive's money gift still leaves for the giving page with its purpose
@@ -147,6 +151,34 @@ export default function AnnouncementsPage() {
       })
       .catch(() => setMyDepartments([]));
   }, [loadFeed]);
+
+  // Landing on the notice the reader pressed: the dashboard's card (and its
+  // "See more") names it with `?id=`, so the feed scrolls to that card and
+  // tints it for a moment instead of opening at the top of a list the member
+  // has to search. A slow fetch is waited out — the cards must exist before
+  // there is anything to scroll to.
+  useEffect(() => {
+    if (loading || items.length === 0) return;
+    let wanted = 0;
+    try {
+      wanted = Number(new URLSearchParams(window.location.search).get("id") || 0);
+    } catch {
+      return;
+    }
+    if (!wanted || !items.some((item) => item.id === wanted)) return;
+    // Both state writes ride timers rather than the effect's own body: the
+    // card is tinted once it has been scrolled to, and the tint is a guide
+    // rather than a state — it fades once the eye has arrived.
+    const arrive = window.setTimeout(() => {
+      setFocusedId(wanted);
+      document.getElementById(`announcement-${wanted}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    const fade = window.setTimeout(() => setFocusedId(null), 5200);
+    return () => {
+      window.clearTimeout(arrive);
+      window.clearTimeout(fade);
+    };
+  }, [loading, items]);
 
   /** Submit an opinion answer, then confirm inline on the card. */
   async function submitOpinion(item: FeedItem) {
@@ -224,7 +256,11 @@ export default function AnnouncementsPage() {
                     .find(Boolean);
                   // A little more room than the ledger cards: the notice
                   // reads as a card of its own, never a squashed strip.
-                  const cardClasses = "flex min-h-28 flex-col justify-between rounded-2xl border border-sand-line bg-white p-5 text-sm shadow-sm md:min-h-40 md:p-6";
+                  const cardClasses = `flex min-h-28 flex-col justify-between rounded-2xl border bg-white p-5 text-sm shadow-sm transition-shadow duration-500 md:min-h-40 md:p-6 ${
+                    focusedId === item.id
+                      ? "border-ember ring-2 ring-ember/50 ring-offset-2 ring-offset-sand shadow-md"
+                      : "border-sand-line"
+                  }`;
                   const content = (
                     <>
                       <div>
@@ -457,7 +493,15 @@ export default function AnnouncementsPage() {
                     </>
                   );
 
-                  return <article key={item.id} className={cardClasses}>{content}</article>;
+                  return (
+                    <article
+                      key={item.id}
+                      id={`announcement-${item.id}`}
+                      className={`scroll-mt-24 ${cardClasses}`}
+                    >
+                      {content}
+                    </article>
+                  );
                 })}
               </div>
             )}

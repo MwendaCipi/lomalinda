@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { announcementCountdown } from "@/lib/announcement-dates";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
@@ -134,16 +134,36 @@ export function DashboardAnnouncements() {
   const isOpinion = current?.announcement_type === "opinion";
   const isConference = current?.announcement_type === "web_conference" && Boolean(current.href);
 
-  const isAwareness = current?.announcement_type === "awareness";
-  const textLong = current && current.text.length > 220;
   const hasImage = current && isImageAttachment(current.attachment);
 
-  /** The ask to open the full feed. An awareness notice asks when the body is
-      longer than the card's three-line window or when it carries an image a
-      visitor can enlarge; a conference asks on the same terms, since above
-      the join row it has room for nothing but the hour and the link. The
-      giving and opinion slides already carry their own actions. */
-  const showSeeMore = Boolean(current && (isAwareness || isConference) && (textLong || hasImage));
+  // Whether the body is really cut off, measured on the line-clamped
+  // paragraph itself. Counting characters got this wrong both ways — a wide
+  // notice of 200 characters clamped with no ask to read on, a narrow one of
+  // 240 showed "See more" over text that ended before the third line — so the
+  // card now asks the element: a box whose content is taller than the box is
+  // a box with an ellipsis in it.
+  const bodyRef = useRef<HTMLParagraphElement>(null);
+  const [bodyClamped, setBodyClamped] = useState(false);
+  useEffect(() => {
+    const node = bodyRef.current;
+    if (!node) {
+      setBodyClamped(false);
+      return;
+    }
+    const measure = () => setBodyClamped(node.scrollHeight - node.clientHeight > 1);
+    measure();
+    // The card is measured again when the slide turns, the width changes or
+    // the web font lands late and the lines re-wrap.
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [current?.id, current?.text]);
+
+  /** The ask to open the full feed, on whichever kind of notice the slide is:
+      the body is cut with an ellipsis, or the card carries an image a visitor
+      can enlarge but cannot see in full here. Every type asks on those same
+      terms — a giving call can run past three lines too. */
+  const showSeeMore = Boolean(current && (bodyClamped || hasImage));
 
   /** The pledge modal's view of the slide the member is looking at. */
   const pledgeTargetFor = (announcement: Announcement): PledgeTarget => ({
@@ -180,8 +200,10 @@ export function DashboardAnnouncements() {
           Only the controls take their own clicks (they carry
           `pointer-events-auto`). */}
       <Link
-        href="/announcements"
-        aria-label="Open announcements"
+        // The slide the member pressed travels with them: the feed opens with
+        // that notice in focus rather than at the top of the list.
+        href={current ? `/announcements?id=${current.id}` : "/announcements"}
+        aria-label={current ? `Open announcement: ${current.title}` : "Open announcements"}
         className="absolute inset-0 rounded-3xl transition hover:bg-sand-veil/60"
         style={{ zIndex: 0 }}
       />
@@ -244,24 +266,24 @@ export function DashboardAnnouncements() {
               rather than its length takes See more after the text instead:
               there is no ellipsis to own a line. */}
           <div className="relative">
-            <p className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
+            <p ref={bodyRef} className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
               {current
                 ? current.text
                 : gathering
                   ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || churchWhere(settings) || "Church grounds"}`
                   : "The week's meetings are still being set up."}
-              {current && showSeeMore && !textLong && (
+              {current && showSeeMore && !bodyClamped && (
                 <Link
-                  href="/announcements"
+                  href={`/announcements?id=${current.id}`}
                   className="pointer-events-auto ml-1 whitespace-nowrap font-semibold text-ember"
                 >
                   See more
                 </Link>
               )}
             </p>
-            {current && showSeeMore && textLong && (
+            {current && showSeeMore && bodyClamped && (
               <Link
-                href="/announcements"
+                href={`/announcements?id=${current.id}`}
                 className="pointer-events-auto absolute bottom-0 right-0 bg-white pl-1 text-sm font-semibold leading-6 text-ember"
               >
                 <span aria-hidden="true">&hellip; </span>See more
