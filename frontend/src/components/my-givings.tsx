@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, MoreVertical, Printer, Receipt } from "lucide-react";
-import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime } from "@/lib/dates";
 import { showAlert, showGivingThanks } from "@/lib/alerts";
@@ -149,18 +148,6 @@ const timeOf = (at: string) => {
   return formatted.includes(" ") ? formatted.slice(formatted.indexOf(" ") + 1) : "";
 };
 
-const KIND_OPTIONS: { key: "all" | "money" | "in-kind"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "money", label: "Money" },
-  { key: "in-kind", label: "In Kind" },
-];
-
-const STATUS_OPTIONS: { key: "successful" | "failed" | "all"; label: string }[] = [
-  { key: "successful", label: "Successful" },
-  { key: "failed", label: "Failed" },
-  { key: "all", label: "All" },
-];
-
 /**
  * My Givings — the member's giving, as one timeline.
  *
@@ -180,10 +167,6 @@ export function MyGivings() {
   const [loadingInKind, setLoadingInKind] = useState(true);
   const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(() => localDate());
-  // What kind of giving is on show: everything by default.
-  const [kindFilter, setKindFilter] = useState<"all" | "money" | "in-kind">("all");
-  // Status applies to money only — starts on Successful as default.
-  const [statusFilter, setStatusFilter] = useState<"successful" | "failed" | "all">("successful");
   const [givingSearch, setGivingSearch] = useState("");
   const [givingAccounts, setGivingAccounts] = useState<GivingAccount[]>([]);
   const [openActions, setOpenActions] = useState<number | null>(null);
@@ -300,18 +283,13 @@ export function MyGivings() {
 
   const entries: TimelineEntry[] = [];
   for (const g of money) {
-    if (kindFilter === "in-kind") continue;
     const day = (g.paid_at || g.created_at || "").slice(0, 10);
     if (fromDate && day && day < fromDate) continue;
     if (toDate && day && day > toDate) continue;
-    const status = (g.status || "").toLowerCase();
-    if (statusFilter === "successful" && status !== "completed") continue;
-    if (statusFilter === "failed" && status !== "failed" && status !== "cancelled") continue;
     if (q && !`${g.purpose} ${g.honoree_name || ""} ${g.payment_method} ${g.mpesa_receipt_number || ""}`.toLowerCase().includes(q)) continue;
     entries.push({ key: `m-${g.id}`, kind: "money", day, at: g.paid_at || g.created_at || "", gift: g });
   }
   for (const r of inKind) {
-    if (kindFilter === "money") continue;
     const day = (r.received_on || r.created_at || "").slice(0, 10);
     if (fromDate && day && day < fromDate) continue;
     if (toDate && day && day > toDate) continue;
@@ -513,12 +491,13 @@ export function MyGivings() {
       // tab bar, which the shell's bottom padding matches exactly.
       className="flex min-h-0 flex-1 flex-col rounded-3xl bg-white shadow-sm ring-1 ring-sand-line"
     >
-      {/* The filters share each row in equal parts — the date range across
-          the phone's first row, the two popovers across the second — and the
-          search gets a row of its own below them rather than squeezing in. */}
+      {/* The page keeps two ways to narrow a timeline: the date range, and the
+          search over what each row says. Type and status are not filters here —
+          the rows carry their own badge, and the report prints what is on
+          screen. */}
       <div className="border-b border-sand-line px-5 py-3.5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex w-full items-center gap-1.5 sm:w-auto sm:flex-1">
+        <div className="flex w-full items-center gap-2.5">
+          <div className="flex w-full items-center gap-1.5">
             <input
               type="date"
               value={fromDate}
@@ -537,48 +516,6 @@ export function MyGivings() {
               className="h-9 min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-2.5 text-xs text-bark focus:border-ember focus:outline-none"
             />
           </div>
-
-          <div className="min-w-0 flex-1">
-            <FilterPopover
-              title="Filter by type"
-              summary={kindFilter === "all" ? "All types" : KIND_OPTIONS.find((o) => o.key === kindFilter)?.label ?? "All types"}
-              active={kindFilter !== "all"}
-            >
-              <FilterSet label="Type">
-                <select
-                  value={kindFilter}
-                  onChange={(e) => setKindFilter(e.target.value as typeof kindFilter)}
-                  className={FILTER_SELECT_CLASS}
-                  aria-label="Filter by type"
-                >
-                  {KIND_OPTIONS.map((option) => (
-                    <option key={option.key} value={option.key}>{option.label}</option>
-                  ))}
-                </select>
-              </FilterSet>
-            </FilterPopover>
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <FilterPopover
-              title="Filter by status"
-              summary={statusFilter === "all" ? "All statuses" : STATUS_OPTIONS.find((o) => o.key === statusFilter)?.label ?? "All statuses"}
-              active={statusFilter !== "all"}
-            >
-              <FilterSet label="Status">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                  className={FILTER_SELECT_CLASS}
-                  aria-label="Filter by status"
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.key} value={option.key}>{option.label}</option>
-                  ))}
-                </select>
-              </FilterSet>
-            </FilterPopover>
-          </div>
         </div>
 
         <input
@@ -596,7 +533,7 @@ export function MyGivings() {
         ) : entries.length === 0 ? (
           <div className="py-10 text-center">
             <p className="text-xs font-semibold text-bark">No givings in this period</p>
-            <p className="mt-1 text-[11px] text-moss">Adjust the filters above, or tap Give Now to add one.</p>
+            <p className="mt-1 text-[11px] text-moss">Widen the dates above, or tap Give Now to add one.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-5">
@@ -625,11 +562,9 @@ export function MyGivings() {
           {loading && entries.length === 0
             ? "Loading your givings…"
             : [
-                kindFilter !== "in-kind" && `${moneyEntries.length} money gift${moneyEntries.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`,
-                kindFilter !== "money" && `${inKindEntries.length} in-kind gift${inKindEntries.length === 1 ? "" : "s"} · ${inKindItems} item${inKindItems === 1 ? "" : "s"}`,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+                `${moneyEntries.length} money gift${moneyEntries.length === 1 ? "" : "s"} · KES ${givingTotal.toLocaleString()}`,
+                `${inKindEntries.length} in-kind gift${inKindEntries.length === 1 ? "" : "s"} · ${inKindItems} item${inKindItems === 1 ? "" : "s"}`,
+              ].join(" · ")}
         </p>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <button
@@ -641,10 +576,10 @@ export function MyGivings() {
             <Printer size={12} className="inline" aria-hidden="true" /> Print My Report
           </button>
           <Link
-            href={kindFilter === "in-kind" ? "/support/in-kind" : "/member/giving"}
+            href="/member/giving"
             className="inline-flex flex-1 items-center justify-center rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep sm:flex-none"
           >
-            {kindFilter === "in-kind" ? "Give In-Kind" : "Give Now"}
+            Give Now
           </Link>
         </div>
       </div>

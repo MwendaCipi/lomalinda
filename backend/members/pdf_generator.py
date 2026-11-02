@@ -274,14 +274,14 @@ class DepartmentLetterCanvas(NumberedCanvas):
                 'MERU-KENYA',
             )):
                 self.drawString(right_x, top - offset * 6.15 * mm, line)
-            self.setFillColor(colors.blue)
+            # The contact lines sit on the address's own left margin and
+            # wear its blue: one block reads as one block, and TEL is no
+            # longer a different blue hung a few points off the others.
             self.setFont('Times-Bold', 10.6)
             tel_text = getattr(self, '_tel_line', None) or 'TEL:0708069827/0711340087'
-            self.drawString(right_x + 0.12 * cm, top - 2 * 6.15 * mm, tel_text)
-            self.setFillColor(colors.HexColor('#2E8BA6'))
-            self.setFont('Times-Bold', 10.6)
-            self.drawString(right_x - 0.45 * cm, top - 3 * 6.15 * mm, 'EMAIL: info@sdalomalinda.or.ke')
-            self.drawString(right_x - 0.45 * cm, top - 4 * 6.15 * mm, 'WEB: sdalomalinda.or.ke')
+            self.drawString(right_x, top - 2 * 6.15 * mm, tel_text)
+            self.drawString(right_x, top - 3 * 6.15 * mm, 'EMAIL: info@sdalomalinda.or.ke')
+            self.drawString(right_x, top - 4 * 6.15 * mm, 'WEB: sdalomalinda.or.ke')
 
         self.restoreState()
         self.saveState()

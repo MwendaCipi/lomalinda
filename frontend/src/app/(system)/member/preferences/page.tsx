@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MemberWorkspace } from "@/components/member-workspace";
 import { useAccessibility } from "@/context/accessibility-context";
-import { getPushState, PushSupport } from "@/lib/push";
+import { disablePush, enablePush, getPushState, PushSupport, sendTestPush } from "@/lib/push";
 import { showAlert } from "@/lib/alerts";
 import { Bell, Monitor, Moon, RotateCcw, SlidersHorizontal, Sun, Type } from "lucide-react";
 
@@ -32,6 +32,9 @@ export default function MemberPreferencesPage() {
   // standing behind it; "both" texts every receipt beside the email.
   const [receiptBoth, setReceiptBoth] = useState<boolean | null>(null);
   const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
+  // A switch press asks the browser for permission, which can take a moment
+  // on a phone — the button says so rather than looking dead.
+  const [pushBusy, setPushBusy] = useState(false);
   const [savingPref, setSavingPref] = useState(false);
   const [prefMessage, setPrefMessage] = useState("");
 
@@ -59,6 +62,67 @@ export default function MemberPreferencesPage() {
       alive = false;
     };
   }, [token]);
+
+  /** Turn this device's notifications on or off — the browser's own switch,
+      not the church's channels below: nothing reaches the device without it. */
+  async function toggleDeviceNotifications() {
+    if (!pushSupport?.supported || pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushSupport.enabled) {
+        await disablePush();
+        setPushSupport({ supported: true, enabled: false });
+        showAlert("Notifications off", "This device will no longer be alerted.", "success");
+        return;
+      }
+      const result = await enablePush();
+      if (result.ok) {
+        setPushSupport({ supported: true, enabled: true });
+        showAlert(
+          "Notifications on",
+          "You will now be alerted on this device when something needs you.",
+          "success",
+        );
+      } else {
+        showAlert("Not enabled", result.error || "This browser would not allow notifications.", "warning");
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  /** Prove this device is actually reachable, and name why when it is not.
+      A switch can only say the browser accepted a subscription; it cannot say
+      the server still reaches the phone. */
+  async function sendTestNotification() {
+    const report = await sendTestPush();
+    if (!report.ok) {
+      showAlert("Test not sent", report.error, "warning");
+      return;
+    }
+    if (report.devices === 0) {
+      showAlert(
+        "No device is subscribed yet",
+        "This account has no phone registered for notifications. Turn notifications on from this device; on an iPhone, add the app to the Home Screen first — Safari only allows notifications for an installed app.",
+        "warning",
+      );
+      return;
+    }
+    if (report.delivered > 0) {
+      showAlert(
+        "Test sent",
+        `Delivered to ${report.delivered} of ${report.devices} registered device(s). If nothing appears within a minute, check this app's notification settings on the phone itself.`,
+        "success",
+      );
+      return;
+    }
+    const first = report.results[0];
+    showAlert(
+      "The push service refused it",
+      `${first?.device || "The device"} answered${first?.status ? ` with ${first.status}` : " with an error"}: ${first?.error || "no delivery"}. Switching notifications off and on again on that phone registers it afresh.`,
+      "warning",
+    );
+  }
 
   async function saveReceiptPreference(value: boolean) {
     if (!token || receiptBoth === null) return;
@@ -284,6 +348,51 @@ export default function MemberPreferencesPage() {
             </div>
           </div>
 
+          {/* This device first: the browser's own permission is what decides
+              whether any of the channels below can reach it. */}
+          {pushSupport && (
+            <div className="rounded-2xl bg-sand p-3.5 text-xs font-medium">
+              <strong className="block text-bark">Notifications on this device</strong>
+              <span className="text-moss">
+                {pushSupport.supported
+                  ? "Allow this browser to alert you here. Off means nothing reaches this device, whatever the channels below say."
+                  : pushSupport.reason === "insecure"
+                    ? "Notifications need the secure (https) address of the site."
+                    : "This browser will not show notifications here. On an iPhone, open the site in Safari, tap Share then Add to Home Screen, and turn notifications on inside the installed app."}
+              </span>
+              {pushSupport.supported && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={pushBusy}
+                    onClick={() => void toggleDeviceNotifications()}
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition disabled:opacity-60 ${
+                      pushSupport.enabled
+                        ? "border border-sand-line bg-white text-moss hover:text-bark"
+                        : "bg-ember text-white hover:bg-ember-deep"
+                    }`}
+                  >
+                    <Bell className="h-3.5 w-3.5" aria-hidden="true" />
+                    {pushBusy
+                      ? "One moment…"
+                      : pushSupport.enabled
+                        ? "Turn off notifications"
+                        : "Turn on notifications"}
+                  </button>
+                  {pushSupport.enabled && (
+                    <button
+                      type="button"
+                      onClick={() => void sendTestNotification()}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-ember transition hover:border-ember hover:bg-sand"
+                    >
+                      Send a test notification
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {announcePrefs ? (
             <div className="space-y-3">
               <label className="flex items-center justify-between gap-4 rounded-2xl bg-sand p-3.5 text-xs font-medium cursor-pointer">
@@ -325,7 +434,7 @@ export default function MemberPreferencesPage() {
 
               {pushSupport?.supported && !pushSupport.enabled && announcePrefs.push && (
                 <p className="text-xs text-moss">
-                  To receive notifications on <em>this</em> device, also ensure browser permission is granted in the notification bell at the top of the page.
+                  Announcements are set to arrive as notifications, but this device has them switched off — turn them on above.
                 </p>
               )}
             </div>

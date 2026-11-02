@@ -243,12 +243,9 @@ export default function AnnouncementsPage() {
                   // the same Pledge / In-kind / Give Money row a drive gets.
                   const supportGives = !isDrive && Boolean(item.support_account_display);
                   // The buttons the officer chose for this post, in the
-                  // card's reading order.
+                  // card's reading order — the giving doors first and Comment
+                  // last, so the talk sits at the right-hand end of the row.
                   const feedActions = chosenActions(item);
-                  const actionGrid =
-                    feedActions.length >= 4 ? "grid-cols-2 sm:grid-cols-4" :
-                    feedActions.length === 3 ? "grid-cols-3" :
-                    feedActions.length === 2 ? "grid-cols-2" : "grid-cols-1";
                   // The area a post is addressed to, by name: the first of
                   // this account's areas whose audience code the post carries.
                   const itemBadge = (item.audience ?? [])
@@ -397,7 +394,9 @@ export default function AnnouncementsPage() {
                           stands alone where Give now was left off. */}
                       {(supportGives || (isDrive && drive)) && feedActions.length > 0 && (
                         <div className="mt-3 border-t border-sand-line pt-3">
-                          <div className={`grid gap-2 ${actionGrid}`}>
+                          {/* The row gathers at the card's right edge: the
+                              giving doors first, Comment at the end. */}
+                          <div className="flex flex-wrap items-center justify-end gap-2">
                             {feedActions.map((code) => {
                               if (code === "give_now") {
                                 return (
@@ -405,7 +404,7 @@ export default function AnnouncementsPage() {
                                     key="give_now"
                                     type="button"
                                     onClick={() => setMethodFor(item)}
-                                    className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
+                                    className="rounded-full bg-sage-strong px-4 py-1.5 text-xs font-bold text-white transition hover:bg-sage-shade"
                                   >
                                     Give Now
                                   </button>
@@ -417,7 +416,7 @@ export default function AnnouncementsPage() {
                                     key="pledge"
                                     type="button"
                                     onClick={() => setPledgeTarget(pledgeTargetFor(item))}
-                                    className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                    className="rounded-full border border-sand-mute bg-white px-4 py-1.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                                   >
                                     Pledge
                                   </button>
@@ -429,7 +428,7 @@ export default function AnnouncementsPage() {
                                     key="in_kind"
                                     type="button"
                                     onClick={() => setInKindFor(item)}
-                                    className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                    className="rounded-full border border-sand-mute bg-white px-4 py-1.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                                   >
                                     Support
                                   </button>
@@ -441,7 +440,7 @@ export default function AnnouncementsPage() {
                                   key="comment"
                                   type="button"
                                   onClick={() => toggleComment(item.id)}
-                                  className={`rounded-full border px-2.5 py-2 text-xs font-bold transition ${
+                                  className={`rounded-full border px-4 py-1.5 text-xs font-bold transition ${
                                     isExpanded
                                       ? "border-ember bg-sand text-ember"
                                       : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
@@ -458,7 +457,7 @@ export default function AnnouncementsPage() {
                       {/* A card with nothing to give still carries the one
                           Comment button at its foot — expanding the thread inline. */}
                       {!supportGives && !isDrive && (
-                        <div className="mt-3 border-t border-sand-line pt-3">
+                        <div className="mt-3 flex justify-end border-t border-sand-line pt-3">
                           {(() => {
                             const isExpanded = Boolean(expandedComments[item.id]);
                             return (
