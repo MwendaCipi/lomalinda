@@ -281,6 +281,7 @@ class DepartmentLetterCanvas(NumberedCanvas):
             self.setFillColor(colors.HexColor('#2E8BA6'))
             self.setFont('Times-Bold', 10.6)
             self.drawString(right_x - 0.45 * cm, top - 3 * 6.15 * mm, 'EMAIL: info@sdalomalinda.or.ke')
+            self.drawString(right_x - 0.45 * cm, top - 4 * 6.15 * mm, 'WEB: sdalomalinda.or.ke')
 
         self.restoreState()
         self.saveState()
@@ -2636,9 +2637,16 @@ def generate_department_letter_pdf(
 
     address_text = str(letter_record.get("recipient_address") or "").strip()
 
+    # The salutation and the receiving church block are one paragraph of
+    # lines: ReportLab is asked for no space before or after each, so every
+    # line in the address sits on the same fourteen-point rhythm. Left as
+    # separate paragraphs, BodyText's own spaceAfter would open a wider gap
+    # between the salutation and the church's name than between the
+    # church's name and its town.
     addr_style = ParagraphStyle(
         "LetterAddr", parent=st["BodyText"],
-        fontSize=10, leading=14, textColor=colors.HexColor("#1f2937"),
+        fontSize=10, leading=14, spaceBefore=0, spaceAfter=0,
+        textColor=colors.HexColor("#1f2937"),
     )
 
     # The date on its own line, then the salutation and the receiving
@@ -2658,11 +2666,13 @@ def generate_department_letter_pdf(
         for idx, line in enumerate(raw_block)
     ]
     story.append(date_para)
-    story.append(Paragraph(escape("To the Pastor/ Church clerk,"), addr_style))
-    if address_block:
-        story.append(Paragraph(
-            "<br />".join([escape(line) for line in address_block]), addr_style,
-        ))
+    # The date keeps a little air of its own; the salutation and the block
+    # beneath it then read as one address, every line evenly spaced.
+    story.append(Spacer(1, 10))
+    address_lines = ["To the Pastor/ Church clerk,", *address_block]
+    story.append(Paragraph(
+        "<br />".join([escape(line) for line in address_lines]), addr_style,
+    ))
     story.append(Spacer(1, 10))
     
     # The subject on its own line: the title the writer gave the letter,

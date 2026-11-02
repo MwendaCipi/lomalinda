@@ -389,10 +389,18 @@ export function WriteLetterModal({
               <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Letter preview</p>
               <article className="mx-auto mt-2 w-full max-w-2xl rounded-lg border border-sand-line bg-white px-7 py-9 font-serif text-[13px] leading-relaxed text-bark shadow-sm">
                 <p>{letterDate.trim() || dayFirst(new Date())}</p>
-                <p className="mt-4">To the Pastor/ Church clerk,</p>
-                <p className={`mt-4 whitespace-pre-line${recipientBlock().length ? "" : " text-moss-faint"}`}>
-                  {recipientBlock().length ? recipientBlock().join("\n") : "Receiving church, address and town"}
-                </p>
+                {/* The salutation and the receiving church's lines ride one
+                    rhythm: every line carries the same gap above it, so the
+                    paper never opens more space under the salutation than
+                    between the church and its town. */}
+                <div className="mt-6 space-y-1.5">
+                  <p>To the Pastor/ Church clerk,</p>
+                  {recipientBlock().length ? (
+                    recipientBlock().map((line, index) => <p key={`${line}-${index}`}>{line}</p>)
+                  ) : (
+                    <p className="text-moss-faint">Receiving church, address and town</p>
+                  )}
+                </div>
                 <p className="mt-6 font-bold">
                   <span>REF: </span>
                   <span className="underline">
