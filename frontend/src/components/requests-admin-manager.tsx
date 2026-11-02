@@ -98,6 +98,24 @@ type AreaRequestRow = {
   created_at: string;
 };
 
+/** Personal Ministries' ask of the office: seat a person, or let a seat go.
+    Approving applies the change to the leadership register. */
+type LeadershipChangeItem = {
+  id: number;
+  kind: "appoint" | "release";
+  department: string;
+  department_name: string;
+  unit?: string;
+  role_name?: string;
+  member_name: string;
+  seat_kind: string;
+  note?: string;
+  status: "pending" | "approved" | "rejected";
+  reply?: string;
+  requested_by_name?: string;
+  created_at: string;
+};
+
 /** The deaconate desk's ask of the office: buy an item, or repair one. */
 type DeaconateRequestItem = {
   id: number;
@@ -119,7 +137,7 @@ function statusOfArea(status?: string): { status: string; statusLabel: string } 
 }
 
 /** Every request kind in one table, tagged by desk. */
-type RequestKind = "join" | "area" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer" | "property";
+type RequestKind = "join" | "area" | "prayer" | "visitation" | "dedication" | "welfare" | "transfer" | "property" | "leadership";
 
 type UnifiedRow = {
   key: string;
@@ -148,6 +166,8 @@ type UnifiedRow = {
   areaRequest?: AreaRequestRow;
   /** Only set on property rows: the deaconate's buy/repair ask. */
   property?: DeaconateRequestItem;
+  /** Only set on leadership rows: Personal Ministries' staff change. */
+  leadership?: LeadershipChangeItem;
 };
 
 /**
@@ -194,6 +214,7 @@ const KIND_META: Record<RequestKind, { label: string; badge: string }> = {
   transfer: { label: "Membership transfer", badge: "bg-moss/10 text-moss-mid" },
   area: { label: "Ministry requests", badge: "bg-blue-50 text-blue-800" },
   property: { label: "Property requests", badge: "bg-amber-50 text-amber-800" },
+  leadership: { label: "Leadership changes", badge: "bg-indigo-50 text-indigo-800" },
 };
 
 const JOINING_MODE_LABELS: Record<string, string> = {
@@ -250,6 +271,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   const [transfers, setTransfers] = useState<TransferRow[]>([]);
   const [areaRequests, setAreaRequests] = useState<AreaRequestRow[]>([]);
   const [deaconateRequests, setDeaconateRequests] = useState<DeaconateRequestItem[]>([]);
+  const [leadershipChanges, setLeadershipChanges] = useState<LeadershipChangeItem[]>([]);
   // Department codes read as names in the queue — from the same directory
   // the members' own ask modal reads.
   const [areaLabels, setAreaLabels] = useState<Record<string, string>>({});
@@ -299,6 +321,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       { value: "welfare", label: "Welfare" },
       { value: "transfer", label: "Transfers" },
       { value: "property", label: "Property" },
+      { value: "leadership", label: "Leadership" },
     ];
     // Membership Requests reads every request and shows each row's state, so
     // it needs no review-state control — one popover, and a narrow one.
@@ -423,7 +446,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     setLoading(true);
     const headers = authHeaders();
     try {
-      const [jRes, pRes, vRes, dRes, sRes, tRes, aRes, dqRes, dirRes] = await Promise.all([
+      const [jRes, pRes, vRes, dRes, sRes, tRes, aRes, dqRes, dirRes, lcRes] = await Promise.all([
         fetch(`${API_URL}/api/members/enrollment-requests/`, { headers }),
         fetch(`${API_URL}/api/members/prayer-requests/`, { headers }),
         fetch(`${API_URL}/api/members/visitations/`, { headers }),
@@ -436,6 +459,8 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         // The deaconate desk's property asks — buy or repair — answered here.
         fetch(`${API_URL}/api/members/deaconate-requests/review/`, { headers }),
         fetch(`${API_URL}/api/members/departments/`, { headers }),
+        // Personal Ministries' leadership changes, waiting on this office.
+        fetch(`${API_URL}/api/members/leadership-changes/`, { headers }),
       ]);
       setJoinRequests(jRes.ok ? await jRes.json() : []);
       setPrayerRequests(pRes.ok ? await pRes.json() : []);
@@ -445,6 +470,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       setTransfers(tRes.ok ? await tRes.json() : []);
       setAreaRequests(aRes.ok ? (await aRes.json()).requests ?? [] : []);
       setDeaconateRequests(dqRes.ok ? (await dqRes.json()).requests ?? [] : []);
+      setLeadershipChanges(lcRes.ok ? (await lcRes.json()).requests ?? [] : []);
       const dirData = dirRes.ok ? await dirRes.json() : { departments: [] };
       const labelMap: Record<string, string> = {};
       for (const d of (dirData?.departments ?? []) as { code: string; label: string }[]) labelMap[d.code] = d.label;
@@ -638,6 +664,52 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
     }
   };
 
+  /** The office's answer to a leadership change: approving seats the person
+      (or lets the seat go) the moment it saves. */
+  const handleReviewLeadership = async (item: LeadershipChangeItem, decision: "approved" | "rejected") => {
+    const seat = item.role_name || "office";
+    const confirmText =
+      decision === "approved"
+        ? item.kind === "release"
+          ? `Release ${item.member_name} from ${seat} in ${item.department_name}?`
+          : `Seat ${item.member_name} as ${seat} in ${item.department_name}?`
+        : `Decline this leadership change for ${item.department_name}?`;
+    const result = await showAlert(
+      "Leadership change",
+      confirmText,
+      "question",
+      { showCancelButton: true, confirmButtonText: decision === "approved" ? "Approve" : "Decline", cancelButtonText: "Cancel" }
+    );
+    if (!result.isConfirmed) return;
+    setReviewingId(`leadership-${item.id}`);
+    try {
+      const res = await fetch(`${API_URL}/api/members/leadership-changes/${item.id}/`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision }),
+      });
+      if (res.ok) {
+        showAlert(
+          decision === "approved" ? "Change approved" : "Change declined",
+          decision === "approved"
+            ? item.kind === "release"
+              ? `${item.member_name} is no longer ${seat} in ${item.department_name}.`
+              : `${item.member_name} is now ${seat} in ${item.department_name}.`
+            : "The desk that raised it has been told.",
+          "success"
+        );
+        fetchAll();
+      } else {
+        const data = await res.json().catch(() => null);
+        showAlert("Review Failed", data?.detail || "Could not answer the leadership change.", "error");
+      }
+    } catch {
+      showAlert("Network Error", "Could not reach the server.", "error");
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   // ── One table out of every ledger, newest first. ─────────────────────────
   const rows: UnifiedRow[] = useMemo(() => {
     const joinRows: UnifiedRow[] = joinRequests.map((item) => {
@@ -747,6 +819,23 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       property: item,
     }));
 
+    const leadershipRows: UnifiedRow[] = leadershipChanges.map((item) => ({
+      key: `leadership-${item.id}`,
+      kind: "leadership",
+      title: item.member_name,
+      contact: item.requested_by_name || "Personal Ministries",
+      summary:
+        item.kind === "release"
+          ? `Release from ${item.role_name || "office"} in ${item.department_name}`
+          : `Seat as ${item.role_name || "office"} in ${item.department_name}`,
+      meta: item.note || undefined,
+      status: item.status,
+      statusLabel: statusOfArea(item.status).statusLabel,
+      created_at: item.created_at,
+      reviewable: item.status === "pending",
+      leadership: item,
+    }));
+
     const areaRows: UnifiedRow[] = areaRequests.map((item) => {
       const { status, statusLabel } = statusOfArea(item.status);
       const isGroup = item.kind === "singing_group";
@@ -768,10 +857,10 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
       };
     });
 
-    return [...joinRows, ...areaRows, ...propertyRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
+    return [...joinRows, ...areaRows, ...propertyRows, ...leadershipRows, ...prayerRows, ...visitationRows, ...dedicationRows, ...welfareRows, ...transferRows].sort(
       (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
-  }, [joinRequests, areaRequests, deaconateRequests, areaLabels, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
+  }, [joinRequests, areaRequests, deaconateRequests, leadershipChanges, areaLabels, prayerRequests, visitationRequests, childDedications, supportSubmissions, transfers]);
 
   // A link from a request notification arrives as ?request=<kind>-<id>. The
   // filters are moved to that row once the ledgers have loaded, and only once,
@@ -1172,6 +1261,26 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
                         type="button"
                         disabled={reviewingId === row.key}
                         onClick={() => handleReviewProperty(row.property!.id, "rejected")}
+                        className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <X size={12} className="inline" aria-hidden="true" /> Reject
+                      </button>
+                    </>
+                  )}
+                  {row.leadership && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewLeadership(row.leadership!, "approved")}
+                        className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                      >
+                        {reviewingId === row.key ? "..." : <><Check size={12} className="inline" aria-hidden="true" /> Approve</>}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={reviewingId === row.key}
+                        onClick={() => handleReviewLeadership(row.leadership!, "rejected")}
                         className="flex-1 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         <X size={12} className="inline" aria-hidden="true" /> Reject

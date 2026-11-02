@@ -815,7 +815,7 @@ export const clerkshipItems: RailRow[] = [
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "baptismal-class" | "leaders" | "calendar" | "sharing" | "requests" | "moments" | "funding" | "rota";
+  key: "baptismal-class" | "letters" | "calendar" | "sharing" | "requests" | "moments" | "funding" | "rota";
   label: string;
   short?: string;
   icon: LucideIcon;
@@ -842,15 +842,6 @@ export const eldershipViews: {
     href: "/my-areas?area=eldership&view=baptismal-class",
     description: "The members being prepared for baptism, their walk from studying to the font.",
   },
-  // Assigning the church's leaders: appointing a leader is work the offices do
-  // together, so it is a page of their desk rather than a row of its own.
-  {
-    key: "leaders",
-    label: "Leadership",
-    icon: Crown,
-    href: "/administration?tab=leaders",
-    description: "The church's offices, ministries and departments, with each leader and assistant.",
-  },
   // The church's days as the desk keeps them.
   {
     key: "calendar",
@@ -858,6 +849,17 @@ export const eldershipViews: {
     icon: Calendar,
     href: "/my-areas?area=eldership&view=calendar",
     description: "The church's calendar, with the gatherings the elders keep.",
+  },
+  // The elders' own paper: every letter their desk has written, whose pen it
+  // waits on, and the signed sheet once the pastor and the clerk have both
+  // signed. The leadership register lives on Personal Ministries' desk, since
+  // appointing the church's leaders is that desk's work now.
+  {
+    key: "letters",
+    label: "Letters",
+    icon: FileText,
+    href: "/my-areas?area=eldership&view=letters",
+    description: "Letters written on the eldership's desk, whose pen each one waits on, and the signed sheets.",
   },
   {
     key: "requests",
@@ -1438,13 +1440,26 @@ export const OPEN_DOOR_AREA_CODES = new Set(["music", "apm", "deaconate"]);
  * and the minutes, kept as books rather than as the church's days, so the
  * wall is not theirs to keep.
  */
-const MOMENTS_LESS_AREA_CODES = new Set(["treasury", "clerkship"]);
+const MOMENTS_LESS_AREA_CODES = new Set(["treasury", "clerkship", "personal_ministries"]);
 
 /** Does this area's desk carry a Moments view? One rule, asked by the strip
  *  that draws a desk's pages and by the view itself, so the two can never
  *  disagree about which areas have the page. */
 export function areaHasMoments(code: string): boolean {
   return !MOMENTS_LESS_AREA_CODES.has(code.trim().toLowerCase());
+}
+
+/**
+ * The one area whose desk keeps no Letters page: Personal Ministries appoints
+ * and rosters the church's people rather than writing its paper, so the
+ * letters page moves to the desk that does write it (the eldership's).
+ */
+const LETTERS_LESS_AREA_CODES = new Set(["personal_ministries"]);
+
+/** Does this area's desk carry a Letters view? Asked by the strip that draws a
+ *  desk's pages and by the view itself, so the two cannot disagree. */
+export function areaHasLetters(code: string): boolean {
+  return !LETTERS_LESS_AREA_CODES.has(code.trim().toLowerCase());
 }
 
 /**

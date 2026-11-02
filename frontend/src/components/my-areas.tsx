@@ -469,9 +469,22 @@ export function MyAreas() {
     // No padding on a phone: the desk's own card is the screen there. It
     // carries its own inset on the wider widths, where this wrapper's padding
     // is what frames it.
+    //
+    // Sharing is the exception: its page is a wall of cards, and every pixel
+    // this wrapper and the reading measure spend on the frame is a pixel the
+    // cards do not have. It takes the whole panel and every width.
+    const sharingWall = opensEldershipDesk && eldershipView === "sharing";
     return (
-      <div className="flex h-full min-w-0 w-full flex-col sm:px-8 sm:py-4 lg:px-10 lg:py-5">
-        <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
+      <div
+        className={`flex h-full min-w-0 w-full flex-col ${
+          sharingWall ? "" : "sm:px-8 sm:py-4 lg:px-10 lg:py-5"
+        }`}
+      >
+        <div
+          className={`mx-auto flex h-full min-h-0 w-full flex-col ${
+            sharingWall ? "max-w-none" : "max-w-6xl"
+          }`}
+        >
           <div className="min-h-0 w-full flex-1">
             {opensDeaconateDesk ? (
               // Funding is the hub's accounts desk, which for the deaconate
@@ -510,6 +523,8 @@ export function MyAreas() {
                           ? "baptismal-class"
                           : openView === "rota" && opensEldershipDesk
                             ? "rota"
+                            : openView === "letters" && opensEldershipDesk
+                              ? "letters"
                             : openView === "calendar"
                               // A view of the desk keeps its view when the
                               // address bar names it.

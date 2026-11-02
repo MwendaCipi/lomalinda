@@ -257,7 +257,9 @@ export function AnnouncementsFeed({
   });
 
   const feed = (
-    <div className="max-w-7xl mx-auto space-y-4">
+    // Embedded, the host card is the frame, so the feed takes its whole width;
+    // standalone it keeps the reading measure.
+    <div className={`space-y-4 ${embedded ? "" : "mx-auto max-w-7xl"}`}>
       {/* The cards themselves are compact — there is no comfortable/
                 compact toggle here, the feed is a notice board and reads best
                 tight. */}

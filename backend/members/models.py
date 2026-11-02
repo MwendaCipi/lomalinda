@@ -558,6 +558,72 @@ class DepartmentAssignment(models.Model):
         return f"{self.member.get_username()} — {label}, {self.role.name} ({self.department.name})"
 
 
+class LeadershipChangeRequest(models.Model):
+    """A leadership change Personal Ministries asks the church office to make.
+
+    Personal Ministries keeps the church's leadership register, but a seat is
+    not its alone to fill or empty: a change staged on its desk waits here for
+    the pastor or an elder, who answer it on the Requests desk. ``appoint``
+    names the office and the person; ``release`` names the appointment being
+    let go. Approving applies the change exactly as the desk's own save
+    would, so the leadership table never keeps a seat the office has not
+    answered for.
+    """
+
+    KIND_CHOICES = [
+        ('appoint', 'Appoint'),
+        ('release', 'Release'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Declined'),
+    ]
+
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='leadership_change_requests')
+    unit = models.CharField(
+        max_length=60, blank=True,
+        help_text="The sub-unit whose leadership changes; blank for the department as a whole",
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default='appoint')
+    # The office being filled (appoint), or the office the released appointment
+    # held. SET_NULL keeps the request readable after the office goes.
+    role = models.ForeignKey(
+        DepartmentRole, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='leadership_change_requests',
+    )
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='leadership_change_requests',
+    )
+    seat_kind = models.CharField(max_length=10, choices=DepartmentAssignment.KIND_CHOICES, default='leader')
+    # The appointment a release lets go — the row itself, so approving deletes
+    # exactly what the desk named and not whatever holds the seat by then.
+    assignment = models.ForeignKey(
+        DepartmentAssignment, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='release_requests',
+    )
+    note = models.TextField(blank=True, help_text="Why the desk asks for the change")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reply = models.TextField(blank=True, help_text="The answer the office sends back to the desk")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='leadership_change_requests_raised',
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='leadership_change_requests_reviewed',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        seat = self.role.name if self.role else 'office'
+        return f"{self.get_kind_display()} {self.member.get_username()} as {seat} ({self.status})"
+
+
 class DepartmentMembership(models.Model):
     """A member's place on a department's roll.
 

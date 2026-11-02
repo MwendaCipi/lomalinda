@@ -48,7 +48,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
-from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement, Invitation, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -122,6 +122,16 @@ TEMPORARY_PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23
 PASSWORD_UPPERCASE = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
 PASSWORD_DIGITS = '23456789'
 PASSWORD_SYMBOLS = '@#!$%&*?'
+
+#: The treasury desk's Requests view: where a funds request waits for its elder
+#: approval and its treasurer's release, and where a giving change is reviewed.
+#: It is the address the treasury's own strip links to (frontend/src/components/
+#: treasury-nav.tsx), so a notice that points anywhere else sends an officer to
+#: a page that cannot act on the request.
+TREASURY_REQUESTS_PATH = '/administration?tab=accounts&view=withdrawals'
+
+#: The pastorate's approvals page — the first pen in the funds chain.
+PASTORATE_APPROVALS_PATH = '/my-areas?area=pastorate&view=treasury-approvals'
 
 
 def generate_temporary_password(length=12):
@@ -3791,7 +3801,10 @@ class GivingChangeRequestView(APIView):
         label = 'reappropriation' if request_type == 'reappropriate' else 'reversal'
         detail = f"{giver_display_name('', member=request.user)} requested {label} of KES {contribution.amount:,.2f} ({contribution.purpose})."
         ChurchNotification.objects.bulk_create([
-            ChurchNotification(user=person, title='Giving request awaiting review', message=detail, link='/administration/treasury?view=requests')
+            ChurchNotification(
+                user=person, title='Giving request awaiting review', message=detail,
+                link=TREASURY_REQUESTS_PATH,
+            )
             for person in audience
         ])
         return Response({'request': self._row(row), 'detail': 'Your request has been sent to Treasury.'}, status=status.HTTP_201_CREATED)
@@ -12770,6 +12783,40 @@ class DepartmentLeadershipView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # Personal Ministries keeps the register, but its own hand does not
+        # seat or release a person: the change waits for the pastor or an
+        # elder on the Requests desk, and lands when one of them approves it.
+        # The checks above still run, so a request is never raised for an
+        # appointment the church would refuse.
+        if target.code == LEADERSHIP_DESK and leadership_change_is_staged(request.user):
+            staged = []
+            for entry in submitted:
+                role = roles[entry.get('role_id')]
+                kind = entry.get('kind') or 'leader'
+                member = members.get(pk=entry.get('member_id'))
+                if LeadershipChangeRequest.objects.filter(
+                    department=target, role=role, member=member, kind='appoint',
+                    seat_kind=kind, unit=unit, status='pending',
+                ).exists():
+                    continue
+                staged.append(LeadershipChangeRequest.objects.create(
+                    department=target, unit=unit, kind='appoint', role=role,
+                    member=member, seat_kind=kind,
+                    note=str(request.data.get('note') or '').strip()[:1000],
+                    requested_by=request.user,
+                ))
+            for row in staged:
+                notify_leadership_change(row)
+            return Response(
+                {
+                    'detail': 'Sent to the pastor and the eldership for approval.',
+                    'pending': len(staged),
+                    'code': target.code,
+                    'unit': unit,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
         for entry in submitted:
             role = roles[entry.get('role_id')]
             kind = entry.get('kind') or 'leader'
@@ -12852,9 +12899,246 @@ class DepartmentLeadershipView(APIView):
                 {'detail': f"{assignment.role.name} is set by {target.name}'s leader, not from the church office."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # Releasing a person is the office's answer too, the same as seating
+        # one: Personal Ministries asks, the pastor or an elder lets the seat go.
+        if target.code == LEADERSHIP_DESK and leadership_change_is_staged(request.user):
+            existing = LeadershipChangeRequest.objects.filter(
+                kind='release', assignment=assignment, status='pending',
+            ).first()
+            if existing is None:
+                row = LeadershipChangeRequest.objects.create(
+                    department=target, unit=assignment.unit, kind='release',
+                    role=assignment.role, member=assignment.member,
+                    seat_kind=assignment.kind, assignment=assignment,
+                    note=str(request.data.get('note') or '').strip()[:1000],
+                    requested_by=request.user,
+                )
+                notify_leadership_change(row)
+            return Response(
+                {
+                    'detail': 'Sent to the pastor and the eldership for approval.',
+                    'pending': 1,
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
         assignment.delete()
         sync_role_flags_from_assignments()
         return Response({'detail': 'Appointment released.'})
+
+
+#: The desk that keeps the church's leadership register.
+LEADERSHIP_DESK = 'personal_ministries'
+
+#: Where the elders answer a leadership change — the Requests desk they share
+#: with the church's other asks.
+LEADERSHIP_REQUESTS_PATH = '/administration?tab=requests'
+
+#: Where the pastor answers the same request, on the pastorate's own desk.
+PASTORATE_SPIRITUAL_PATH = '/my-areas?area=pastorate&view=spiritual'
+
+
+def leadership_change_is_staged(user):
+    """Whether this account's leadership edit waits for the church office.
+
+    Personal Ministries keeps the register, but a seat is not its alone to
+    fill or empty: a change made by a hand that holds no church office — the
+    desk's own leader or assistant — is staged as a request, while the pastor,
+    the elders, the clerk and the administrator seat people directly. Approving
+    the request applies exactly what the desk asked for.
+    """
+    return department_office_profile(user) is None
+
+
+def leadership_change_link(user):
+    """Where this officer answers a leadership change: the pastor on the
+    pastorate's desk, the elders on the Requests desk every office reads."""
+    if user_has_role(user, 'pastor'):
+        return PASTORATE_SPIRITUAL_PATH
+    return LEADERSHIP_REQUESTS_PATH
+
+
+def notify_leadership_change(row):
+    """Tell the pastor and the eldership a seat is waiting on their answer."""
+    audience = User.objects.filter(
+        Q(member_profile__role__in=['pastor', 'elder', 'first_elder', 'second_elder', 'third_elder']) |
+        Q(member_profile__roles__contains='pastor') |
+        Q(member_profile__roles__contains='elder') |
+        Q(member_profile__roles__contains='first_elder') |
+        Q(member_profile__roles__contains='second_elder') |
+        Q(member_profile__roles__contains='third_elder'),
+        is_active=True,
+    ).exclude(pk=row.requested_by_id).distinct()
+    seat = row.role.name if row.role else 'an office'
+    person = giver_display_name('', member=row.member)
+    if row.kind == 'release':
+        title = f'{row.department.name} asks to release {person}'
+        message = (
+            f"Personal Ministries asks to release {person} from {seat} in "
+            f"{row.department.name}. Open the Requests desk to answer it: "
+            f"{settings.FRONTEND_URL}{LEADERSHIP_REQUESTS_PATH}"
+        )
+    else:
+        title = f'{row.department.name} asks to appoint {person}'
+        message = (
+            f"Personal Ministries asks to seat {person} as {seat} in "
+            f"{row.department.name}. Open the Requests desk to answer it: "
+            f"{settings.FRONTEND_URL}{LEADERSHIP_REQUESTS_PATH}"
+        )
+    ChurchNotification.objects.bulk_create([
+        ChurchNotification(
+            user=person_row, title=title, message=message,
+            link=f'{settings.FRONTEND_URL}{leadership_change_link(person_row)}',
+        )
+        for person_row in audience
+    ])
+    try:
+        from .push import push_to_user
+        for person_row in audience:
+            push_to_user(
+                person_row, title=title, body=message,
+                link=f'{settings.FRONTEND_URL}{leadership_change_link(person_row)}',
+            )
+    except Exception:
+        pass
+
+
+def apply_leadership_change(row):
+    """Make an approved change land: seat the person, or let the seat go."""
+    if row.kind == 'release':
+        assignment = row.assignment
+        if assignment is not None and DepartmentAssignment.objects.filter(pk=assignment.pk).exists():
+            assignment.delete()
+            sync_role_flags_from_assignments()
+        return
+    role = row.role
+    if role is None:
+        return
+    target = row.department
+    member = row.member
+    notes = []
+    if row.seat_kind == 'leader':
+        # One leader per role: the appointment replaces whoever holds the seat
+        # now, the way the desk's own save would.
+        replaced = (
+            DepartmentAssignment.objects.filter(role=role, kind='leader', unit=row.unit)
+            .exclude(member=member).select_related('member').first()
+        )
+        DepartmentAssignment.objects.filter(role=role, kind='leader', unit=row.unit).exclude(member=member).delete()
+        notes.append({
+            'member': member, 'position': role.name, 'kind': 'leader',
+            'replaced': replaced.member if replaced else None,
+        })
+    else:
+        already = DepartmentAssignment.objects.filter(
+            role=role, kind='assistant', member=member, unit=row.unit,
+        ).exists()
+        if not already:
+            seat_name = role.name.strip().lower()
+            position = role.name if seat_name.startswith('assistant') else f"Assistant {role.name}"
+            notes.append({'member': member, 'position': position, 'kind': 'assistant', 'replaced': None})
+    assignment, _created = DepartmentAssignment.objects.get_or_create(
+        role=role, member=member, kind=row.seat_kind, unit=row.unit,
+        defaults={'department': target},
+    )
+    updates = []
+    if assignment.department_id != target.id:
+        assignment.department = target
+        updates.append('department')
+    if assignment.unit != row.unit:
+        assignment.unit = row.unit
+        updates.append('unit')
+    if updates:
+        assignment.save(update_fields=updates)
+    sync_role_flags_from_assignments()
+    send_appointment_emails(target, notes)
+
+
+class LeadershipChangeRequestView(APIView):
+    """Personal Ministries' leadership changes, waiting on the church office.
+
+    GET reads the queue: the offices see every request, the desk that raised
+    them sees its own. Requests are raised by the leadership save itself (see
+    DepartmentLeadershipView), never by hand, so there is no POST here.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def row(self, row):
+        return {
+            'id': row.id,
+            'kind': row.kind,
+            'department': row.department.code,
+            'department_name': row.department.name,
+            'unit': row.unit,
+            'role': row.role_id,
+            'role_name': row.role.name if row.role else '',
+            'member_id': row.member_id,
+            'member_name': giver_display_name('', member=row.member),
+            'seat_kind': row.seat_kind,
+            'note': row.note,
+            'status': row.status,
+            'reply': row.reply,
+            'requested_by_name': giver_display_name('', member=row.requested_by) if row.requested_by_id else '',
+            'reviewed_by_name': giver_display_name('', member=row.reviewed_by) if row.reviewed_by_id else '',
+            'created_at': row.created_at,
+            'reviewed_at': row.reviewed_at,
+        }
+
+    def get(self, request):
+        rows = LeadershipChangeRequest.objects.select_related(
+            'department', 'role', 'member', 'requested_by', 'reviewed_by',
+        )
+        if department_office_profile(request.user) is None:
+            rows = rows.filter(requested_by=request.user)
+        return Response({'requests': [self.row(row) for row in rows]})
+
+
+class LeadershipChangeRequestDetailView(APIView):
+    """The church office's answer: approve the change, or decline it.
+
+    Approving is the act — the seat is filled or released the moment it saves,
+    exactly as the desk's own save would have done it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        if department_office_profile(request.user) is None:
+            return Response(
+                {'detail': 'Only the pastor, an elder, the clerk or an administrator can answer a leadership change.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        row = LeadershipChangeRequest.objects.select_related(
+            'department', 'role', 'member', 'requested_by', 'reviewed_by',
+        ).filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'That request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        if row.status != 'pending':
+            return Response({'detail': 'That leadership change has already been answered.'}, status=status.HTTP_400_BAD_REQUEST)
+        decision = str(request.data.get('status') or '').strip()
+        if decision not in ('approved', 'rejected'):
+            return Response({'detail': 'Use approved or rejected for the answer.'}, status=status.HTTP_400_BAD_REQUEST)
+        row.status = decision
+        row.reply = str(request.data.get('reply') or '').strip()[:1000]
+        row.reviewed_by = request.user
+        row.reviewed_at = timezone.now()
+        row.save(update_fields=['status', 'reply', 'reviewed_by', 'reviewed_at'])
+        if decision == 'approved':
+            apply_leadership_change(row)
+        if row.requested_by_id:
+            seat = row.role.name if row.role else 'the office'
+            verb = 'approved' if decision == 'approved' else 'declined'
+            ChurchNotification.objects.create(
+                user=row.requested_by,
+                title=f'Leadership change {verb}',
+                message=(
+                    f"Your request to {row.kind} {giver_display_name('', member=row.member)} "
+                    f"as {seat} in {row.department.name} was {verb}."
+                    + (f' {row.reply}' if row.reply else '')
+                ),
+                link='/administration?tab=leaders',
+            )
+        return Response(LeadershipChangeRequestView().row(row))
 
 
 def drop_area_filing(user, code):
@@ -14877,7 +15161,7 @@ class DepartmentAccountView(APIView):
             Q(member_profile__roles__contains='treasurer'),
             is_active=True,
         ).distinct()
-        desk_link = f'{settings.FRONTEND_URL}/my-areas?area=pastorate&view=treasury-approvals'
+        desk_link = f'{settings.FRONTEND_URL}{PASTORATE_APPROVALS_PATH}'
         subject = f'Funding request from {target.name}' if is_deaconate else f'Withdrawal request from {target.name}'
         account_name = account.description or account.name
         requester_name = giver_display_name('', member=request.user)
@@ -14886,19 +15170,58 @@ class DepartmentAccountView(APIView):
             f"from the {account_name} account — {reason}. "
             f"Awaiting pastor approval: {desk_link}"
         )
-        sms_text = (
-            f"SDA Loma Linda: KES {amount:,.2f} withdrawal requested by {requester_name} "
-            f"for {target.name} ({account_name}) — {reason}. Review & approve: {desk_link}"
+        # Each officer is sent to the page their own office answers it on: a
+        # treasurer (or an admin who is also one) opens the treasury's queue,
+        # the pastor the pastorate's approvals. The letter keeps the pastorate
+        # address, which is where the chain starts; the text carries the
+        # reader's own desk.
+        _notify_withdrawal_audience(
+            audience, subject, body,
+            lambda person: f'{settings.FRONTEND_URL}{withdrawal_desk_path(person)}',
+            lambda person: (
+                f"SDA Loma Linda: KES {amount:,.2f} withdrawal requested by {requester_name} "
+                f"for {target.name} ({account_name}) — {reason}. Review & approve: "
+                f"{settings.FRONTEND_URL}{withdrawal_desk_path(person)}"
+            ),
         )
-        _notify_withdrawal_audience(audience, subject, body, desk_link, sms_text)
         detail_msg = 'Your funding request has been sent to the treasurer.' if is_deaconate else 'Your withdrawal request has been sent to the treasurer.'
         return Response({'id': row.id, 'status': row.status, 'detail': detail_msg}, status=status.HTTP_201_CREATED)
 
 
+def withdrawal_desk_path(user) -> str:
+    """Where a funds-request notice lands for this officer.
+
+    The chain is the pastor's blessing, then an elder's approval, then the
+    treasurer's release, and the offices do not all answer it on the same page:
+    the pastor reads it on the pastorate's approvals, while the elder and the
+    treasurer work the treasury desk's Requests view. An account holding more
+    than one office is sent to the one that moves the money — a treasurer who
+    is also an admin lands in Treasury, not on a page where the request only
+    waits for somebody else.
+    """
+    if user_has_role(user, 'treasurer'):
+        return TREASURY_REQUESTS_PATH
+    if user_has_role(user, 'elder', 'first_elder', 'second_elder', 'third_elder'):
+        return TREASURY_REQUESTS_PATH
+    return PASTORATE_APPROVALS_PATH
+
+
 def _notify_withdrawal_audience(audience, subject, body, link, sms_text=None):
-    """Notify officers across in-app, email, SMS, and push notification channels."""
+    """Notify officers across in-app, email, SMS, and push notification channels.
+
+    ``link`` and ``sms_text`` are one value for everyone, or a function of the
+    officer when the audience answers the request on different pages (see
+    ``withdrawal_desk_path``).
+    """
+
+    def value_for(value, person):
+        return value(person) if callable(value) else value
+
+    def link_for(person):
+        return value_for(link, person)
+
     ChurchNotification.objects.bulk_create([
-        ChurchNotification(user=person, title=subject, message=body, link=link)
+        ChurchNotification(user=person, title=subject, message=body, link=link_for(person))
         for person in audience
     ])
     emails = [u.email for u in audience if u.email]
@@ -14910,18 +15233,20 @@ def _notify_withdrawal_audience(audience, subject, body, link, sms_text=None):
             )
         except Exception:
             logger.exception("Withdrawal notice email failed.")
-    text = sms_text or body
     for person in audience:
         phone = getattr(getattr(person, 'member_profile', None), 'phone_number', '')
         if phone:
             try:
-                sms.send(phone, text)
+                sms.send(phone, value_for(sms_text, person) or body)
             except Exception:
                 logger.exception("Withdrawal notice SMS failed for %s.", phone)
     try:
         from .push import push_to_user
         for person in audience:
-            push_to_user(person, title=subject, body=text, link=link)
+            push_to_user(
+                person, title=subject, body=value_for(sms_text, person) or body,
+                link=link_for(person),
+            )
     except Exception:
         pass
 
@@ -15023,7 +15348,7 @@ class DepartmentWithdrawalReviewView(APIView):
                 Q(member_profile__role='admin') | Q(member_profile__roles__contains='admin'),
                 is_active=True,
             ).distinct()
-            desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
+            desk_link = f'{settings.FRONTEND_URL}{TREASURY_REQUESTS_PATH}'
             title = f'{row.department.name} withdrawal cleared for elder approval'
             pastor_name = giver_display_name('', member=request.user)
             account_name = row.account.description or row.account.name
@@ -15066,7 +15391,7 @@ class DepartmentWithdrawalReviewView(APIView):
                 Q(member_profile__role='admin') | Q(member_profile__roles__contains='admin'),
                 is_active=True,
             ).distinct()
-            desk_link = f'{settings.FRONTEND_URL}/administration?view=accounts&withdrawals=1'
+            desk_link = f'{settings.FRONTEND_URL}{TREASURY_REQUESTS_PATH}'
             title = f'{row.department.name} withdrawal cleared by elder'
             elder_name = giver_display_name('', member=request.user)
             account_name = row.account.description or row.account.name
@@ -15098,8 +15423,15 @@ class DepartmentWithdrawalReviewView(APIView):
             if row is None:
                 return Response({'detail': 'That request is not waiting on treasury release, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
             # Separation of duties: whoever cleared this ask as pastor or elder
-            # cannot also release it as the treasurer.
-            if (row.elder_approved_by_id == request.user.id or row.treasurer_approved_by_id == request.user.id or row.pastor_approved_by_id == request.user.id) and not (request.user.is_superuser or request.user.is_staff):
+            # cannot also release it as the treasurer. A release that was
+            # reversed is not prior clearance — the reversal credited the fund,
+            # so the same treasurer may move the money again.
+            gave_prior_clearance = (
+                row.elder_approved_by_id == request.user.id
+                or row.pastor_approved_by_id == request.user.id
+                or (row.status == 'elder_approved' and row.treasurer_approved_by_id == request.user.id)
+            )
+            if gave_prior_clearance and not (request.user.is_superuser or request.user.is_staff):
                 return Response(
                     {'detail': 'You gave this request prior clearance — a different treasurer must release the money.'},
                     status=status.HTTP_403_FORBIDDEN,

@@ -71,7 +71,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -12944,6 +12944,87 @@ class DepartmentApiTests(APITestCase):
         repair.restore_office_seats(apps=django_apps, schema_editor=None)
         self.assertEqual(DepartmentAssignment.objects.filter(member__in=[elder, clerk]).count(), before)
 
+    def test_personal_ministries_appointments_wait_for_the_office(self):
+        """Personal Ministries keeps the register, but its own hand does not
+        seat a person: the save stages a request for the pastor and the
+        elders, and only their answer fills the seat."""
+        pm = Department.objects.get(code='personal_ministries')
+        leader_role = DepartmentRole.objects.get(department=pm, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=pm, role=leader_role, member=self.leader, kind='leader',
+        )
+        self._auth(self.leader)
+        res = self.client.put('/api/members/departments/personal_ministries/leadership/', {
+            'assignments': [
+                {'role_id': leader_role.id, 'member_id': self.plain.id, 'kind': 'leader'},
+            ],
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_202_ACCEPTED)
+        row = LeadershipChangeRequest.objects.get(status='pending')
+        self.assertEqual((row.kind, row.member_id, row.role_id), ('appoint', self.plain.id, leader_role.id))
+        # Nothing has moved yet: the seat is still the old leader's.
+        self.assertTrue(DepartmentAssignment.objects.filter(
+            role=leader_role, member=self.leader, kind='leader',
+        ).exists())
+        self.assertFalse(DepartmentAssignment.objects.filter(
+            role=leader_role, member=self.plain,
+        ).exists())
+        # The elders read the queue and answer it; approving seats the person.
+        self._auth(self.elder)
+        queue = self.client.get('/api/members/leadership-changes/')
+        self.assertEqual([item['id'] for item in queue.data['requests']], [row.id])
+        answer = self.client.patch(
+            f'/api/members/leadership-changes/{row.id}/', {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        self.assertTrue(DepartmentAssignment.objects.filter(
+            role=leader_role, member=self.plain, kind='leader',
+        ).exists())
+        self.assertFalse(DepartmentAssignment.objects.filter(
+            role=leader_role, member=self.leader, kind='leader',
+        ).exists())
+
+    def test_personal_ministries_releases_wait_for_the_office_too(self):
+        """Letting a seat go is the office's answer as well: the desk asks,
+        and the appointment stays until an elder approves the release."""
+        pm = Department.objects.get(code='personal_ministries')
+        leader_role = DepartmentRole.objects.get(department=pm, name='Leader')
+        seat = DepartmentAssignment.objects.create(
+            department=pm, role=leader_role, member=self.leader, kind='leader',
+        )
+        self._auth(self.leader)
+        res = self.client.delete(
+            '/api/members/departments/personal_ministries/leadership/',
+            {'assignment_id': seat.id}, format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_202_ACCEPTED)
+        row = LeadershipChangeRequest.objects.get(kind='release', status='pending')
+        self.assertTrue(DepartmentAssignment.objects.filter(pk=seat.id).exists())
+        self._auth(self.elder)
+        answer = self.client.patch(
+            f'/api/members/leadership-changes/{row.id}/', {'status': 'approved'}, format='json',
+        )
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        self.assertFalse(DepartmentAssignment.objects.filter(pk=seat.id).exists())
+
+    def test_the_church_office_seats_people_without_a_request(self):
+        """An elder keeping the register makes the change itself — the gate is
+        the desk's own hand, not the page it happens to be standing on."""
+        self._auth(self.elder)
+        directory = self.client.get('/api/members/departments/').json()['departments']
+        amm_row = next(d for d in directory if d['code'] == 'amm')
+        roles = {r['name']: r for r in amm_row['roles']}
+        res = self.client.put('/api/members/departments/amm/leadership/', {
+            'assignments': [
+                {'role_id': roles['Leader']['id'], 'member_id': self.plain.id, 'kind': 'leader'},
+            ],
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(LeadershipChangeRequest.objects.exists())
+        self.assertTrue(DepartmentAssignment.objects.filter(
+            department=self.amm, role=self.amm_leader_role, member=self.plain, kind='leader',
+        ).exists())
+
     def test_leadership_put_appoints_and_syncs_flags(self):
         """The leadership modal saves appointments in one PUT: a leader
         appointment replaces whoever held the seat, and the derived
@@ -15736,6 +15817,11 @@ class DepartmentFundTests(APITestCase):
         from .models import DepartmentWithdrawalRequest
         return DepartmentWithdrawalRequest.objects.get()
 
+    def _open(self):
+        """The ask just raised, where earlier answers have left rows behind."""
+        from .models import DepartmentWithdrawalRequest
+        return DepartmentWithdrawalRequest.objects.filter(status='pending').latest('id')
+
     def test_the_desk_reads_its_own_fund(self):
         account = self._fund()
         TreasuryAccountTransaction.objects.create(
@@ -16303,7 +16389,7 @@ class DepartmentFundTests(APITestCase):
             self.client.post('/api/members/departments/music/account/', {
                 'amount': '50', 'reason': 'A bundle of choir books',
             }, format='json')
-            row = self._pending()
+            row = self._open()
             if stage == 'pastor_approve':
                 self.client.force_authenticate(self.pastor)
                 self.client.post('/api/members/department-withdrawals/review/', {
@@ -16462,10 +16548,10 @@ class DepartmentFundTests(APITestCase):
         }, format='json')
         self.assertEqual(p_res.status_code, status.HTTP_200_OK)
 
-        # Verify Elder received SMS with administration withdrawals link
+        # Verify Elder received SMS with the treasury Requests link
         elder_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254722222222']
         self.assertTrue(len(elder_calls) >= 1)
-        self.assertIn('administration?view=accounts&withdrawals=1', elder_calls[-1][0][1])
+        self.assertIn('administration?tab=accounts&view=withdrawals', elder_calls[-1][0][1])
         # The elder clears it with a fresh SMS about the chain's wording.
         self.assertIn('approved by Pastor', elder_calls[-1][0][1])
 
@@ -16479,8 +16565,36 @@ class DepartmentFundTests(APITestCase):
         # The elder is told the treasury can now release the money.
         treasurer_calls = [c for c in mock_sms.call_args_list if c[0][0] == '+254733333333']
         self.assertTrue(len(treasurer_calls) >= 1)
-        self.assertIn('administration?view=accounts&withdrawals=1', treasurer_calls[-1][0][1])
+        self.assertIn('administration?tab=accounts&view=withdrawals', treasurer_calls[-1][0][1])
         self.assertIn('approved by Elder', treasurer_calls[-1][0][1])
+
+    def test_a_funds_notice_lands_on_the_office_that_can_act(self):
+        """Each officer opens the page their own office answers the chain on.
+
+        The treasury moves the money, so the treasurer — and an administrator
+        who also holds that office — lands in the treasury's Requests view
+        rather than on the console, where the request only waits. The pastor
+        keeps the pastorate's approvals, which is the first pen in the chain.
+        """
+        from .views import PASTORATE_APPROVALS_PATH, TREASURY_REQUESTS_PATH, withdrawal_desk_path
+
+        self.assertEqual(withdrawal_desk_path(self.treasurer), TREASURY_REQUESTS_PATH)
+        self.assertEqual(withdrawal_desk_path(self.elder), TREASURY_REQUESTS_PATH)
+        self.assertEqual(withdrawal_desk_path(self.pastor), PASTORATE_APPROVALS_PATH)
+
+        # The office beats the console: an admin who is also a treasurer is
+        # sent to the treasury, and one who is also a pastor to the pastorate.
+        admin_treasurer = User.objects.create_user(
+            'fund.admin.treasurer', 'fund.admin.treasurer@example.com', 'StrongPass#2026',
+        )
+        MemberProfile.objects.create(user=admin_treasurer, role='admin', roles='admin,treasurer')
+        self.assertEqual(withdrawal_desk_path(admin_treasurer), TREASURY_REQUESTS_PATH)
+
+        admin_pastor = User.objects.create_user(
+            'fund.admin.pastor', 'fund.admin.pastor@example.com', 'StrongPass#2026',
+        )
+        MemberProfile.objects.create(user=admin_pastor, role='admin', roles='admin,pastor')
+        self.assertEqual(withdrawal_desk_path(admin_pastor), PASTORATE_APPROVALS_PATH)
 
 
 class SeededDepartmentFundTests(APITestCase):

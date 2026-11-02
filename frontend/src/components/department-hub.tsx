@@ -32,6 +32,7 @@ import {
   Church,
   Clock,
   Copy,
+  Crown,
   Download,
   FileText,
   GitMerge,
@@ -74,6 +75,7 @@ import {
 import { showAlert } from "@/lib/alerts";
 import { showOfflineGuard } from "@/components/toast";
 import {
+  areaHasLetters,
   areaHasMoments,
   areaHasMessaging,
   areaSearchWords,
@@ -3922,8 +3924,20 @@ function LeadershipEditModal({
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ assignments: fresh, unit: unit ?? "" }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as { detail?: string; pending?: number };
       if (!res.ok) throw new Error(data.detail || "Could not save the leadership board.");
+      // Personal Ministries keeps the register, but its seats wait on the
+      // church office: the save staged a request instead of seating anyone.
+      if (data.pending) {
+        showAlert(
+          "Sent for approval",
+          `${department.label}'s leadership change waits on the pastor and the elders. The seat fills when one of them approves it.`,
+          "success",
+          { toast: true, timer: 5000, showConfirmButton: false },
+        );
+        onSaved();
+        return;
+      }
       showAlert("Leadership updated", `${department.label}'s leadership has been saved.`, "success", {
         toast: true,
         timer: 4000,
@@ -4225,8 +4239,21 @@ function AssignRoleModal({
           unit: unit ?? "",
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as { detail?: string; pending?: number };
       if (!res.ok) throw new Error(data.detail || "Could not assign the role.");
+      // The same gate as the leadership board: a Personal Ministries seat is
+      // asked for, and the church office answers it.
+      if (data.pending) {
+        showAlert(
+          "Sent for approval",
+          `${member.name}'s seats in ${department.label} wait on the pastor and the elders. They fill when one of them approves the request.`,
+          "success",
+          { toast: true, timer: 5000, showConfirmButton: false },
+        );
+        invalidateDepartments();
+        onSaved();
+        return;
+      }
       showAlert(
         "Role assigned",
         `${member.name} now holds ${chosen.map((role) => seatTitle(department.code, role.name, "leader")).join(", ")} in ${department.label}.`,
@@ -5671,6 +5698,10 @@ function DepartmentDetail({
   // Personal Ministries runs the church's weekly rhythm, so the church's own
   // week is kept on its page — see WeeklyMeetingsPanel.
   const keepsTheWeek = department.code === "personal_ministries";
+  // The leadership register is kept by Personal Ministries: it appoints and
+  // releases the church's leaders, so the page that does it is a view of this
+  // desk rather than of the elders'.
+  const keepsLeadership = department.code === "personal_ministries";
   // Music is the church's singing, and it sings in groups: the register of
   // singing groups is a music-desk view, not a general department one.
   const isMusic = department.code === "music";
@@ -6310,6 +6341,12 @@ function DepartmentDetail({
       ...(areaHasMessaging(department.code)
         ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }]
         : []),
+      // The church's leadership register — who leads each office, ministry
+      // and department. It sits on the desk that appoints them, and opens the
+      // directory the console holds.
+      ...(keepsLeadership
+        ? [{ key: "leaders", label: "Leadership", short: "Leaders", icon: Crown }]
+        : []),
       // The pastorate's three pages: the money the treasury wants released,
       // the letters waiting on the pastor's pen, and the church's spiritual
       // asks — prayer, visitation and the rest. They replace the single
@@ -6336,7 +6373,7 @@ function DepartmentDetail({
       // too — its own button opens the composer — so Accounts goes back to
       // being the ledger. The Pastorate writes none of them: theirs arrive
       // for a signature on Letter Approvals.
-      ...(isPastorate
+      ...(isPastorate || !areaHasLetters(department.code)
         ? []
         : [{ key: "letters", label: "Letters", short: "Letters", icon: FileText }]),
       // Only the ministry that keeps the church's week carries its panel.
@@ -6358,9 +6395,15 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, canOpenOfficeViews, isPastorate, department.code]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
+    // The leadership register is not a panel of this desk: it is the console's
+    // directory of every area, so its chip walks to that page.
+    if (key === "leaders") {
+      router.push("/administration?tab=leaders");
+      return;
+    }
     // A unit key selects the unit and lands the desk on its roll; a plain key
     // is a view of the department as the strip held before.
     if (key.startsWith("unit:")) {
@@ -6400,6 +6443,8 @@ function DepartmentDetail({
         return "rota";
       case "baptismal-class":
         return "baptismal-class";
+      case "letters":
+        return "letters";
       case "announcements":
       case "sharing":
         return "sharing";
@@ -6417,7 +6462,7 @@ function DepartmentDetail({
       // the rendering below), so its press stays in place instead of walking
       // to the console's board.
       if (
-        (key === "calendar" || key === "baptismal-class" || key === "rota" || (key === "sharing" && canOpenOfficeViews)) &&
+        (key === "calendar" || key === "baptismal-class" || key === "letters" || key === "rota" || (key === "sharing" && canOpenOfficeViews)) &&
         !onConsole
       ) {
         setSubTab(key as DeptSubTab);
@@ -7226,6 +7271,10 @@ function DepartmentDetail({
   // sit pinned at its foot — the way the roster and the treasury read on the
   // same screen. Every other view keeps the page's padding and scrolls it.
   const deskFillsPhone = subTab === "members";
+  // Sharing (and the announcements page that draws the same feed) is a wall
+  // of cards with its actions pinned at the foot: the page's own inset would
+  // only be dead space around them, so the card takes the panel edge to edge.
+  const sharingWall = subTab === "sharing" || subTab === "announcements";
 
   return (
     <div
@@ -7238,9 +7287,11 @@ function DepartmentDetail({
       // it: it is a desk-sized surface too, and its pinned bar of buttons
       // only stays put while the column holds still beneath the strip.
       className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
-        deskFillsPhone || subTab === "calendar"
-          ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
-          : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
+        sharingWall
+          ? "gap-2 overflow-hidden p-1"
+          : deskFillsPhone || subTab === "calendar"
+            ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
+            : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
       }`}
     >
 
@@ -8157,7 +8208,7 @@ function DepartmentDetail({
               fellowship feed — flat cards, no manager chrome, no nesting.
               The feed scrolls within the barely-framed card; nothing above
               it moves, and the desk's own edge is the card's. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-1 sm:p-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-0.5">
             <AnnouncementsFeed
               key={shareFeedKey}
               embedded
@@ -8169,11 +8220,11 @@ function DepartmentDetail({
               onChanged={() => setShareFeedKey((key) => key + 1)}
             />
           </div>
-          {/* The buttons panel: separate from the card and held at the foot
-              of the desk, the way every other desk keeps its actions — the
-              feed above grows without moving the bar below it, and the
-              panel keeps a gap of its own beneath. */}
-          <div className="mb-3 mt-1 flex shrink-0 flex-wrap items-center gap-2">
+          {/* The buttons panel: separate from the card and held at the very
+              foot of the desk, the way every other desk keeps its actions —
+              the feed above grows without moving the bar below it, and the
+              bar sits on the page's own edge, with no gap beneath it. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {

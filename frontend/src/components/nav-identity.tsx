@@ -23,10 +23,9 @@ import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
 import { clearSession } from "@/lib/auth";
-import { disablePush, enablePush, getPushState, postPushSubscription, PushSupport, sendTestPush, syncPushSubscription } from "@/lib/push";
+import { enablePush, getPushState, postPushSubscription, PushSupport, syncPushSubscription } from "@/lib/push";
 import {
   markCachedNotificationsRead,
-  patchCachedMe,
   resetHeaderSession,
   useHeaderData,
   type ChurchNotificationItem,
@@ -134,8 +133,6 @@ export function NavIdentity() {
   const unreadCount = useUnreadNotifications();
   const controlsRef = useRef<HTMLDivElement>(null);
 
-  const announcePrefs = me ? { email: me.announce_email, push: me.announce_push } : null;
-
   // Whether this device can take browser notifications, re-registering the
   // subscription it already holds first. A device whose endpoint the browser
   // rotated (or whose row the server dropped as dead) is silently out of reach
@@ -240,18 +237,6 @@ export function NavIdentity() {
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, [router]);
 
-  const updateAnnouncePref = (field: "email" | "push", value: boolean) => {
-    if (!announcePrefs) return;
-    patchCachedMe(field === "email" ? { announce_email: value } : { announce_push: value });
-    const token = localStorage.getItem("access_token");
-    if (!token) return;
-    fetch(`${API_URL}/api/members/me/`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ [field === "email" ? "announce_email" : "announce_push"]: value }),
-    }).catch(() => {});
-  };
-
   /**
    * Mark exactly these notifications read — the ones the member opened, or
    * the one they pressed "Mark as read" on.
@@ -319,60 +304,6 @@ export function NavIdentity() {
     }
   };
 
-  const toggleDeviceNotifications = async () => {
-    if (!pushState?.supported) return;
-    if (pushState.enabled) {
-      await disablePush();
-      setPushState({ supported: true, enabled: false });
-      return;
-    }
-    const result = await enablePush();
-    if (result.ok) {
-      setPushState({ supported: true, enabled: true });
-      showAlert("Notifications on", "You will now be alerted on this device when something needs you.", "success");
-    } else {
-      showAlert("Not enabled", result.error || "This browser would not allow notifications.", "warning");
-    }
-  };
-
-  /**
-   * Prove this device is actually reachable, and name why when it is not.
-   *
-   * The switch can only say a browser accepted a subscription; it cannot say
-   * the server still reaches that device. A member with a silent phone has no
-   * other way to tell "never subscribed" from "the row went stale" from "the
-   * push service refused it" — three different fixes that look identical.
-   */
-  const testDeviceNotifications = async () => {
-    const report = await sendTestPush();
-    if (!report.ok) {
-      showAlert("Test not sent", report.error, "warning");
-      return;
-    }
-    if (report.devices === 0) {
-      showAlert(
-        "No device is subscribed yet",
-        "This account has no phone registered for notifications. Turn notifications on from this device; on an iPhone, add the app to the Home Screen first — Safari only allows notifications for an installed app.",
-        "warning"
-      );
-      return;
-    }
-    if (report.delivered > 0) {
-      showAlert(
-        "Test sent",
-        `Delivered to ${report.delivered} of ${report.devices} registered device(s). If nothing appears within a minute, check this app's notification settings on the phone itself.`,
-        "success"
-      );
-      return;
-    }
-    const first = report.results[0];
-    showAlert(
-      "The push service refused it",
-      `${first?.device || "The device"} answered${first?.status ? ` with ${first.status}` : " with an error"}: ${first?.error || "no delivery"}. Switching notifications off and on again on that phone registers it afresh.`,
-      "warning"
-    );
-  };
-
   const signOut = () => {
     clearSession();
     resetHeaderSession();
@@ -427,7 +358,12 @@ export function NavIdentity() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-full z-50 mt-2 w-96 max-w-[calc(100vw-2rem)] space-y-3 rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl">
+            /* A phone pins the panel to the screen rather than to the bell:
+               anchored to the button it hung off the left edge, because the
+               bell sits near the right of the bar and the panel is wider
+               than the room beside it. From `sm` up it is the bell's own
+               dropdown again, hanging under it on the right. */
+            <div className="fixed left-2 right-2 top-[4.25rem] z-50 max-h-[calc(100dvh-5.5rem)] space-y-3 overflow-y-auto rounded-2xl border border-sand-line bg-white p-4 text-slate-900 shadow-2xl sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:overflow-visible">
               {/* A little wider than the old panel, so a notice reads as a
                   notice rather than a headline: four lines of text fit, and
                   the whole of it is still on the row's own title. */}
@@ -548,77 +484,6 @@ export function NavIdentity() {
                     <div className="py-4 text-center text-xs text-slate-500">No new notifications at this time.</div>
                   )
                 )}
-              </div>
-
-              <div className="space-y-2 border-t border-slate-100 pt-2">
-                {pushState?.supported && (
-                  <button
-                    type="button"
-                    onClick={toggleDeviceNotifications}
-                    className={`flex w-full items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
-                      pushState.enabled
-                        ? "border-sand-line bg-white text-moss hover:bg-sand"
-                        : "border-ember bg-ember text-white hover:bg-ember-dark"
-                    }`}
-                  >
-                    {pushState.enabled ? "Turn off notifications" : "Turn on notifications"}
-                  </button>
-                )}
-                {pushState && !pushState.supported && (
-                  // "The button is gone" and "the button does nothing" are the
-                  // same silence on the phone. Safari only offers notifications
-                  // to an app on the Home Screen, and push only exists on a
-                  // secure origin — neither is guessable from an empty panel.
-                  <p className="rounded-xl bg-sand p-2.5 text-[10px] leading-4 text-moss">
-                    {pushState.reason === "insecure"
-                      ? "Notifications need the secure (https) address of the site."
-                      : "This browser will not show notifications here. On an iPhone, open the site in Safari, tap Share then Add to Home Screen, and turn notifications on inside the installed app."}
-                  </p>
-                )}
-                {pushState?.supported && pushState.enabled && (
-                  <button
-                    type="button"
-                    onClick={testDeviceNotifications}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-ember transition-colors hover:bg-sand"
-                  >
-                    Send a test notification
-                  </button>
-                )}
-                {announcePrefs && (
-                  <div className="space-y-1.5 rounded-xl bg-sand p-2.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-moss">Announcements reach me by</p>
-                    <label className="flex cursor-pointer items-center justify-between text-xs text-bark">
-                      <span>Email</span>
-                      <input
-                        type="checkbox"
-                        checked={announcePrefs.email}
-                        onChange={(e) => updateAnnouncePref("email", e.target.checked)}
-                        className="h-3.5 w-3.5 accent-sage"
-                      />
-                    </label>
-                    {pushState?.supported && (
-                      <label className="flex cursor-pointer items-center justify-between text-xs text-bark">
-                        <span>Notifications</span>
-                        <input
-                          type="checkbox"
-                          checked={announcePrefs.push}
-                          onChange={(e) => updateAnnouncePref("push", e.target.checked)}
-                          className="h-3.5 w-3.5 accent-sage"
-                        />
-                      </label>
-                    )}
-                    <p className="text-[10px] text-slate-400">
-                      Requests for the office always notify, whatever you switch off here.
-                    </p>
-                  </div>
-                )}
-                <Link
-                  href="/announcements"
-                  onClick={() => setShowNotifications(false)}
-                  className="block text-center text-xs font-semibold text-ember hover:underline"
-                >
-                  View All Announcements &rarr;
-                </Link>
               </div>
             </div>
           )}
