@@ -5626,6 +5626,9 @@ type DeptSubTab =
   | "daily-word"
   | "announcements"
   | "sharing"
+  // The leadership register, kept inside the one desk that appoints the
+  // church's leaders rather than on the eldership's console page.
+  | "leaders"
   // The deaconate desk's two panels that live in the console desk and ride
   // this desk's structure when it opens from the map (see the panels block).
   | "inventory"
@@ -6398,12 +6401,11 @@ function DepartmentDetail({
   }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
-    // The leadership register is not a panel of this desk: it is the console's
-    // directory of every area, so its chip walks to that page.
-    if (key === "leaders") {
-      router.push("/administration?tab=leaders");
-      return;
-    }
+    // The leadership register is a page of this desk: Personal Ministries
+    // appoints the church's leaders, so its chip opens the directory here,
+    // under this desk's own name and strip. Walking to the console's
+    // `?tab=leaders` page used to take the reader out of the desk entirely —
+    // the heading then read Eldership and the ministry's pages were gone.
     // A unit key selects the unit and lands the desk on its roll; a plain key
     // is a view of the department as the strip held before.
     if (key.startsWith("unit:")) {
@@ -8103,6 +8105,19 @@ function DepartmentDetail({
       {/* Weekly meetings — the church's own week, on the ministry that keeps
           it. Church-wide, so it is its own view rather than a calendar entry. */}
       {subTab === "meetings" && keepsTheWeek && <WeeklyMeetingsPanel search={meetingsSearch} />}
+
+      {/* The leadership register — every office, ministry and department with
+          its leader and assistants, and the board that seats them. It is kept
+          inside this desk, because appointing the church's leaders is this
+          ministry's work: the directory draws itself here, under the desk's
+          own heading and strip, instead of walking out to the eldership's
+          console page. `embedded` leaves the heading and the strip to the
+          desk around it (see DepartmentDetail). */}
+      {subTab === "leaders" && keepsLeadership && (
+        <div className="h-full min-h-0 overflow-y-auto">
+          <DepartmentHub embedded />
+        </div>
+      )}
 
       {/* The pulpit team — who preaches, plays, reads and leads on a Sabbath.
           Rostered on the same rota the deaconate keeps its duty on, so the
