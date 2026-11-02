@@ -21,7 +21,17 @@ export function isSystemRoute(pathname: string | null | undefined): boolean {
  * The sign-in surfaces — pages a signed-in member has no business on, so the
  * marketing header stays for them there too.
  */
-const SIGN_IN_SURFACES = ["/login", "/create-account", "/forgot-password", "/reset-password", "/accept-invite"];
+// `/register` and `/signup` are aliases of `/create-account` — one page, three
+// addresses — so they take the same chrome.
+const SIGN_IN_SURFACES = [
+  "/login",
+  "/create-account",
+  "/register",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/accept-invite",
+];
 
 /**
  * The marketing website: the church's own pages, read the same way whether or

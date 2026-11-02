@@ -7,7 +7,10 @@ export const metadata = {
     "Create your SDA Church Loma Linda account as a church member, a friend of the church, a baptism candidate or a Sabbath School attendee, and get access to announcements, giving and events.",
 };
 
-export default function CreateAccountPage() {
+// The desk is reachable at three addresses — `/create-account`, `/register`
+// and `/signup` — because people type any of them. This file owns the markup
+// and metadata; the other two render this component so they cannot drift.
+export function CreateAccountPage() {
   return (
     <main className="min-h-screen bg-sand text-bark">
       <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16">
@@ -32,3 +35,5 @@ export default function CreateAccountPage() {
     </main>
   );
 }
+
+export default CreateAccountPage;

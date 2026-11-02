@@ -35,7 +35,23 @@ export function AnnouncementBanner({ compact = false }: { compact?: boolean }) {
   }, [items.length, paused, dismissed]);
 
   const normalizedPath = (pathname ?? "").toLowerCase().replace(/\/$/, "");
-  const isAuthOrMember = normalizedPath === "/login" || normalizedPath.startsWith("/login/") || normalizedPath === "/member" || normalizedPath.startsWith("/member/") || normalizedPath === "/enroll" || normalizedPath.startsWith("/enroll/") || normalizedPath === "/create-account" || normalizedPath.startsWith("/create-account/") || normalizedPath === "/accept-invite" || normalizedPath === "/forgot-password" || normalizedPath === "/reset-password";
+  // Signing in, signing up (the desk answers at /create-account, /register
+  // and /signup) and the invitation, enrolment and password pages must not
+  // carry the public announcement banner over their forms.
+  const signInOrMember = [
+    "/login",
+    "/member",
+    "/enroll",
+    "/create-account",
+    "/register",
+    "/signup",
+    "/accept-invite",
+    "/forgot-password",
+    "/reset-password",
+  ];
+  const isAuthOrMember = signInOrMember.some(
+    (path) => normalizedPath === path || normalizedPath.startsWith(`${path}/`),
+  );
 
   if (isAuthOrMember || dismissed || items.length === 0) return null;
   const announcement = items[active] ?? items[0];
