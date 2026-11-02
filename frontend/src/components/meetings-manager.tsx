@@ -738,81 +738,60 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
 
   return (
     <div className="space-y-6">
-      {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-sand-line bg-white p-6 shadow-sm">
-        <div className="flex items-center gap-2">
-          <BackToOverviewArrow />
-          <div>
-            <h2 className="flex items-center gap-2 text-xl font-extrabold text-bark">
-              <Calendar size={20} aria-hidden="true" />
-              <span>Church Meetings</span>
-            </h2>
-            <p className="mt-1 text-xs text-moss">
-              Schedule church board and business meetings, attach agenda documents, record minutes, and track decisions.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => openCreateModal()}
-            className="inline-flex items-center gap-2 rounded-xl bg-bark px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-bark-900 active:scale-95"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Add a meeting</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Filter Tabs & Search Bar */}
+      {/* Filter Tabs & Search Bar — the strip above names this desk, so the
+          page opens straight on its records. The way back to the overview
+          rides at the start of this row: phones only, where the sidebar and
+          its permanent navigation are out of sight. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Toggle Pills: All | Board Meetings | Business Meetings */}
-        <div className="inline-flex rounded-xl border border-sand-line bg-sand p-1 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setKindFilter("all")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
-              kindFilter === "all"
-                ? "bg-white text-bark shadow-xs font-bold"
-                : "text-moss hover:text-bark"
-            }`}
-          >
-            <span>All Meetings</span>
-            <span className="rounded-full bg-sand-shade px-1.5 py-0.2 text-[10px] text-moss-dark">
-              {meetings.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setKindFilter("board")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
-              kindFilter === "board"
-                ? "bg-white text-cyan-900 shadow-xs font-bold"
-                : "text-moss hover:text-bark"
-            }`}
-          >
-            <ShieldCheck size={13} aria-hidden="true" />
-            <span>Board</span>
-            <span className="rounded-full bg-cyan-100/60 px-1.5 py-0.2 text-[10px] text-cyan-900">
-              {boardCount}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setKindFilter("business")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
-              kindFilter === "business"
-                ? "bg-white text-purple-900 shadow-xs font-bold"
-                : "text-moss hover:text-bark"
-            }`}
-          >
-            <Briefcase size={13} aria-hidden="true" />
-            <span>Business</span>
-            <span className="rounded-full bg-purple-100/60 px-1.5 py-0.2 text-[10px] text-purple-900">
-              {businessCount}
-            </span>
-          </button>
+        <div className="flex min-w-0 items-center gap-2">
+          <BackToOverviewArrow />
+          {/* Toggle Pills: All | Board Meetings | Business Meetings */}
+          <div className="inline-flex rounded-xl border border-sand-line bg-sand p-1 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setKindFilter("all")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
+                kindFilter === "all"
+                  ? "bg-white text-bark shadow-xs font-bold"
+                  : "text-moss hover:text-bark"
+              }`}
+            >
+              <span>All Meetings</span>
+              <span className="rounded-full bg-sand-shade px-1.5 py-0.2 text-[10px] text-moss-dark">
+                {meetings.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setKindFilter("board")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
+                kindFilter === "board"
+                  ? "bg-white text-cyan-900 shadow-xs font-bold"
+                  : "text-moss hover:text-bark"
+              }`}
+            >
+              <ShieldCheck size={13} aria-hidden="true" />
+              <span>Board</span>
+              <span className="rounded-full bg-cyan-100/60 px-1.5 py-0.2 text-[10px] text-cyan-900">
+                {boardCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setKindFilter("business")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
+                kindFilter === "business"
+                  ? "bg-white text-purple-900 shadow-xs font-bold"
+                  : "text-moss hover:text-bark"
+              }`}
+            >
+              <Briefcase size={13} aria-hidden="true" />
+              <span>Business</span>
+              <span className="rounded-full bg-purple-100/60 px-1.5 py-0.2 text-[10px] text-purple-900">
+                {businessCount}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -1148,6 +1127,19 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
           }}
         />
       )}
+
+      {/* Buttons panel — the desk's one action sits across the bottom of the
+          records and centred, rather than crowding a heading card above them. */}
+      <div className="flex items-center justify-center rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm">
+        <button
+          type="button"
+          onClick={() => openCreateModal()}
+          className="inline-flex items-center gap-2 rounded-xl bg-ember px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-ember-dark active:scale-95"
+        >
+          <Plus size={14} aria-hidden="true" />
+          <span>Add a meeting</span>
+        </button>
+      </div>
 
       {/* Modal: Create Meeting */}
       {isModalOpen && (
