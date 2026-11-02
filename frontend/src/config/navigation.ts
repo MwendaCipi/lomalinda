@@ -201,9 +201,10 @@ export const destinations = {
    */
   testimonies: {
     href: "/spiritual/testimonies",
-    // "Sharing" read as testimonies-only, so the name says what sits inside:
-    // a testimony, an idea, or both.
-    label: "Testimonies and Ideas",
+    // The page asks for a testimony, an idea, or both, and the section has
+    // always called it Sharing in its strip; the long name only succeeded in
+    // making the row wrap, so the row says what the member is doing there.
+    label: "Sharing",
     short: "Sharing",
     description: "Share a testimony of what God has done, or an idea that could help the church.",
     icon: Sparkles,
