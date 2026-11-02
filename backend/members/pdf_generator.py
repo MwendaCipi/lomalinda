@@ -2244,14 +2244,14 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
                 # The office's phrase reads on its own line and the officer's
                 # name starts the next: the cell is only ~40 characters wide,
                 # so one long line would break the name across two.
-                details.append("Elder's Approval: Approved by")
+                details.append("Elder-approved by")
                 details.append(escape(str(row["elder_approved_by"])))
             if row.get("pastor_approved_by"):
-                details.append("Pastor's Approval: Approved by")
+                details.append("Pastor-approved by")
                 details.append(escape(str(row["pastor_approved_by"])))
             if row.get("decided_by") and row.get("status") in ("approved", "declined"):
-                verdict = "Approved" if row["status"] == "approved" else "Rejected"
-                details.append(f"Treasurer's Approval: {verdict} by")
+                verdict = "Treasurer-approved" if row["status"] == "approved" else "Rejected"
+                details.append(f"{verdict} by")
                 decided = escape(str(row["decided_by"]))
                 if row.get("reply"):
                     decided += f" — “{escape(str(row['reply']))}”"

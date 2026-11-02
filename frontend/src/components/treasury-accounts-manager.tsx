@@ -279,7 +279,7 @@ export function WithdrawalRequestsPanel({
 
   /* The clearances on one ask, in the order the church gives them: the
      pastor's blessing, the elder's approval, and then the treasury's own
-     word, "Treasurer approved by …", the office that actually released the
+     word, "Treasurer-approved by …", the office that actually released the
      money named as itself, so it is never read as a second, anonymous
      approval. Both layouts read these same lines, so a request says the
      same thing on a phone as on a desk. */
@@ -287,18 +287,20 @@ export function WithdrawalRequestsPanel({
     <>
       {row.pastor_approved_by && (
         <p className="text-[10px] text-moss-faint">
-          Pastor approved by {row.pastor_approved_by}
+          Pastor-approved by {row.pastor_approved_by}
         </p>
       )}
       {row.elder_approved_by && (
         <p className="text-[10px] text-moss-faint">
-          Elder approved by {row.elder_approved_by}
+          Elder-approved by {row.elder_approved_by}
         </p>
       )}
 
       {row.decided_by && (row.status === "approved" || row.status === "declined") && (
         <p className="text-[10px] italic text-moss-faint">
-          {row.status === "approved" ? "Treasurer approved by" : "Rejected"} by {row.decided_by}
+          {row.status === "approved"
+            ? `Treasurer-approved by ${row.decided_by}`
+            : `Rejected by ${row.decided_by}`}
           {row.reply ? `: "${row.reply}"` : ""}
         </p>
       )}
@@ -502,7 +504,7 @@ export function WithdrawalRequestsPanel({
                       : awaitingRelease
                         ? "Approved by the pastor and an elder. The treasury releases or declines it now."
                         : canReverse
-                          ? `${target.decided_by ? `Treasurer approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
+                          ? `${target.decided_by ? `Treasurer-approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
                           : isReversed
                             ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
                             : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
