@@ -13,10 +13,8 @@ import {
   Mail,
   MapPin,
   Pause,
-  Pencil,
   Plus,
   Play,
-  Receipt,
   ShieldCheck,
   Send,
   Trash2,
@@ -26,8 +24,17 @@ import {
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { RecordList } from "@/components/record-list";
+import { densityCellPad } from "@/lib/table-density";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** One badge palette per meeting status, shared by the row and the card. */
+const STATUS_BADGE: Record<UnifiedMeeting["status"], string> = {
+  upcoming: "border-amber-300 bg-amber-100 text-amber-800",
+  completed: "border-emerald-300 bg-emerald-100 text-emerald-800",
+  archived: "border-gray-300 bg-gray-100 text-gray-700",
+};
 
 export type MeetingKind = "board" | "business";
 
@@ -200,13 +207,26 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       itself. */
   const meetingMenuBody = (m: UnifiedMeeting) => (
     <>
-      <Link
-        href={`${API_URL}/api/members/board-meetings/${m.id}/pdf/`}
+      <a
+        href={`${API_URL}/api/members/${m.kind === "board" ? "board-meetings" : "business-meetings"}/${m.id}/pdf/`}
+        target="_blank"
+        rel="noopener noreferrer"
         onClick={closeMeetingActionsMenu}
         className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
       >
         <FileText size={13} className="inline" aria-hidden="true" /> View Packet
-      </Link>
+      </a>
+
+      <button
+        type="button"
+        onClick={() => {
+          closeMeetingActionsMenu();
+          openAddAgendaModal(m);
+        }}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+      >
+        <Plus size={13} className="inline" aria-hidden="true" /> Add Agenda
+      </button>
 
       {m.kind === "board" && m.status === "upcoming" && (
         <button
@@ -221,38 +241,44 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={() => {
-          closeMeetingActionsMenu();
-          void handleResendInvitation(m);
-        }}
-        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand transition-colors"
-      >
-        <Send size={13} className="inline" aria-hidden="true" /> Resend Invitation
-      </button>
+      {m.kind === "board" && (
+        <button
+          type="button"
+          onClick={() => {
+            closeMeetingActionsMenu();
+            void handleResendInvitation(m);
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand transition-colors"
+        >
+          <Send size={13} className="inline" aria-hidden="true" /> Resend Invitation
+        </button>
+      )}
 
-      <button
-        type="button"
-        onClick={() => {
-          closeMeetingActionsMenu();
-          void handlePostponeMeeting(m);
-        }}
-        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
-      >
-        <CalendarDays size={13} className="inline" aria-hidden="true" /> Postpone Meeting
-      </button>
+      {m.kind === "board" && m.status === "upcoming" && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              closeMeetingActionsMenu();
+              void handlePostponeMeeting(m);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
+          >
+            <CalendarDays size={13} className="inline" aria-hidden="true" /> Postpone Meeting
+          </button>
 
-      <button
-        type="button"
-        onClick={() => {
-          closeMeetingActionsMenu();
-          void handleCancelMeeting(m);
-        }}
-        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
-      >
-        <X size={13} className="inline" aria-hidden="true" /> Cancel Meeting
-      </button>
+          <button
+            type="button"
+            onClick={() => {
+              closeMeetingActionsMenu();
+              void handleCancelMeeting(m);
+            }}
+            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+          >
+            <X size={13} className="inline" aria-hidden="true" /> Cancel Meeting
+          </button>
+        </>
+      )}
 
       {!m.status.startsWith("archived") && (
         <button
@@ -266,13 +292,14 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
               ? "text-emerald-700 hover:bg-emerald-50"
               : "text-sage hover:bg-sand"
           }`}
-      >
-        {m.status === "completed" ? (
-          <><Play size={13} className="inline" aria-hidden="true" /> Reopen</>
-        ) : (
-          <><Pause size={13} className="inline" aria-hidden="true" /> Mark Completed</>
-        )}
-      </button>
+        >
+          {m.status === "completed" ? (
+            <><Play size={13} className="inline" aria-hidden="true" /> Reopen</>
+          ) : (
+            <><Pause size={13} className="inline" aria-hidden="true" /> Mark Completed</>
+          )}
+        </button>
+      )}
     </>
   );
 
@@ -293,7 +320,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       if (res.ok) {
         showAlert(
           "Invitation Resent",
-          data.summary ? data.summary : `The ${m.title} invitation was resent to the board.",
+          data.summary ? data.summary : `The ${m.title} invitation was resent to the board.`,
           "success",
         );
         fetchMeetings();
@@ -707,6 +734,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
 
   const boardCount = meetings.filter((m) => m.kind === "board").length;
   const businessCount = meetings.filter((m) => m.kind === "business").length;
+  const cellPad = `${densityCellPad()} pr-3 align-top`;
 
   return (
     <div className="space-y-6">
@@ -840,241 +868,285 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
         </div>
       )}
 
-      {/* Meetings List */}
+      {/* Meetings list — the same table the roster uses: one row per meeting,
+          a sticky head, and the actions behind a popover so a row stays
+          readable. Phones get the card form of the same record. */}
       {!loading && !error && filteredMeetings.length > 0 && (
-        <div className="space-y-4">
-          {filteredMeetings.map((meeting) => {
+        <RecordList
+          rows={filteredMeetings}
+          loading={false}
+          rowKey={(m) => `${m.kind}-${m.id}`}
+          headers={[
+            { label: "Meeting" },
+            { label: "Date", className: "w-24" },
+            { label: "Time", className: "w-32" },
+            { label: "Venue" },
+            { label: "Items", className: "w-14" },
+            { label: "Status", className: "w-24" },
+            { label: "Actions", className: "w-32 text-right" },
+          ]}
+          cardsClassName="grid gap-2"
+          loadingLabel="Loading church meetings..."
+          tableEmpty="No meetings match these filters."
+          cardsEmpty="No meetings match these filters."
+          renderRow={(meeting) => {
             const meetingKey = `${meeting.kind}-${meeting.id}`;
             const isExpanded = expandedMeetingKey === meetingKey;
-            const isBoard = meeting.kind === "board";
-
             return (
-              <div
-                key={meetingKey}
-                className="overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm transition hover:border-ember/50"
-              >
-                <div className="p-5 sm:p-6">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* Meeting Type Badge */}
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                            isBoard
-                              ? "border-cyan-200 bg-cyan-50 text-cyan-800"
-                              : "border-purple-200 bg-purple-50 text-purple-800"
-                          }`}
-                        >
-                          {isBoard ? (
-                            <>
-                              <ShieldCheck size={11} aria-hidden="true" />
-                              <span>Board Meeting</span>
-                            </>
-                          ) : (
-                            <>
-                              <Briefcase size={11} aria-hidden="true" />
-                              <span>Business Meeting</span>
-                            </>
-                          )}
-                        </span>
-
-                        {/* Status Badge */}
-                        <span
-                          className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                            meeting.status === "upcoming"
-                              ? "border-amber-300 bg-amber-100 text-amber-800"
-                              : meeting.status === "completed"
-                              ? "border-emerald-300 bg-emerald-100 text-emerald-800"
-                              : "border-gray-300 bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {meeting.status}
-                        </span>
-
-                        <h3 className="text-base font-extrabold text-bark">{meeting.title}</h3>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-moss">
-                        <div className="flex items-center gap-1.5">
-                          <CalendarDays size={13} aria-hidden="true" />
-                          <span>{dayFirst(meeting.meeting_date)}</span>
-                        </div>
-                        {meeting.time_display && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-bark">{meeting.time_display}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5">
-                          <MapPin size={13} aria-hidden="true" />
-                          <span>{meeting.location}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <ClipboardList size={13} aria-hidden="true" />
-                          <span>{meeting.agendas?.length || 0} Agendas</span>
-                        </div>
-                      </div>
+              <>
+                <tr className={isExpanded ? "bg-sand/70" : "hover:bg-sand/50"}>
+                  <td className={cellPad}>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 rounded-md border border-sand-line bg-sand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
+                        {meeting.kind === "board" ? "Board" : "Business"}
+                      </span>
+                      <span className="truncate font-semibold text-bark">{meeting.title}</span>
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {!isBoard && (
-                        <a
-                          href={`${API_URL}/api/members/business-meetings/${meeting.id}/pdf/`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-white px-3 py-1.5 text-xs font-bold text-bark shadow-xs transition hover:bg-sand"
-                        >
-                          <FileText size={13} aria-hidden="true" />
-                          <span>PDF Packet</span>
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openAddAgendaModal(meeting)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-ember px-3 py-1.5 text-xs font-bold text-white shadow-xs transition hover:bg-ember-dark"
-                      >
-                        <Plus size={14} aria-hidden="true" />
-                        <span>Add Agenda</span>
-                      </button>
-                      {/* The meeting's actions live behind one popover, on desktop and
-                          on the phone card, instead of as separate inline buttons. */}
-                      <button
-                        type="button"
-                        onClick={(e) => toggleMeetingActionsMenu(meeting.id, e)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-sand-line bg-sand px-3 py-1.5 text-xs font-bold text-bark shadow-xs transition hover:bg-sand-shade"
-                      >
-                        <UserCheck size={13} aria-hidden="true" />
-                        <span>Actions</span>
-                        <ChevronDown size={11} className="inline" aria-hidden="true" />
-                      </button>
+                  </td>
+                  <td className={`${cellPad} whitespace-nowrap text-moss`}>{dayFirst(meeting.meeting_date)}</td>
+                  <td className={`${cellPad} whitespace-nowrap text-moss`}>{meeting.time_display || "—"}</td>
+                  <td className={`${cellPad} truncate text-moss`}>{meeting.location}</td>
+                  <td className={`${cellPad} text-moss`}>{meeting.agendas?.length || 0}</td>
+                  <td className={cellPad}>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_BADGE[meeting.status]}`}>
+                      {meeting.status}
+                    </span>
+                  </td>
+                  <td className={`${cellPad} text-right`}>
+                    <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => setExpandedMeetingKey(isExpanded ? null : meetingKey)}
-                        className="rounded-lg border border-sand-line bg-sand px-3 py-1.5 text-xs font-bold text-bark transition hover:bg-sand-shade"
+                        className="rounded-lg border border-sand-line bg-white p-1.5 text-moss transition hover:border-bark hover:text-bark"
+                        title={isExpanded ? "Hide agendas and minutes" : "Agendas and minutes"}
+                        aria-expanded={isExpanded}
                       >
-                        {isExpanded ? (
-                          <>
-                            Hide Agendas &amp; Minutes{" "}
-                            <ChevronUp size={12} className="inline" aria-hidden="true" />
-                          </>
-                        ) : (
-                          <>
-                            View Agendas &amp; Minutes{" "}
-                            <ChevronDown size={12} className="inline" aria-hidden="true" />
-                          </>
-                        )}
+                        {isExpanded ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => toggleMeetingActionsMenu(meeting.id, e)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-bold text-bark transition hover:bg-sand"
+                      >
+                        <span>Actions</span>
+                        <ChevronDown size={11} aria-hidden="true" />
                       </button>
                     </div>
-                  </div>
+                  </td>
+                </tr>
 
-                  {/* Expanded Content: Agendas & Minutes */}
-                  {isExpanded && (
-                    <div className="mt-6 space-y-6 border-t border-sand-line pt-6">
-                      {/* Agendas Section */}
-                      <div>
-                        <div className="flex items-center justify-between pb-2">
-                          <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-bark">
-                            <ClipboardList size={14} aria-hidden="true" />
-                            <span>Meeting Agendas</span>
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => openAddAgendaModal(meeting)}
-                            className="text-xs font-bold text-ember hover:underline"
-                          >
-                            + Add Agenda Item
-                          </button>
+                {isExpanded && (
+                  <tr>
+                    <td colSpan={7} className="bg-sand/40 px-4 pb-5 pt-1">
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex items-center justify-between pb-2">
+                            <h4 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-bark">
+                              <ClipboardList size={13} aria-hidden="true" />
+                              <span>Agendas</span>
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => openAddAgendaModal(meeting)}
+                              className="text-[11px] font-bold text-ember hover:underline"
+                            >
+                              + Add agenda item
+                            </button>
+                          </div>
+
+                          {meeting.agendas && meeting.agendas.length > 0 ? (
+                            <div className="divide-y divide-sand-soft rounded-xl border border-sand-line bg-white">
+                              {meeting.agendas.map((agenda, idx) => (
+                                <div
+                                  key={agenda.id || idx}
+                                  className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                  <div className="min-w-0 space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sand text-[10px] font-bold text-bark">
+                                        {agenda.order || idx + 1}
+                                      </span>
+                                      <h5 className="truncate text-xs font-semibold text-bark">{agenda.title}</h5>
+                                    </div>
+                                    {agenda.description && (
+                                      <p className="pl-7 text-[11px] text-moss">{agenda.description}</p>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 pl-7 sm:pl-0">
+                                    {agenda.document_url && (
+                                      <a
+                                        href={agenda.document_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 rounded-md border border-sand-line bg-white px-2 py-1 text-[11px] font-bold text-bark hover:border-bark"
+                                      >
+                                        <FileText size={12} aria-hidden="true" />
+                                        <span>Document</span>
+                                      </a>
+                                    )}
+                                    {agenda.id && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteAgenda(meeting, agenda.id!)}
+                                        className="rounded-md p-1 text-moss transition hover:bg-sand hover:text-red-600"
+                                        title="Delete agenda item"
+                                      >
+                                        <Trash2 size={13} aria-hidden="true" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="rounded-xl border border-sand-line bg-white p-3 text-[11px] italic text-moss">
+                              No agendas yet — use &quot;+ Add agenda item&quot; to attach one.
+                            </p>
+                          )}
                         </div>
 
-                        {meeting.agendas && meeting.agendas.length > 0 ? (
-                          <div className="divide-y divide-sand-line rounded-xl border border-sand-line bg-sand">
-                            {meeting.agendas.map((agenda, idx) => (
-                              <div
-                                key={agenda.id || idx}
-                                className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
-                              >
-                                <div className="space-y-0.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-bold text-bark">
-                                      {agenda.order || idx + 1}
-                                    </span>
-                                    <h5 className="text-xs font-bold text-bark">{agenda.title}</h5>
-                                  </div>
-                                  {agenda.description && (
-                                    <p className="pl-7 text-xs text-moss">{agenda.description}</p>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-2 pl-7 sm:pl-0">
-                                  {agenda.document_url && (
-                                    <a
-                                      href={agenda.document_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 rounded-md border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-bold text-bark hover:border-bark"
-                                    >
-                                      <FileText size={12} aria-hidden="true" />
-                                      <span>Document</span>
-                                    </a>
-                                  )}
-                                  {agenda.id && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteAgenda(meeting, agenda.id!)}
-                                      className="rounded-md p-1 text-moss hover:bg-white hover:text-red-600 transition"
-                                      title="Delete agenda item"
-                                    >
-                                      <Trash2 size={13} aria-hidden="true" />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="rounded-xl border border-sand-line bg-sand p-4 text-xs italic text-moss">
-                            No agendas added yet. Use the &quot;+ Add Agenda&quot; button above to attach discussion items.
-                          </p>
-                        )}
+                        <div>
+                          <h4 className="flex items-center gap-1.5 pb-2 text-[11px] font-bold uppercase tracking-wider text-bark">
+                            <FileText size={13} aria-hidden="true" />
+                            <span>Minutes</span>
+                          </h4>
+                          {meeting.minutes ? (
+                            <div className="whitespace-pre-wrap rounded-xl border border-sand-line bg-white p-3 text-xs leading-relaxed text-bark">
+                              {meeting.minutes}
+                            </div>
+                          ) : (
+                            <p className="rounded-xl border border-sand-line bg-white p-3 text-[11px] italic text-moss">
+                              Minutes have not been recorded yet.
+                            </p>
+                          )}
+                        </div>
                       </div>
+                    </td>
+                  </tr>
+                )}
 
-                      {/* Minutes Section */}
-                      <div>
-                        <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-bark pb-2">
-                          <FileText size={14} aria-hidden="true" />
-                          <span>Meeting Minutes &amp; Notes</span>
-                        </h4>
-                        {meeting.minutes ? (
-                          <div className="whitespace-pre-wrap rounded-xl border border-sand-line bg-sand p-4 text-xs font-medium text-bark leading-relaxed">
-                            {meeting.minutes}
-                          </div>
-                        ) : (
-                          <p className="rounded-xl border border-sand-line bg-sand p-4 text-xs italic text-moss">
-                            Minutes have not been recorded or uploaded yet.
-                          </p>
-                        )}
+                {openMeetingActionsId === meeting.id && meetingActionsMenuPos && (
+                  <tr>
+                    <td className="p-0">
+                      <div
+                        className="fixed z-50 min-w-[13rem] rounded-2xl border border-sand-line bg-white p-1.5 shadow-xl"
+                        style={{
+                          ...(meetingActionsMenuPos.dropUp
+                            ? { bottom: meetingActionsMenuPos.bottom }
+                            : { top: meetingActionsMenuPos.top }),
+                          right: meetingActionsMenuPos.right,
+                        }}
+                      >
+                        <div className="max-h-[70vh] overflow-y-auto">{meetingMenuBody(meeting)}</div>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Meeting actions popover, positioned by the button that opened it. */}
-                  {openMeetingActionsId === meeting.id && meetingActionsMenuPos && (
-                    <div
-                      className="fixed z-50 mt-1 shadow-xl rounded-2xl border border-sand-line bg-white p-2"
-                      style={{
-                        ...(meetingActionsMenuPos.dropUp
-                          ? { bottom: meetingActionsMenuPos.bottom }
-                          : { top: meetingActionsMenuPos.top }),
-                        right: meetingActionsMenuPos.right,
-                      }}
-                    >
-                      <div className="max-h-[70vh] overflow-y-auto">{meetingMenuBody(meeting)}</div>
-                    </div>
-                  )}
+                    </td>
+                  </tr>
+                )}
+              </>
+            );
+          }}
+          renderCard={(meeting) => {
+            const meetingKey = `${meeting.kind}-${meeting.id}`;
+            const isExpanded = expandedMeetingKey === meetingKey;
+            return (
+              <div className="rounded-2xl border border-sand-line bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md border border-sand-line bg-sand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-moss">
+                    {meeting.kind === "board" ? "Board" : "Business"}
+                  </span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATUS_BADGE[meeting.status]}`}>
+                    {meeting.status}
+                  </span>
                 </div>
+                <h3 className="mt-2 text-sm font-bold text-bark">{meeting.title}</h3>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-moss">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays size={12} aria-hidden="true" />
+                    {dayFirst(meeting.meeting_date)}
+                  </span>
+                  {meeting.time_display && <span className="font-semibold text-bark">{meeting.time_display}</span>}
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin size={12} aria-hidden="true" />
+                    {meeting.location}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <ClipboardList size={12} aria-hidden="true" />
+                    {meeting.agendas?.length || 0}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMeetingKey(isExpanded ? null : meetingKey)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-bold text-bark"
+                  >
+                    {isExpanded ? <ChevronUp size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />}
+                    <span>Agendas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => toggleMeetingActionsMenu(meeting.id, e)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-sand-line bg-white px-2.5 py-1.5 text-[11px] font-bold text-bark"
+                  >
+                    <span>Actions</span>
+                    <ChevronDown size={11} aria-hidden="true" />
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div className="mt-3 space-y-3 border-t border-sand-line pt-3">
+                    {meeting.agendas && meeting.agendas.length > 0 ? (
+                      <div className="divide-y divide-sand-soft">
+                        {meeting.agendas.map((agenda, idx) => (
+                          <div key={agenda.id || idx} className="flex items-center justify-between gap-2 py-2">
+                            <span className="truncate text-[11px] font-semibold text-bark">
+                              {agenda.order || idx + 1}. {agenda.title}
+                            </span>
+                            {agenda.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAgenda(meeting, agenda.id!)}
+                                className="rounded-md p-1 text-moss hover:text-red-600"
+                                title="Delete agenda item"
+                              >
+                                <Trash2 size={12} aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] italic text-moss">No agendas yet.</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openAddAgendaModal(meeting)}
+                      className="text-[11px] font-bold text-ember hover:underline"
+                    >
+                      + Add agenda item
+                    </button>
+                    {meeting.minutes && (
+                      <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-moss">{meeting.minutes}</p>
+                    )}
+                  </div>
+                )}
+                {openMeetingActionsId === meeting.id && meetingActionsMenuPos && (
+                  <div
+                    className="fixed z-50 min-w-[13rem] rounded-2xl border border-sand-line bg-white p-1.5 shadow-xl"
+                    style={{
+                      ...(meetingActionsMenuPos.dropUp
+                        ? { bottom: meetingActionsMenuPos.bottom }
+                        : { top: meetingActionsMenuPos.top }),
+                      right: meetingActionsMenuPos.right,
+                    }}
+                  >
+                    <div className="max-h-[70vh] overflow-y-auto">{meetingMenuBody(meeting)}</div>
+                  </div>
+                )}
               </div>
             );
-          })}
-        </div>
+          }}
+        />
       )}
 
       {/* Modal: Create Meeting */}
