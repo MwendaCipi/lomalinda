@@ -5464,6 +5464,7 @@ type DeptSubTab =
   | "singing_groups"
   | "choir"
   | "accounts"
+  | "letters"
   | "lesson-orders"
   | "baptismal-class"
   | "daily-word"
@@ -5588,10 +5589,12 @@ function DepartmentDetail({
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
-  // The Write Letter button in the Requests view's footer opens the
-  // church-letterhead compose modal over the desk — the desk is the one
-  // the letter will carry, and Requests is where outgoing asks live.
+  // The Write Letter button on the Letters page opens the church-letterhead
+  // composer over the desk — the desk is the one the letter will carry.
   const [showWriteLetter, setShowWriteLetter] = useState(false);
+  // Bumped when a letter has just been sent, so the Letters page re-reads its
+  // register and the new row is already on it.
+  const [lettersVersion, setLettersVersion] = useState(0);
   // The Message button at the foot of the roll opens the composer over the
   // desk — the roll on screen is the roll the send addresses.
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -6100,18 +6103,24 @@ function DepartmentDetail({
             { key: "spiritual", label: "Spiritual", short: "Spiritual", icon: HandHeart },
           ]
         : []),
-      // The desk's asks — the letters it writes on the church's letterhead
-      // and the money it asks of the treasury — gathered under one name so the
-      // ledger and the requests share the same toggle instead of two. The name
-      // is Requests: the ledger keeps the room beneath them at the height it
-      // always had, the requests come first because they are the desk's own
-      // paper. The Pastorate is the one desk without it — its three approval
-      // pages (Treasury, Letters, Spiritual) are the church's asks of that
-      // office, and the pastor does not raise fund requests, so the ledger
-      // would be a second door to pages this desk already names.
+      // The desk's accounts: its fund ledger and the money it asks of the
+      // treasury. Accounts is the name this chip answers to again now that
+      // the paper the desk writes has a page of its own beside it (below).
+      // The Pastorate is the one desk without it — its three approval pages
+      // (Treasury, Letters, Spiritual) are the church's asks of that office,
+      // and the pastor does not raise fund requests.
       ...(isPastorate
         ? []
-        : [{ key: "accounts", label: "Requests", short: "Requests", icon: Wallet }]),
+        : [{ key: "accounts", label: "Accounts", short: "Accounts", icon: Wallet }]),
+      // The letters this desk has written: every one of them on the church's
+      // letterhead, whose pen it is waiting on, and the signed sheet once the
+      // pastor and the clerk have both signed. Writing happens on this page
+      // too — its own button opens the composer — so Accounts goes back to
+      // being the ledger. The Pastorate writes none of them: theirs arrive
+      // for a signature on Letter Approvals.
+      ...(isPastorate
+        ? []
+        : [{ key: "letters", label: "Letters", short: "Letters", icon: FileText }]),
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
       // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
@@ -7409,12 +7418,11 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* The Requests view: the fund ledger and the money the desk asks for,
-          full width. Writing a letter belongs with those outgoing asks, at
-          the bottom of this view rather than in the strip or member register.
-          While the letter sheet is open, the ledger stands down on a desk —
-          the letter page takes the view, and the way back is its own bar. */}
-      {subTab === "accounts" && !showWriteLetter && (
+      {/* The Accounts view: the fund ledger and the money the desk asks for,
+          full width. The paper the desk writes has a page of its own beside
+          this one (the Letters view below), so the ledger is just the ledger
+          again. */}
+      {subTab === "accounts" && (
         <div className="flex min-h-0 flex-1 flex-col">
           <DepartmentAccountsPanel
             department={department}
@@ -7422,22 +7430,35 @@ function DepartmentDetail({
             search={accountsSearch}
             typeFilter={accountsFilter}
             // The same panel the console pages draw whole, here given the
-            // whole Requests view rather than the room letters left it.
+            // whole view.
             className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
-            footer={
-              !isPastorate ? (
-                <div className="flex items-center justify-end border-t border-sand-line px-3 py-2 sm:px-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowWriteLetter(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep"
-                  >
-                    <PenLine className="h-3.5 w-3.5" /> Write Letter
-                  </button>
-                </div>
-              ) : undefined
-            }
           />
+        </div>
+      )}
+      {/* The Letters view: the desk's own paper. The register lists what has
+          been written and whose pen it is waiting on, and reads its empty
+          state until the first letter exists; the panel below the list is
+          where a new one is written. While the composer is open the page
+          stands down, the sheet taking the whole view with its own way back. */}
+      {subTab === "letters" && !showWriteLetter && (
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="custom-hover-scrollbar min-h-0 flex-1 overflow-y-auto rounded-2xl border border-sand-line bg-white shadow-sm">
+            <DepartmentLettersPanel
+              department={department}
+              scrollList={false}
+              version={lettersVersion}
+              className="rounded-2xl border border-sand-line bg-white"
+            />
+          </div>
+          <div className="flex shrink-0 items-center justify-center rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowWriteLetter(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep"
+            >
+              <PenLine className="h-3.5 w-3.5" /> Write Letter
+            </button>
+          </div>
         </div>
       )}
       {subTab === "calendar" && (
@@ -8012,6 +8033,7 @@ function DepartmentDetail({
               open={showWriteLetter}
               department={department}
               onClose={() => setShowWriteLetter(false)}
+              onSent={() => setLettersVersion((version) => version + 1)}
             />
           </div>
           {/* A desk reads the letter through the whole viewport: the sheet
@@ -8024,6 +8046,7 @@ function DepartmentDetail({
               department={department}
               variant="page"
               onClose={() => setShowWriteLetter(false)}
+              onSent={() => setLettersVersion((version) => version + 1)}
             />
           </div>
         </>

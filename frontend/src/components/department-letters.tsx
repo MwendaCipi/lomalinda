@@ -285,7 +285,7 @@ export function WriteLetterModal({
             onClick={onClose}
             className="inline-flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-semibold text-bark transition hover:text-ember"
           >
-            <MoveLeft className="h-4 w-4" aria-hidden="true" /> Back to requests
+            <MoveLeft className="h-4 w-4" aria-hidden="true" /> Back to letters
           </button>
           <p className="text-sm font-semibold text-bark">Write a letter</p>
         </header>
@@ -1029,7 +1029,7 @@ export function DepartmentLettersPanel({
             <p className="mt-0.5 max-w-sm text-xs text-moss">
               {scope === "all"
                 ? "Letters from every desk arrive here for the pastor's signature, then the clerk's — sign, send back with a reason, or read the signed sheet."
-                : "Letters written on this desk arrive here to be signed or sent back with a reason."}
+                : "Nothing written on this desk yet. A letter sent for signature is listed here while it waits for the pastor's pen, then the clerk's, and stays once both have signed."}
             </p>
           </div>
         ) : (
