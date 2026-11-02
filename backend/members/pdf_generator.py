@@ -1189,8 +1189,15 @@ def generate_treasury_pdf(
     # page block breaks the layout outright, so only a short table keeps
     # its whole tribe together; a long one flows over the page break the
     # way any table does.
-    block = KeepTogether(local_block) if len(local_data) <= 15 else local_block
-    story.append(block)
+    # A long block is laid onto the story flowable by flowable: appending the
+    # list itself put a plain Python list in the story, and the frame's
+    # keep-with-next walk crashed on it ("'list' object has no attribute
+    # 'getKeepWithNext'" — the summary failed outright on every church whose
+    # account roll outgrew the short-table case).
+    if len(local_data) <= 15:
+        story.append(KeepTogether(local_block))
+    else:
+        story.extend(local_block)
     story.append(Spacer(1, 12))
 
     # --- Deposit Slips ---

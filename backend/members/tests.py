@@ -3217,6 +3217,25 @@ class PdfGenerationAPITests(APITestCase):
         # The deacon's saved pen prints on the deacon's line.
         self.assertIn('DeaconOtieno', flat)
 
+    def test_summary_report_survives_a_long_local_account_roll(self):
+        """A church whose account roll outgrows the short-table case still gets
+        its summary: the long local block used to be appended to the story as a
+        plain list, which crashed the frame's keep-with-next walk."""
+        from .pdf_generator import generate_treasury_pdf
+
+        rows = [(f'Fund {i}', [f'fund {i}']) for i in range(24)]
+        pdf_bytes = generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 1500, "cash": 1000, "mpesa": 500, "bank_transfer": 0, "cheque": 0},
+            saturdays=[date(2026, 1, 3), date(2026, 1, 10)],
+            weekly_data={},
+            local_account_rows=rows,
+        )
+        self.assertTrue(pdf_bytes.startswith(b'%PDF'))
+
     def test_member_giving_pdf_returns_valid_pdf_stream(self):
         Contribution.objects.create(
             member=self.user,
