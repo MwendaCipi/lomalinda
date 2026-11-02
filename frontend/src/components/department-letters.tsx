@@ -392,8 +392,8 @@ export function WriteLetterModal({
                 <p className={`mt-4 whitespace-pre-line${recipientBlock().length ? "" : " text-moss-faint"}`}>
                   {recipientBlock().length ? recipientBlock().join("\n") : "Receiving church, address and town"}
                 </p>
-                <p className="mt-6">
-                  <span className="font-semibold">REF: </span>
+                <p className="mt-6 font-bold">
+                  <span>REF: </span>
                   <span className="underline">
                     {subject.trim() || <span className="text-moss-faint">Subject</span>}
                   </span>

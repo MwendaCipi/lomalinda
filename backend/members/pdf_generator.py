@@ -2483,7 +2483,10 @@ def generate_department_letter_pdf(
         # page one reserves room for its two columns of office details.
         doc = BaseDocTemplate(buffer, pagesize=(21 * cm, 29.7 * cm))
         body_bottom = 2.2 * cm
-        body_left = 1.8 * cm
+        # The body's left edge sits under the letterhead's own left edge
+        # (left_x in draw_page_decorations), so the address and body align
+        # with the church name and field above them.
+        body_left = 1.05 * cm
         strip_left = 21 * cm - _DEPARTMENT_LETTER_STRIP_WIDTH
         body_w = strip_left - 0.45 * cm - body_left
         first_top = 29.7 * cm - _DEPARTMENT_LETTERHEAD_HEIGHT - 0.35 * cm
@@ -2578,14 +2581,12 @@ def generate_department_letter_pdf(
         for idx, line in enumerate(raw_block)
     ]
     story.append(date_para)
-    story.append(Spacer(1, 10))
     story.append(Paragraph(escape("To the Pastor/ Church clerk,"), addr_style))
-    story.append(Spacer(1, 10))
     if address_block:
         story.append(Paragraph(
             "<br />".join([escape(line) for line in address_block]), addr_style,
         ))
-        story.append(Spacer(1, 10))
+    story.append(Spacer(1, 10))
     
     # The subject on its own line: the title the writer gave the letter,
     # underlined as the template writes it.
@@ -2595,7 +2596,7 @@ def generate_department_letter_pdf(
         fontName="Helvetica-Bold", fontSize=11, leading=15,
         textColor=colors.black, spaceAfter=10,
     )
-    story.append(Paragraph(f"<u>{escape(title_text)}</u>", subject_style))
+    story.append(Paragraph(f"<b>REF: </b><u>{escape(title_text)}</u>", subject_style))
     story.append(Spacer(1, 2))
     
     # Letter body — the writer's own paragraphs, from the left margin.
