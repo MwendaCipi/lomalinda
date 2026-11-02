@@ -12,7 +12,7 @@ import hashlib
 import hmac
 import json
 import re
-from datetime import datetime
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -319,6 +319,46 @@ def parse_clock(value):
         except ValueError:
             continue
     return None
+
+
+def meeting_ends_at(meeting):
+    """The instant the meeting is over, in church time, or ``None``.
+
+    A board meeting carries a real clock — its end time, or its start when no
+    end was set. A business meeting's time is free text ("2:00 PM"), so one
+    that will not parse leaves the meeting over at the end of its own day.
+    """
+    day = _meeting_date(meeting)
+    if not hasattr(day, 'strftime'):
+        return None
+    clock = getattr(meeting, 'end_time', None) or getattr(meeting, 'start_time', None)
+    if not clock:
+        clock = parse_clock(getattr(meeting, 'meeting_time', '') or '')
+    if not clock:
+        return datetime.combine(day, time(23, 59))
+    return datetime.combine(day, clock)
+
+
+def mark_finished_meetings(now=None):
+    """Write off the meetings whose hour has passed.
+
+    The desk settles this as it reads the roll instead of leaving it to a cron
+    that might run late: an upcoming meeting whose end has gone by is
+    completed, once. Archived rows are left alone — the cancel endpoint files
+    its own cancellations, and a reopened meeting is the office's decision.
+    """
+    from .models import BoardMeeting, BusinessMeeting
+
+    moment = (now or datetime.now(EAT)).replace(tzinfo=None)
+    finished = []
+    for model in (BoardMeeting, BusinessMeeting):
+        for meeting in model.objects.filter(status='upcoming'):
+            ends_at = meeting_ends_at(meeting)
+            if ends_at and ends_at <= moment:
+                meeting.status = 'completed'
+                meeting.save(update_fields=['status'])
+                finished.append(meeting)
+    return finished
 
 
 def create_agendas(request, meeting, agenda_model):

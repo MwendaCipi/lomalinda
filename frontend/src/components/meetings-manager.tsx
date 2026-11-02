@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Armchair,
   Briefcase,
@@ -15,6 +15,7 @@ import {
   Pause,
   Plus,
   Play,
+  Printer,
   ShieldCheck,
   Send,
   Trash2,
@@ -165,6 +166,9 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
     top: number;
     bottom: number;
   } | null>(null);
+  /** The open menu itself, so a click anywhere else in the page can tell
+      "inside" (an action) from "outside" (dismiss). */
+  const meetingActionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   const toggleMeetingActionsMenu = (id: number, event: React.MouseEvent<HTMLButtonElement>) => {
     if (openMeetingActionsId === id) {
@@ -194,11 +198,21 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       setOpenMeetingActionsId(null);
       setMeetingActionsMenuPos(null);
     };
+    // A press outside the menu dismisses it, the way every other popover in
+    // the console behaves. The press is read on mousedown so the page beneath
+    // responds to the same click instead of being swallowed.
+    const onPress = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && meetingActionsMenuRef.current?.contains(target)) return;
+      close();
+    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
+    document.addEventListener("mousedown", onPress, true);
     return () => {
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
+      document.removeEventListener("mousedown", onPress, true);
     };
   }, [openMeetingActionsId]);
 
@@ -207,16 +221,6 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       itself. */
   const meetingMenuBody = (m: UnifiedMeeting) => (
     <>
-      <a
-        href={`${API_URL}/api/members/${m.kind === "board" ? "board-meetings" : "business-meetings"}/${m.id}/pdf/`}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={closeMeetingActionsMenu}
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
-      >
-        <FileText size={13} className="inline" aria-hidden="true" /> View Packet
-      </a>
-
       <button
         type="button"
         onClick={() => {
@@ -300,6 +304,17 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
           )}
         </button>
       )}
+
+      <button
+        type="button"
+        onClick={() => {
+          closeMeetingActionsMenu();
+          void handleDeleteMeeting(m);
+        }}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
+      >
+        <Trash2 size={13} className="inline" aria-hidden="true" /> Delete Meeting
+      </button>
     </>
   );
 
@@ -399,6 +414,33 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       }
     } catch {
       showAlert("Could not reach the server. Try again.", "error");
+    }
+  };
+
+  /** Remove a meeting outright — its agendas and minutes go with it. */
+  const handleDeleteMeeting = async (m: UnifiedMeeting) => {
+    if (!confirm(`Delete the ${m.title} meeting? Its agenda and minutes go with it, and this cannot be undone.`)) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(
+        `${API_URL}/api/members/${m.kind === "board" ? "board-meetings" : "business-meetings"}/${m.id}/`,
+        {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      );
+      if (res.ok) {
+        if (expandedMeetingKey === `${m.kind}-${m.id}`) setExpandedMeetingKey(null);
+        showAlert("Meeting Deleted", `The ${m.title} meeting was removed from the roll.`, "success");
+        fetchMeetings();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showAlert("Could not delete", data.detail || data.error || "The meeting was not deleted.", "error");
+      }
+    } catch {
+      showAlert("Could not reach the server", "The meeting was not deleted. Please try again.", "error");
     }
   };
 
@@ -1009,6 +1051,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                   <tr>
                     <td className="p-0">
                       <div
+                        ref={meetingActionsMenuRef}
                         className="fixed z-50 min-w-[13rem] rounded-2xl border border-sand-line bg-white p-1.5 shadow-xl"
                         style={{
                           ...(meetingActionsMenuPos.dropUp
@@ -1111,6 +1154,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
                 )}
                 {openMeetingActionsId === meeting.id && meetingActionsMenuPos && (
                   <div
+                    ref={meetingActionsMenuRef}
                     className="fixed z-50 min-w-[13rem] rounded-2xl border border-sand-line bg-white p-1.5 shadow-xl"
                     style={{
                       ...(meetingActionsMenuPos.dropUp
@@ -1130,7 +1174,18 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
 
       {/* Buttons panel — the desk's one action sits across the bottom of the
           records and centred, rather than crowding a heading card above them. */}
-      <div className="flex items-center justify-center rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm">
+        {/* The backend draws the sheet, so what prints is the roll as it
+            stands rather than whatever this page happened to load. */}
+        <a
+          href={`${API_URL}/api/members/meetings/pdf/`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-xl border border-sand-line bg-white px-5 py-2.5 text-xs font-bold text-bark shadow-sm transition hover:bg-sand active:scale-95"
+        >
+          <Printer size={14} aria-hidden="true" />
+          <span>Print meetings</span>
+        </a>
         <button
           type="button"
           onClick={() => openCreateModal()}

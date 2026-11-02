@@ -1503,6 +1503,83 @@ def generate_business_meeting_pdf(church_name, meeting_title, meeting_date, loca
     return buffer.getvalue()
 
 
+def generate_meetings_schedule_pdf(church_name, meetings):
+    """One sheet of the meetings still on the books.
+
+    ``meetings`` is a list of dicts — kind, title, date, time, location,
+    status and items — already ordered by the caller. This is the desk's
+    diary for a notice board or a hand-over, so it lists what is coming and
+    what has just been held rather than each packet's detail.
+    """
+    church_name = pdf_church_name(church_name)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=1.4 * cm,
+        rightMargin=1.4 * cm,
+        topMargin=1.8 * cm,
+        bottomMargin=2.4 * cm,
+    )
+
+    story = []
+    st = get_pdf_styles()
+
+    story.append(Paragraph("SCHEDULED CHURCH MEETINGS", st["title_big"]))
+    story.append(Paragraph(escape(church_name), st["subtitle"]))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#26352f"), spaceAfter=8))
+
+    upcoming = sum(1 for row in meetings if (row.get("status") or "upcoming") == "upcoming")
+    story.append(Paragraph(
+        f"{len(meetings)} meeting(s) on the books — {upcoming} still to come · "
+        f"printed {date_compact(datetime.now())}",
+        st["meta"],
+    ))
+    story.append(Spacer(1, 12))
+
+    if not meetings:
+        story.append(Paragraph("<i>No meetings are scheduled.</i>", st["cell"]))
+        doc.build(story, canvasmaker=NumberedCanvas)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    headers = ["Date", "Meeting", "Type", "Time", "Venue", "Status", "Items"]
+    data = [[Paragraph(header, st["header"]) for header in headers]]
+    for row in meetings:
+        data.append([
+            Paragraph(date_compact(row.get("date")), st["cell_bold"]),
+            Paragraph(escape(str(row.get("title") or "")), st["cell_bold"]),
+            Paragraph(escape(str(row.get("kind") or "")), st["cell"]),
+            Paragraph(escape(str(row.get("time") or "—")), st["cell"]),
+            Paragraph(escape(str(row.get("location") or "—")), st["cell"]),
+            Paragraph(str(row.get("status") or "upcoming").upper(), st["cell"]),
+            Paragraph(str(row.get("items") or 0), st["cell_right"]),
+        ])
+
+    table = Table(
+        data,
+        colWidths=[1.9 * cm, 4.8 * cm, 1.7 * cm, 2.7 * cm, 3.3 * cm, 2.0 * cm, 1.1 * cm],
+        repeatRows=1,
+    )
+    style = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dfdbd1")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#26352f")),
+    ]
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#faf9f6")))
+    table.setStyle(TableStyle(style))
+    story.append(table)
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def generate_member_list_pdf(church_name: str, members: list, friend_count: int = 0) -> bytes:
     """
     Generate a PDF member directory list.

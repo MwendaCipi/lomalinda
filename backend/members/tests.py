@@ -9063,6 +9063,100 @@ class AccountActivationTests(APITestCase):
         self.assertTrue(User.objects.get(pk=self.person.pk).is_active)
 
 
+class MeetingRollTests(APITestCase):
+    """The desk's roll: meetings whose hour has gone, and the printed diary.
+
+    A meeting is over when its own clock says so, and the desk settles that as
+    it reads the roll — nobody has to remember to mark it. The paper comes off
+    the backend, so it carries the roll itself rather than a page's copy.
+    """
+
+    BOARD_URL = '/api/members/board-meetings/'
+    BUSINESS_URL = '/api/members/business-meetings/'
+    PDF_URL = '/api/members/meetings/pdf/'
+
+    def setUp(self):
+        self.clerk = User.objects.create_user('roll.clerk', 'roll.clerk@example.com', 'ClerkPass#2026')
+        MemberProfile.objects.create(user=self.clerk, role='clerk', roles='clerk')
+        ChurchSettings.objects.create(church_name='SDA Church Loma Linda, Meru')
+        self.client.force_authenticate(self.clerk)
+
+    def _board(self, **overrides):
+        fields = {
+            'title': 'Board Planning',
+            'meeting_date': date(2026, 3, 7),
+            'start_time': datetime(2026, 3, 7, 9, 0).time(),
+            'end_time': datetime(2026, 3, 7, 11, 0).time(),
+            'location': 'Board Room',
+        }
+        fields.update(overrides)
+        return BoardMeeting.objects.create(**fields)
+
+    def _business(self, **overrides):
+        fields = {
+            'title': 'Quarterly Business',
+            'meeting_date': date(2026, 3, 7),
+            'meeting_time': '2:00 PM',
+            'location': 'Main Sanctuary',
+        }
+        fields.update(overrides)
+        return BusinessMeeting.objects.create(**fields)
+
+    def test_a_board_meeting_is_completed_once_its_hour_has_gone(self):
+        meeting = self._board()
+
+        self.assertEqual(self.client.get(self.BOARD_URL).status_code, 200)
+
+        meeting.refresh_from_db()
+        self.assertEqual(meeting.status, 'completed')
+
+    def test_a_board_meeting_still_to_come_stays_upcoming(self):
+        meeting = self._board(
+            meeting_date=date(2099, 3, 7),
+            start_time=datetime(2099, 3, 7, 9, 0).time(),
+            end_time=datetime(2099, 3, 7, 11, 0).time(),
+        )
+
+        self.client.get(self.BOARD_URL)
+
+        meeting.refresh_from_db()
+        self.assertEqual(meeting.status, 'upcoming')
+
+    def test_a_business_meeting_reads_its_own_free_text_time(self):
+        held = self._business()
+        later = self._business(title='Year End Business', meeting_date=date(2099, 12, 12))
+
+        self.assertEqual(self.client.get(self.BUSINESS_URL).status_code, 200)
+
+        held.refresh_from_db()
+        later.refresh_from_db()
+        self.assertEqual(held.status, 'completed')
+        self.assertEqual(later.status, 'upcoming')
+
+    def test_an_archived_meeting_keeps_its_own_place(self):
+        archived = self._board(status='archived')
+
+        self.client.get(self.BOARD_URL)
+
+        archived.refresh_from_db()
+        self.assertEqual(archived.status, 'archived')
+
+    def test_the_printed_diary_is_a_pdf_of_the_meetings_on_the_books(self):
+        self._board(
+            title='Board Planning',
+            meeting_date=date(2099, 12, 5),
+            start_time=datetime(2099, 12, 5, 9, 0).time(),
+            end_time=datetime(2099, 12, 5, 11, 0).time(),
+        )
+        self._business(title='Year End Business', meeting_date=date(2099, 12, 12))
+
+        response = self.client.get(self.PDF_URL)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+
 class MeetingInvitationTests(APITestCase):
     """Meeting invitations: the times on the form, and the words members read."""
 

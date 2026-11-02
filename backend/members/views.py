@@ -105,7 +105,9 @@ from .meetings import (
     broadcast_invitation,
     create_agendas,
     eat_greeting,
+    mark_finished_meetings,
     meeting_audience,
+    meeting_time_display,
     parse_clock,
     recipient_name,
     render_message,
@@ -7931,6 +7933,12 @@ class BoardMeetingView(generics.ListCreateAPIView):
     def get_queryset(self):
         return BoardMeeting.objects.all().prefetch_related('agendas')
 
+    def list(self, request, *args, **kwargs):
+        # The roll settles itself as it is read: a meeting whose hour has gone
+        # by is completed, rather than waiting for a cron to say so.
+        mark_finished_meetings()
+        return super().list(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
         title = request.data.get('title')
         meeting_date = parse_date(str(request.data.get('meeting_date') or ''))
@@ -8031,6 +8039,10 @@ class BusinessMeetingView(generics.ListCreateAPIView):
     permission_classes = [AllowAny]
     serializer_class = BusinessMeetingSerializer
     queryset = BusinessMeeting.objects.all().prefetch_related('agendas')
+
+    def list(self, request, *args, **kwargs):
+        mark_finished_meetings()
+        return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         title = request.data.get('title')
@@ -10095,6 +10107,7 @@ from .pdf_generator import (
     generate_treasury_pdf,
     generate_member_giving_statement_pdf,
     generate_business_meeting_pdf,
+    generate_meetings_schedule_pdf,
     generate_financial_report_pdf,
     generate_contribution_thermal_receipt_pdf,
     generate_in_kind_thermal_receipt_pdf,
@@ -10384,6 +10397,52 @@ class BusinessMeetingPdfView(APIView):
         filename = f"Business_Meeting_{pk}_Agendas_Minutes.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
+class MeetingsSchedulePdfView(APIView):
+    """The desk's printed diary: the meetings still on the books.
+
+    The paper is built here, from the church's own records, so what comes off
+    the printer is the roll as it stands rather than whatever a page had
+    loaded. Cancelled and archived meetings are left off — this is the sheet
+    for a notice board.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        mark_finished_meetings()
+        church_setting = ChurchSettings.objects.first()
+        church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
+
+        meetings = []
+        for meeting in BoardMeeting.objects.exclude(status='archived').prefetch_related('agendas'):
+            meetings.append({
+                'kind': 'Board',
+                'title': meeting.title,
+                'date': meeting.meeting_date,
+                'time': meeting_time_display(meeting),
+                'location': meeting.location,
+                'status': meeting.status,
+                'items': meeting.agendas.count(),
+            })
+        for meeting in BusinessMeeting.objects.exclude(status='archived').prefetch_related('agendas'):
+            meetings.append({
+                'kind': 'Business',
+                'title': meeting.title,
+                'date': meeting.meeting_date,
+                'time': meeting_time_display(meeting),
+                'location': meeting.location,
+                'status': meeting.status,
+                'items': meeting.agendas.count(),
+            })
+
+        meetings.sort(key=lambda row: (row['date'], row['kind']))
+
+        pdf_bytes = generate_meetings_schedule_pdf(church_name=church_name, meetings=meetings)
+        filename = f"Church_Meetings_{date.today().strftime('%Y%m%d')}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
 
 
