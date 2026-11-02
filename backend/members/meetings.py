@@ -33,9 +33,10 @@ EAT = ZoneInfo('Africa/Nairobi')
 
 DEFAULT_BOARD_INVITATION_MESSAGE = (
     '{greeting}, {name}. {church} is inviting you to a board meeting '
-    'scheduled for {day}, {date}, {time_range}. '
-    'God bless you as you purpose to attend.'
-)
+    'scheduled for {day}, {date}, from {start_time} to {end_time}. '
+    '{message_extra}')
+
+DEFAULT_BOARD_INVITATION_MESSAGE_EXTRA = "God bless you as you purpose to attend."
 DEFAULT_BUSINESS_INVITATION_MESSAGE = (
     '{greeting}, {name}. {church} is inviting you to a church business meeting '
     'scheduled for {day}, {date} at {meeting_time}, {location}. '
@@ -51,6 +52,7 @@ PLACEHOLDERS = (
     ('date', 'e.g. 12 September 2026'),
     ('start_time', 'e.g. 9:00 AM (board meetings)'),
     ('end_time', 'e.g. 11:00 AM (board meetings)'),
+    ('time_range', 'e.g. 9:00 AM – 11:00 AM (board meetings)'),
     ('meeting_time', 'the meeting time as entered (business meetings)'),
     ('location', 'meeting venue'),
     ('church', 'the church name from these settings'),
@@ -177,7 +179,7 @@ def invitation_context(meeting, user, church_name):
         'start_time': format_clock(getattr(meeting, 'start_time', None)) or meeting_time_display(meeting),
         'end_time': format_clock(getattr(meeting, 'end_time', None)),
         'meeting_time': meeting_time_display(meeting),
-        'time_range': meeting_time_display(meeting),
+        'time_range': time_range or meeting_time_display(meeting),
         'location': meeting.location or '',
         'church': church_name,
     }
@@ -190,8 +192,24 @@ def invitation_template(kind, settings_obj=None):
     if kind == BUSINESS_KIND:
         configured = getattr(settings_obj, 'default_business_meeting_invitation_message', '') if settings_obj else ''
         return configured or DEFAULT_BUSINESS_INVITATION_MESSAGE
+
     configured = getattr(settings_obj, 'default_board_meeting_invitation_message', '') if settings_obj else ''
-    return configured or DEFAULT_BOARD_INVITATION_MESSAGE
+    configured_extra = getattr(settings_obj, 'board_invitation_message_extra', '') if settings_obj else ''
+    extra = configured_extra or DEFAULT_BOARD_INVITATION_MESSAGE_EXTRA
+    return configured, extra
+
+
+def invitation_template(kind, settings_obj=None):
+    """An extra clause the board-message template tacks onto the end.
+
+    Kept separate from ``invitation_template`` so a one-time note (a time
+    band appended for this broadcast, say) can ride only this invitation
+    round and not change what the settings screen stores.
+    """
+    if settings_obj is None:
+        settings_obj = ChurchSettings.objects.first()
+    configured = getattr(settings_obj, 'board_invitation_message_extra', '') if settings_obj else ''
+    return configured or DEFAULT_BOARD_INVITATION_MESSAGE_EXTRA
 
 
 def board_audience():
@@ -227,20 +245,18 @@ def meeting_audience(kind):
     return User.objects.filter(is_active=True)
 
 
-def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=True, notify_email=True):
+def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=True, notify_email=True, extra_message=None, time_range=None):
     """Invite the audience: SMS first, then email.
 
     SMS goes out first because it is more immediate. If SMS fails (no phone,
     gateway error), email falls back so no recipient is missed. One in-app
     notification and one email per person.
-
-    Returns ``(invited, sms_sent, emailed)`` so the caller can report what
-    really happened.
     """
     if not (notify_sms or notify_email):
         return 0, 0, 0
 
     template = template or invitation_template(kind)
+    template_extra = extra_message or invitation_extra(kind, extra_message=extra_message)
     subject_kind = 'Church Board Meeting' if kind == BOARD_KIND else 'Church Business Meeting'
     audience = list(meeting_audience(kind))
     invited = sms_sent = emailed = 0
@@ -249,12 +265,15 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
     for user in audience:
         context = invitation_context(meeting, user, church_name)
         message = render_message(template, context)
+        message_extra = render_message(template_extra, context)
         # The board answers its invite from the phone: the confirm link rides
         # every channel — the in-app bell, the SMS, the fallback email — so
         # whatever the hand opens first can answer.
         confirm_link = rsvp_link(meeting, user) if kind == BOARD_KIND else ''
         notify_body = (
-            f"{message}\n\nConfirm your attendance: {confirm_link}" if confirm_link else message
+            f"{message}"
+            f"{'' if message.endswith(('.', '?', '!')) else '. '}{message_extra}"
+            + (f"\n\nConfirm your attendance: {confirm_link}" if confirm_link else "")
         )
         ChurchNotification.objects.create(
             user=user,
@@ -275,6 +294,10 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
                     f"{church_name}: {subject_kind} invitation: {meeting.title} on {context['date']}, {context['time_range']}. "
                     f"Agenda: {meet_url}. Confirm attendance: {confirm_link}"
                 )
+                # Attach a one-off note the secretary tacked onto this broadcast, when
+                # one was provided (for example a time band the receiving phone needs).
+                if message_extra:
+                    sms_text = f"{sms_text} ({message_extra})"
                 sms_sent += sms.send(phone, sms_text)
             except Exception:
                 pass
@@ -307,7 +330,7 @@ def as_bool(value, default=True):
 
 
 def parse_clock(value):
-    """Accept what a browser sends (09:00) and what a human types (9:00 AM)."""
+    """Accept what a browser sends ("09:00") and what a human types ("9:00 AM")."""
     if not value:
         return None
     if hasattr(value, 'hour'):

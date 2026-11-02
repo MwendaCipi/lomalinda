@@ -7973,6 +7973,8 @@ class BoardMeetingView(generics.ListCreateAPIView):
             template=custom_message or None,
             notify_sms=notify_sms,
             notify_email=notify_email,
+            time_range=f"{meeting.start_time} – {meeting.end_time}",
+            extra_message=None,
         )
 
         serializer = self.get_serializer(meeting)
@@ -8066,6 +8068,7 @@ class BusinessMeetingView(generics.ListCreateAPIView):
             template=custom_message or None,
             notify_sms=notify_sms,
             notify_email=notify_email,
+            time_range=meeting_time,
         )
 
         serializer = self.get_serializer(meeting)
@@ -8162,7 +8165,9 @@ class BoardMeetingResendView(APIView):
             template=None,
             notify_sms=meeting.notify_sms,
             notify_email=meeting.notify_email,
+            time_range=f"{meeting.start_time} – {meeting.end_time}",
         )
+
 
         return Response(
             {
@@ -8208,6 +8213,7 @@ class BoardMeetingPostponeView(APIView):
             template=None,
             notify_sms=meeting.notify_sms,
             notify_email=meeting.notify_email,
+            time_range=f"{meeting.start_time} – {meeting.end_time}",
         )
 
         return Response(
