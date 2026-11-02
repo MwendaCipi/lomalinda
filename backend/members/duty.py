@@ -52,6 +52,7 @@ DUTY_ROTA_LINK = '/administration?tab=deaconate-rota'
 PULPIT_ROTA_LINK = '/administration?dept=personal_ministries&view=pulpit-team'
 MUSIC_ROTA_LINK = '/administration?dept=music&view=duties'
 ELDERSHIP_ROTA_LINK = '/administration?dept=eldership&view=rota'
+SABBATH_SCHOOL_ROTA_LINK = '/administration?dept=sabbath_school&view=rota'
 
 
 def rota_link(entry) -> str:
@@ -63,6 +64,8 @@ def rota_link(entry) -> str:
         return MUSIC_ROTA_LINK
     if desk == 'eldership':
         return ELDERSHIP_ROTA_LINK
+    if desk == 'sabbath_school':
+        return SABBATH_SCHOOL_ROTA_LINK
     return DUTY_ROTA_LINK
 
 
@@ -73,6 +76,7 @@ DESK_DEPARTMENT_CODES = {
     DutyRota.DESK_PULPIT: 'personal_ministries',
     DutyRota.DESK_MUSIC: 'music',
     DutyRota.DESK_ELDERSHIP: 'eldership',
+    DutyRota.DESK_SABBATH_SCHOOL: 'sabbath_school',
 }
 
 
@@ -134,6 +138,7 @@ DESK_DEFAULT_TITLES = {
     DutyRota.DESK_DEACONATE: 'Sabbath Duty Rota',
     DutyRota.DESK_MUSIC: 'Sabbath Music Duties',
     DutyRota.DESK_ELDERSHIP: 'Eldership Duty Rota',
+    DutyRota.DESK_SABBATH_SCHOOL: 'Sabbath School Duty Rota',
 }
 
 

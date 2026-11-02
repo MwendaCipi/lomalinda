@@ -11936,7 +11936,8 @@ class DutyRotaPeopleView(APIView):
         if not (can_keep_rota(request.user, DutyRota.DESK_DEACONATE)
                 or can_keep_rota(request.user, DutyRota.DESK_PULPIT)
                 or can_keep_rota(request.user, DutyRota.DESK_MUSIC)
-                or can_keep_rota(request.user, DutyRota.DESK_ELDERSHIP)):
+                or can_keep_rota(request.user, DutyRota.DESK_ELDERSHIP)
+                or can_keep_rota(request.user, DutyRota.DESK_SABBATH_SCHOOL)):
             return Response(
                 {'detail': 'Only the officers who keep a rota can look up officers.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -12290,6 +12291,8 @@ def can_keep_rota(user, desk):
         return can_manage_department(user, 'music')
     if desk == DutyRota.DESK_ELDERSHIP:
         return can_manage_department(user, 'eldership')
+    if desk == DutyRota.DESK_SABBATH_SCHOOL:
+        return can_manage_department(user, 'sabbath_school')
     return can_manage_deaconate(user)
 
 
@@ -12306,6 +12309,7 @@ def keeps_any_rota(user):
         or can_keep_rota(user, DutyRota.DESK_PULPIT)
         or can_keep_rota(user, DutyRota.DESK_MUSIC)
         or can_keep_rota(user, DutyRota.DESK_ELDERSHIP)
+        or can_keep_rota(user, DutyRota.DESK_SABBATH_SCHOOL)
     )
 
 
@@ -12323,6 +12327,8 @@ def rota_desk_from(request, default=DutyRota.DESK_DEACONATE):
         return DutyRota.DESK_MUSIC
     if desk == DutyRota.DESK_ELDERSHIP:
         return DutyRota.DESK_ELDERSHIP
+    if desk == DutyRota.DESK_SABBATH_SCHOOL:
+        return DutyRota.DESK_SABBATH_SCHOOL
     return default
 
 

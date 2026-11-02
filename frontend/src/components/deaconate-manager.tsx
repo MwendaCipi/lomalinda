@@ -347,7 +347,7 @@ interface DeaconateManagerProps {
    * search, so these variants keep their filters inline rather than taking
    * the shell's header band over.
    */
-  desk?: "deaconate" | "pulpit" | "music" | "eldership";
+  desk?: "deaconate" | "pulpit" | "music" | "eldership" | "sabbath_school";
   /**
    * Whether a surface above — the Personal Ministries desk, which keeps its
    * own heading — is hosting this rota's date and search filters at the right
@@ -363,11 +363,29 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const isPulpit = desk === "pulpit";
   const isEldership = desk === "eldership";
+  const isSabbathSchool = desk === "sabbath_school";
   // What this desk's rota is called wherever the reader is told about it.
-  const rotaName = desk === "music" ? "Music Duties" : isPulpit ? "Pulpit Team" : isEldership ? "Eldership Duty Rota" : "Duty Rota";
+  const rotaName =
+    desk === "music"
+      ? "Music Duties"
+      : isPulpit
+        ? "Pulpit Team"
+        : isEldership
+          ? "Eldership Duty Rota"
+          : isSabbathSchool
+            ? "Sabbath School Duty Rota"
+            : "Duty Rota";
   // What a line of it is called when the desk names none.
   const defaultRotaTitle =
-    desk === "music" ? MUSIC_DEFAULT_TITLE : isPulpit ? PULPIT_DEFAULT_TITLE : isEldership ? "Eldership Duty Rota" : emptyRotaForm.title;
+    desk === "music"
+      ? MUSIC_DEFAULT_TITLE
+      : isPulpit
+        ? PULPIT_DEFAULT_TITLE
+        : isEldership
+          ? "Eldership Duty Rota"
+          : isSabbathSchool
+            ? "Sabbath School Duty Rota"
+            : emptyRotaForm.title;
   // The save form as the desk opens it. The default title is written into
   // the field as its value, not left as a hint in an empty box, so what the
   // desk sees is what is saved when it changes nothing else.
@@ -375,7 +393,16 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // What a line of this desk's rota is called wherever it is named.
   const titleOf = (entry: { title?: string | null }) => rotaTitleOf(entry, defaultRotaTitle);
   // The query that asks the server for this desk's lines only.
-  const deskParam = desk === "music" ? "music" : isPulpit ? "pulpit" : isEldership ? "eldership" : "deaconate";
+  const deskParam =
+    desk === "music"
+      ? "music"
+      : isPulpit
+        ? "pulpit"
+        : isEldership
+          ? "eldership"
+          : isSabbathSchool
+            ? "sabbath_school"
+            : "deaconate";
   const activeTab = initialTab;
 
   // Inventory state (server-backed: this is the real property register)

@@ -6237,12 +6237,29 @@ function DepartmentDetail({
       // the calendar follow the toggle — so the units ride the strip beside
       // the views: All Members, then the desk's own fellowships.
       ...(hasMemberUnitPages
-        ? [{ key: "unit:null", label: "All Members", short: "Members", icon: Users }]
+        ? [
+            {
+              key: "unit:null",
+              // Sabbath School files its people by the group that studies
+              // together, so its roll is the study groups, not a membership
+              // list — the name says what the page holds.
+              label: isSabbathSchool ? "Study Groups" : "All Members",
+              short: isSabbathSchool ? "Groups" : "Members",
+              icon: Users,
+            },
+          ]
         : []),
       ...(hasMemberUnitPages ? names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })) : []),
       // A desk without units keeps the roll named "All Members".
       ...(!hasMemberUnitPages
-        ? [{ key: "members", label: isMusic ? "Members" : "All Members", short: "Members", icon: Users }]
+        ? [
+            {
+              key: "members",
+              label: isMusic ? "Members" : isSabbathSchool ? "Study Groups" : "All Members",
+              short: isSabbathSchool ? "Groups" : "Members",
+              icon: Users,
+            },
+          ]
         : []),
       // Music sings in more than one voice: the choir's own roll and the
       // groups registered under it each get a view beside the roll. The desk
@@ -6264,6 +6281,10 @@ function DepartmentDetail({
       // pulpit team keep (see DeaconateManager's music desk).
       ...(isMusic ? [{ key: "duties", label: "Duties", short: "Duties", icon: ListMusic }] : []),
       ...(isSabbathSchool ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", icon: BookOpen }] : []),
+      // Sabbath School rosters the hour: which study group leads the lesson,
+      // keeps the register and reads the mission story. Its own rota, kept by
+      // its own desk on the same panel the deaconate's and the pulpit's use.
+      ...(isSabbathSchool ? [{ key: "rota", label: "Duty Rota", short: "Rota", icon: ClipboardList }] : []),
       // The deaconate's two desk panels — the church's property register and
       // its duty rota — ride the strip wherever this desk names itself, in
       // the order the console's six-page strip holds (see DeaconateManager).
@@ -8071,6 +8092,16 @@ function DepartmentDetail({
       {subTab === "rota" && isEldership && canOpenEldershipRota && (
         <div className="h-full min-h-0">
           <DeaconateManager initialTab="rota" desk="eldership" embedded />
+        </div>
+      )}
+
+      {/* Sabbath School's own rota: which study group leads the lesson, keeps
+          the register and reads the mission story on a Sabbath. Kept apart
+          from the deaconate's duties and the pulpit's team, on the same panel
+          with its own lines. */}
+      {subTab === "rota" && isSabbathSchool && (
+        <div className="h-full min-h-0">
+          <DeaconateManager initialTab="rota" desk="sabbath_school" embedded />
         </div>
       )}
 
