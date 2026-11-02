@@ -10305,7 +10305,6 @@ from .pdf_generator import (
     generate_financial_report_pdf,
     generate_contribution_thermal_receipt_pdf,
     generate_in_kind_thermal_receipt_pdf,
-    TRUST_FUND_PURPOSES,
 )
 
 class TreasuryPdfView(APIView):
@@ -10429,26 +10428,6 @@ class TreasuryPdfView(APIView):
         # Gather weekly breakdown for NEKF format
         saturdays, weekly_data, overall_purpose_map = _gather_weekly_contributions(start_date, end_date)
 
-        # The local offering rows come from the church's own books, not the
-        # template's guesswork: every treasury account the church keeps
-        # offers its own line, so a fund like the church plot reads as the
-        # account it is. The accounts the trust table and the 50/50
-        # combined split already carry are left out, and anything keyed in
-        # a wording no account answers to still lands in the Others line.
-        text_fold = lambda value: ''.join(str(value or '').lower().split())
-
-        carried_folds = {'combinedoffering', 'combined(50%)', 'combined(50%'}
-        for _, names in TRUST_FUND_PURPOSES:
-            if isinstance(names, list):
-                carried_folds.update(text_fold(n) for n in names)
-
-        local_account_rows = []
-        for account in TreasuryAccount.objects.order_by('name'):
-            wordings = [w for w in (account.name, account.description) if w]
-            if any(text_fold(w) in carried_folds for w in wordings):
-                continue
-            local_account_rows.append((account.description or account.name, wordings))
-
         pdf_bytes = generate_treasury_pdf(
             church_name=church_name,
             start_date=start_date.strftime("%Y-%m-%d"),
@@ -10459,7 +10438,6 @@ class TreasuryPdfView(APIView):
             individual_rows=individual_rows,
             saturdays=saturdays,
             weekly_data=weekly_data,
-            local_account_rows=local_account_rows,
             district=district,
             field_name=field_name,
             purpose_title=purpose_param,

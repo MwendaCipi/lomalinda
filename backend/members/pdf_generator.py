@@ -1002,18 +1002,19 @@ def generate_treasury_pdf(
         ("Combined (50%)", "combined_split"),
     ]
     if local_account_rows:
-        local_fund_purposes.extend(
-            (label, list(names)) for label, names in local_account_rows if names
-        )
-        local_fund_purposes.append(("Others", "others_residual"))
+        local_fund_purposes = [
+            ("Combined (50%)", "combined_split"),
+            *[(label, list(names)) for label, names in local_account_rows if names],
+            ("Others", "others_residual"),
+        ]
     else:
-        local_fund_purposes.extend([
-            ("Building/Development", ['building/development', 'building', 'building development']),
-            ("Church Plot/Building", ['churchplot', 'church plot', 'church plot/building', 'church building', 'churchplotbuilding']),
+        local_fund_purposes = [
+            ("Combined (50%)", "combined_split"),
+            ("Building/Development", ['building/development', 'building', 'building development', 'churchplot', 'church plot', 'church plot/building', 'church building']),
             ("Camp Expenses", ['camp expenses']),
             ("LCB", ['local church budget', 'lcb']),
-        ])
-        local_fund_purposes.append(("Others", "others_residual"))
+            ("Others", "others_residual"),
+        ]
 
     claimed_lower = set()
     for _, names in trust_fund_purposes:
