@@ -470,10 +470,12 @@ export function MyAreas() {
     // carries its own inset on the wider widths, where this wrapper's padding
     // is what frames it.
     //
-    // Eldership is edge-to-edge across all its pages: cards take the whole panel
-    // without margin or max-width gutters around them.
+    // Eldership, Personal Ministries and Leadership are edge-to-edge across all their pages:
+    // cards take the whole panel without margin or max-width gutters around them.
     const isEldershipDesk = opensEldershipDesk || openArea.code === "eldership";
-    const noGutter = isEldershipDesk;
+    const isPersonalMinistriesDesk = openArea.code === "personal_ministries";
+    const isLeadershipDesk = openArea.code === "leadership";
+    const noGutter = isEldershipDesk || isPersonalMinistriesDesk || isLeadershipDesk;
     return (
       <div
         className={`flex h-full min-w-0 w-full flex-col ${

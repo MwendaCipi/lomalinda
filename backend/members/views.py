@@ -11865,12 +11865,24 @@ class DutyRotaView(APIView):
 
     def get(self, request):
         desk = rota_desk_from(request)
-        if not can_keep_rota(request.user, desk):
+        dept = str(request.query_params.get('department') or request.query_params.get('dept') or '').strip().lower()
+        if not can_keep_rota(request.user, desk, department=dept):
             return Response(
                 {'detail': 'Only the officers who keep this desk can read its rota.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         rota = DutyRota.objects.select_related('created_by').filter(desk=desk)
+        if desk == DutyRota.DESK_PULPIT:
+            if dept and dept != 'all':
+                if dept == 'personal_ministries':
+                    rota = rota.filter(Q(department='personal_ministries') | Q(department='') | Q(department__isnull=True))
+                else:
+                    rota = rota.filter(department=dept)
+            elif not can_manage_department(request.user, 'personal_ministries') and not department_office_profile(request.user):
+                user_depts = list(DepartmentAssignment.objects.filter(
+                    member=request.user, department__is_active=True,
+                ).values_list('department__code', flat=True))
+                rota = rota.filter(Q(department__in=user_depts) | Q(department='') | Q(department__isnull=True))
         start = str(request.query_params.get('from') or '').strip()
         end = str(request.query_params.get('to') or '').strip()
         q = str(request.query_params.get('q') or request.query_params.get('query') or '').strip()
@@ -11883,6 +11895,7 @@ class DutyRotaView(APIView):
                 Q(title__icontains=q)
                 | Q(duty_type__icontains=q)
                 | Q(shift__icontains=q)
+                | Q(department__icontains=q)
                 | Q(notes__icontains=q)
             )
         return Response(DutyRotaSerializer(rota, many=True).data)
@@ -11893,7 +11906,8 @@ class DutyRotaView(APIView):
         desk = str(request.data.get('desk') or DutyRota.DESK_DEACONATE).strip().lower()
         if desk not in dict(DutyRota.DESK_CHOICES):
             desk = DutyRota.DESK_DEACONATE
-        if not can_keep_rota(request.user, desk):
+        dept = str(request.data.get('department') or '').strip().lower()
+        if not can_keep_rota(request.user, desk, department=dept):
             return Response(
                 {'detail': 'Only the officers who keep this desk can schedule a line on it.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -11914,7 +11928,8 @@ class DutyRotaView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         entry = generics.get_object_or_404(DutyRota, pk=pk)
-        if not can_keep_rota(request.user, entry.desk):
+        entry_dept = getattr(entry, 'department', '')
+        if not (can_manage_department(request.user, 'personal_ministries') or can_keep_rota(request.user, entry.desk, department=entry_dept)):
             return Response(
                 {'detail': 'Only the officers who keep this desk can remove a line from it.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -11937,7 +11952,8 @@ class DutyRotaView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         entry = generics.get_object_or_404(DutyRota, pk=pk)
-        if not can_keep_rota(request.user, entry.desk):
+        entry_dept = getattr(entry, 'department', '')
+        if not (can_manage_department(request.user, 'personal_ministries') or can_keep_rota(request.user, entry.desk, department=entry_dept)):
             return Response(
                 {'detail': 'Only the officers who keep this desk can edit a line on it.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -11979,7 +11995,8 @@ class DutyRotaRemindView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         entry = generics.get_object_or_404(DutyRota, pk=pk)
-        if not can_keep_rota(request.user, entry.desk):
+        entry_dept = getattr(entry, 'department', '')
+        if not (can_manage_department(request.user, 'personal_ministries') or can_keep_rota(request.user, entry.desk, department=entry_dept)):
             return Response(
                 {'detail': 'Only the officers who keep this desk can remind its team.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -12457,15 +12474,26 @@ def can_manage_department(user, department):
     ).exists()
 
 
-def can_keep_rota(user, desk):
+def can_keep_rota(user, desk, department=None):
     """Who keeps one desk's rota: the deaconate's, the pulpit's, or music's.
 
-    The pulpit team is rostered by Personal Ministries, music by its own
-    leadership, and Eldership by the elders' own desk. A desk's rota is its own
-    business: the deaconate's steward edits no Eldership line, and vice versa.
+    The pulpit team is rostered by Personal Ministries (which keeps the whole
+    church's week and can see/manage all pulpit teams across departments) and
+    any department's own leadership for their department's pulpit duties.
     """
     if desk == DutyRota.DESK_PULPIT:
-        return can_manage_department(user, 'personal_ministries')
+        if can_manage_department(user, 'personal_ministries'):
+            return True
+        if department and can_manage_department(user, department):
+            return True
+        if department_office_profile(user):
+            return True
+        if getattr(user, 'is_authenticated', False):
+            return DepartmentAssignment.objects.filter(
+                member=user,
+                department__is_active=True,
+            ).exists()
+        return False
     if desk == DutyRota.DESK_MUSIC:
         return can_manage_department(user, 'music')
     if desk == DutyRota.DESK_ELDERSHIP:

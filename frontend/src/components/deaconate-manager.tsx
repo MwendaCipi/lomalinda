@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePageHeader } from "@/components/app-frame";
 import { showOfflineGuard } from "@/components/toast";
@@ -132,6 +132,7 @@ interface RotaEntry {
   date: string;
   shift: string;
   duty_type: string;
+  department?: string;
   /**
    * Officers as they come back: an object where their contacts were taken
    * down, a bare name where they weren't — every line scheduled before the
@@ -222,6 +223,7 @@ const emptyRotaForm = {
   title: "Sabbath Duty Rota",
   date: "",
   shift: "08:30 AM - 04:00 PM",
+  department: "",
   officers: [] as RotaOfficer[],
 };
 
@@ -356,14 +358,46 @@ interface DeaconateManagerProps {
    * carrying them itself so the filters are never unreachable.
    */
   filtersHosted?: boolean;
+  /**
+   * Which ministry or department this rota line belongs to, e.g. for pulpit team.
+   */
+  department?: string;
+  /**
+   * Whether to display rota entries from all departments (e.g. for Personal Ministries).
+   */
+  allDepartments?: boolean;
 }
 
-export function DeaconateManager({ initialTab = "inventory", embedded = false, desk = "deaconate", onBack, filtersHosted = false }: DeaconateManagerProps) {
+export function DeaconateManager({
+  initialTab = "inventory",
+  embedded = false,
+  desk = "deaconate",
+  onBack,
+  filtersHosted = false,
+  department,
+  allDepartments = false,
+}: DeaconateManagerProps) {
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const isPulpit = desk === "pulpit";
   const isEldership = desk === "eldership";
   const isSabbathSchool = desk === "sabbath_school";
+
+  const [buttonsHidden, setButtonsHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+  const handleScrollCapture = useCallback((e: React.UIEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    if (!target || typeof target.scrollTop !== "number") return;
+    const currentY = target.scrollTop;
+    const diff = currentY - lastScrollYRef.current;
+    if (diff > 8 && currentY > 32) {
+      setButtonsHidden(true);
+    } else if (diff < -8 || currentY <= 32) {
+      setButtonsHidden(false);
+    }
+    lastScrollYRef.current = currentY;
+  }, []);
+
   // What this desk's rota is called wherever the reader is told about it.
   const rotaName =
     desk === "music"
@@ -389,7 +423,11 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
   // The save form as the desk opens it. The default title is written into
   // the field as its value, not left as a hint in an empty box, so what the
   // desk sees is what is saved when it changes nothing else.
-  const blankRota = () => ({ ...emptyRotaForm, title: defaultRotaTitle });
+  const blankRota = () => ({
+    ...emptyRotaForm,
+    title: defaultRotaTitle,
+    department: department && !allDepartments ? department : (department || ""),
+  });
   // What a line of this desk's rota is called wherever it is named.
   const titleOf = (entry: { title?: string | null }) => rotaTitleOf(entry, defaultRotaTitle);
   // The query that asks the server for this desk's lines only.
@@ -530,6 +568,9 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
     try {
       const params = new URLSearchParams();
       params.set("desk", deskParam);
+      if (department && !allDepartments) {
+        params.set("department", department);
+      }
       if (from) params.set("from", from);
       if (to) params.set("to", to);
       if (q.trim()) params.set("q", q.trim());
@@ -1165,6 +1206,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
         method: editing ? "PUT" : "POST",
         body: JSON.stringify({
           desk: deskParam,
+          department: newRota.department || (department && !allDepartments ? department : ""),
           title: newRota.title.trim(),
           date: newRota.date,
           shift: newRota.shift.trim(),
@@ -1213,6 +1255,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       title: titleOf(entry),
       date: entry.date,
       shift: entry.shift,
+      department: entry.department ?? "",
       officers: entry.assigned_team.map(normalizeOfficer),
     });
     setEditingRotaId(entry.id);
@@ -1440,7 +1483,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
 
   return (
     <RotaFiltersContext.Provider value={{ filters: rotaFilters, hosted: rotaFiltersHosted }}>
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div onScrollCapture={handleScrollCapture} className="flex h-full min-h-0 flex-col bg-white">
       {/* ── INVENTORY: fixed filters on top, scrolling rows, fixed actions below ── */}
       {activeTab === "inventory" && (
         <>
@@ -1585,7 +1628,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
           </div>
 
           {/* ── Bottom bar: count + primary action, like every other table page ── */}
-          <div className="shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className={`shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <p className="hidden text-[11px] text-moss sm:block">
               {filteredInventory.length} of {inventory.length} {inventory.length === 1 ? "item" : "items"} shown
             </p>
@@ -1611,7 +1654,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
       {/* ── TAB: DUTY ROTA — scheduled, edited and rostered here ── */}
       {activeTab === "rota" && (
         <>
-          <div className={`flex-1 overflow-y-auto min-h-0 ${isEldership ? "p-0 space-y-4" : "p-4 sm:p-6 space-y-4"}`}>
+          <div className={`flex-1 overflow-y-auto min-h-0 ${isEldership || isPulpit ? "p-0 space-y-4" : "p-4 sm:p-6 space-y-4"}`}>
             {(isPulpit || desk === "music" || isEldership) && !rotaFiltersHosted && (
               /* The rota views' filters, when no surface above hosts them.
                  The Personal Ministries desk keeps its own heading, so while it
@@ -1670,13 +1713,18 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                 {filteredRota.map((item) => (
                   <div key={item.id} className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm space-y-3">
                     <div className="flex items-center justify-between border-b border-sand-line pb-3">
-                      {item.duty_type ? (
-                        <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
-                          {item.duty_type}
-                        </span>
-                      ) : (
-                        <span />
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {item.duty_type ? (
+                          <span className="rounded-full bg-sand-film px-2.5 py-0.5 text-[10px] font-bold text-ember">
+                            {item.duty_type}
+                          </span>
+                        ) : null}
+                        {item.department ? (
+                          <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-semibold text-bark capitalize">
+                            {item.department.replace(/_/g, " ")}
+                          </span>
+                        ) : null}
+                      </div>
                       <span className="text-[11px] font-bold text-bark">{dayFirst(item.date)}</span>
                     </div>
                     <h3 className="font-bold text-sm text-bark">{titleOf(item)}</h3>
@@ -1846,15 +1894,15 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
           </div>
 
           {/* ── Fixed Bottom Bar for Duty Rota ── */}
-          <div className="shrink-0 border-t border-sand-line bg-white p-3 sm:px-6 sm:py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-20">
+          <div className={`shrink-0 border-t border-sand-line bg-white p-3 sm:px-6 sm:py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-20 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <p className="hidden text-[11px] text-moss sm:block">
               {filteredRota.length} of {rota.length} {rota.length === 1 ? "duty" : "duties"} scheduled
             </p>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="flex w-full items-center justify-center gap-2 sm:w-auto">
               <button
                 type="button"
                 onClick={() => openShareModal(null)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
               >
                 <Share2 className="h-3.5 w-3.5 text-ember" />
                 Share
@@ -1862,7 +1910,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
               <button
                 type="button"
                 onClick={() => void printRotaPdf()}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:bg-sand"
               >
                 <Printer className="h-3.5 w-3.5 text-ember" />
                 Print
@@ -1874,7 +1922,7 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   setNewRota(blankRota());
                   setShowAddRotaModal(true);
                 }}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark-950"
               >
                 <Plus className="h-4 w-4" />
                 Schedule
@@ -2301,6 +2349,22 @@ export function DeaconateManager({ initialTab = "inventory", embedded = false, d
                   />
                 </div>
               </div>
+
+              {isPulpit && (
+                <div>
+                  <label className="font-bold text-bark">Ministry / Department</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. personal_ministries, youth, music..."
+                    value={newRota.department || ""}
+                    onChange={(e) => setNewRota({ ...newRota, department: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
+                  />
+                  <p className="mt-1 text-[10px] text-moss">
+                    Assign which ministry or department leads this pulpit team line.
+                  </p>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between gap-2">

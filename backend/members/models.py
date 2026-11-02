@@ -2944,6 +2944,10 @@ class DutyRota(models.Model):
         max_length=20, choices=DESK_CHOICES, default=DESK_DEACONATE,
         help_text='Which desk keeps this line: the deaconate duty rota, the pulpit team, music duties, the eldership, or Sabbath School',
     )
+    department = models.CharField(
+        max_length=60, blank=True, default='',
+        help_text='Which ministry or department this duty line was created under',
+    )
     title = models.CharField(max_length=200)
     duty_date = models.DateField()
     shift = models.CharField(max_length=80, blank=True, default='')

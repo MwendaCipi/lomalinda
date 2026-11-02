@@ -2274,10 +2274,13 @@ class DutyRotaSerializer(serializers.ModelSerializer):
     desk = serializers.ChoiceField(
         choices=DutyRota.DESK_CHOICES, default=DutyRota.DESK_DEACONATE,
     )
+    department = serializers.CharField(
+        max_length=60, required=False, allow_blank=True, default='',
+    )
 
     class Meta:
         model = DutyRota
-        fields = ('id', 'desk', 'title', 'date', 'shift', 'duty_type', 'assigned_team', 'created_at')
+        fields = ('id', 'desk', 'department', 'title', 'date', 'shift', 'duty_type', 'assigned_team', 'created_at')
         read_only_fields = ('id', 'created_at')
 
     def update(self, instance, validated_data):

@@ -4457,6 +4457,36 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
   const [draft, setDraft] = useState<MeetingDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [buttonsHidden, setButtonsHidden] = useState(false);
+
+  useEffect(() => {
+    let lastTarget: EventTarget | null = null;
+    let lastY = 0;
+    const onScroll = (event: Event) => {
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      let y = 0;
+      if (element && element !== document.documentElement && element !== document.body) {
+        y = element.scrollTop;
+      } else {
+        y = window.scrollY;
+      }
+      if (event.target !== lastTarget) {
+        lastTarget = event.target;
+        lastY = y;
+        return;
+      }
+      const moved = y - lastY;
+      lastY = y;
+      if (y <= 32) {
+        setButtonsHidden(false);
+        return;
+      }
+      if (Math.abs(moved) < 8) return;
+      setButtonsHidden(moved > 0);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, []);
 
   const load = useCallback(() => {
     // The desk sees the retired ones too, so a meeting put down can be picked
@@ -4574,26 +4604,17 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
     "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember";
 
   return (
-    <div className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
+        <div className="shrink-0">
           <h3 className="text-sm font-bold text-bark">The church&apos;s week</h3>
           <p className="mt-0.5 text-[11px] text-moss">
             The regular meetings every screen draws. A meeting that is online and running right now puts the Live
             badge on the identity bar.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setDraft({ ...BLANK_MEETING });
-            setError("");
-          }}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add meeting
-        </button>
-      </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto custom-hover-scrollbar mt-3">
 
       {draft && (
         <div className="mt-4 rounded-xl border border-sand-line bg-sand-plate p-4">
@@ -4760,6 +4781,26 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
           ))}
         </div>
       )}
+        </div>
+      </div>
+
+      {/* The buttons panel: fixed to the bottom with buttons centered and a small margin below, hides on scroll. */}
+      <div
+        className={`flex shrink-0 items-center justify-center gap-2 mb-2 sm:mb-3 transition-all duration-300 ease-out ${
+          buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setDraft({ ...BLANK_MEETING });
+            setError("");
+          }}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-ember-deep"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add meeting
+        </button>
+      </div>
     </div>
   );
 }
@@ -5721,6 +5762,7 @@ function DepartmentDetail({
   // to reach its calendar or its accounts at all.
   const isDeaconate = department.code === "deaconate";
   const isEldership = department.code === "eldership";
+  const isPersonalMinistries = department.code === "personal_ministries";
   const onConsole = usePathname().startsWith("/administration");
   // Whether the console's own strip already names the deaconate's pages: it
   // does on every one of them (`?tab=deaconate-*`), and not on the desk opened
@@ -5778,6 +5820,36 @@ function DepartmentDetail({
   const [showJoin, setShowJoin] = useState(false);
   // The "Contact leader" modal: chat here, WhatsApp or call.
   const [showContactLeader, setShowContactLeader] = useState(false);
+  const [buttonsHidden, setButtonsHidden] = useState(false);
+
+  useEffect(() => {
+    let lastTarget: EventTarget | null = null;
+    let lastY = 0;
+    const onScroll = (event: Event) => {
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      let y = 0;
+      if (element && element !== document.documentElement && element !== document.body) {
+        y = element.scrollTop;
+      } else {
+        y = window.scrollY;
+      }
+      if (event.target !== lastTarget) {
+        lastTarget = event.target;
+        lastY = y;
+        return;
+      }
+      const moved = y - lastY;
+      lastY = y;
+      if (y <= 32) {
+        setButtonsHidden(false);
+        return;
+      }
+      if (Math.abs(moved) < 8) return;
+      setButtonsHidden(moved > 0);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, []);
   // Who is reading: on the roll, or holding an office at the desk. A viewer
   // who is neither is a member looking in — the desk reads, and the ask to
   // join rides the strip.
@@ -6382,10 +6454,9 @@ function DepartmentDetail({
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
       // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
-      // is rostered by the same desk that keeps the church's week, on the same
-      // rota the deaconate keeps its duty on (see DeaconateManager's pulpit
-      // desk).
-      ...(keepsTheWeek ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
+      // is rostered across ministries and departments, and centralized under
+      // the desk that keeps the church's week (Personal Ministries).
+      ...(!isDeaconate ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
       // The prayer cells — the little companies of prayer registered under
       // this desk, with their rolls and their asks riding one panel.
       ...(keepsTheWeek ? [{ key: "prayer_cells", label: "Prayer Cells", short: "Cells", icon: Handshake }] : []),
@@ -7289,8 +7360,8 @@ function DepartmentDetail({
       // it: it is a desk-sized surface too, and its pinned bar of buttons
       // only stays put while the column holds still beneath the strip.
       className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
-        isEldership
-          ? subTab === "baptismal-class" || subTab === "daily-word" || subTab === "moments"
+        isEldership || isPersonalMinistries
+          ? subTab === "baptismal-class" || subTab === "daily-word" || subTab === "moments" || subTab === "prayer_cells"
             ? "gap-3 overflow-y-auto p-0"
             : "gap-3 overflow-hidden p-0"
           : sharingWall
@@ -7727,7 +7798,11 @@ function DepartmentDetail({
               className="rounded-2xl border border-sand-line bg-white"
             />
           </div>
-          <div className="flex shrink-0 items-center justify-center rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm mb-2 sm:mb-3">
+          <div
+            className={`flex shrink-0 items-center justify-center rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm mb-2 sm:mb-3 transition-all duration-300 ease-out ${
+              buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+            }`}
+          >
             <button
               type="button"
               onClick={() => setShowWriteLetter(true)}
@@ -7977,7 +8052,7 @@ function DepartmentDetail({
               is pinned to the desk's foot while the rows scroll above it.
               The count on the left, and what the desk does with a calendar
               on the right — file one, share it, or save it. */}
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm print:hidden mb-2 sm:mb-3">
+          <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm print:hidden mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <p className="text-xs text-moss">
               {calendarView === "calendar"
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
@@ -7990,7 +8065,7 @@ function DepartmentDetail({
                   desk that keeps the week, the calendar carries the jump there
                   beside its own actions, so setting the Sabbath's team is one
                   press away from the day's events. */}
-              {keepsTheWeek && (
+              {!isDeaconate && (
                 <button
                   type="button"
                   onClick={() => setSubTab("pulpit-team")}
@@ -8126,9 +8201,16 @@ function DepartmentDetail({
       {/* The pulpit team — who preaches, plays, reads and leads on a Sabbath.
           Rostered on the same rota the deaconate keeps its duty on, so the
           desk hands the panel to it with its own desk's lines. */}
-      {subTab === "pulpit-team" && keepsTheWeek && (
+      {subTab === "pulpit-team" && !isDeaconate && (
         <div className="h-full min-h-0">
-          <DeaconateManager initialTab="rota" desk="pulpit" embedded filtersHosted />
+          <DeaconateManager
+            initialTab="rota"
+            desk="pulpit"
+            department={department.code}
+            allDepartments={keepsTheWeek}
+            embedded
+            filtersHosted
+          />
         </div>
       )}
 
@@ -8227,7 +8309,7 @@ function DepartmentDetail({
               fellowship feed — flat cards, no manager chrome, no nesting.
               The feed scrolls within the barely-framed card; nothing above
               it moves, and the desk's own edge is the card's. */}
-          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white ${isEldership ? "p-0" : "p-0.5"}`}>
+          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white ${isEldership || isPersonalMinistries ? "p-0" : "p-0.5"}`}>
             <AnnouncementsFeed
               key={shareFeedKey}
               embedded
@@ -8241,7 +8323,7 @@ function DepartmentDetail({
           </div>
           {/* The buttons panel: fixed to the bottom with buttons centered
               and a small margin below. */}
-          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 mb-2 sm:mb-3">
+          <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <button
               type="button"
               onClick={() => {
@@ -8641,6 +8723,20 @@ export function DepartmentHub({
   const [leadershipDept, setLeadershipDept] = useState<DepartmentRow | null>(null);
   // The Add area modal.
   const [showAddArea, setShowAddArea] = useState(false);
+  const [buttonsHidden, setButtonsHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+  const handleScrollCapture = useCallback((e: React.UIEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    if (!target || typeof target.scrollTop !== "number") return;
+    const currentY = target.scrollTop;
+    const diff = currentY - lastScrollYRef.current;
+    if (diff > 8 && currentY > 32) {
+      setButtonsHidden(true);
+    } else if (diff < -8 || currentY <= 32) {
+      setButtonsHidden(false);
+    }
+    lastScrollYRef.current = currentY;
+  }, []);
   // The directory search: narrows by area or by any name seated at it. It
   // rides the shell's header beside the page's name, the way every other
   // desk places its own — one row for the heading and the search, at both
@@ -8770,7 +8866,10 @@ export function DepartmentHub({
   }
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 overflow-y-auto px-2 py-3 custom-hover-scrollbar md:overflow-hidden md:px-4 lg:px-6">
+    <div
+      onScrollCapture={handleScrollCapture}
+      className="flex h-full w-full flex-col gap-3 overflow-y-auto p-0 custom-hover-scrollbar md:overflow-hidden"
+    >
       {/* The strip above the card names the place on a wide screen, so the
           heading here is the phone's telling only. */}
       <div className="shrink-0 md:hidden">
@@ -8870,7 +8969,7 @@ export function DepartmentHub({
         </div>
         {/* The bottom row: the count on the left, Add Department on the
             right — communication goes through announcements. */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
+        <div className={`flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
           <p className="text-xs text-moss">
             {visibleDepartments.length} of {departments.length}{" "}
             {departments.length === 1 ? "ministry or department" : "ministries and departments"}
@@ -8932,13 +9031,15 @@ export function DepartmentHub({
           );
         })}
         {/* Phones get the same Add Department action beneath the cards. */}
-        <button
-          type="button"
-          onClick={() => setShowAddArea(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Department
-        </button>
+        <div className={`transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
+          <button
+            type="button"
+            onClick={() => setShowAddArea(true)}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Department
+          </button>
+        </div>
       </div>
 
       {budgetDept && (
