@@ -685,6 +685,12 @@ function AddMemberModal({
   onClose,
   onAdd,
   onBatchAdd,
+  /** The desk's own categories, when it runs as units (Family Life's young
+      couples, single parents and the rest): a picked name is filed into the
+      one chosen here. Empty on a desk that keeps one roll. */
+  units = [],
+  /** The category the desk was reading — the default for a new name. */
+  defaultUnit = null,
   /** When set, the picker fills this instead — one modal serves both the
       roll's Add member and a singing group's add-singer. */
   title,
@@ -698,11 +704,13 @@ function AddMemberModal({
   departmentLabel: string;
   rollIds: Set<number>;
   onClose: () => void;
-  onAdd: (member: { id: number; name: string }) => void;
+  onAdd: (member: { id: number; name: string }, unit?: string) => void;
   /** Sends every picked name at once; resolves false when the send was
       refused, so the modal keeps the picks for a retry. */
-  onBatchAdd?: (members: { id: number; name: string }[]) => Promise<boolean | void>;
+  onBatchAdd?: (members: { id: number; name: string }[], unit?: string) => Promise<boolean | void>;
   title?: string;
+  units?: string[];
+  defaultUnit?: string | null;
   takenLabel?: string;
   excludeIds?: Set<number>;
   batch?: boolean;
@@ -710,6 +718,9 @@ function AddMemberModal({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
+  // Which category the names land in: the one the desk was reading, unless
+  // the desk files them somewhere else. "" is the roll itself — no category.
+  const [category, setCategory] = useState(defaultUnit ?? "");
   // The batch list: picked names wait here until Add members sends them all.
   const [picked, setPicked] = useState<{ id: number; name: string }[]>([]);
   const [sending, setSending] = useState(false);
@@ -766,6 +777,29 @@ function AddMemberModal({
         {/* The search and the matches scroll; the batch's send row below, when
             it is on, does not. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        {/* A desk that runs as categories files the names it adds: the combo
+            is where Family Life's young couples, single parents and the rest
+            are chosen. A one-roll desk never sees it. */}
+        {units.length > 0 && (
+          <label className="mb-3 block text-xs font-medium text-bark">
+            Category
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+            >
+              <option value="">No category</option>
+              {units.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] font-normal text-moss">
+              Where these names sit on {departmentLabel}&apos;s roll.
+            </span>
+          </label>
+        )}
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
           <input
@@ -795,7 +829,7 @@ function AddMemberModal({
                     setQuery("");
                     setResults([]);
                   } else {
-                    onAdd(member);
+                    onAdd(member, category);
                   }
                 }}
                 className={`flex w-full items-center justify-between gap-2 py-2.5 text-left text-xs transition ${
@@ -843,7 +877,7 @@ function AddMemberModal({
                 try {
                   // Only a successful send empties the list — a refused
                   // batch keeps the picks so the desk can retry as-is.
-                  const added = await onBatchAdd?.(picked);
+                  const added = await onBatchAdd?.(picked, category);
                   if (added !== false) setPicked([]);
                 } finally {
                   setSending(false);
@@ -6422,11 +6456,13 @@ function DepartmentDetail({
   /** The board on show: the unit's when one is selected, the department's otherwise. */
   const board = unitBoard ?? { leader: department.leader, assistants: department.assistants };
 
-  const addMember = async (member: { id: number; name: string }) => {
+  // The category the modal chose, or the one the desk was reading when the
+  // picker did not ask (`""` is the roll itself — no category).
+  const addMember = async (member: { id: number; name: string }, category?: string) => {
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/members/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ member_id: member.id, unit: unit ?? "" }),
+      body: JSON.stringify({ member_id: member.id, unit: category ?? unit ?? "" }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -6441,12 +6477,12 @@ function DepartmentDetail({
 
   // The batch add: one request carries every picked name, so a roll of a
   // Sabbath class costs one modal and one button, not one per person.
-  const addMembers = async (members: { id: number; name: string }[]) => {
+  const addMembers = async (members: { id: number; name: string }[], category?: string) => {
     if (members.length === 0) return;
     const res = await fetch(`${API_URL}/api/members/departments/${department.code}/members/`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ member_ids: members.map((m) => m.id), unit: unit ?? "" }),
+      body: JSON.stringify({ member_ids: members.map((m) => m.id), unit: category ?? unit ?? "" }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -7913,11 +7949,15 @@ function DepartmentDetail({
           pastor writes none of them — they arrive here to be signed or sent
           back with a reason. */}
       {subTab === "treasury-approvals" && isPastorate && (
-        /* Phones read this card at its own height under the scrolling page
-           — the bounded height is a desk treatment, and clipping the panel
-           on a phone left the queue out of reach of a thumb. */
+        // Phones read this card at its own height under the scrolling page —
+        // the bounded height is a desk treatment, and clipping the panel on a
+        // phone left the queue out of reach of a thumb. On a desk the card is
+        // bounded and the queue inside it scrolls, which needs the whole
+        // chain to be a flex column: the panel's table keeps its own flex and
+        // overflow, so a plain wrapper between the two leaves the rows with
+        // no height to scroll inside and they spill out of sight instead.
         <div className="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs md:min-h-0 md:flex-1">
-          <div className="min-h-0">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <WithdrawalRequestsPanel statusFilter="all" />
           </div>
         </div>
@@ -8020,6 +8060,10 @@ function DepartmentDetail({
           departmentLabel={department.label}
           rollIds={rollIds}
           batch
+          // A desk that runs as categories (Family Life, the gender groups)
+          // asks which one each name belongs to; a one-roll desk does not.
+          units={hasMemberUnitPages ? units : []}
+          defaultUnit={unit}
           onClose={() => setShowAddMember(false)}
           onAdd={addMember}
           onBatchAdd={addMembers}
