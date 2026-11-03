@@ -39,6 +39,23 @@ export function pwaInstallLabel(): string {
   return isMacSafari ? "Add to Home Screen" : "Install the app";
 }
 
+/**
+ * Whether this window is the installed app rather than a tab of the browser.
+ *
+ * An installed app has nothing to install, so every "Install the app" row is
+ * pointless there — the reader is already inside what it offers. iOS reports
+ * it on `navigator.standalone` (it predates the display-mode query); every
+ * other browser answers through `(display-mode: standalone)`, which also
+ * covers a desktop app window.
+ */
+export function isPwaInstalled(): boolean {
+  if (typeof window === "undefined") return false;
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
+  const iosStandalone =
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return standalone || iosStandalone;
+}
+
 export function triggerPwaInstall() {
   if (globalDeferredPrompt) {
     globalDeferredPrompt.prompt().then(() => {

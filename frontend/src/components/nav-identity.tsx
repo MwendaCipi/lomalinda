@@ -18,7 +18,7 @@ import Swal from "sweetalert2";
 
 import { AccessibilityMenu } from "./accessibility-menu";
 import { resolveAttachmentUrl } from "./announcement-attachment";
-import { pwaInstallLabel, triggerPwaInstall } from "./pwa-register";
+import { isPwaInstalled, pwaInstallLabel, triggerPwaInstall } from "./pwa-register";
 import { accountMenuKeys, destinationOf, isStaffRole } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
 import { brand } from "@/lib/brand";
@@ -81,6 +81,9 @@ function readIdsSnapshot(): string {
  */
 const subscribeToNothing = () => () => {};
 const installLabelOnServer = () => "Install the app";
+/** Whether the app is already installed, read the same way: an app window
+    says so in `navigator`, and the server cannot see it. */
+const installedOnServer = () => false;
 
 export function useUnreadNotifications(): number {
   const { announcements, notifications } = useHeaderData();
@@ -130,6 +133,8 @@ export function NavIdentity() {
   // raises its own prompt, "Add to Home Screen" on iOS and macOS Safari, which
   // have no prompt to raise.
   const installLabel = useSyncExternalStore(subscribeToNothing, pwaInstallLabel, installLabelOnServer);
+  // The installed app has nothing to install, so the row is not offered there.
+  const appInstalled = useSyncExternalStore(subscribeToNothing, isPwaInstalled, installedOnServer);
   const unreadCount = useUnreadNotifications();
   const controlsRef = useRef<HTMLDivElement>(null);
 
@@ -564,21 +569,24 @@ export function NavIdentity() {
                   of its own in the list rather than a destination. The menu
                   closes first: the browser's own install prompt (or, where
                   there is none, the how-to alert) is the thing to read, not
-                  a popover hanging over it. */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUserMenu(false);
-                  triggerPwaInstall();
-                }}
-                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
-                <span className="flex items-center gap-2.5">
-                  <Download className="h-4 w-4 text-slate-500" />
-                  {installLabel}
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-              </button>
+                  a popover hanging over it. Inside the installed app the row
+                  is left out entirely — there is nothing there to install. */}
+              {!appInstalled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    triggerPwaInstall();
+                  }}
+                  className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Download className="h-4 w-4 text-slate-500" />
+                    {installLabel}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                </button>
+              )}
             </div>
 
             <div className="border-t border-slate-100 pt-3">
