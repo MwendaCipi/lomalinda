@@ -527,6 +527,20 @@ export function AnnouncementManager({
   const sharingDropdownRef = useRef<HTMLDivElement>(null);
   const [showPostToDropdown, setShowPostToDropdown] = useState(false);
   const postToDropdownRef = useRef<HTMLDivElement>(null);
+  // The card's buttons — "User actions" — open as one combo, beside the
+  // channels the post is shared on, rather than as a wall of chips above the
+  // title.
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const actionsDropdownRef = useRef<HTMLDivElement>(null);
+
+  /** What the closed "User actions" combo reads — the card's buttons, named
+   *  in the officer's own tick order, or the plain-notice answer. */
+  const actionsLabel = (() => {
+    const chosen = CARD_OPTION_CHOICES.filter((option) => form.options.includes(option.value)).map(
+      (option) => option.label,
+    );
+    return chosen.length === 0 ? "No actions" : chosen.join(", ");
+  })();
 
   /** What the closed "Post to" combo reads, e.g. "Members only + 2 groups". */
   const postToLabel = (() => {
@@ -542,6 +556,9 @@ export function AnnouncementManager({
       }
       if (postToDropdownRef.current && !postToDropdownRef.current.contains(e.target as Node)) {
         setShowPostToDropdown(false);
+      }
+      if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target as Node)) {
+        setShowActionsDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -821,49 +838,6 @@ export function AnnouncementManager({
   function renderComposerFields() {
     return (
       <form id={COMPOSER_FORM_ID} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-              {/* The card's buttons, as one ticked list: the officer picks
-                  what the post offers instead of a type deciding for them.
-                  Every button below the card comes from these ticks. */}
-              <div className="block text-xs font-semibold text-bark md:col-span-2">
-                <span>Options</span>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {CARD_OPTION_CHOICES.map((option) => {
-                    const selected = form.options.includes(option.value);
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            options: selected
-                              ? f.options.filter((code) => code !== option.value)
-                              : [...f.options, option.value],
-                          }))
-                        }
-                        className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
-                          selected
-                            ? "border-ember bg-ember text-white"
-                            : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
-                        }`}
-                      >
-                        <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${selected ? "border-white/70 bg-white/20" : "border-sand-mute bg-white"}`}>
-                          {selected && (
-                            <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                          )}
-                        </span>
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="mt-1 block text-[10px] font-normal text-moss">
-                  Which buttons this post&apos;s card carries. Leave them all unticked for a plain
-                  notice; tick the ones members should be able to press.
-                </span>
-              </div>
-
               <label className="block text-xs font-semibold text-bark">
                 Title *
                 <input
@@ -999,6 +973,63 @@ export function AnnouncementManager({
                   )}
                 </div>
               </label>
+
+              {/* What a member can press on the post's card. It reads beside
+                  the channels the post is shared on, the way the rest of the
+                  form pairs its choices, and opens as one combo of ticks
+                  rather than a wall of chips above the title. */}
+              <div className="block text-xs font-semibold text-bark">
+                <span>User actions</span>
+                <div className="mt-1 relative" ref={actionsDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowActionsDropdown((prev) => !prev)}
+                    aria-expanded={showActionsDropdown}
+                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-left text-xs outline-none transition focus:border-ember"
+                  >
+                    <span
+                      className={`min-w-0 truncate ${form.options.length ? "text-bark" : "text-graymuted"}`}
+                    >
+                      {actionsLabel}
+                    </span>
+                    <svg className="h-4 w-4 shrink-0 text-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {showActionsDropdown && (
+                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-sand-line bg-white p-2 shadow-lg">
+                      {CARD_OPTION_CHOICES.map((option) => {
+                        const selected = form.options.includes(option.value);
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                options: selected
+                                  ? f.options.filter((code) => code !== option.value)
+                                  : [...f.options, option.value],
+                              }))
+                            }
+                            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-bark transition hover:bg-sand"
+                          >
+                            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-ember bg-ember" : "border-sand-mute bg-white"}`}>
+                              {selected && (
+                                <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                              )}
+                            </span>
+                            <span className="min-w-0 truncate">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <span className="mt-1 block text-[10px] font-normal text-moss">
+                  What members can press on this post&apos;s card. Leave them all unticked for a plain
+                  notice.
+                </span>
+              </div>
 
               {/* A call for money or goods names the account it supports —
                   the wording members read on the giving form. */}
