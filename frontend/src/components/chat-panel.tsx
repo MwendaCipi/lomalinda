@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -160,6 +160,7 @@ function Avatar({ room, className = "h-10 w-10 text-xs" }: { room: ChatConversat
  * its shape and the timer becomes the fallback.
  */
 export function ChatPanel() {
+  const router = useRouter();
   const { me } = useHeaderData();
   const meName = me?.name || "";
 
@@ -519,12 +520,33 @@ export function ChatPanel() {
         active ? "hidden" : "flex"
       }`}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-bold text-bark">Chat</h2>
-          <p className="truncate text-[11px] text-moss">
-            {totalUnread > 0 ? `${totalUnread} unread` : tab === "groups" ? "Your groups" : "Your rooms and messages"}
-          </p>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sand-line px-2.5 py-3 sm:px-4">
+        {/* The way out of chat, read before the name it returns from. Chat is
+            reached from the top bar on a PC and the bottom bar on a phone, and
+            neither leaves a way back once the page is open — so the page
+            carries its own, the same shape the desks use. */}
+        <div className="flex min-w-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else {
+                router.replace("/dashboard");
+              }
+            }}
+            aria-label="Back"
+            title="Back"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-moss transition hover:bg-sand hover:text-bark"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-bold text-bark">Chat</h2>
+            <p className="truncate text-[11px] text-moss">
+              {totalUnread > 0 ? `${totalUnread} unread` : tab === "groups" ? "Your groups" : "Your rooms and messages"}
+            </p>
+          </div>
         </div>
         <button
           type="button"
