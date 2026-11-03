@@ -888,14 +888,17 @@ export const eldershipViews: {
   },
   // The elders answer for the church's money the same way the deaconate
   // does: the desk reads every treasury account — LCB and Msamaria Mwema
-  // among them — with the movements on each.
+  // among them — with the movements on each. The page is the accounts, and
+  // its name says so: the strip already carried a Requests chip for the
+  // church's asks, and two chips of that name left the reader guessing which
+  // desk they were on.
   {
     key: "funding",
-    label: "Requests",
-    short: "Requests",
+    label: "Accounts",
+    short: "Accounts",
     icon: Wallet,
     href: "/administration?tab=eldership-funding",
-    description: "Funding requests, church treasury accounts, balances and movements.",
+    description: "Church treasury accounts, balances and movements.",
   },
   {
     key: "rota",

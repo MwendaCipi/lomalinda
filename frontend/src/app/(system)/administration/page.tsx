@@ -59,8 +59,8 @@ const deskTabHeadings: Record<string, { label: string; description?: string }> =
     description: "Document a moment — pictures and video links of the church's days, on the Moments wall.",
   },
   "eldership-funding": {
-    label: "Requests",
-    description: "Funding requests, church treasury accounts, balances and movements.",
+    label: "Accounts",
+    description: "Church treasury accounts, balances and movements.",
   },
 };
 
@@ -503,17 +503,16 @@ function AdministrationContent() {
       setHeadingFirst(false);
     };
   }, [deskTailTab, activeTab, setCustomHeader, setHeadingFirst]);
-  // Eldership Funding — the one desk-tail page that asks for the other
-  // order: the strip names Funding, and the ledger's search and movements
-  // filter ride the heading row beneath it (the band's own control slot), the
-  // way the desk's own views answer. So the page asks for no heading-first
-  // phone display of its own — a phone meets no "Funding" heading and no
-  // paragraph under it, only the strip and the search that narrows what the
-  // strip opened — while the wider screens keep the page's name and line.
+  // Eldership Accounts — the elders' money page: the ledger's search and
+  // movements filter ride the heading row beneath it (the band's own control
+  // slot), the way the desk's own views answer, and the page keeps its name
+  // and line at every width. It used to ask for no heading on a phone, which
+  // left this one page alone without the band every other page carries.
   const eldershipFundingTab = activeTab === "eldership-funding";
   useEffect(() => {
     if (!eldershipFundingTab) return;
     setCustomHeader(deskTabHeadings["eldership-funding"]);
+    setHeadingFirst(true);
     setHeaderRightAction(
       <div className="flex w-full items-center gap-1.5 sm:w-auto">
         <input
@@ -532,9 +531,10 @@ function AdministrationContent() {
     );
     return () => {
       setCustomHeader(null);
+      setHeadingFirst(false);
       setHeaderRightAction(null);
     };
-  }, [eldershipFundingTab, eldershipFundingSearch, eldershipFundingFilter, setCustomHeader, setHeaderRightAction]);
+  }, [eldershipFundingTab, eldershipFundingSearch, eldershipFundingFilter, setCustomHeader, setHeadingFirst, setHeaderRightAction]);
   // The console's own pages draw the Administration strip. The clerk's
   // register is deliberately not among them: it answers to `clerk-users`
   // (see the rail's Clerkship row), so opening Clerkship never meets
