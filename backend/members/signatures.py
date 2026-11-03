@@ -45,6 +45,19 @@ SIGNING_OFFICES = (
 
 OFFICE_LABELS = dict(SIGNING_OFFICES)
 
+#: The offices the leadership table seats before (or without) the role flag
+#: ever being granted in User Management: the department whose appointment
+#: carries the seat, and the title the seat is named by. The clerk was the
+#: first — a church that appointed that leader before the role synchroniser
+#: learned the mapping had the name in the leadership record alone. The
+#: pastorate is the same shape: the desk appoints a Pastor there, and a church
+#: that never granted the `pastor` flag still has a pastor whose name every
+#: paper countersigned by the pastor must print.
+APPOINTED_OFFICES = {
+    'clerk': ('clerkship', 'leader'),
+    'pastor': ('pastorate', 'pastor'),
+}
+
 
 def office_code_for(profile):
     """The office code this member's signature stands for, or ''.
@@ -131,22 +144,25 @@ def office_holder(code):
     if holders:
         return holders[0]
 
-    # Clerkship's leader is the church clerk.  Churches that appointed that
-    # leader before the role synchroniser learned this mapping have the
-    # person's name and phone in the leadership record but no ``clerk`` flag
-    # yet.  Read that existing appointment here so the live letter preview
-    # does not leave the clerk blank; the next leadership save adds the
-    # normal role flag through ``sync_role_flags_from_assignments``.
-    if code == 'clerk':
+    # Clerkship's leader is the church clerk, and the pastorate's is the
+    # pastor. Churches that appointed either before the role synchroniser
+    # learned the mapping have the person's name and phone in the leadership
+    # record but no role flag yet. Read that existing appointment here so the
+    # letter preview and the reports' signature cells do not leave the office
+    # blank; the next leadership save adds the normal role flag through
+    # ``sync_role_flags_from_assignments``.
+    seat = APPOINTED_OFFICES.get(code)
+    if seat:
         from .models import DepartmentAssignment
 
+        department_code, role_title = seat
         assignment = (
             DepartmentAssignment.objects.select_related('member__member_profile')
             .filter(
-                department__code='clerkship',
+                department__code=department_code,
                 department__is_active=True,
                 kind='leader',
-                role__name__iexact='Leader',
+                role__name__iexact=role_title,
                 member__is_active=True,
             )
             .order_by('id')

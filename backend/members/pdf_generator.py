@@ -20,6 +20,7 @@ from reportlab.platypus import (
     Table,
     TableStyle,
     KeepTogether,
+    PageBreak,
     HRFlowable,
     Flowable,
     Image,
@@ -471,6 +472,15 @@ def get_pdf_styles():
         textColor=muted_gray,
     )
 
+    # The same line under a centred title — a report whose heading already
+    # names the period says only where the church is, and that one line reads
+    # under the middle of the title.
+    meta_centered_style = ParagraphStyle(
+        "DocMetaCentered",
+        parent=meta_style,
+        alignment=1,
+    )
+
     h2_style = ParagraphStyle(
         "SectionHeading",
         parent=styles["Heading2"],
@@ -546,6 +556,7 @@ def get_pdf_styles():
         "title_big": doc_title_style,
         "subtitle": subtitle_style,
         "meta": meta_style,
+        "meta_centered": meta_centered_style,
         "h2": h2_style,
         "cell": cell_style,
         "cell_bold": cell_bold,
@@ -685,15 +696,12 @@ def generate_treasury_pdf(
         else:
             subtitle_text = f"CHURCH GIVINGS REPORT FROM {date_compact(start_date)} TO {date_compact(end_date)}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
-        if start_date == end_date:
-            date_str = f"Date: {date_compact(start_date)}"
-        else:
-            date_str = f"Period: {date_compact(start_date)} to {date_compact(end_date)}"
+        # The heading already names the period, so the line under it carries
+        # only where the church is — printed under the middle of that title.
         meta_str = f"Field: {field_name or 'North East Kenya Field'}"
         if district:
             meta_str += f" &nbsp;&nbsp;|&nbsp;&nbsp; District: {district}"
-        meta_str += f" &nbsp;&nbsp;|&nbsp;&nbsp; {date_str}"
-        story.append(Paragraph(meta_str, st["meta"]))
+        story.append(Paragraph(meta_str, st["meta_centered"]))
         story.append(Spacer(1, 10))
         story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#26352f"), spaceAfter=12))
 
@@ -760,6 +768,11 @@ def generate_treasury_pdf(
         story.append(Spacer(1, 16))
 
         if purpose_rows:
+            # The breakdown answers on a page of its own. Left to follow the
+            # ledger it could only break where the page ran out — the heading
+            # stranded at the foot of one page, its table at the top of the
+            # next, with the columns' headers the only thing naming it.
+            story.append(PageBreak())
             story.append(Paragraph("<b>Giving Account Breakdown</b>", st["h2"]))
             story.append(Spacer(1, 6))
 
@@ -792,7 +805,11 @@ def generate_treasury_pdf(
                 Paragraph(format_money(totals.get("total", 0)), st["cell_right_bold"]),
             ])
 
-            p_table = Table(p_table_data, colWidths=[4.8 * cm, 2.4 * cm, 2.4 * cm, 2.2 * cm, 2.4 * cm, 3.0 * cm], repeatRows=1)
+            # The bank column carries the longest word in the header row:
+            # "Bank-to-Bank" needed 2.06cm of text and the old 2.4cm cell left
+            # it 1.98, so the final k fell onto a line of its own. The purpose
+            # column gives up half a centimetre to seat it.
+            p_table = Table(p_table_data, colWidths=[4.5 * cm, 2.4 * cm, 2.75 * cm, 2.15 * cm, 2.4 * cm, 3.0 * cm], repeatRows=1)
             p_style = [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#b36b3c")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),

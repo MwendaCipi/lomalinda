@@ -3037,6 +3037,32 @@ class PdfGenerationAPITests(APITestCase):
         self.assertIn('Witnessedby:HeadDeacon', text)
         self.assertIn('Verifiedby:Elder', text)
 
+    def test_the_report_names_the_pastor_the_pastorate_seat_holds(self):
+        # The pastorate desk appoints the pastor; the church that never granted
+        # the `pastor` flag in User Management still has a pastor, and the
+        # report countersigned by the office must name him rather than print an
+        # empty rule — the same appointment the clerk's line already reads.
+        pastor = User.objects.create_user(
+            username='pastor.seat', email='pastor.seat@example.com',
+            password='password123', first_name='George', last_name='Mwenda',
+        )
+        MemberProfile.objects.create(user=pastor, role='member', roles='member')
+        pastorate = Department.objects.filter(code='pastorate').first()
+        if pastorate is None:
+            pastorate = Department.objects.create(code='pastorate', name='Pastorate')
+        seat = DepartmentRole.objects.filter(department=pastorate, name='Pastor').first()
+        if seat is None:
+            seat = DepartmentRole.objects.create(department=pastorate, name='Pastor')
+        DepartmentAssignment.objects.create(
+            department=pastorate, role=seat, member=pastor, kind='leader',
+        )
+
+        response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        text = _pdf_text(response.content)
+        self.assertIn('Countersignedby:Pastor', text)
+        self.assertIn('GeorgeMwenda', text)
+
     def test_individual_report_reads_mode_only(self):
         # The desk reads how the money moved — one Mode column. The type and
         # mode pair the table used to carry is no longer a question the
