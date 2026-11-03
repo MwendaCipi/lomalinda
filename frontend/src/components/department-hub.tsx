@@ -5723,7 +5723,7 @@ function DepartmentDetail({
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
   const officeViewBlocked =
-    (subTab === "baptismal-class" || subTab === "daily-word" || subTab === "announcements" || subTab === "sharing") &&
+    (subTab === "daily-word" || subTab === "announcements" || subTab === "sharing") &&
     !canOpenOfficeViews;
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // The members view holds the roll *and* the asks to join it, so the desk
@@ -5945,6 +5945,15 @@ function DepartmentDetail({
   const rowPad = densityCellPad();
 
   const [canManageRoll, setCanManageRoll] = useState(false);
+
+  // The baptismal class left the elders' desk for the school's: it is one of
+  // Sabbath School's classes now, so the school's leaders keep it (its roll's
+  // `can_manage` answers that) and the church's office holders as they keep
+  // every desk. A deep link that names it anywhere else says where it went
+  // rather than opening an empty panel.
+  const canKeepBaptismalClass = canManageRoll || canOpenOfficeViews;
+  const baptismalBlocked =
+    subTab === "baptismal-class" && !(isSabbathSchool && canKeepBaptismalClass);
 
   // Inject the search bar into the AppFrame page header's right slot — the
   // shell draws the title and description; we slot the search beside them.
@@ -6201,6 +6210,12 @@ function DepartmentDetail({
       // pulpit team keep (see DeaconateManager's music desk).
       ...(isMusic ? [{ key: "duties", label: "Duties", short: "Duties", icon: ListMusic }] : []),
       ...(isSabbathSchool ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", icon: BookOpen }] : []),
+      // The baptismal class is one of the school's classes now: who is being
+      // prepared for the font, their walk from studying to baptism, kept
+      // beside the study groups rather than on the elders' desk.
+      ...(isSabbathSchool && canKeepBaptismalClass
+        ? [{ key: "baptismal-class", label: "Baptismal Class", short: "Baptism", icon: Droplets }]
+        : []),
       // Sabbath School rosters the hour: which study group leads the lesson,
       // keeps the register and reads the mission story. Its own rota, kept by
       // its own desk on the same panel the deaconate's and the pulpit's use.
@@ -6275,16 +6290,17 @@ function DepartmentDetail({
       // The prayer cells — the little companies of prayer registered under
       // this desk, with their rolls and their asks riding one panel.
       ...(keepsTheWeek ? [{ key: "prayer_cells", label: "Prayer Cells", short: "Cells", icon: Handshake }] : []),
-      // The eldership's own three, gated to the roles that hold them.
+      // The office's own views, gated to the roles that hold them. The
+      // baptismal class is not one of them any longer: it is a class of the
+      // Sabbath School, and rides that desk's strip instead.
       ...(canOpenOfficeViews
         ? [
-            { key: "baptismal-class", label: "Baptismal Class", short: "Baptism", icon: Droplets },
             { key: "daily-word", label: "Daily Word", short: "Word", icon: BookOpen },
             { key: "announcements", label: "Announcements", short: "News", icon: Megaphone },
           ]
         : []),
     ];
-  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, isDeaconate, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // The leadership register is a page of this desk: Personal Ministries
@@ -8117,14 +8133,19 @@ function DepartmentDetail({
           church&apos;s records rather than its days, so the wall is not theirs to keep.
         </p>
       )}
-      {subTab === "baptismal-class" && canOpenOfficeViews && (
+      {baptismalBlocked && (
+        <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
+          The baptismal class is one of the Sabbath School&apos;s classes now — open it on the school&apos;s desk.
+        </p>
+      )}
+      {subTab === "baptismal-class" && !baptismalBlocked && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
           <div className="mb-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
               <Droplets className="h-4 w-4 text-ember" aria-hidden="true" /> Baptismal Class
             </h3>
             <p className="mt-0.5 text-xs text-moss">
-              The members being prepared for baptism, their walk from studying to the font, kept by the eldership desk.
+              The members being prepared for baptism, their walk from studying to the font, kept by the Sabbath School desk.
             </p>
           </div>
           <BaptismalClassPanel />

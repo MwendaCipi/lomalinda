@@ -10111,12 +10111,28 @@ LessonOrderView = LessonRequestView
 LessonOrderDeliverView = LessonRequestServeView
 
 
-class BaptismalClassView(APIView):
-    """The baptismal class: the members the elders are preparing for baptism.
+def can_keep_baptismal_class(user):
+    """Who keeps the baptismal class: the Sabbath School's leaders, and the elders'.
 
-    The register is the eldership desk's own — who is being prepared, how
-    they are getting on, and who brought them — so only that desk reads it
-    and writes it. Adding names a member from the roll (the picker's id);
+    The class is one of the school's classes — it studies with the school
+    rather than standing apart on the elders' desk — so that desk's own
+    leaders (leader and assistant) read and write it. The eldership keeps its
+    keys too: the elders still sit with the candidates and sign them off for
+    the font, even though the page now lives under the school. Office holders
+    pass both checks, as they pass every desk's.
+    """
+    return (
+        can_manage_department(user, 'sabbath_school')
+        or can_manage_department(user, 'eldership')
+    )
+
+
+class BaptismalClassView(APIView):
+    """The baptismal class: the members being prepared for baptism.
+
+    The register is a Sabbath School class's — who is being prepared, how
+    they are getting on, and who brought them — so that desk reads it and
+    writes it. Adding names a member from the roll (the picker's id);
     someone with no account yet is written in by name, because a candidate
     for baptism is not held back by having no login.
     """
@@ -10140,18 +10156,18 @@ class BaptismalClassView(APIView):
         }
 
     def get(self, request):
-        if not can_manage_department(request.user, 'eldership'):
+        if not can_keep_baptismal_class(request.user):
             return Response(
-                {'detail': 'Only the eldership desk may read the baptismal class.'},
+                {'detail': 'Only the Sabbath School desk may read the baptismal class.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         rows = BaptismalClassEntry.objects.select_related('member', 'added_by')
         return Response({'entries': [self._row(row) for row in rows]})
 
     def post(self, request):
-        if not can_manage_department(request.user, 'eldership'):
+        if not can_keep_baptismal_class(request.user):
             return Response(
-                {'detail': 'Only the eldership desk may add to the baptismal class.'},
+                {'detail': 'Only the Sabbath School desk may add to the baptismal class.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         member_id = request.data.get('member_id')
@@ -10196,9 +10212,9 @@ class BaptismalClassEntryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not can_manage_department(request.user, 'eldership'):
+        if not can_keep_baptismal_class(request.user):
             return Response(
-                {'detail': 'Only the eldership desk may update the baptismal class.'},
+                {'detail': 'Only the Sabbath School desk may update the baptismal class.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         row = BaptismalClassEntry.objects.filter(pk=pk).first()

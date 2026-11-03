@@ -11,7 +11,6 @@ import {
   ClipboardList,
   Compass,
   Crown,
-  Droplets,
   Briefcase,
   FileText,
   Gift,
@@ -833,15 +832,10 @@ export const eldershipViews: {
     href: "/administration?tab=announcements",
     description: "Publish announcements and share a daily thought with the church.",
   },
-  // The baptismal class: who the elders are preparing for the font, their
-  // walk from studying to baptism, kept by the desk itself.
-  {
-    key: "baptismal-class",
-    label: "Baptismal",
-    icon: Droplets,
-    href: "/my-areas?area=eldership&view=baptismal-class",
-    description: "The members being prepared for baptism, their walk from studying to the font.",
-  },
+  // The baptismal class is no longer a page of this desk: it is one of Sabbath
+  // School's classes (see the sabbath school desk's own strip), where the
+  // members being prepared for the font are studied with the rest of the
+  // school rather than kept apart from it.
   // The church's days as the desk keeps them.
   {
     key: "calendar",

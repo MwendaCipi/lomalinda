@@ -48,11 +48,10 @@ const fourUpGridClass =
 
 function stripLayout(items: readonly { key: string }[]): string {
   // Three or fewer items fit a phone on one natural row; from four up the
-  // strip wraps anyway, so it switches to the equal-share grid instead. A
-  // strip of eight or more — Music's, Sabbath School's, the treasury's — reads
-  // four to a row, which keeps its many pages in level rows rather than
-  // three-to-a-row with a ragged last line.
-  if (items.length >= 8) return fourUpGridClass;
+  // strip wraps anyway, so it switches to the equal-share grid instead —
+  // four to a row when the count divides by four (the treasury's four, Music's
+  // eight, the school's where they come in fours) and three a row otherwise,
+  // so a long strip's last line is level instead of a lone chip under it.
   if (items.length > 3 && items.length % 4 === 0) return fourUpGridClass;
   return items.length > 3 ? phoneGridClass : `${stripClass} flex`;
 }
