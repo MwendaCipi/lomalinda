@@ -7,6 +7,7 @@ import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { ConnectivityToast } from "./toast";
+import { UpdateNotice } from "./update-notice";
 import { SectionNav } from "./sub-nav";
 import { pageHeaderFor, railFor, type RailRow } from "@/config/navigation";
 import { normalizePath } from "@/lib/paths";
@@ -505,7 +506,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       </div>
       {pathname === "/dashboard" && <MobileTabBar />}
       <ConnectivityToast />
-      <ConnectivityToast />
+      <UpdateNotice />
     </PageHeaderContext.Provider>
   );
 }
