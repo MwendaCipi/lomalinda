@@ -367,6 +367,7 @@ export function ExpenditureManager({
 
       {/* Footer: what the filtered spending comes to, with the Record button
           beside it — the shape the accounts desk's bar uses. */}
+      <div className="page-actions">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
         <p className="text-xs text-moss">
           Showing <strong className="text-bark">{filteredExpenditures.length}</strong> of {expenditures.length} records · Total:{" "}
@@ -394,6 +395,7 @@ export function ExpenditureManager({
           <span>Record Expenditure</span>
         </button>
         </div>
+      </div>
       </div>
 
       {/* Record Expenditure Modal */}

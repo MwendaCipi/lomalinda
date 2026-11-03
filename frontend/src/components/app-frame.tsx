@@ -77,11 +77,6 @@ type PageHeaderContextType = {
    * own scroll.
    */
   setPinnedDesk: (on: boolean) => void;
-  /**
-   * Whether the toggles strip should step aside / hide when the reader scrolls,
-   * giving the height back to the scrolling page content while heading and search stay fixed.
-   */
-  setTogglesHideOnScroll: (on: boolean) => void;
 };
 
 const noop = () => {};
@@ -94,7 +89,6 @@ const PageHeaderContext = createContext<PageHeaderContextType>({
   setCustomHeader: () => {},
   setHeadingFirst: () => {},
   setPinnedDesk: () => {},
-  setTogglesHideOnScroll: () => {},
 });
 
 export function usePageHeader(): PageHeaderContextType {
@@ -151,34 +145,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
   const { me, hasToken } = useHeaderData();
 
-  /**
-   * The places whose strip steps aside while the page is read by scrolling.
-   *
-   * Stewardship is read that way — the giving page, the member's own record of
-   * it, the drives, the budget and the published figures — so its strip gives
-   * the screen back on the way down and returns on any upward move, the way the
-   * phone's own bar does (see `MobileTabBar`); the difference is that this band
-   * hands its height to the page rather than floating over it, which is why it
-   * answers only a page that scrolls inside itself (see the effect below) — on
-   * a phone the drives, budget, balances and reports ride the window instead,
-   * and their strip leaves the screen with the page it belongs to. The desks
-   * that switch a table between views keep their strip: there the toggles *are*
-   * the page, and the calendar asks for the same by holding its own list still.
-   */
-  const [togglesHideOnScrollAsked, setTogglesHideOnScroll] = useState(false);
-
-  const togglesHideOnScroll =
-    togglesHideOnScrollAsked ||
-    pathname === "/member/giving" ||
-    pathname === "/member/givings" ||
-    pathname === "/support/campaigns" ||
-    pathname === "/support/budget" ||
-    pathname === "/support/financial" ||
-    pathname === "/support/reports" ||
-    pathname === "/support/property" ||
-    pathname === "/administration/treasury" ||
-    pathname === "/administration/fund-drives";
-
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
   const [customToggles, setCustomTogglesState] = useState<React.ReactNode>(null);
   // Which page drew the strip now on screen. A page's clear only counts while
@@ -200,9 +166,13 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // The screen the shell lays out: the route's own mode, or the one a page
   // asks for while it is the desk on screen (see `setPinnedDesk`).
   const mode: ScrollMode = pinnedDesk ? "pinned" : scrollModeForPath(pathname);
-  // Whether the strip is currently out of sight because the reader is moving
-  // down the page (see the scroll effect below).
-  const [togglesScrolledDown, setTogglesScrolledDown] = useState(false);
+  // Whether the page's chrome is out of sight because the reader is moving
+  // down the page (see the scroll effect below). It is one state for the whole
+  // app: the strip under the heading and the buttons panel at the foot of a
+  // desk both step aside while a page is being read, and both come back on the
+  // first upward move. A page spends its height on what it is reading rather
+  // than on the controls that brought the reader there.
+  const [chromeAway, setChromeAway] = useState(false);
   // The band's own element, and when it last moved: a scroll *inside* the band
   // (its content is taller than the row while the row shrinks) is the band
   // collapsing, not the reader going anywhere, and the browser's own
@@ -227,9 +197,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       setCustomHeader,
       setHeadingFirst,
       setPinnedDesk,
-      setTogglesHideOnScroll,
     }),
-    [setHeaderRightAction, claimStrip, setTogglesRightAction, setCustomHeader, setHeadingFirst, setPinnedDesk, setTogglesHideOnScroll]
+    [setHeaderRightAction, claimStrip, setTogglesRightAction, setCustomHeader, setHeadingFirst, setPinnedDesk]
   );
 
   // A page's header chrome belongs to the page it was drawn for, so it is
@@ -258,21 +227,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     togglesMovedAt.current = 0;
   }, [pathname]);
 
-  /** Show or hide the strip, and remember when it last moved — nothing the
+  /** Show or hide the chrome, and remember when it last moved — nothing the
       browser says in the next few hundred milliseconds is the reader. */
   const setTogglesHidden = useCallback((hidden: boolean) => {
     if (togglesScrolledRef.current === hidden) return;
     togglesScrolledRef.current = hidden;
     togglesMovedAt.current = Date.now();
-    setTogglesScrolledDown(hidden);
+    setChromeAway(hidden);
   }, []);
 
-  // Whatever scrolls, scrolls: a pinned page moves its own inner list, a phone's
-  // panel page moves the window, and a desk's table moves the panel card. The
-  // event names which, so one listener reads them all — registered in the
-  // capture phase, because a scroll event does not bubble.
+  // Whatever scrolls, scrolls: the panel a page lives in, its table, or a list
+  // it holds still. The event names which, so one listener reads them all —
+  // registered in the capture phase, because a scroll event does not bubble.
+  // A window that moves is deliberately not answered (see below).
   useEffect(() => {
-    if (!togglesHideOnScroll) return;
     let lastTarget: EventTarget | null = null;
     let lastY = 0;
     let lastBoxH = -1;
@@ -281,20 +249,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       // the row while the row shrinks — and that is the band moving, not the
       // reader. It leaves the reading position untouched.
       if (event.target instanceof Node && togglesBandRef.current?.contains(event.target)) return;
-      // Only a scroller *inside* the page counts. When the window is what
-      // moves, the strip is riding away with the page already — it is the
-      // page's first row, not chrome pinned over it — and taking its height
-      // away under a moving page would only shift what the reader is reading.
       const element = event.target instanceof HTMLElement ? event.target : null;
-      let y = 0;
-      let boxH = 0;
-      if (element && element !== document.documentElement && element !== document.body) {
-        y = element.scrollTop;
-        boxH = element.clientHeight;
-      } else {
-        y = window.scrollY;
-        boxH = window.innerHeight;
+      // Only a scroller *inside* the page counts. When the window is what
+      // moves — a phone reading a page that is not pinned — the chrome is in
+      // the page's own flow and rides away with it already. Collapsing it
+      // there would shift everything the reader is looking at up by its
+      // height, which is worse than the space it gives back.
+      if (!element || element === document.documentElement || element === document.body) {
+        lastTarget = null;
+        return;
       }
+      const y = element.scrollTop;
+      const boxH = element.clientHeight;
       // A different scroller takes over: the move is measured from here.
       if (event.target !== lastTarget) {
         lastTarget = event.target;
@@ -333,7 +299,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => document.removeEventListener("scroll", onScroll, { capture: true });
-  }, [togglesHideOnScroll, setTogglesHidden]);
+  }, [setTogglesHidden]);
 
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   const myDepartments = useMyDepartments();
@@ -361,8 +327,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     setCustomHeader(null);
     setHeadingFirst(false);
     setPinnedDesk(false);
-    setTogglesHideOnScroll(false);
-    setTogglesScrolledDown(false);
+    setChromeAway(false);
   }
 
   const section = here.group ? entries.find((entry) => entry.label === here.group) ?? null : null;
@@ -436,6 +401,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         }`}
         data-scroll-mode={mode}
         data-has-mobile-nav={pathname === "/dashboard"}
+        // Read by the page's own action panel at its foot (see `.page-actions`
+        // in globals.css): the height a panel gives back belongs to the records
+        // above it, so the whole panel collapses, not just its buttons.
+        data-chrome-away={chromeAway ? "true" : "false"}
       >
         <div className="app-shell-body flex min-h-0 flex-1">
           <NavRail />
@@ -506,9 +475,9 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 // toggles back the moment the reader turns upward.
                 <div
                   ref={togglesBandRef}
-                  inert={togglesHideOnScroll && togglesScrolledDown}
+                  inert={chromeAway}
                   className={`${headingFirst ? "order-2" : "order-1"} sm:order-none grid shrink-0 transition-[grid-template-rows] duration-300 ease-out ${
-                    togglesHideOnScroll && togglesScrolledDown ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+                    chromeAway ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
                   }`}
                 >
                   <div className="flex min-h-0 items-center gap-3 overflow-hidden border-b border-sand-line bg-white px-3 sm:px-5">

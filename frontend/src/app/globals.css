@@ -557,6 +557,36 @@ body {
   min-height: 0;
 }
 
+/* The buttons panel at the foot of a desk — the row of actions a place keeps
+   under its records. It steps aside with the strip above it while the reader
+   moves down the page and comes back on the first upward move (AppFrame holds
+   the one scroll state for both, and stamps `data-chrome-away` on the shell).
+
+   It collapses rather than sliding out of the way: the height a panel gives
+   back belongs to the records above it, so the whole panel — its padding, its
+   rule and the words it carries — is a grid row that runs from 1fr to 0fr
+   with the panel clipped inside it. A panel that only slid down would leave
+   the strip of page it occupied behind. */
+.page-actions {
+  display: grid;
+  grid-template-rows: 1fr;
+  flex-shrink: 0;
+  transition: grid-template-rows 300ms ease-out, opacity 250ms ease-out;
+}
+.page-actions > * {
+  min-height: 0;
+}
+.app-shell[data-chrome-away="true"] .page-actions {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+/* Clipped only while it is collapsing, so the shadow and rounding a panel
+   carries at rest are never cut, and a menu it hosts is never trimmed. */
+.app-shell[data-chrome-away="true"] .page-actions > * {
+  overflow: hidden;
+}
+
 /* The rail already names these places on a wide screen, so the landing-page
    section cards are a duplicate there. On phones the cards stay: outside the
    pinned giving page they are the only way to reach the other destinations.

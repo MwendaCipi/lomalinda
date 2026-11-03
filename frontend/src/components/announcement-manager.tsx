@@ -1590,7 +1590,9 @@ export function AnnouncementManager({
           )}
           />
 
-        {/* Sticky Footer */}
+        {/* Sticky Footer — the desk's own count and its two writes. It steps
+            aside with the rest of the chrome while the board is read. */}
+        <div className="page-actions">
         <div className="shrink-0 border-t-2 border-sand-mute bg-sand font-bold text-bark">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
             <span className="text-xs text-moss sm:text-sm">
@@ -1623,6 +1625,7 @@ export function AnnouncementManager({
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
 

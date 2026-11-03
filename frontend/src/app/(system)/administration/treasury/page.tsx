@@ -147,7 +147,7 @@ export default function TreasuryPage() {
     });
   }, [modeParam]);
 
-  const { setHeaderRightAction, setCustomToggles, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
+  const { setHeaderRightAction, setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
   // A phone reads the desk the way the ministry map reads: the view's name
   // first, the search and the date window under it, then the strip. Without
   // this the shell hides the heading on a phone (the strip names the place)
@@ -157,10 +157,6 @@ export default function TreasuryPage() {
     setHeadingFirst(true);
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
-  useEffect(() => {
-    setTogglesHideOnScroll(true);
-    return () => setTogglesHideOnScroll(false);
-  }, [setTogglesHideOnScroll]);
   const [searchQuery, setSearchQuery] = useState("");
   // A phone holds both dates behind one button in the header, so the desk
   // keeps one row of controls where it used to spend two. The fields

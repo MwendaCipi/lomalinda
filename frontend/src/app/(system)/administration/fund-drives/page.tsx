@@ -25,17 +25,12 @@ import { TREASURY_HEADING } from "@/config/navigation";
 export default function FundDrivesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { setCustomToggles, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
+  const { setCustomToggles, setCustomHeader, setHeadingFirst } = usePageHeader();
 
   useEffect(() => {
     setHeadingFirst(true);
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
-
-  useEffect(() => {
-    setTogglesHideOnScroll(true);
-    return () => setTogglesHideOnScroll(false);
-  }, [setTogglesHideOnScroll]);
 
   useEffect(() => {
     setCustomHeader({

@@ -1173,7 +1173,10 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
       )}
 
       {/* Buttons panel — the desk's one action sits across the bottom of the
-          records and centred, rather than crowding a heading card above them. */}
+          records and centred, rather than crowding a heading card above them.
+          It steps aside while the reader scrolls the roll (see
+          `.page-actions`). */}
+      <div className="page-actions">
       <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border border-sand-line bg-white px-4 py-3 shadow-sm">
         {/* The backend draws the sheet, so what prints is the roll as it
             stands rather than whatever this page happened to load. */}
@@ -1194,6 +1197,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
           <Plus size={14} aria-hidden="true" />
           <span>Add a meeting</span>
         </button>
+      </div>
       </div>
 
       {/* Modal: Create Meeting */}

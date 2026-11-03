@@ -556,7 +556,9 @@ export function MyGivings() {
         )}
       </div>
 
-      {/* Footer actions — always visible at the bottom */}
+      {/* Footer actions — always visible at the bottom, until the reader
+          scrolls the record and it steps aside with the rest of the chrome. */}
+      <div className="page-actions">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-sand-line px-5 py-3">
         <p className="text-[11px] font-semibold text-bark">
           {loading && entries.length === 0
@@ -582,6 +584,7 @@ export function MyGivings() {
             Give Now
           </Link>
         </div>
+      </div>
       </div>
 
       {reappropriateGift && (

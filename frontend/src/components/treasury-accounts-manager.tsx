@@ -720,7 +720,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
   // page's own views. Rendering it through the band (rather than as a row in
   // this component's own header) is what keeps the treasury to a single line
   // of toggles — the band shows this strip instead of the section's pages.
-  const { setCustomToggles, setHeaderRightAction, setCustomHeader, setHeadingFirst, setTogglesHideOnScroll } = usePageHeader();
+  const { setCustomToggles, setHeaderRightAction, setCustomHeader, setHeadingFirst } = usePageHeader();
   // A phone reads the desk top-down the way the ledger does: the view's name
   // first, its search and filters under it, then the treasury strip. The
   // shell hides the heading on a phone unless a page asks to lead with it,
@@ -729,10 +729,6 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
     setHeadingFirst(true);
     return () => setHeadingFirst(false);
   }, [setHeadingFirst]);
-  useEffect(() => {
-    setTogglesHideOnScroll(true);
-    return () => setTogglesHideOnScroll(false);
-  }, [setTogglesHideOnScroll]);
   useEffect(() => {
     setCustomToggles(
       <TreasuryNav
@@ -1696,9 +1692,10 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           free for the table and its search; Expenses brings its own footer, so
           this bar steps aside for it. ── */}
       {view === "accounts" && (
-        /* A phone reads this bar as two rows — the words the ledger keeps
+        <div className="page-actions">
+        {/* A phone reads this bar as two rows — the words the ledger keeps
            above the buttons that act — and one row on the wider screens,
-           as it always read. */
+           as it always read. */}
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
             <span>
@@ -1753,6 +1750,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
                 <span>Add Account</span>
               </button>
           </div>
+        </div>
         </div>
       )}
 

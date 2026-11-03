@@ -1309,6 +1309,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         </div>
       )}
       </div>
+      <div className="page-actions">
       <footer className="flex shrink-0 items-center justify-between border-t border-sand-line bg-white px-4 py-3 text-xs text-moss sm:px-6">
         <span>
           {filteredRows.length} of {rows.length} request{rows.length === 1 ? "" : "s"}
@@ -1317,6 +1318,7 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
           {search.trim() ? ` · matching “${search.trim()}”` : ""}
         </span>
       </footer>
+      </div>
     </div>
   );
 }

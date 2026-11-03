@@ -2520,6 +2520,7 @@ export function UserManagement() {
       </div>
 
       {/* ── Bottom bar: Print + Add ── */}
+      <div className="page-actions">
       <div className="shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* The count line is a desktop nicety; on phones the buttons need the width. */}
         <p className="hidden text-[11px] text-moss sm:block">
@@ -2553,6 +2554,7 @@ export function UserManagement() {
             <span className="hidden lg:inline">Print Users List</span>
           </button>
         </div>
+      </div>
       </div>
 
       {/* The friend fields now live in the shared Add Person modal. */}
