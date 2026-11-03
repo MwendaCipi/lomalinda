@@ -1210,6 +1210,39 @@ class Announcement(models.Model):
     # default trio every surface rendered before the choice existed.
     GIVING_ACTION_CHOICES = [('give_now', 'Give now'), ('pledge', 'Pledge'), ('in_kind', 'Support (in-kind)'), ('comment', 'Comment')]
     giving_actions = models.JSONField(default=list, blank=True, help_text='Giving buttons this promotion card carries; empty means the default trio (pledge, give now, comment)')
+    # The buttons a post's card carries, as one ticked list: the officer picks
+    # what the card offers instead of picking a "type" that decides it for
+    # them. The codes are the buttons themselves — money or goods, a comment, a
+    # meeting to join, a class to enrol in, a form to register on — and each
+    # one only shows on the card when it was ticked here. Empty means a plain
+    # notice: words, its flyer, its link, and nothing to press.
+    CARD_OPTION_CHOICES = [
+        ('give_now', 'Give now'),
+        ('pledge', 'Pledge'),
+        ('in_kind', 'Support (in-kind)'),
+        ('comment', 'Comment'),
+        ('join_meeting', 'Join meeting'),
+        ('enroll', 'Enroll now'),
+        ('register', 'Register now'),
+    ]
+    card_options = models.JSONField(default=list, blank=True, help_text="Buttons this post's card carries, in the officer's own pick; empty means a plain notice")
+    # Scheduling: a post written now and published later. ``publish_at`` is the
+    # moment it goes live — on the site, and out by email, SMS and push — and
+    # until it arrives the feed does not show it and no message has gone out.
+    # ``repeat`` says whether the same notice stands every day, week or month
+    # after that moment: it stays in the feed rather than being posted again.
+    publish_at = models.DateTimeField(null=True, blank=True, help_text='When this post goes live; blank means it is posted the moment it is saved')
+    REPEAT_CHOICES = [
+        ('none', 'Does not repeat'),
+        ('daily', 'Every day'),
+        ('weekly', 'Every week'),
+        ('monthly', 'Every month'),
+    ]
+    repeat = models.CharField(max_length=10, choices=REPEAT_CHOICES, default='none', blank=True, help_text='How the notice repeats once it is live')
+    # The stamp that the post's one broadcast has gone out: a scheduled post is
+    # announced when its hour comes, and a re-run of the sweep that announces
+    # due posts sends nothing twice.
+    scheduled_broadcast_at = models.DateTimeField(null=True, blank=True, help_text="When this post's broadcast was sent")
     attachment = models.FileField(upload_to='announcement-attachments/', blank=True, null=True)
     sharing_option = models.CharField(max_length=100, default='site', blank=True)
     is_popup = models.BooleanField(default=False, help_text="Pop up automatically to users requiring action")
@@ -1245,6 +1278,11 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def is_live(self):
+        """Whether the post has reached its hour yet — a plain post always has."""
+        return self.publish_at is None or self.publish_at <= timezone.now()
 
     @property
     def dismissal_date(self):

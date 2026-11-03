@@ -2436,6 +2436,25 @@ class ChurchEventDetailView(generics.RetrieveUpdateDestroyAPIView):
         serializer.save()
 
 
+def broadcast_announcement_if_due(announcement, request=None, schema_name=None):
+    """Send a post's one broadcast — now, or when its scheduled hour arrives.
+
+    A post written ahead of its time is not announced early: nothing goes out
+    while it waits, and the sweep (``send_scheduled_announcements``) rings it
+    when the hour comes. The stamp is what makes that sweep safe to re-run —
+    a post is announced once, whatever calls this twice.
+    """
+    if announcement.scheduled_broadcast_at is not None:
+        return
+    if announcement.publish_at is not None and announcement.publish_at > timezone.now():
+        return
+    dispatch_announcement_broadcast(announcement, request, schema_name=schema_name)
+    Announcement.objects.filter(pk=announcement.pk, scheduled_broadcast_at__isnull=True).update(
+        scheduled_broadcast_at=timezone.now()
+    )
+    announcement.refresh_from_db(fields=['scheduled_broadcast_at', 'published'])
+
+
 def dispatch_announcement_broadcast(announcement, request=None, schema_name=None):
     """Handle Site / SMS / Email / Push broadcast for an announcement."""
     sharing_raw = (announcement.sharing_option or '').lower()
@@ -2547,6 +2566,11 @@ class AnnouncementView(generics.ListCreateAPIView):
             # the feed by when it ends (see list()) — but a legacy start date
             # still holds older posts back.
             queryset = queryset.filter(Q(starts_at__isnull=True) | Q(starts_at__lte=today))
+            # A post scheduled for later has not reached its hour: the feed
+            # does not show it, and nothing has been sent about it. The
+            # management board opts out to see what is waiting.
+            now = timezone.now()
+            queryset = queryset.filter(Q(publish_at__isnull=True) | Q(publish_at__lte=now))
         search = self.request.query_params.get('search', '').strip()
         if search:
             queryset = queryset.filter(Q(title__icontains=search) | Q(text__icontains=search) | Q(detail__icontains=search))
@@ -2637,7 +2661,9 @@ class AnnouncementView(generics.ListCreateAPIView):
 
         # Leadership was already established by CanManageAnnouncements.
         announcement = serializer.save()
-        dispatch_announcement_broadcast(announcement, self.request)
+        # A post written for a later hour waits for it: the sweep announces it
+        # then, and nothing reaches the congregation before the officer meant.
+        broadcast_announcement_if_due(announcement, self.request)
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -2677,6 +2703,10 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
         if announcement.published != show_site:
             announcement.published = show_site
             announcement.save(update_fields=['published'])
+        # An edit can bring a waiting post's hour forward (or post a draft that
+        # was written for later): it is announced when it lands, and a post
+        # already announced once is not announced again.
+        broadcast_announcement_if_due(announcement, self.request)
 
     def perform_destroy(self, instance):
         if not can_manage_announcements(self.request.user):

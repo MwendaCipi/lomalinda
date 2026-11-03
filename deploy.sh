@@ -130,6 +130,16 @@ FAILED_CRON="15 2 * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py c
 crontab -l 2>/dev/null | grep -F 'cleanup_failed_contributions' > /dev/null \
   || fail "the failed-givings purge cron entry could not be installed."
 
+echo "⏰ Ensuring the scheduled-announcement sweep is installed..."
+# A post may be written for a later day and hour: nothing goes out about it —
+# site, email, SMS or push — until that hour. Every five minutes the sweep
+# announces whatever has come due, stamping each row as it does so a re-run
+# sends nothing twice. Same idempotent shape as the lines above.
+SCHEDULED_CRON="*/5 * * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.py send_scheduled_announcements >> /var/log/loma_linda_scheduled_announcements.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'send_scheduled_announcements' || true; echo "$SCHEDULED_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'send_scheduled_announcements' > /dev/null \
+  || fail "the scheduled-announcement cron entry could not be installed."
+
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"
 

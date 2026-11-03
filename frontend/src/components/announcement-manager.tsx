@@ -5,9 +5,10 @@ import { showAlert } from "@/lib/alerts";
 import { ArrowUpRight, Download, Megaphone, Search, Send, Sparkles, X } from "lucide-react";
 import { brand } from "@/lib/brand";
 import { usePageHeader } from "@/components/app-frame";
-import { localDate, dayFirst } from "@/lib/dates";
+import { localDate, dayFirst, dayFirstTime } from "@/lib/dates";
 import { eventLabel } from "@/lib/announcement-dates";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { CARD_OPTION_CHOICES, GIVING_OPTION_CODES } from "@/lib/announcement-options";
 import { RecordList } from "./record-list";
 
 /**
@@ -75,8 +76,13 @@ export type Announcement = {
   response_options?: string;
   responses?: { id: number; action_type: string; response_text?: string; response_choice?: string; respondent_name?: string; created_at: string }[];
   support_account?: string | null;
-  // The giving buttons this promotion card carries — codes from
-  // GIVING_ACTION_OPTIONS. Empty means the long-standing default trio.
+  // The buttons this post's card carries — codes from CARD_OPTION_CHOICES.
+  // Empty means a plain notice with nothing to press.
+  options?: string[];
+  // Scheduling: when the post goes live, and whether the notice repeats.
+  publish_at?: string | null;
+  repeat?: "none" | "daily" | "weekly" | "monthly";
+  // The giving buttons a post saved before the picker existed carries.
   giving_actions?: string[];
   sharing_option?: string;
   action_prompt?: string;
@@ -86,17 +92,13 @@ export type Announcement = {
   published?: boolean;
 };
 
-/** The giving buttons a promotion card can carry, and what an untouched
- *  picker means. All four are the full row; an old post that was saved
- *  before the choice existed reads the same as the empty list, so nothing
- *  changes for what is already on the board. */
-const GIVING_ACTION_OPTIONS = [
-  { value: "give_now", label: "Give now" },
-  { value: "pledge", label: "Pledge" },
-  { value: "in_kind", label: "Support (in-kind)" },
-  { value: "comment", label: "Comment" },
+/** How a notice repeats once it is live. */
+const REPEAT_CHOICES = [
+  { value: "none", label: "Does not repeat" },
+  { value: "daily", label: "Every day" },
+  { value: "weekly", label: "Every week" },
+  { value: "monthly", label: "Every month" },
 ] as const;
-const GIVING_ACTIONS_ALL: string[] = GIVING_ACTION_OPTIONS.map((option) => option.value);
 
 /** A date-only string from the API, rendered without shifting a day. */
 function dayLabel(iso?: string | null): string {
@@ -490,22 +492,12 @@ export function AnnouncementManager({
     visibility: "all",
     // Communicate-from-a-department opens the composer already addressed.
     audience: (presetAudience ?? []) as string[],
-    // The kind of post decides which special fields the form shows: a plain
-    // notice, a meeting link, a supported account, or a question the
-    // congregation answers. Nothing is preselected on a new post so the
-    // officer chooses the type on purpose.
-    announcement_type: "" as "awareness" | "web_conference" | "promotion" | "opinion" | "job_vacancy" | "",
-    action_type: "none",
+    // The buttons the card carries, as the officer ticks them. Empty is a
+    // plain notice: words, its flyer, its link, and nothing to press.
+    options: [] as string[],
+    // The account a call for money or goods supports. The form asks for it
+    // only when one of those buttons is ticked, the API insists on it there.
     support_account: "",
-    // Promotion posts only: the goal the post's fund drive opens with.
-    promotion_target: "",
-    // Promotion posts only: which giving buttons the card carries. All four
-    // to begin with — the officer unticks what the call does not want.
-    giving_actions: [...GIVING_ACTIONS_ALL],
-    // Opinion posts only: how members answer, and the fixed options for a
-    // closed question (one per line).
-    response_mode: "open" as "open" | "closed",
-    response_options: "",
     // Site and email are the ordinary pair: the post shows on the site and
     // lands in inboxes. SMS is added for the occasions it is wanted.
     sharing_option: "site,email",
@@ -515,6 +507,11 @@ export function AnnouncementManager({
     // The event's clock: blank for an all-day event, where the day says it.
     event_time_from: "",
     event_time_to: "",
+    // Scheduling: the day and hour the post goes live, and whether the notice
+    // repeats once it is. All blank means it is posted the moment it is saved.
+    publish_on: "",
+    publish_time: "",
+    repeat: "none" as "none" | "daily" | "weekly" | "monthly",
   });
   // The treasury accounts a "Request support" post may name, offered as the
   // wording members read on the giving form.
@@ -646,25 +643,32 @@ export function AnnouncementManager({
     setExistingAttachment(item.attachment ? { name: item.attachment_name, size: item.attachment_size } : null);
     setRemoveAttachment(false);
     const postTo = parsePostTo(item.visibility, item.audience);
+    // A post saved before the picker existed reports the buttons its card
+    // already carries, so editing it opens on the same ticks. A post already
+    // out has no schedule to open on — its hour is in the past, and the form
+    // would refuse to save it back — so it opens as a post going out now.
+    const publishAt = item.publish_at ? new Date(item.publish_at) : null;
+    const waiting = publishAt && publishAt.getTime() > Date.now() ? publishAt : null;
     setForm({
       title: item.title,
       text: item.text,
       visibility: postTo.reach,
       audience: postTo.ministries,
-      announcement_type: item.announcement_type ?? "",
-      action_type: item.action_type ?? "none",
+      options: [...(item.options ?? [])],
       support_account: item.support_account ?? "",
-      promotion_target: "",
-      // A post saved before the choice existed reads the default row.
-      giving_actions: item.giving_actions?.length ? item.giving_actions : [...GIVING_ACTIONS_ALL],
-      response_mode: item.response_mode === "closed" ? "closed" : "open",
-      response_options: item.response_options ?? "",
       sharing_option: item.sharing_option || "site,email",
       href: item.href ?? "",
       event_date_from: item.event_date_from ?? "",
       event_date_to: item.event_date_to ?? "",
       event_time_from: (item.event_time_from ?? "").slice(0, 5),
       event_time_to: (item.event_time_to ?? "").slice(0, 5),
+      // A post already scheduled opens on its own day and hour; the officer
+      // can move it, or clear the day to post it now.
+      publish_on: waiting ? localDate(waiting) : "",
+      publish_time: waiting
+        ? `${String(waiting.getHours()).padStart(2, "0")}:${String(waiting.getMinutes()).padStart(2, "0")}`
+        : "",
+      repeat: item.repeat ?? "none",
     });
     setShowCreateModal(true);
   }
@@ -672,23 +676,19 @@ export function AnnouncementManager({
   function resetAndCloseModal() {
     setForm({
       title: "",
-      text: "",
-      visibility: "all",
+      text: "",      visibility: "all",
       audience: (presetAudience ?? []) as string[],
-      announcement_type: "",
-      action_type: "none",
+      options: [],
       support_account: "",
-      promotion_target: "",
-      // All four to begin with — the officer unticks what the call does not want.
-      giving_actions: [...GIVING_ACTIONS_ALL],
-      response_mode: "open",
-      response_options: "",
       sharing_option: "site,email",
       href: "",
       event_date_from: "",
       event_date_to: "",
       event_time_from: "",
       event_time_to: "",
+      publish_on: "",
+      publish_time: "",
+      repeat: "none",
     });
     setEditingId(null);
     setAttachment(null);
@@ -724,56 +724,30 @@ export function AnnouncementManager({
       showAlert("Event Date Missing", err, "error");
       return;
     }
-    // The type's own field is the whole point of the post, so it is checked
-    // client-side too; the API enforces the same rule.
-    if (form.announcement_type === "web_conference" && !form.href.trim()) {
-      const err = "A web conference announcement needs its meeting link.";
+    // A ticked button that needs input is checked here as well as at the API:
+    // a meeting to join needs its link, and a call for money or goods needs
+    // the account it supports.
+    if (form.options.includes("join_meeting") && !form.href.trim()) {
+      const err = "A post that invites members to join a meeting needs its meeting link.";
       setMessage(err);
       showAlert("Meeting Link Missing", err, "error");
       return;
     }
-    if (form.announcement_type === "promotion" && !form.support_account.trim()) {
-      const err = "A promotion / contribution announcement needs a treasury account.";
+    if (form.options.some((code) => GIVING_OPTION_CODES.includes(code)) && !form.support_account.trim()) {
+      const err = "A post that asks for money or goods needs the treasury account it supports.";
       setMessage(err);
       showAlert("Account Missing", err, "error");
       return;
     }
-    if (!form.announcement_type) {
-      const err = "Choose the announcement type first.";
+    // A scheduled post must fall in the future — the API refuses an hour that
+    // has already passed, and the form says so before the round trip.
+    const publishAt = form.publish_on
+      ? new Date(`${form.publish_on}T${form.publish_time || "00:00"}`)
+      : null;
+    if (publishAt && publishAt.getTime() <= Date.now()) {
+      const err = "A scheduled announcement must be set for a future day and time.";
       setMessage(err);
-      showAlert("Missing Announcement Type", err, "error");
-      return;
-    }
-    // The goal is optional: a support call may post with no drive behind it.
-    // A number that is written must still be a real goal, though — zero or a
-    // stray word would open a drive that can never show progress.
-    if (form.announcement_type === "promotion" && form.promotion_target.trim()) {
-      const target = parseFloat(form.promotion_target);
-      if (isNaN(target) || target <= 0) {
-        const err = "A target amount must be a number greater than zero — or leave it blank.";
-        setMessage(err);
-        showAlert("Target Invalid", err, "error");
-        return;
-      }
-    }
-    // A closed opinion question must offer at least two choices, or members
-    // have nothing to pick between.
-    if (
-      form.announcement_type === "opinion" &&
-      form.response_mode === "closed" &&
-      form.response_options.split("\n").map((line) => line.trim()).filter(Boolean).length < 2
-    ) {
-      const err = "A closed opinion question needs at least two response options, one per line.";
-      setMessage(err);
-      showAlert("Response Options Missing", err, "error");
-      return;
-    }
-    // The row of buttons must amount to something: a call with no giving
-    // action carries a card members cannot act on.
-    if (form.announcement_type === "promotion" && form.giving_actions.length === 0) {
-      const err = "Choose at least one giving action.";
-      setMessage(err);
-      showAlert("Giving Actions Missing", err, "error");
+      showAlert("Schedule Invalid", err, "error");
       return;
     }
     setSubmitting(true);
@@ -786,10 +760,10 @@ export function AnnouncementManager({
           (value as string[]).forEach((code) => payload.append("audience", code));
           return;
         }
-        // The promotion's giving buttons are sent as repeated values further
-        // down; String()-ing the array here would post one comma-joined code
-        // the API reads as a single invalid choice and refuses the save.
-        if (key === "giving_actions") return;
+        // The card's buttons and the schedule are sent as their own values
+        // further down; String()-ing an array here would post one
+        // comma-joined code the API reads as a single invalid choice.
+        if (key === "options" || key === "publish_on" || key === "publish_time") return;
         // Optional fields are omitted when blank so the row keeps a real null
         // (an empty string would fail date parsing server-side). The drive
         // goal rides along only when written — the API mints a drive for a
@@ -798,7 +772,7 @@ export function AnnouncementManager({
         // out of a PATCH says "leave it as it was", and an officer who clears
         // the start time of an existing post means to clear it. A blank time
         // is read by the API as exactly that.
-        const optional = key === "href" || key === "event_date_from" || key === "event_date_to" || key === "promotion_target";
+        const optional = key === "href" || key === "event_date_from" || key === "event_date_to";
         if (optional && !value) return;
         if ((key === "event_time_from" || key === "event_time_to") && !value) {
           payload.append(key, "");
@@ -809,11 +783,13 @@ export function AnnouncementManager({
       });
       if (attachment) payload.append("attachment", attachment);
       if (editingId && removeAttachment) payload.append("remove_attachment", "true");
-      // Support posts send their chosen buttons as repeated values; other
-      // types send nothing — the API clears the field for them.
-      if (form.announcement_type === "promotion") {
-        form.giving_actions.forEach((code) => payload.append("giving_actions", code));
-      }
+      // The card's buttons, as repeated values in the officer's own tick order.
+      form.options.forEach((code) => payload.append("options", code));
+      // A scheduled post carries the moment it goes live; a post going out now
+      // carries a blank, which the API reads as "no wait" (an untouched PATCH
+      // would otherwise keep a stale hour standing).
+      payload.append("publish_at", publishAt ? publishAt.toISOString() : "");
+      payload.append("repeat", form.repeat || "none");
       const response = await fetch(
         editingId ? `${API_URL}/api/members/announcements/${editingId}/` : `${API_URL}/api/members/announcements/`,
         {
@@ -845,37 +821,48 @@ export function AnnouncementManager({
   function renderComposerFields() {
     return (
       <form id={COMPOSER_FORM_ID} onSubmit={submit} className="grid gap-4 md:grid-cols-2">
-              {/* The type leads: it decides which special fields the rest of
-                  the form shows. */}
-              <label className="block text-xs font-semibold text-bark">
-                Announcement type *
-                <select
-                  value={form.announcement_type}
-                  onChange={(e) => {
-                    const type = e.target.value as typeof form.announcement_type;
-                    // Switching type drops the fields the new type does not
-                    // use, so the form never carries hidden stale values.
-                    if (type === "awareness") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "", response_mode: "open", response_options: "" }));
-                    else if (type === "web_conference") setForm((f) => ({ ...f, announcement_type: type, support_account: "", response_mode: "open", response_options: "" }));
-                    else if (type === "opinion") setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "" }));
-                    else if (type === "promotion") setForm((f) => ({ ...f, announcement_type: type, href: "", response_mode: "open", response_options: "" }));
-                    else if (type === "job_vacancy") setForm((f) => ({ ...f, announcement_type: type, support_account: "", response_mode: "open", response_options: "" }));
-                    else setForm((f) => ({ ...f, announcement_type: type, href: "", support_account: "", response_mode: "open", response_options: "" }));
-                  }}
-                  className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                >
-                  {editingId ? (
-                    <option value="" disabled>-- select --</option>
-                  ) : (
-                    <option value="">-- select --</option>
-                  )}
-                  <option value="awareness">Awareness</option>
-                  <option value="web_conference">Web conference</option>
-                  <option value="promotion">Promotion / Contribution</option>
-                  <option value="opinion">Opinion poll</option>
-                  <option value="job_vacancy">Job vacancy</option>
-                </select>
-              </label>
+              {/* The card's buttons, as one ticked list: the officer picks
+                  what the post offers instead of a type deciding for them.
+                  Every button below the card comes from these ticks. */}
+              <div className="block text-xs font-semibold text-bark md:col-span-2">
+                <span>Options</span>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {CARD_OPTION_CHOICES.map((option) => {
+                    const selected = form.options.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            options: selected
+                              ? f.options.filter((code) => code !== option.value)
+                              : [...f.options, option.value],
+                          }))
+                        }
+                        className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                          selected
+                            ? "border-ember bg-ember text-white"
+                            : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
+                        }`}
+                      >
+                        <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${selected ? "border-white/70 bg-white/20" : "border-sand-mute bg-white"}`}>
+                          {selected && (
+                            <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          )}
+                        </span>
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="mt-1 block text-[10px] font-normal text-moss">
+                  Which buttons this post&apos;s card carries. Leave them all unticked for a plain
+                  notice; tick the ones members should be able to press.
+                </span>
+              </div>
 
               <label className="block text-xs font-semibold text-bark">
                 Title *
@@ -942,10 +929,9 @@ export function AnnouncementManager({
                 </div>
               </div>
 
-              {/* The link belongs to the web-conference type only; the account
-                  picker belongs to the promotion type only. Awareness shows
-                  neither — a plain notice is a plain notice. */}
-              {form.announcement_type === "web_conference" && (
+              {/* A meeting to join needs its link; a call for money or goods
+                  needs the account it supports. Everything else is optional. */}
+              {form.options.includes("join_meeting") && (
                 <label className="block text-xs font-semibold text-bark md:col-span-2">
                   Meeting link *
                   <input
@@ -959,18 +945,6 @@ export function AnnouncementManager({
                 </label>
               )}
 
-              {form.announcement_type === "job_vacancy" && (
-                <label className="block text-xs font-semibold text-bark md:col-span-2">
-                  Application / Information link (optional)
-                  <input
-                    type="url"
-                    value={form.href}
-                    onChange={(e) => setForm({ ...form, href: e.target.value })}
-                    placeholder="Application link or vacancy page (optional)"
-                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                  />
-                </label>
-              )}
 
               <label className="block text-xs font-semibold text-bark">
                 Share Announcement Via *<span className="font-normal text-moss"> (select one or more)</span>
@@ -1026,135 +1000,28 @@ export function AnnouncementManager({
                 </div>
               </label>
 
-              {/* An opinion poll asks the congregation a question and hears
-                  it back; the other types are statements. The question text
-                  leads, then the answer shape it collects. */}
-              {form.announcement_type === "opinion" && (
-                <>
-                  <label className="block text-xs font-semibold text-bark md:col-span-2">
-                    Opinion question *
-                    <textarea
-                      required
-                      rows={3}
-                      maxLength={ANNOUNCEMENT_TEXT_LIMIT}
-                      value={form.text}
-                      onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
-                      placeholder="Ask the question members will answer, e.g. Will you join the choir's visit to Nkubu?"
-                      className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                    />
-                    <span
-                      className={`mt-1 block text-right text-[10px] font-semibold ${
-                        form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
-                      }`}
-                    >
-                      {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
-                    </span>
-                  </label>
-                  <label className="block text-xs font-semibold text-bark">
-                    Response type *
-                    <select
-                      value={form.response_mode}
-                      onChange={(e) => setForm({ ...form, response_mode: e.target.value as "open" | "closed" })}
-                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                    >
-                      <option value="open">Open: members write their answer</option>
-                      <option value="closed">Closed: members pick from options</option>
-                    </select>
-                  </label>
-                  {form.response_mode === "closed" && (
-                    <label className="block text-xs font-semibold text-bark">
-                      Options *<span className="font-normal text-moss"> (one per line)</span>
-                      <textarea
-                        required
-                        rows={4}
-                        value={form.response_options}
-                        onChange={(e) => setForm({ ...form, response_options: e.target.value })}
-                        placeholder={"Yes, I will attend\nNo, I cannot make it\nMaybe (I will confirm later)"}
-                        className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                      />
-                    </label>
-                  )}
-                </>
-              )}
-
-              {form.announcement_type === "promotion" && (
-                <>
-                  <label className="block text-xs font-semibold text-bark">
-                    Support account *
-                    <select
-                      value={form.support_account}
-                      onChange={(e) => setForm({ ...form, support_account: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                    >
-                      <option value="">-- Select account --</option>
-                      {accounts.map((account) => (
-                        <option key={account.id} value={account.description || account.name}>
-                          {account.description || account.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-xs font-semibold text-bark">
-                    Target amount (KES)
-                    <input
-                      type="number"
-                      min="1"
-                      step="any"
-                      value={form.promotion_target}
-                      onChange={(e) => setForm({ ...form, promotion_target: e.target.value })}
-                      placeholder="e.g. 500000"
-                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs font-bold text-sage outline-none focus:border-ember"
-                    />
-                    <span className="mt-1 block text-[10px] font-normal text-moss">
-                      Optional — the goal of the fund drive this post opens. Leave it blank to post a
-                      support call with no drive goal; the giving buttons still name this account.
-                    </span>
-                  </label>
-
-                  {/* The giving actions: which buttons the card actually
-                      carries. Ticked to begin with — untick what the call
-                      does not want, and that button never shows on the
-                      card members read. */}
-                  <div className="md:col-span-2 block text-xs font-semibold text-bark">
-                    <span>Giving actions *</span>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {GIVING_ACTION_OPTIONS.map((option) => {
-                        const selected = form.giving_actions.includes(option.value);
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-pressed={selected}
-                            onClick={() =>
-                              setForm((f) => ({
-                                ...f,
-                                giving_actions: selected
-                                  ? f.giving_actions.filter((code) => code !== option.value)
-                                  : [...f.giving_actions, option.value],
-                              }))
-                            }
-                            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
-                              selected
-                                ? "border-ember bg-ember text-white"
-                                : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
-                            }`}
-                          >
-                            <span className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${selected ? "border-white/70 bg-white/20" : "border-sand-mute bg-white"}`}>
-                              {selected && (
-                                <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                              )}
-                            </span>
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span className="mt-1 block text-[10px] font-normal text-moss">
-                      Which buttons this post&apos;s card carries. On the feed, Give now opens the
-                      money-or-goods choice — untick Support (in-kind) as well when the call wants money first.
-                    </span>
-                  </div>
-                </>
+              {/* A call for money or goods names the account it supports —
+                  the wording members read on the giving form. */}
+              {form.options.some((code) => GIVING_OPTION_CODES.includes(code)) && (
+                <label className="block text-xs font-semibold text-bark md:col-span-2">
+                  Support account *
+                  <select
+                    value={form.support_account}
+                    onChange={(e) => setForm({ ...form, support_account: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                  >
+                    <option value="">-- Select account --</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.description || account.name}>
+                        {account.description || account.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[10px] font-normal text-moss">
+                    The account the card&apos;s giving buttons name. Give now opens the money-or-goods
+                    choice; untick Support (in-kind) as well when the call wants money first.
+                  </span>
+                </label>
               )}
 
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
@@ -1217,6 +1084,62 @@ export function AnnouncementManager({
                 </p>
               </div>
 
+              {/* Scheduling: the day and hour the post goes live, and whether
+                  the notice repeats once it is. Blank means it goes out the
+                  moment it is saved, which is what the board has always done;
+                  a day and hour keep it out of the feed — and out of every
+                  inbox and phone — until that moment arrives. */}
+              <div className="md:col-span-2 rounded-xl border border-sand-line bg-sand-linen/40 p-3">
+                <span className="block text-xs font-semibold text-bark">Schedule</span>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+                  <label className="block text-[11px] font-semibold text-moss">
+                    Day
+                    <input
+                      type="date"
+                      min={localDate()}
+                      value={form.publish_on}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          publish_on: e.target.value,
+                          // A day with no hour is a morning post: the hour
+                          // input is filled rather than left to read as
+                          // midnight, which nobody schedules on purpose.
+                          publish_time: e.target.value && !form.publish_time ? "08:00" : form.publish_time,
+                        })
+                      }
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-moss">
+                    Time
+                    <input
+                      type="time"
+                      value={form.publish_time}
+                      onChange={(e) => setForm({ ...form, publish_time: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
+                    />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-moss">
+                    Repeats
+                    <select
+                      value={form.repeat}
+                      onChange={(e) => setForm({ ...form, repeat: e.target.value as typeof form.repeat })}
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
+                    >
+                      {REPEAT_CHOICES.map((choice) => (
+                        <option key={choice.value} value={choice.value}>{choice.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p className="mt-1.5 text-[10px] font-normal text-moss">
+                  {form.publish_on
+                    ? `Goes out on ${dayFirst(form.publish_on)}${form.publish_time ? ` at ${form.publish_time}` : ""} — nothing reaches the congregation before then.`
+                    : "Blank means the post is published the moment you save it."}
+                </p>
+              </div>
+
               <div className="text-xs font-semibold text-bark">
                 Attachment (optional)
                 {existingAttachment && !removeAttachment && (
@@ -1248,34 +1171,25 @@ export function AnnouncementManager({
                 )}
               </div>
 
-              {/* Other types keep the ordinary body field; an opinion poll's
-                  body is its question, collected in the poll block above. */}
-              {form.announcement_type !== "opinion" && (
-                <label className="block text-xs font-semibold text-bark md:col-span-2">
-                  Announcement Text *
-                  <textarea
-                    required
-                    rows={4}
-                    maxLength={ANNOUNCEMENT_TEXT_LIMIT}
-                    value={form.text}
-                    onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
-                    placeholder="Write full announcement content..."
-                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                  />
-                  {form.announcement_type === "promotion" && (
-                    <span className="mt-1 block text-[10px] font-normal text-moss">
-                      This text is the drive&apos;s description and the message broadcast to its audience. There is no second letter to write.
-                    </span>
-                  )}
-                  <span
-                    className={`mt-1 block text-right text-[10px] font-semibold ${
-                      form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
-                    }`}
-                  >
-                    {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
-                  </span>
-                </label>
-              )}
+              <label className="block text-xs font-semibold text-bark md:col-span-2">
+                Announcement Text *
+                <textarea
+                  required
+                  rows={4}
+                  maxLength={ANNOUNCEMENT_TEXT_LIMIT}
+                  value={form.text}
+                  onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
+                  placeholder="Write full announcement content..."
+                  className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                />
+                <span
+                  className={`mt-1 block text-right text-[10px] font-semibold ${
+                    form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
+                  }`}
+                >
+                  {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
+                </span>
+              </label>
 
               {message && (
                 <div className="md:col-span-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-700">
@@ -1612,6 +1526,16 @@ export function AnnouncementManager({
                 <span className="rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-bold text-ember">
                   Via {channelsLabel(item.sharing_option)}
                 </span>
+                {item.publish_at && new Date(item.publish_at).getTime() > Date.now() && (
+                  <span className="rounded-full bg-sand-veil px-2 py-0.5 text-[10px] font-bold text-bark">
+                    Scheduled for {dayFirstTime(item.publish_at)}
+                  </span>
+                )}
+                {item.repeat && item.repeat !== "none" && (
+                  <span className="rounded-full bg-sand-veil px-2 py-0.5 text-[10px] font-bold text-bark">
+                    Repeats {item.repeat}
+                  </span>
+                )}
                 {item.announcement_type && item.announcement_type !== "awareness" && (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                     {item.announcement_type === "web_conference"

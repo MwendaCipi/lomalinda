@@ -10,6 +10,7 @@ import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { eventLabel } from "@/lib/announcement-dates";
+import { cardButtons } from "@/lib/announcement-options";
 import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -58,22 +59,21 @@ type FeedItem = {
   expires_at?: string | null;
   created_at: string;
   fund_drive?: FundDrive | null;
-  /** The giving buttons this post carries; empty = the default trio. */
-  giving_actions?: string[];
+  /** The buttons this post's card carries, as the officer ticked them. */
+  options?: string[];
+  /** When a scheduled post goes live, and how the notice repeats. */
+  publish_at?: string | null;
+  repeat?: "none" | "daily" | "weekly" | "monthly";
 };
 
-/** The giving buttons an announcement's card actually shows, resolved from
- *  the officer's pick. An old post that predates the choice reads the list
- *  every card used to carry. Give now opens the money-or-goods choice — it
+/** The buttons an announcement's card actually shows, resolved from the
+ *  officer's ticked options. Give now opens the money-or-goods choice — it
  *  already offers the in-kind form — so Support only gains its own button
  *  where Give now was left off; otherwise the two would be two doors to the
  *  same goods form on one card. */
 function chosenActions(item: FeedItem): string[] {
-  const chosen = item.giving_actions?.length ? item.giving_actions : ["give_now", "pledge", "comment"];
-  const order = ["give_now", "pledge", "in_kind", "comment"];
-  return chosen
-    .filter((code) => code !== "in_kind" || !chosen.includes("give_now"))
-    .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const chosen = cardButtons(item.options);
+  return chosen.filter((code) => code !== "in_kind" || !chosen.includes("give_now"));
 }
 
 /** The drive's own giving link, opened straight into the giving modal. */
@@ -392,7 +392,7 @@ export default function AnnouncementsPage() {
                           choice lives inside Give Now's own modal, so a full
                           row still carries everything; a Support button only
                           stands alone where Give now was left off. */}
-                      {(supportGives || (isDrive && drive)) && feedActions.length > 0 && (
+                      {feedActions.length > 0 && (
                         <div className="mt-3 border-t border-sand-line pt-3">
                           {/* The row gathers at the card's right edge: the
                               giving doors first, Comment at the end. */}
@@ -434,6 +434,22 @@ export default function AnnouncementsPage() {
                                   </button>
                                 );
                               }
+                              if (code === "join_meeting" || code === "enroll" || code === "register") {
+                                if (!item.href) return null;
+                                const label =
+                                  code === "join_meeting" ? "Join meeting" : code === "enroll" ? "Enroll now" : "Register now";
+                                return (
+                                  <a
+                                    key={code}
+                                    href={item.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-full border border-sand-mute bg-white px-4 py-1.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
+                                  >
+                                    {label}
+                                  </a>
+                                );
+                              }
                               const isExpanded = Boolean(expandedComments[item.id]);
                               return (
                                 <button
@@ -454,28 +470,7 @@ export default function AnnouncementsPage() {
                         </div>
                       )}
 
-                      {/* A card with nothing to give still carries the one
-                          Comment button at its foot — expanding the thread inline. */}
-                      {!supportGives && !isDrive && (
-                        <div className="mt-3 flex justify-end border-t border-sand-line pt-3">
-                          {(() => {
-                            const isExpanded = Boolean(expandedComments[item.id]);
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => toggleComment(item.id)}
-                                className={`rounded-full border px-4 py-1.5 text-xs font-bold transition ${
-                                  isExpanded
-                                    ? "border-ember bg-sand text-ember"
-                                    : "border-sand-mute bg-white text-bark hover:border-ember hover:text-ember"
-                                }`}
-                              >
-                                {isExpanded ? "Hide comments" : "Comment"}
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      )}
+
 
                       {/* The pledge itself is recorded in the modal the card's
                           Pledge button opens; the pledge lands in the

@@ -6677,20 +6677,104 @@ class AnnouncementEventDatesAPITests(APITestCase):
         self.assertEqual(response.data['event_date_from'], '2026-10-01')
         self.assertEqual(response.data['event_date_to'], '2026-10-02')
 
-    def test_a_plain_notice_keeps_no_link(self):
-        """The companion rule: awareness posts are notices, not invitations."""
+    def test_a_plain_notice_keeps_its_link_and_asks_for_nothing(self):
+        """The type rule is gone: a post names its own buttons, and a notice
+        may carry its link with nothing ticked at all."""
         response = self.client.post('/api/members/announcements/', {
             'title': 'Quiet notice',
-            'text': 'A notice with a stray link.',
+            'text': 'A notice with a link and nothing to press.',
             'visibility': 'members_only',
             'sharing_option': 'site',
-            'href': 'https://meet.example.com/left-over',
+            'href': 'https://example.com/notice',
             'event_date_from': '2026-10-01',
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['href'], '')
+        self.assertEqual(response.data['href'], 'https://example.com/notice')
+        self.assertEqual(response.data['options'], [])
+
+    def test_the_card_carries_only_the_buttons_the_officer_ticked(self):
+        """The options are the card's buttons: what is sent comes back, in the
+        officer's order, and nothing the picker did not offer is accepted."""
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Choir practice',
+            'text': 'Come and sing.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'href': 'https://example.com/choir',
+            'options': ['register', 'comment'],
+            'event_date_from': '2026-10-01',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['options'], ['register', 'comment'])
+
+        unknown = self.client.post('/api/members/announcements/', {
+            'title': 'Stray button',
+            'text': 'A button nobody offers.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'options': ['buy_now'],
+            'event_date_from': '2026-10-01',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+        self.assertEqual(unknown.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_a_meeting_to_join_needs_its_link(self):
+        """A ticked Join meeting with no way in is refused, before it posts."""
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Board on Zoom',
+            'text': 'The board meets online.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'options': ['join_meeting'],
+            'event_date_from': '2026-10-01',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('meeting link', str(response.data))
+
+    def test_a_post_scheduled_for_later_waits_for_its_hour(self):
+        """A scheduled post is not in the feed — and has not been announced —
+        until the day and hour the officer set."""
+        tomorrow = timezone.now() + timedelta(days=1)
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Sabbath programme',
+            'text': 'The programme for the coming Sabbath.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'publish_at': tomorrow.isoformat(),
+            'repeat': 'weekly',
+            'event_date_from': (tomorrow + timedelta(days=2)).date().isoformat(),
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['repeat'], 'weekly')
+        self.assertIsNone(response.data['scheduled_broadcast_at'])
+        titles = [row['title'] for row in self.client.get('/api/members/announcements/').data]
+        self.assertNotIn('Sabbath programme', titles)
+
+        # The management board opts in to what is waiting behind the hour.
+        board = self.client.get('/api/members/announcements/?include_scheduled=true&include_expired=true&include_unpublished=true')
+        self.assertIn('Sabbath programme', [row['title'] for row in board.data])
+
+    def test_a_scheduled_hour_already_passed_is_refused(self):
+        response = self.client.post('/api/members/announcements/', {
+            'title': 'Yesterday',
+            'text': 'Written for an hour that has gone.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'publish_at': (timezone.now() - timedelta(hours=1)).isoformat(),
+            'event_date_from': '2026-10-01',
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('future', str(response.data))
 
     def test_event_window_cannot_end_before_it_starts(self):
         response = self.client.post('/api/members/announcements/', {

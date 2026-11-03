@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { announcementCountdown } from "@/lib/announcement-dates";
+import { cardButtons } from "@/lib/announcement-options";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { GiveMethodModal } from "@/components/give-method-modal";
@@ -14,18 +15,15 @@ import { isImageAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-/** The giving buttons the officer chose for the post. A post saved before
- *  the choice existed shows the row every card used to carry. Give now's
- *  own modal already offers goods, so Support only stands alone where Give
- *  now was left off. Comment is not offered on the card: the thread is
- *  reached by opening the full feed, which the whole card already is. */
+/** The buttons the officer ticked for the post. Give now's own modal already
+ *  offers goods, so Support only stands alone where Give now was left off.
+ *  Comment is not offered on the card: the thread is reached by opening the
+ *  full feed, which the whole card already is. */
 function chosenActions(item: Announcement): string[] {
-  const chosen = item.giving_actions?.length ? item.giving_actions : ["give_now", "pledge"];
-  const order = ["give_now", "pledge", "in_kind"];
+  const chosen = cardButtons(item.options);
   return chosen
     .filter((code) => code !== "in_kind" || !chosen.includes("give_now"))
-    .filter((code) => code !== "comment")
-    .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    .filter((code) => code !== "comment");
 }
 
 type Announcement = {
@@ -38,8 +36,11 @@ type Announcement = {
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   support_account?: string | null;
   support_account_display?: string | null;
-  /** The giving buttons this post carries; empty = the default trio. */
-  giving_actions?: string[];
+  /** The buttons this post's card carries, as the officer ticked them. */
+  options?: string[];
+  /** When a scheduled post goes live, and how the notice repeats. */
+  publish_at?: string | null;
+  repeat?: "none" | "daily" | "weekly" | "monthly";
   /** The clock the pledge's own date is capped by. */
   event_date_from?: string | null;
   event_date_to?: string | null;
@@ -130,9 +131,14 @@ export function DashboardAnnouncements() {
     return () => window.clearInterval(timer);
   }, [canRotate, isPaused, isInteracting, modalOpen, slideCount]);
 
-  const isGiving = current?.announcement_type === "promotion";
+  // The card's buttons come from the officer's ticks: a call for money or
+  // goods gives its own row, and a meeting, class or form is the card's one
+  // way out — the same link the whole card opens, named by its button.
+  const buttons = current ? chosenActions(current) : [];
+  const linkCode = buttons.find((code) => code === "join_meeting" || code === "enroll" || code === "register");
+  const isGiving = buttons.some((code) => code === "give_now" || code === "pledge" || code === "in_kind");
   const isOpinion = current?.announcement_type === "opinion";
-  const isConference = current?.announcement_type === "web_conference" && Boolean(current.href);
+  const linkHref = linkCode && current?.href ? current.href : null;
 
   const hasImage = current && isImageAttachment(current.attachment);
 
@@ -370,7 +376,7 @@ export function DashboardAnnouncements() {
               Give input
             </button>
           )}
-          {isConference && current?.href && (
+          {linkHref && current && (
             /* A conference reads top to bottom: the hour the meeting begins
                and the way in share one row, read before the tap. */
             <div className="ml-auto flex items-center justify-end gap-2.5 sm:gap-3">
@@ -380,12 +386,12 @@ export function DashboardAnnouncements() {
                 </span>
               )}
               <a
-                href={current.href}
+                href={linkHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
               >
-                {platformLabel(current.href)}
+                {linkCode === "enroll" ? "Enroll now" : linkCode === "register" ? "Register now" : platformLabel(current.href)}
               </a>
             </div>
           )}

@@ -607,6 +607,43 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         # Duplicates would render one button twice; a list of codes is a set.
         return list(dict.fromkeys(value))
 
+    # The buttons the post's card carries, as the officer ticked them. Read
+    # back as ``options``; stored on ``card_options`` so the older
+    # ``giving_actions`` field keeps its own meaning for posts saved before
+    # the choice existed.
+    options = serializers.ListField(
+        child=serializers.ChoiceField(choices=Announcement.CARD_OPTION_CHOICES),
+        required=False,
+        source='card_options',
+    )
+
+    @staticmethod
+    def legacy_options(obj):
+        """The buttons an older post's card already carries.
+
+        Posts saved before the picker existed were described by a type, and a
+        promotion by its giving actions. Reading the same codes back as
+        options means every card — old and new — answers the one question:
+        which buttons does this post carry?
+        """
+        if obj.card_options:
+            return list(obj.card_options)
+        if obj.announcement_type == 'web_conference':
+            return ['join_meeting']
+        if obj.announcement_type == 'opinion':
+            return ['comment']
+        if obj.announcement_type == 'job_vacancy':
+            return ['register']
+        if obj.announcement_type == 'promotion':
+            return list(obj.giving_actions or ['give_now', 'pledge', 'comment'])
+        return []
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data.get('options'):
+            data['options'] = self.legacy_options(instance)
+        return data
+
     def get_support_account_display(self, obj):
         """The account label the feed's Give now button names.
 
@@ -675,7 +712,7 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         """
         if hasattr(data, 'copy') and hasattr(data, 'get'):
             mutable = data.copy()
-            for field in ('event_time_from', 'event_time_to'):
+            for field in ('event_time_from', 'event_time_to', 'publish_at'):
                 if field in mutable and not str(mutable.get(field) or '').strip():
                     mutable[field] = None
             data = mutable
@@ -697,79 +734,62 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         if single_day and time_from and time_to and time_to < time_from:
             raise serializers.ValidationError('The event cannot end before it starts.')
 
-        # The type decides which special fields belong to the post. Fields a
-        # type does not use are cleared, so the stored row always matches the
-        # form the officer completed; the link is required where it is the
-        # whole point (web conference), and the options where the question is
-        # a closed one (opinion).
-        announcement_type = attrs.get('announcement_type', instance.announcement_type if instance else 'awareness')
-        if announcement_type == 'web_conference':
-            href = attrs.get('href') if 'href' in attrs else (instance.href if instance else '')
-            if not (href or '').strip():
-                raise serializers.ValidationError('A web conference announcement needs a meeting link.')
-            attrs['support_account'] = ''
-            attrs['response_mode'] = ''
-            attrs['response_options'] = ''
-            attrs['action_type'] = 'none'
-            attrs['giving_actions'] = []
-        elif announcement_type == 'promotion':
-            attrs['href'] = ''
-            support_account = attrs.get('support_account') if 'support_account' in attrs else (instance.support_account if instance else '')
-            if not (support_account or '').strip():
-                raise serializers.ValidationError('A promotion / contribution announcement needs a treasury account.')
-            # The goal is optional: a support call can post with its account
-            # named and no drive behind it, so nothing shows a percentage that
-            # can never move. A target that is written must still be a real
-            # goal, though — zero opens a drive that can never progress.
+        # The card's buttons are the officer's own ticked list — there is no
+        # type deciding for them any more. A ticked button that needs input is
+        # checked here: a meeting to join needs its link, and a call for money
+        # or goods needs the account it supports.
+        if 'card_options' in attrs:
+            attrs['card_options'] = list(dict.fromkeys(attrs['card_options']))
+        chosen = attrs.get('card_options', instance.card_options if instance else [])
+        chosen = list(chosen or [])
+        href = attrs.get('href') if 'href' in attrs else (instance.href if instance else '')
+        if 'join_meeting' in chosen and not (href or '').strip():
+            raise serializers.ValidationError(
+                'A post that invites members to join a meeting needs its meeting link.'
+            )
+        support_account = (
+            attrs.get('support_account') if 'support_account' in attrs
+            else (instance.support_account if instance else '')
+        )
+        if any(code in chosen for code in ('give_now', 'pledge', 'in_kind')) and not (support_account or '').strip():
+            raise serializers.ValidationError(
+                'A post that asks for money or goods needs the treasury account it supports.'
+            )
+        # A scheduled post must fall in the future: a row written for an hour
+        # already past is a post the feed would show the moment it is saved,
+        # which is not what the officer asked for.
+        publish_at = attrs.get('publish_at')
+        if publish_at is not None and publish_at <= timezone.now():
+            raise serializers.ValidationError('A scheduled announcement must be set for a future day and time.')
+        # The buttons an old form used to clear are kept when it sends its own
+        # type: a promotion still names its account and its goal, and a
+        # closed-response question still offers at least two choices.
+        announcement_type = attrs.get('announcement_type')
+        if announcement_type == 'promotion':
             target = attrs.get('promotion_target')
             if target is not None and float(target) <= 0:
                 raise serializers.ValidationError('A target amount must be greater than zero.')
-            attrs['response_mode'] = ''
-            attrs['response_options'] = ''
-            attrs['action_type'] = 'none'
-            # The buttons must amount to an action: an untouched picker keeps
-            # the default trio, but a call whose officer emptied the whole
-            # row would leave members a card with nothing to do.
             if 'giving_actions' in attrs and not attrs['giving_actions']:
                 raise serializers.ValidationError('Choose at least one giving action.')
+            attrs.setdefault('card_options', chosen)
         elif announcement_type == 'opinion':
-            attrs['href'] = ''
-            attrs['support_account'] = ''
-            attrs['action_type'] = 'respond'
-            attrs['giving_actions'] = []
             mode = attrs.get('response_mode') or 'open'
             if mode not in ('open', 'closed'):
                 raise serializers.ValidationError('An opinion post answers openly or among fixed options.')
             options_text = attrs.get('response_options') if 'response_options' in attrs else (instance.response_options if instance else '')
             if mode == 'closed':
-                options = [line.strip() for line in (options_text or '').splitlines() if line.strip()]
-                if len(options) < 2:
+                lines = [line.strip() for line in (options_text or '').splitlines() if line.strip()]
+                if len(lines) < 2:
                     raise serializers.ValidationError('A closed-response opinion needs at least two options, one per line.')
                 # The stored options are the cleaned lines, so the buttons a
                 # member sees and the choice saved are always the same words.
-                attrs['response_options'] = '\n'.join(options)
-            else:
-                attrs['response_options'] = ''
-        elif announcement_type == 'job_vacancy':
-            # Job vacancy can carry an optional application link or attachment
-            attrs['support_account'] = ''
-            attrs['response_mode'] = ''
-            attrs['response_options'] = ''
-            attrs['action_type'] = 'none'
-            attrs['giving_actions'] = []
-        else:  # awareness: a plain notice carries no link, no account, no question
-            attrs['href'] = ''
-            attrs['support_account'] = ''
-            attrs['response_mode'] = ''
-            attrs['response_options'] = ''
-            attrs['action_type'] = 'none'
-            attrs['giving_actions'] = []
+                attrs['response_options'] = '\n'.join(lines)
         return attrs
 
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'giving_actions', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
-        read_only_fields = ('id', 'created_at', 'campaign_id')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'giving_actions', 'options', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'publish_at', 'repeat', 'scheduled_broadcast_at', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
+        read_only_fields = ('id', 'created_at', 'campaign_id', 'scheduled_broadcast_at')
 
 
 class ContributionSerializer(serializers.ModelSerializer):
