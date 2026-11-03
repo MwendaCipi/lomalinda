@@ -1184,12 +1184,6 @@ export function AnnouncementManager({
                     onChange={(e) => setForm({ ...form, event_date_to: e.target.value })}
                     className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
-                  {/* The end day is what ranks the post, so the officer is
-                      told so where they set it: a long event that began
-                      yesterday stands behind the weekend that finishes first. */}
-                  <span className="mt-1 block text-[10px] font-normal text-moss">
-                    Decides where the post sits: the sooner its event ends, the closer to the top of the feed.
-                  </span>
                 </label>
               </div>
 
