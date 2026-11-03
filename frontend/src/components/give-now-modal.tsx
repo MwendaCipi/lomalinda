@@ -5,6 +5,7 @@ import { ChevronDown, Landmark, Search, UserRound, X } from "lucide-react";
 import { showAlert, showGivingThanks } from "@/lib/alerts";
 import { localDate } from "@/lib/dates";
 import { useHeaderData, patchCachedMe } from "@/hooks/use-header-data";
+import { ComboboxPopover } from "@/components/combobox-popover";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -146,6 +147,11 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
   const [accountAmounts, setAccountAmounts] = useState<Record<string, string>>({});
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const accountPickerRef = useRef<HTMLDivElement | null>(null);
+  // The list is rendered through a portal (see ComboboxPopover): anchored to
+  // the trigger's rect and lifted out of the form's scrolling pane, which
+  // would otherwise clip it however high its z-index. That puts it outside the
+  // trigger's own ref, so the outside-tap test has to know it too.
+  const accountPanelRef = useRef<HTMLDivElement | null>(null);
   const [methodOfGiving, setMethodOfGiving] = useState<MethodOfGiving>("mpesa");
   const [purposes, setPurposes] = useState<GivingAccountOption[]>([]);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -216,7 +222,9 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
   useEffect(() => {
     if (!open || !showAccountPicker) return;
     const closeOnOutsideTap = (event: PointerEvent) => {
-      if (!accountPickerRef.current?.contains(event.target as Node)) setShowAccountPicker(false);
+      const target = event.target as Node;
+      if (accountPickerRef.current?.contains(target) || accountPanelRef.current?.contains(target)) return;
+      setShowAccountPicker(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setShowAccountPicker(false);
@@ -579,10 +587,16 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
                 </button>
 
                 {showAccountPicker && (
-                  /* Opens upward: the fields that follow (amounts, M-Pesa
-                     details, the submit button) sit under this row and the
-                     list used to cover them. */
-                  <div className="absolute bottom-full left-0 right-0 z-50 mb-1.5 flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl">
+                  /* Floating over the form rather than growing it: the list is
+                     portalled out of the scrolling pane so the modal's own
+                     overflow cannot cut it off, and it flips above the trigger
+                     when the amounts below leave it no room. */
+                  <ComboboxPopover
+                    open={showAccountPicker}
+                    anchorRef={accountPickerRef}
+                    panelRef={accountPanelRef}
+                    panelClassName="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xl"
+                  >
                     <div className="max-h-56 overflow-y-auto p-2">
                       {purposes.map((item) => {
                         const checked = selectedAccounts.includes(item.label);
@@ -618,7 +632,7 @@ export function GiveNowModal({ open, onClose, presetAccount, honoree, honoreePho
                         Done
                       </button>
                     </div>
-                  </div>
+                  </ComboboxPopover>
                 )}
               </div>
             </div>
