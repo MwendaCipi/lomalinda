@@ -185,6 +185,11 @@ export function DashboardAnnouncements() {
     // `h-full`: on a wide screen the card shares a row with the pages beside
     // it, and filling the row keeps the two panels' feet level instead of
     // leaving the short one floating.
+    //
+    // The body reads four lines now, so the card's own vertical padding — the
+    // air above and below what it holds — gives a line of that back: the card
+    // grows by a hair rather than by a whole line, and the panels under it
+    // stay where they were.
     <div
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -192,7 +197,7 @@ export function DashboardAnnouncements() {
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsInteracting(false);
       }}
-      className="relative h-full rounded-3xl border border-sand-line bg-white px-6 py-5 shadow-sm sm:px-8"
+      className="relative h-full rounded-3xl border border-sand-line bg-white px-6 py-3 shadow-sm sm:px-8"
     >
       {/* The whole card opens the Fellowship feed: this overlay link fills the
           card and the content above it is given back to the pointer, so a
@@ -251,22 +256,22 @@ export function DashboardAnnouncements() {
         </div>
 
         {/* The rail's height is constant whatever the slide carries: the
-            title holds one line, the body always has room for three lines
+            title holds one line, the body always has room for four lines
             and the detail line keeps its slot even when empty — so the
             panels below never jump as the slides turn. The action row sits
             tight under the text so the extra line costs no height. */}
-        <div className="mt-2.5">
+        <div className="mt-1.5">
           <h2 className="line-clamp-1 text-lg font-bold leading-snug text-bark sm:text-xl">
             {current ? current.title : gathering ? gatheringLabel(gathering, now) : "Our week together"}
           </h2>
-          {/* A notice that runs past the three lines is cut with an ellipsis on
+          {/* A notice that runs past the four lines is cut with an ellipsis on
               its last line, and See more rides that same line — pinned over
               the cut — so the ask to read on is read with the sentence it
               ends, not as a button standing apart. A slide cut for its image
               rather than its length takes See more after the text instead:
               there is no ellipsis to own a line. */}
           <div className="relative">
-            <p ref={bodyRef} className="mt-1 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-moss-mid">
+            <p ref={bodyRef} className="mt-0.5 line-clamp-4 min-h-[6rem] text-sm leading-6 text-moss-mid">
               {current
                 ? current.text
                 : gathering
