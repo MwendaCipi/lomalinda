@@ -350,6 +350,10 @@ function NamePicker({
 export function PrayerCellsDesk() {
   const [register, setRegister] = useState<Register | null>(null);
   const [deskRequests, setDeskRequests] = useState<DeskRequest[]>([]);
+  // A cell is formed in a modal over the desk, the way every other form here
+  // opens: the register stays the page's one subject, and the three fields a
+  // new cell needs are not a standing section nobody is using.
+  const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newLeader, setNewLeader] = useState<NameMatch | null>(null);
@@ -392,6 +396,25 @@ export function PrayerCellsDesk() {
     }
   };
 
+  /** Stand the form down — and clear it, so the next cell starts fresh. */
+  const closeForm = () => {
+    if (busy === "create") return;
+    setShowForm(false);
+    setNewName("");
+    setNewDescription("");
+    setNewLeader(null);
+  };
+
+  // Escape closes the form, as every modal in the app does.
+  useEffect(() => {
+    if (!showForm) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && busy !== "create") setShowForm(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showForm, busy]);
+
   const formCell = async () => {
     const name = newName.trim();
     if (name.length < 3) {
@@ -412,6 +435,7 @@ export function PrayerCellsDesk() {
       setNewName("");
       setNewDescription("");
       setNewLeader(null);
+      setShowForm(false);
       showAlert("Cell formed", "The prayer cell is on the register, and its chat is open.", "success", {
         toast: true,
         timer: 4500,
@@ -524,54 +548,21 @@ export function PrayerCellsDesk() {
         </ul>
       </section>
 
-      {/* Form a cell — the register's write. */}
+      {/* The register: each cell and the roll the desk keeps. A cell is added
+          from the heading's own button, which opens the form over the desk. */}
       <section className="rounded-2xl border border-sand-line bg-white p-5">
-        <h3 className="text-sm font-bold text-bark">Form a prayer cell</h3>
-        <div className="mt-3 space-y-2">
-          <input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="Cell name — e.g. Oasis"
-            className="w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-sm outline-none focus:border-ember/40"
-          />
-          <input
-            value={newDescription}
-            onChange={(event) => setNewDescription(event.target.value)}
-            placeholder="A line about when and how they meet (optional)"
-            className="w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-sm outline-none focus:border-ember/40"
-          />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <NamePicker
-              onPick={(match) => setNewLeader(match)}
-              busy={false}
-              placeholder="Search a member to lead it (optional)…"
-            />
-            {newLeader && (
-              <div className="flex items-center justify-between gap-2 rounded-xl bg-sand px-3 py-2 text-xs text-bark">
-                <span className="truncate">Leader: {newLeader.name}</span>
-                <button type="button" onClick={() => setNewLeader(null)} aria-label="Clear leader">
-                  <X className="h-3.5 w-3.5 text-moss hover:text-ember" />
-                </button>
-              </div>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-bark">The register</h3>
           <button
             type="button"
-            onClick={() => void formCell()}
-            disabled={busy === "create"}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-50"
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
           >
-            {busy === "create" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-            Form the cell
+            <UserPlus className="h-3.5 w-3.5" /> Form a prayer cell
           </button>
         </div>
-      </section>
-
-      {/* The register: each cell and the roll the desk keeps. */}
-      <section className="rounded-2xl border border-sand-line bg-white p-5">
-        <h3 className="text-sm font-bold text-bark">The register</h3>
         {register.cells.length === 0 && (
-          <p className="mt-1 text-xs text-moss">No cell on the register yet — form the first one above.</p>
+          <p className="mt-1 text-xs text-moss">No cell on the register yet — form the first one here.</p>
         )}
         <div className="mt-2 space-y-3">
           {register.cells.map((cell) => (
@@ -657,6 +648,114 @@ export function PrayerCellsDesk() {
           ))}
         </div>
       </section>
+
+      {/* Forming a cell: the three fields a new company needs, over the desk
+          rather than in a standing section — the register (and an empty
+          register, above all) is what the desk is for. */}
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeForm();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="form-cell-title"
+            className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
+          >
+            <div className="flex shrink-0 items-start justify-between border-b border-sand-line px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
+              <div>
+                <h2 id="form-cell-title" className="text-xl font-bold text-bark">
+                  Form a prayer cell
+                </h2>
+                <p className="mt-1 text-xs text-moss">
+                  Name the company and say a line about how it meets. Seat a member to lead it, or leave that to the
+                  desk later — its chat opens with the cell.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={busy === "create"}
+                aria-label="Close"
+                className="rounded-full p-2 text-moss transition hover:bg-sand hover:text-bark disabled:opacity-50"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4 pt-6 sm:px-8">
+              <label className="block text-xs font-semibold text-bark">
+                Cell name *
+                <input
+                  autoFocus
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="e.g. Oasis"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-sm text-bark outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+
+              <label className="block text-xs font-semibold text-bark">
+                Description <span className="font-normal text-moss">(optional)</span>
+                <input
+                  value={newDescription}
+                  onChange={(event) => setNewDescription(event.target.value)}
+                  placeholder="When and how the cell meets"
+                  className="mt-1 w-full rounded-xl border border-sand-line bg-sand-plate px-3.5 py-2.5 text-sm text-bark outline-none focus:border-ember focus:bg-white"
+                />
+              </label>
+
+              <div className="block text-xs font-semibold text-bark">
+                <span>
+                  Leader <span className="font-normal text-moss">(optional)</span>
+                </span>
+                <div className="mt-1">
+                  <NamePicker
+                    onPick={(match) => setNewLeader(match)}
+                    busy={false}
+                    placeholder="Search a member to lead it…"
+                  />
+                </div>
+                {newLeader && (
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-sand px-3 py-2 text-xs text-bark">
+                    <span className="truncate">Leader: {newLeader.name}</span>
+                    <button type="button" onClick={() => setNewLeader(null)} aria-label="Clear leader">
+                      <X className="h-3.5 w-3.5 text-moss hover:text-ember" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center justify-end gap-3 border-t border-sand-line px-6 pb-4 pt-3 sm:px-8">
+              <button
+                type="button"
+                onClick={closeForm}
+                disabled={busy === "create"}
+                className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void formCell()}
+                disabled={busy === "create"}
+                className="inline-flex items-center gap-1.5 rounded-full bg-ember px-6 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-ember-deep disabled:opacity-60"
+              >
+                {busy === "create" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                Form the cell
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
