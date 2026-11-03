@@ -600,9 +600,12 @@ export function AnnouncementsFeed({
 
   if (embedded) {
     // Inside a host card (the eldership desk's Sharing): scroll within the
-    // room the host already drew — no shell of its own.
+    // room the host already drew — no shell of its own. The host is drawn
+    // edge to edge, so the feed keeps a line of air inside it: the posts are
+    // cards without a table beneath them, and flush against the host's border
+    // they read as clipped rather than rested.
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto custom-hover-scrollbar">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto custom-hover-scrollbar p-1.5 sm:p-2">
         {feed}
         {modals}
       </div>

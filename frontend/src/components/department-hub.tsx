@@ -7362,7 +7362,13 @@ function DepartmentDetail({
       className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
         isEldership || isPersonalMinistries
           ? subTab === "baptismal-class" || subTab === "daily-word" || subTab === "moments" || subTab === "prayer_cells"
-            ? "gap-3 overflow-y-auto p-0"
+            // These are the desk's card pages, not its tables: the gutter the
+            // page gave up is asked back inside the card, so the panels a
+            // view draws sit off its edge with a line of air rather than
+            // flush against it. The tables keep the full width (p-0 below),
+            // where their rows are the content and air would only be lost
+            // space.
+            ? "gap-3 overflow-y-auto p-2 sm:p-3"
             : "gap-3 overflow-hidden p-0"
           : sharingWall
             ? "gap-2 overflow-hidden p-1"
