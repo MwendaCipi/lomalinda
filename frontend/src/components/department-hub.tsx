@@ -4604,7 +4604,9 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
     "mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm font-normal outline-none focus:border-ember";
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
+    // The desk draws itself edge to edge for its tables; this view is a card
+    // rather than rows, so it keeps a line of air inside the desk's edge.
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 p-2 sm:p-3">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white p-5 shadow-sm">
         <div className="shrink-0">
           <h3 className="text-sm font-bold text-bark">The church&apos;s week</h3>

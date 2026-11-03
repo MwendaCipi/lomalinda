@@ -297,7 +297,12 @@ export function MessagingPanel({
   const audience = `${departmentLabel} roll`;
 
   return (
-    <div className="space-y-4">
+    // The desk draws this panel edge to edge (its tables need the width), but
+    // the composer and the log are cards rather than rows — flush against the
+    // panel they read as clipped, so the panel keeps a line of air inside it.
+    // It scrolls within the desk for the same reason: the log grows a card at
+    // a time, and the desk holds its own height still.
+    <div className="h-full min-h-0 space-y-4 overflow-y-auto custom-hover-scrollbar p-2 sm:p-3">
       <MessageCompose
         departmentCode={departmentCode}
         departmentLabel={departmentLabel}
