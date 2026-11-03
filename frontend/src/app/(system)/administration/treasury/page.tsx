@@ -1535,6 +1535,7 @@ export default function TreasuryPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDownloadBackendPdf(true, expandedPurpose)}
+                                  title="Print this account's givings for the period"
                                   disabled={preparing !== null}
                                   className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                                 >
@@ -1543,7 +1544,7 @@ export default function TreasuryPage() {
                                   ) : (
                                     <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
                                   )}
-                                  <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
+                                  <span className="truncate">{preparing === "pdf" ? "Preparing…" : "Givings Report"}</span>
                                 </button>
                               </div>
                             </div>
@@ -1792,6 +1793,7 @@ export default function TreasuryPage() {
                         <button
                           type="button"
                           onClick={() => handleDownloadBackendPdf(false)}
+                          title="Print the period's summary for the church"
                           disabled={preparing !== null}
                           className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                         >
@@ -1800,7 +1802,7 @@ export default function TreasuryPage() {
                           ) : (
                             <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
                           )}
-                          <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
+                          <span className="truncate">{preparing === "pdf" ? "Preparing…" : "Summary Report"}</span>
                         </button>
                       </div>
                     </div>
@@ -2480,6 +2482,7 @@ export default function TreasuryPage() {
                             <button
                               type="button"
                               onClick={() => handleDownloadBackendPdf(true)}
+                              title="Print the period's givings"
                               disabled={preparing !== null}
                               className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                             >
@@ -2488,7 +2491,7 @@ export default function TreasuryPage() {
                               ) : (
                                 <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-ember shrink-0" aria-hidden="true" />
                               )}
-                              <span className="truncate">{preparing === "pdf" ? "Preparing…" : "PDF Report"}</span>
+                              <span className="truncate">{preparing === "pdf" ? "Preparing…" : "Givings Report"}</span>
                             </button>
                             {/* The periods walked where the givings table
                                 reads them: back an older close, forward the
