@@ -48,7 +48,6 @@ import {
   Mic,
   MicVocal,
   MoreVertical,
-  Music,
   PenLine,
   Mail,
   Phone,
@@ -3529,190 +3528,6 @@ function SingingGroupsPanel({
   );
 }
 
-/** One singer on the choir's own roll, as the department members read carries. */
-type ChoirMember = {
-  membership_id: number | null;
-  id: number;
-  name: string;
-  username: string;
-  email: string;
-  phone_number: string;
-};
-
-/**
- * The church choir's own roll, opened from the music desk.
- *
- * The choir files its singers under its own department — the music roll
- * unions them in with a "via Choir" chip — so this view is the desk's way of
- * working that list directly: search it, and add or remove the singers on
- * it. Adding follows the server's own guard (officers and the choir's own
- * leadership), and the button rides the flag the read carries.
- */
-function ChoirPanel({
-  departmentLabel,
-  onChanged,
-  search,
-}: {
-  departmentLabel: string;
-  onChanged: () => void;
-  /** The roll's search, owned by the desk so it can ride the shell's header
-      band beside the page's name, as every other view's search does. */
-  search: string;
-}) {
-  const [members, setMembers] = useState<ChoirMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [canManage, setCanManage] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const rowPad = densityCellPad();
-
-  const loadChoir = useCallback(() => {
-    setLoading(true);
-    fetch(`${API_URL}/api/members/departments/choir/members/`, { headers: authHeaders() })
-      .then((res) => (res.ok ? res.json() : { members: [], can_manage: false }))
-      .then((data) => {
-        setMembers(data.members || []);
-        setCanManage(Boolean(data.can_manage));
-      })
-      .catch(() => setMembers([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    // The fetch starts a microtask late, keeping the effect from writing
-    // state synchronously and cascading the render.
-    let alive = true;
-    void Promise.resolve().then(() => {
-      if (alive) loadChoir();
-    });
-    return () => {
-      alive = false;
-    };
-  }, [loadChoir]);
-
-  const addSinger = async (member: { id: number; name: string }) => {
-    const res = await fetch(`${API_URL}/api/members/departments/choir/members/`, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ member_id: member.id }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      showAlert("Singer added", `${member.name} now sings with the church choir.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
-      setShowAdd(false);
-      loadChoir();
-      onChanged();
-    } else {
-      showAlert("Could not add", data.detail || "The member could not be added to the church choir.", "error");
-    }
-  };
-
-  const removeSinger = async (singer: ChoirMember) => {
-    const result = await showAlert(
-      "Remove from the church choir",
-      `Take ${singer.name} off the church choir's roll? Their membership in the church is not affected.`,
-      "question",
-      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Cancel", confirmButtonColor: brand.ember }
-    );
-    if (!result.isConfirmed) return;
-    const res = await fetch(`${API_URL}/api/members/departments/choir/members/${singer.id}/`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    if (res.ok) {
-      showAlert("Removed", `${singer.name} is off the church choir's roll.`, "success", { toast: true, timer: 4000, showConfirmButton: false });
-      loadChoir();
-      onChanged();
-    } else {
-      showAlert("Could not remove", "The member could not be removed from the church choir.", "error");
-    }
-  };
-
-  const choirQuery = search.trim().toLowerCase();
-  const visibleChoir = choirQuery
-    ? members.filter((m) => `${m.name} ${m.username} ${m.phone_number} ${m.email}`.toLowerCase().includes(choirQuery))
-    : members;
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
-        <h3 className="text-sm font-bold text-bark">Church Choir</h3>
-        {canManage && (
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-          >
-            <UserPlus className="h-3.5 w-3.5" /> Add singer
-          </button>
-        )}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
-        {loading ? (
-          <p className="py-8 text-center text-xs text-moss">Loading the church choir…</p>
-        ) : visibleChoir.length === 0 ? (
-          <p className="py-8 text-center text-xs text-moss">
-            {members.length === 0
-              ? canManage
-                ? "Nobody is on the church choir's roll yet. Use “Add singer” to build it."
-                : "Nobody is on the church choir's roll yet."
-              : "No choir member matches that search."}
-          </p>
-        ) : (
-          <table className="w-full text-center sm:text-left text-xs">
-            <thead className="sticky top-0 z-10 bg-white text-[11px] font-bold uppercase tracking-wider text-ember">
-              <tr className="border-b border-sand-line">
-                <th className="px-4 pb-3 pt-3 text-center sm:text-left font-bold">Name</th>
-                <th className="hidden px-4 pb-3 pt-3 font-bold sm:table-cell">Contact</th>
-                {canManage && <th className="px-4 pb-3 pt-3 text-right font-bold">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sand-soft">
-              {visibleChoir.map((singer) => (
-                <tr key={singer.id}>
-                  <td className={`px-4 ${rowPad} text-center sm:text-left align-middle`}>
-                    <p className="break-words whitespace-normal font-semibold text-bark">{singer.name}</p>
-                  </td>
-                  <td className={`hidden px-4 ${rowPad} align-middle sm:table-cell`}>
-                    <span className="truncate text-moss">{singer.phone_number || singer.email || `@${singer.username}`}</span>
-                  </td>
-                  {canManage && (
-                    <td className={`px-4 ${rowPad} text-right align-middle`}>
-                      <button
-                        type="button"
-                        onClick={() => removeSinger(singer)}
-                        className="rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
-        <p className="text-xs text-moss">
-          {visibleChoir.length} {visibleChoir.length === 1 ? "singer" : "singers"}
-          {choirQuery ? ` of ${members.length}` : ""} on the choir&apos;s roll
-        </p>
-      </div>
-      {showAdd && (
-        <AddMemberModal
-          departmentLabel={departmentLabel}
-          title="Add singers to the church choir"
-          rollIds={new Set<number>()}
-          excludeIds={new Set(members.map((m) => m.id))}
-          takenLabel="Already in the choir"
-          onClose={() => setShowAdd(false)}
-          onAdd={addSinger}
-        />
-      )}
-    </div>
-  );
-}
-
 /** One appointment staged in the leadership modal: the person the save will
     seat under a position — the Leader's, or one of the two Assistants'. */
 type RolePerson = {
@@ -5671,7 +5486,6 @@ type DeptSubTab =
   | "pulpit-team"
   | "duties"
   | "singing_groups"
-  | "choir"
   | "accounts"
   | "letters"
   | "lesson-orders"
@@ -6118,7 +5932,6 @@ function DepartmentDetail({
     const target = monthIndexForQuery(eventSearch, calendarYear);
     if (target !== null) scrollToMonth(target, "smooth");
   }, [calendarView, eventSearch, loadingEvents, calendarYear, scrollToMonth]);
-  const [choirSearch, setChoirSearch] = useState("");
   const [groupsSearch, setGroupsSearch] = useState("");
   const [accountsSearch, setAccountsSearch] = useState("");
   const [meetingsSearch, setMeetingsSearch] = useState("");
@@ -6208,18 +6021,6 @@ function DepartmentDetail({
             />
           )}
         </div>
-      );
-    } else if (subTab === "choir") {
-      // The church choir's roll searches from the same place every other
-      // view's does — the shell's header band, beside the page's name.
-      setHeaderRightAction(
-        <input
-          type="text"
-          value={choirSearch}
-          onChange={(e) => setChoirSearch(e.target.value)}
-          placeholder="Search the church choir…"
-          className={inputCls}
-        />
       );
     } else if (subTab === "singing_groups") {
       setHeaderRightAction(
@@ -6323,7 +6124,6 @@ function DepartmentDetail({
     showsAllCalendars,
     memberFilter,
     joinRequests,
-    choirSearch,
     groupsSearch,
     accountsSearch,
     accountsFilter,
@@ -6383,11 +6183,9 @@ function DepartmentDetail({
             },
           ]
         : []),
-      // Music sings in more than one voice: the choir's own roll and the
-      // groups registered under it each get a view beside the roll. The desk
-      // names each of its views one word — Choir, Groups, Events, Requests —
-      // so its strip reads the same in a hand as on a desk.
-      ...(isMusic ? [{ key: "choir", label: "Choir", icon: Music }] : []),
+      // Music sings in more than one voice, and the groups registered under
+      // it get a view beside the roll — one word, Groups, so the strip reads
+      // the same in a hand as on a desk.
       ...(isMusic ? [{ key: "singing_groups", label: "Groups", icon: MicVocal }] : []),
       // The choir's outbox — one box to write in, one list kept so a
       // sent message can be read or typed again. Messages go to the people
@@ -6471,8 +6269,9 @@ function DepartmentDetail({
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
       // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
       // is rostered across ministries and departments, and centralized under
-      // the desk that keeps the church's week (Personal Ministries).
-      ...(!isDeaconate ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
+      // the desk that keeps the church's week (Personal Ministries). The
+      // Deaconate and Music keep no such page: it is not their work.
+      ...(!isDeaconate && !isMusic ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
       // The prayer cells — the little companies of prayer registered under
       // this desk, with their rolls and their asks riding one panel.
       ...(keepsTheWeek ? [{ key: "prayer_cells", label: "Prayer Cells", short: "Cells", icon: Handshake }] : []),
@@ -6537,6 +6336,8 @@ function DepartmentDetail({
         return "baptismal-class";
       case "letters":
         return "letters";
+      case "treasury-approvals":
+        return "treasury-approvals";
       case "announcements":
       case "sharing":
         return "sharing";
@@ -6554,7 +6355,7 @@ function DepartmentDetail({
       // the rendering below), so its press stays in place instead of walking
       // to the console's board.
       if (
-        (key === "calendar" || key === "baptismal-class" || key === "letters" || key === "rota" || (key === "sharing" && canOpenOfficeViews)) &&
+        (key === "calendar" || key === "baptismal-class" || key === "letters" || key === "rota" || key === "treasury-approvals" || (key === "sharing" && canOpenOfficeViews)) &&
         !onConsole
       ) {
         setSubTab(key as DeptSubTab);
@@ -7897,7 +7698,7 @@ function DepartmentDetail({
                           onCreate={() => { onClose(); setProgramFor(event); }}
                           onRemove={() => { onClose(); removeEvent(event); }}
                           onPulpitTeam={
-                            isDeaconate
+                            isDeaconate || isMusic
                               ? undefined
                               : () => {
                                   onClose();
@@ -7993,7 +7794,7 @@ function DepartmentDetail({
                                         onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                         onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                                         onPulpitTeam={
-                                          isDeaconate
+                                          isDeaconate || isMusic
                                             ? undefined
                                             : () => {
                                                 setOpenEventMenuKey(null);
@@ -8075,7 +7876,7 @@ function DepartmentDetail({
                                     onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                     onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
                                     onPulpitTeam={
-                                      isDeaconate
+                                      isDeaconate || isMusic
                                         ? undefined
                                         : () => {
                                             setOpenEventMenuKey(null);
@@ -8210,9 +8011,6 @@ function DepartmentDetail({
 
       {/* Singing groups — the music register: groups registered under the
           department, each with the singers who make it up. */}
-      {subTab === "choir" && isMusic && (
-        <ChoirPanel departmentLabel={department.label} onChanged={onChanged} search={choirSearch} />
-      )}
       {subTab === "singing_groups" && isMusic && (
         <SingingGroupsPanel
           departmentCode={department.code}
@@ -8242,7 +8040,7 @@ function DepartmentDetail({
       {/* The pulpit team — who preaches, plays, reads and leads on a Sabbath.
           Rostered on the same rota the deaconate keeps its duty on, so the
           desk hands the panel to it with its own desk's lines. */}
-      {subTab === "pulpit-team" && !isDeaconate && (
+      {subTab === "pulpit-team" && !isDeaconate && !isMusic && (
         <div className="h-full min-h-0">
           <DeaconateManager
             initialTab="rota"
@@ -8390,7 +8188,7 @@ function DepartmentDetail({
           order because a signature waiting is the ask that cannot wait; the
           pastor writes none of them — they arrive here to be signed or sent
           back with a reason. */}
-      {subTab === "treasury-approvals" && isPastorate && (
+      {subTab === "treasury-approvals" && (isPastorate || isEldership) && (
         // Phones read this card at its own height under the scrolling page —
         // the bounded height is a desk treatment, and clipping the panel on a
         // phone left the queue out of reach of a thumb. On a desk the card is
@@ -8400,7 +8198,12 @@ function DepartmentDetail({
         // no height to scroll inside and they spill out of sight instead.
         <div className="flex flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-xs md:min-h-0 md:flex-1">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <WithdrawalRequestsPanel statusFilter="all" />
+            {/* Each desk offers only its own clearance: the pastorate blesses,
+                the eldership approves, the treasury releases. */}
+            <WithdrawalRequestsPanel
+              statusFilter="all"
+              workspace={isPastorate ? "pastorate" : "eldership"}
+            />
           </div>
         </div>
       )}

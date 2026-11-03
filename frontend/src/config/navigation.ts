@@ -815,7 +815,7 @@ export const clerkshipItems: RailRow[] = [
  * desk beside this one (Clerkship). Elders and clerks share these pages.
  */
 export const eldershipViews: {
-  key: "baptismal-class" | "letters" | "calendar" | "sharing" | "requests" | "moments" | "funding" | "rota";
+  key: "baptismal-class" | "letters" | "calendar" | "sharing" | "requests" | "moments" | "funding" | "rota" | "treasury-approvals";
   label: string;
   short?: string;
   icon: LucideIcon;
@@ -867,6 +867,17 @@ export const eldershipViews: {
     icon: HeartHandshake,
     href: "/administration?tab=requests",
     description: "The asks the church has received.",
+  },
+  // The elder's own clearance on the department funds: the pastorate blesses
+  // an ask, an elder approves it here, and the treasury releases it on its
+  // own desk. No desk offers another office's step.
+  {
+    key: "treasury-approvals",
+    label: "Treasury Approvals",
+    short: "Approvals",
+    icon: Wallet,
+    href: "/my-areas?area=eldership&view=treasury-approvals",
+    description: "The department funds' withdrawal asks waiting on an elder's approval.",
   },
   {
     key: "moments",

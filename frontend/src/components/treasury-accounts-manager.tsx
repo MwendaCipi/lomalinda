@@ -73,6 +73,16 @@ type WithdrawalRequestRow = {
 };
 
 /**
+ * Which desk is showing the queue. The chain is signed off one office at a
+ * time, and each office signs on its own desk and nowhere else: the pastor
+ * blesses inside the pastorate, an elder approves inside the eldership, and
+ * the treasury releases inside the treasury. A desk is told which step is its
+ * own, and the other buttons never appear there — not for an administrator
+ * or any other role reading the same queue from a different workspace.
+ */
+export type WithdrawalWorkspace = "pastorate" | "eldership" | "treasury";
+
+/**
  * The departments' withdrawal queue — showing every request across every
  * department in a structured, actionable table.
  * Approval is four clearances in order:
@@ -93,9 +103,15 @@ export function WithdrawalRequestsPanel({
   onChanged,
   onLoaded,
   registerRefresh,
+  workspace,
 }: {
   search?: string;
   statusFilter?: "all" | "pending" | "approved" | "rejected";
+  /** The desk this queue is drawn on. Only that desk's own clearance is
+      offered: the pastor's blessing on the pastorate, the elder's approval on
+      the eldership, the release on the treasury. Omitted, no clearance is
+      offered at all — reading the queue is never the right to sign it. */
+  workspace?: WithdrawalWorkspace;
   /** The date window the desk hides under: the day each request was asked,
       read the same way the Givings and Expenses dates read their rows. */
   fromDate?: string;
@@ -554,7 +570,7 @@ export function WithdrawalRequestsPanel({
                   {inFlight || isReversed ? "Cancel" : "Close"}
                 </button>
 
-                {awaitingPastor && (
+                {awaitingPastor && workspace === "pastorate" && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "pastor_approve")}
@@ -565,7 +581,7 @@ export function WithdrawalRequestsPanel({
                   </button>
                 )}
 
-                {awaitingElder && (
+                {awaitingElder && workspace === "eldership" && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "elder_approve")}
@@ -587,7 +603,7 @@ export function WithdrawalRequestsPanel({
                   </button>
                 )}
 
-                {awaitingRelease && (
+                {awaitingRelease && workspace === "treasury" && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
@@ -603,7 +619,7 @@ export function WithdrawalRequestsPanel({
                   </button>
                 )}
 
-                {isReversed && reversedCovered && (
+                {isReversed && reversedCovered && workspace === "treasury" && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "approve", reply)}
@@ -619,7 +635,7 @@ export function WithdrawalRequestsPanel({
                   </button>
                 )}
 
-                {canReverse && (
+                {canReverse && workspace === "treasury" && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1500,7 +1516,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
           the space to their own desks. ── */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {view === "withdrawals" ? (
-          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} onLoaded={handleWithdrawalRowsLoaded} registerRefresh={(fn) => { withdrawalRefreshRef.current = fn; }} />
+          <WithdrawalRequestsPanel search={withdrawalSearch} statusFilter={withdrawalFilter} fromDate={withdrawalFrom} toDate={withdrawalTo} onChanged={fetchAccounts} onLoaded={handleWithdrawalRowsLoaded} registerRefresh={(fn) => { withdrawalRefreshRef.current = fn; }} workspace="treasury" />
         ) : view === "expenditure" ? (
           <ExpenditureManager search={expenseSearch} category={expenseCategory} fromDate={expenseFrom} toDate={expenseTo} registerRefresh={(fn) => { expenseRefreshRef.current = fn; }} />
         ) : (
