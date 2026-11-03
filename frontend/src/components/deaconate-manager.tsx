@@ -344,10 +344,12 @@ interface DeaconateManagerProps {
    * these are this same panel with their own lines — the server keeps them
    * apart by desk, and this prop is what asks for one.
    *
-   * The pulpit view is a page of the Personal Ministries desk, and the music
-   * view a page of the music desk's Duties; each draws its own heading and
-   * search, so these variants keep their filters inline rather than taking
-   * the shell's header band over.
+   * The pulpit view is a page of every ministry's desk: it is the pulpit team
+   * on Personal Ministries, which keeps the church's week, and the desk's own
+   * Duty Rota everywhere else (see `department`). The music view is a page of
+   * the music desk's Duties. Each draws its own heading and search, so these
+   * variants keep their filters inline rather than taking the shell's header
+   * band over.
    */
   desk?: "deaconate" | "pulpit" | "music" | "eldership" | "sabbath_school";
   /**
@@ -388,6 +390,11 @@ export function DeaconateManager({
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
   const isPulpit = desk === "pulpit";
+  // The church's pulpit team is Personal Ministries' own page: it keeps the
+  // church's week, and so keeps who preaches, plays, reads and leads in it.
+  // Every other desk rosters its own duties on this same panel and names it
+  // for what it is there — a Duty Rota.
+  const pulpitTeam = isPulpit && department === "personal_ministries";
   const isEldership = desk === "eldership";
   const isSabbathSchool = desk === "sabbath_school";
 
@@ -410,7 +417,7 @@ export function DeaconateManager({
   const rotaName =
     desk === "music"
       ? "Music Duties"
-      : isPulpit
+      : pulpitTeam
         ? "Pulpit Team"
         : isEldership
           ? "Eldership Duty Rota"
@@ -421,7 +428,7 @@ export function DeaconateManager({
   const defaultRotaTitle =
     desk === "music"
       ? MUSIC_DEFAULT_TITLE
-      : isPulpit
+      : pulpitTeam
         ? PULPIT_DEFAULT_TITLE
         : isEldership
           ? "Eldership Duty Rota"
@@ -1677,7 +1684,17 @@ export function DeaconateManager({
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" />
                   <input
                     type="text"
-                    placeholder={desk === "music" ? "Search music duties…" : isEldership ? "Search Eldership rota…" : "Search the pulpit team…"}
+                    placeholder={
+                      desk === "music"
+                        ? "Search music duties…"
+                        : isEldership
+                          ? "Search Eldership rota…"
+                          : isSabbathSchool
+                            ? "Search the Sabbath School rota…"
+                            : pulpitTeam
+                              ? "Search the pulpit team…"
+                              : "Search the duty rota…"
+                    }
                     value={rotaSearchQuery}
                     onChange={(e) => setRotaSearchQuery(e.target.value)}
                     className="w-full rounded-xl border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none focus:border-ember"
@@ -1711,11 +1728,13 @@ export function DeaconateManager({
                 {rota.length === 0
                   ? desk === "music"
                     ? "No one is on the music rota yet. Schedule who sings and plays on the Sabbath."
-                    : isPulpit
+                    : pulpitTeam
                       ? "No one is on the pulpit team yet. Schedule the Sabbath's preachers, players and readers."
-                      : isEldership
-                        ? "The Eldership rota is empty. Schedule the elders' duties here."
-                        : "No duty rota has been scheduled yet."
+                      : isPulpit
+                        ? "No duty has been set for this desk yet. Schedule who serves on a Sabbath."
+                        : isEldership
+                          ? "The Eldership rota is empty. Schedule the elders' duties here."
+                          : "No duty rota has been scheduled yet."
                   : "No entries match your filters."}
               </div>
             ) : (
@@ -2371,7 +2390,9 @@ export function DeaconateManager({
                     className="mt-1 w-full rounded-xl border border-sand-line p-2.5 text-xs text-bark"
                   />
                   <p className="mt-1 text-[10px] text-moss">
-                    Assign which ministry or department leads this pulpit team line.
+                    {pulpitTeam
+                      ? "Assign which ministry or department leads this pulpit team line."
+                      : "Assign which ministry or department this duty line belongs to."}
                   </p>
                 </div>
               )}

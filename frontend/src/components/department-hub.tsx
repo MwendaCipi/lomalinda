@@ -1262,6 +1262,7 @@ function EventProgramMenu({
   onCreate,
   onRemove,
   onPulpitTeam,
+  rotaWord = "Pulpit team",
 }: {
   event: DeptEvent;
   /** Correct the event's details — the form, open on what it holds. */
@@ -1274,10 +1275,12 @@ function EventProgramMenu({
       that names the day — this menu stays choices about the event. */
   onCreate: () => void;
   onRemove: () => void;
-  /** The pulpit team for this event's own day: opens the rota narrowed to it,
-      where who preaches, plays, reads and leads is set. Offered on the desks
-      that keep the pulpit team, and only there. */
+  /** The rota for this event's own day: opens it narrowed to that day, where
+      who preaches, plays, reads and leads is set. The pulpit team on Personal
+      Ministries, the desk's own duty rota everywhere else — which is what
+      `rotaWord` names it. */
   onPulpitTeam?: () => void;
+  rotaWord?: string;
 }) {
   const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
   const hasProgram = eventHasProgram(event);
@@ -1291,7 +1294,7 @@ function EventProgramMenu({
       </button>
       {onPulpitTeam && (
         <button type="button" onClick={onPulpitTeam} className={`${item} text-bark`}>
-          Pulpit team
+          {rotaWord}
         </button>
       )}
       <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
@@ -6074,9 +6077,14 @@ function DepartmentDetail({
       // than a band of the panel's own below it. The values live in the
       // panel, which owns the rota; it exposes them through context and
       // reads them back the same way.
-      const rotaPlaceholder = subTab === "pulpit-team"
-        ? "Search the pulpit team…"
-        : "Search music duties…";
+      // Personal Ministries searches the church's pulpit team; every other
+      // desk searches its own duty rota on the same panel.
+      const rotaPlaceholder =
+        subTab === "pulpit-team"
+          ? isPersonalMinistries
+            ? "Search the pulpit team…"
+            : "Search the duty rota…"
+          : "Search music duties…";
       const filters = hostedRotaFilters?.filters;
       setHeaderRightAction(
         filters ? (
@@ -6139,6 +6147,7 @@ function DepartmentDetail({
     meetingsSearch,
     hostedRotaFilters?.filters,
     department.label,
+    isPersonalMinistries,
     setHeaderRightAction,
   ]);
 
@@ -6282,11 +6291,23 @@ function DepartmentDetail({
         : [{ key: "letters", label: "Letters", short: "Letters", icon: FileText }]),
       // Only the ministry that keeps the church's week carries its panel.
       ...(keepsTheWeek ? [{ key: "meetings", label: "Weekly Meetings", short: "Meetings", icon: Clock }] : []),
-      // The pulpit team — who preaches, plays, reads and leads on a Sabbath —
-      // is rostered across ministries and departments, and centralized under
-      // the desk that keeps the church's week (Personal Ministries). The
-      // Deaconate and Music keep no such page: it is not their work.
-      ...(!isDeaconate && !isMusic ? [{ key: "pulpit-team", label: "Pulpit Team", short: "Pulpit", icon: Mic }] : []),
+      // Who preaches, plays, reads and leads on a Sabbath. It is the pulpit
+      // team on Personal Ministries, which keeps the church's week and so
+      // keeps the church's pulpits; every other desk rosters its own duties
+      // on the same panel and calls the page what it is there — a Duty Rota.
+      // The desks that already keep a rota of their own under another name —
+      // the Deaconate's duties, Music's duties, the Sabbath School's own duty
+      // rota — get no second page.
+      ...(!isDeaconate && !isMusic && !isSabbathSchool
+        ? [
+            {
+              key: "pulpit-team",
+              label: isPersonalMinistries ? "Pulpit Team" : "Duty Rota",
+              short: isPersonalMinistries ? "Pulpit" : "Rota",
+              icon: Mic,
+            },
+          ]
+        : []),
       // The prayer cells — the little companies of prayer registered under
       // this desk, with their rolls and their asks riding one panel.
       ...(keepsTheWeek ? [{ key: "prayer_cells", label: "Prayer Cells", short: "Cells", icon: Handshake }] : []),
@@ -6300,7 +6321,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // The leadership register is a page of this desk: Personal Ministries
@@ -7719,9 +7740,10 @@ function DepartmentDetail({
                               : () => {
                                   onClose();
                                   setPulpitFocusDate(event.date);
-                                  setSubTab("pulpit-team");
+                                  setSubTab(isSabbathSchool ? "rota" : "pulpit-team");
                                 }
                           }
+                          rotaWord={isPersonalMinistries ? "Pulpit team" : "Duty rota"}
                         />
                       </div>
                     )}
@@ -7815,9 +7837,10 @@ function DepartmentDetail({
                                             : () => {
                                                 setOpenEventMenuKey(null);
                                                 setPulpitFocusDate(event.date);
-                                                setSubTab("pulpit-team");
+                                                setSubTab(isSabbathSchool ? "rota" : "pulpit-team");
                                               }
                                         }
+                                        rotaWord={isPersonalMinistries ? "Pulpit team" : "Duty rota"}
                                       />
                                 </div>,
                                 document.body,
@@ -7897,9 +7920,10 @@ function DepartmentDetail({
                                         : () => {
                                             setOpenEventMenuKey(null);
                                             setPulpitFocusDate(event.date);
-                                            setSubTab("pulpit-team");
+                                            setSubTab(isSabbathSchool ? "rota" : "pulpit-team");
                                           }
                                     }
+                                    rotaWord={isPersonalMinistries ? "Pulpit team" : "Duty rota"}
                               />
                             </div>
                           )}
@@ -8053,10 +8077,11 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* The pulpit team — who preaches, plays, reads and leads on a Sabbath.
-          Rostered on the same rota the deaconate keeps its duty on, so the
-          desk hands the panel to it with its own desk's lines. */}
-      {subTab === "pulpit-team" && !isDeaconate && !isMusic && (
+      {/* Who preaches, plays, reads and leads on a Sabbath — the pulpit team
+          on Personal Ministries, this desk's own duty rota everywhere else.
+          Rostered on the same panel the deaconate keeps its duty on, so the
+          desk hands it over with its own desk's lines. */}
+      {subTab === "pulpit-team" && !isDeaconate && !isMusic && !isSabbathSchool && (
         <div className="h-full min-h-0">
           <DeaconateManager
             initialTab="rota"
@@ -8109,7 +8134,7 @@ function DepartmentDetail({
           with its own lines. */}
       {subTab === "rota" && isSabbathSchool && (
         <div className="h-full min-h-0">
-          <DeaconateManager initialTab="rota" desk="sabbath_school" embedded />
+          <DeaconateManager initialTab="rota" desk="sabbath_school" embedded focusDate={pulpitFocusDate ?? undefined} />
         </div>
       )}
 
