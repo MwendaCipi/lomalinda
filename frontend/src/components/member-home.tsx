@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { UserRoundCheck, type LucideIcon } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
 import { dashboardTiles, destinationOf } from "@/config/navigation";
+import { TREASURY_VIEW_HREF } from "@/components/treasury-nav";
 import { DashboardAnnouncements } from "@/components/dashboard-announcements";
 import { DashboardThoughtOfTheDay } from "@/components/dashboard-thought-of-the-day";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
@@ -16,6 +17,12 @@ import { MemberWorkspace } from "@/components/member-workspace";
 import { seatTitle } from "@/components/roles-combobox";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** Nothing to subscribe to: the hour is read from the clock, not watched — a
+    greeting that changed under the reader's eyes as the hour turned is not
+    what the page wants. */
+const subscribeToNothing = () => () => {};
+const readHourOfDay = () => new Date().getHours();
 
 type ProfileChange = {
   id: number;
@@ -95,6 +102,16 @@ export function MemberHome() {
     setTokenChecked(true);
   }, []);
 
+  // The hour the greeting answers to. It lives in the browser's clock, which
+  // server rendering has no share of, so it is read through
+  // `useSyncExternalStore`: the server and the first client pass get `null`,
+  // and React re-renders with the visitor's own hour as soon as it is known.
+  const hourOfDay = useSyncExternalStore(
+    subscribeToNothing,
+    readHourOfDay,
+    () => null,
+  );
+
   useEffect(() => {
     // The hook's hasToken flips inside its layout effect, one tick after this
     // effect can run — bailing on its first render would bounce an entirely
@@ -153,8 +170,28 @@ export function MemberHome() {
     const dest = destinationOf(key);
     if (key === "requests" && isChurchStaff) {
       const isClerkOnly = hasAny(["clerk"]) && !hasAny(["admin", "elder", "pastor"]);
+      // The treasurer answers the department funds' asks — the withdrawals
+      // waiting for the money to move — so their Requests opens the treasury
+      // desk's own queue (`TREASURY_VIEW_HREF.requests`) rather than the
+      // church's incoming asks, which are not theirs to answer.
+      if (isClerkOnly) {
+        return {
+          href: "/administration?tab=clerk-requests",
+          label: "Requests",
+          desc: "Review and answer incoming church and pastoral requests.",
+          icon: dest.icon,
+        };
+      }
+      if (hasAny(["treasurer"])) {
+        return {
+          href: TREASURY_VIEW_HREF.requests,
+          label: "Requests",
+          desc: "The department funds' withdrawal asks waiting on the treasury.",
+          icon: dest.icon,
+        };
+      }
       return {
-        href: isClerkOnly ? "/administration?tab=clerk-requests" : "/administration?tab=requests",
+        href: "/administration?tab=requests",
         label: "Requests",
         desc: "Review and answer incoming church and pastoral requests.",
         icon: dest.icon,
@@ -200,7 +237,22 @@ export function MemberHome() {
   const areaChunks = areaRowSizes.map((size) => myAreas.slice(areaCursor, (areaCursor += size)));
 
   const firstName = me?.name?.split(" ")[0] ?? "";
-  const greeting = firstName ? `Welcome back, ${firstName}` : "Welcome back";
+  // The greeting follows the clock rather than the fact of coming back: a
+  // member opening the page in the evening is told so. The hour is read after
+  // the first paint (the server has no clock the visitor shares), so the
+  // heading opens on a neutral word and settles into the day's greeting — the
+  // one place it changes, and it never contradicts what the visitor sees.
+  const greeting = (() => {
+    const part =
+      hourOfDay === null
+        ? "Hello"
+        : hourOfDay < 12
+          ? "Good morning"
+          : hourOfDay < 17
+            ? "Good afternoon"
+            : "Good evening";
+    return firstName ? `${part}, ${firstName} 👋` : `${part} 👋`;
+  })();
 
   const FIELD_LABELS: Record<string, string> = {
     first_name: "First name",
