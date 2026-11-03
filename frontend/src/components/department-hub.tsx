@@ -1262,6 +1262,7 @@ function EventProgramMenu({
   onEdit,
   onCreate,
   onRemove,
+  onPulpitTeam,
 }: {
   event: DeptEvent;
   /** Correct the event's details — the form, open on what it holds. */
@@ -1274,6 +1275,10 @@ function EventProgramMenu({
       that names the day — this menu stays choices about the event. */
   onCreate: () => void;
   onRemove: () => void;
+  /** The pulpit team for this event's own day: opens the rota narrowed to it,
+      where who preaches, plays, reads and leads is set. Offered on the desks
+      that keep the pulpit team, and only there. */
+  onPulpitTeam?: () => void;
 }) {
   const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-sand";
   const hasProgram = eventHasProgram(event);
@@ -1285,6 +1290,11 @@ function EventProgramMenu({
       <button type="button" onClick={onCreate} className={`${item} text-bark`}>
         {hasProgram ? "Program" : "Add program"}
       </button>
+      {onPulpitTeam && (
+        <button type="button" onClick={onPulpitTeam} className={`${item} text-bark`}>
+          Pulpit team
+        </button>
+      )}
       <button type="button" onClick={onRemove} className={`${item} text-red-600`}>
         Remove event
       </button>
@@ -5945,6 +5955,10 @@ function DepartmentDetail({
   // The calendar's own share menu — WhatsApp, an email, the file itself or
   // the text — opened from the bar at the desk's foot.
   const [calendarShareOpen, setCalendarShareOpen] = useState(false);
+  // The day an event's "Pulpit team" action hands the rota: the team is set
+  // for a day, and the day is the event's own, so the rota opens on it rather
+  // than on the whole year.
+  const [pulpitFocusDate, setPulpitFocusDate] = useState<string | null>(null);
   // Where the table row's Actions button sits in the viewport at the moment
   // it opens its menu. The menu is drawn in a document-level portal (a fixed
   // box above everything) anchored there, because the overflow wrappers that
@@ -6486,6 +6500,9 @@ function DepartmentDetail({
       setSubTab("members");
       return;
     }
+    // The strip opens a view whole: a day an event's own action handed the
+    // pulpit rota is not carried over, so the chip shows the team's range.
+    setPulpitFocusDate(null);
     setSubTab(key as DeptSubTab);
   }, []);
   // The eldership's strip is one list at every width and every door (see
@@ -7363,7 +7380,7 @@ function DepartmentDetail({
       // only stays put while the column holds still beneath the strip.
       className={`flex h-full min-h-0 w-full flex-col custom-hover-scrollbar ${
         isEldership || isPersonalMinistries
-          ? subTab === "baptismal-class" || subTab === "daily-word" || subTab === "moments" || subTab === "prayer_cells"
+          ? subTab === "baptismal-class" || subTab === "daily-word" || subTab === "moments" || subTab === "prayer_cells" || subTab === "pulpit-team"
             // These are the desk's card pages, not its tables: the gutter the
             // page gave up is asked back inside the card, so the panels a
             // view draws sit off its edge with a line of air rather than
@@ -7879,6 +7896,15 @@ function DepartmentDetail({
                           onEdit={() => { onClose(); setEditEvent(event); }}
                           onCreate={() => { onClose(); setProgramFor(event); }}
                           onRemove={() => { onClose(); removeEvent(event); }}
+                          onPulpitTeam={
+                            isDeaconate
+                              ? undefined
+                              : () => {
+                                  onClose();
+                                  setPulpitFocusDate(event.date);
+                                  setSubTab("pulpit-team");
+                                }
+                          }
                         />
                       </div>
                     )}
@@ -7966,6 +7992,15 @@ function DepartmentDetail({
                                         onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                         onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                         onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
+                                        onPulpitTeam={
+                                          isDeaconate
+                                            ? undefined
+                                            : () => {
+                                                setOpenEventMenuKey(null);
+                                                setPulpitFocusDate(event.date);
+                                                setSubTab("pulpit-team");
+                                              }
+                                        }
                                       />
                                 </div>,
                                 document.body,
@@ -8039,6 +8074,15 @@ function DepartmentDetail({
                                     onEdit={() => { setOpenEventMenuKey(null); setEditEvent(event); }}
                                     onCreate={() => { setOpenEventMenuKey(null); setProgramFor(event); }}
                                     onRemove={() => { setOpenEventMenuKey(null); removeEvent(event); }}
+                                    onPulpitTeam={
+                                      isDeaconate
+                                        ? undefined
+                                        : () => {
+                                            setOpenEventMenuKey(null);
+                                            setPulpitFocusDate(event.date);
+                                            setSubTab("pulpit-team");
+                                          }
+                                    }
                               />
                             </div>
                           )}
@@ -8066,23 +8110,12 @@ function DepartmentDetail({
                 ? `${yearEvents.length} ${yearEvents.length === 1 ? "event" : "events"} in ${calendarYear}`
                 : `${filteredEvents.length} ${filteredEvents.length === 1 ? "event" : "events"}`}
             </p>
-            {/* Four buttons fill a phone's row as two pairs rather than
+            {/* The calendar's three actions share a phone's row rather than
                 spilling past its edge; on a desk they stand in one line. */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {/* The pulpit team is scheduled per day, from its rota: for the
-                  desk that keeps the week, the calendar carries the jump there
-                  beside its own actions, so setting the Sabbath's team is one
-                  press away from the day's events. */}
-              {!isDeaconate && (
-                <button
-                  type="button"
-                  onClick={() => setSubTab("pulpit-team")}
-                  title="Set the pulpit team for the day"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-                >
-                  <Mic className="h-3.5 w-3.5" aria-hidden="true" /> Pulpit team
-                </button>
-              )}
+            <div className="grid w-full grid-cols-3 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+              {/* The pulpit team is set for a day, so it is that day's own
+                  action rather than one more button on the bar: each event's
+                  Actions menu carries it, opening the rota on that date. */}
               <button
                 type="button"
                 onClick={() => setShowAddEvent(true)}
@@ -8216,6 +8249,7 @@ function DepartmentDetail({
             desk="pulpit"
             department={department.code}
             allDepartments={keepsTheWeek}
+            focusDate={pulpitFocusDate ?? undefined}
             embedded
             filtersHosted
           />

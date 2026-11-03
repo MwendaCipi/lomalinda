@@ -366,6 +366,13 @@ interface DeaconateManagerProps {
    * Whether to display rota entries from all departments (e.g. for Personal Ministries).
    */
   allDepartments?: boolean;
+  /**
+   * The day the rota is opened on. Who serves is set for a day, and the day is
+   * usually one the desk has already on its calendar, so the calendar's own
+   * "Pulpit team" action hands that event's date in: the rota's range starts
+   * and ends on it, and the schedule form opens holding it.
+   */
+  focusDate?: string;
 }
 
 export function DeaconateManager({
@@ -376,6 +383,7 @@ export function DeaconateManager({
   filtersHosted = false,
   department,
   allDepartments = false,
+  focusDate,
 }: DeaconateManagerProps) {
   // The shell's section strip owns which deaconate page is open, so the tab
   // comes straight from the URL instead of a second, in-page copy that can drift.
@@ -426,6 +434,8 @@ export function DeaconateManager({
   const blankRota = () => ({
     ...emptyRotaForm,
     title: defaultRotaTitle,
+    // The day the rota was opened on is the day most lines are written for.
+    date: focusDate ?? emptyRotaForm.date,
     department: department && !allDepartments ? department : (department || ""),
   });
   // What a line of this desk's rota is called wherever it is named.
@@ -493,8 +503,8 @@ export function DeaconateManager({
   const [pickedOfficerName, setPickedOfficerName] = useState<string | null>(null);
 
   // Rota filtering, PDF download and sharing
-  const [rotaFromDate, setRotaFromDate] = useState("");
-  const [rotaToDate, setRotaToDate] = useState("");
+  const [rotaFromDate, setRotaFromDate] = useState(focusDate ?? "");
+  const [rotaToDate, setRotaToDate] = useState(focusDate ?? "");
   const [rotaSearchQuery, setRotaSearchQuery] = useState("");
   // Whether a surface above is hosting this rota's filters — the Personal
   // Ministries desk, for the pulpit team, which keeps its own heading. When it
