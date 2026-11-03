@@ -5,11 +5,16 @@
  * decides it for them: the ticks are the buttons, in the order below — the
  * ways to act first, then the ways to answer or attend. Codes match
  * `Announcement.CARD_OPTION_CHOICES` in the backend.
+ *
+ * Money and goods are two separate asks, not one button with a choice behind
+ * it: Give now is money (M-Pesa, or a transfer the office records) and Give in
+ * kind is goods handed over. The officer decides which of the two a post
+ * carries — either, or both, or neither.
  */
 export const CARD_OPTION_CHOICES = [
   { value: "give_now", label: "Give now" },
   { value: "pledge", label: "Pledge" },
-  { value: "in_kind", label: "Support (in-kind)" },
+  { value: "in_kind", label: "Give in kind" },
   { value: "comment", label: "Comment" },
   { value: "join_meeting", label: "Join meeting" },
   { value: "enroll", label: "Enroll now" },

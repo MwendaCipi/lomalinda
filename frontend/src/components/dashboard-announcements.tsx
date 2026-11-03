@@ -8,22 +8,18 @@ import { announcementCountdown } from "@/lib/announcement-dates";
 import { cardButtons } from "@/lib/announcement-options";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
-import { GiveMethodModal } from "@/components/give-method-modal";
 import { AnnouncementCommentModal } from "@/components/announcement-comment-modal";
 import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 import { isImageAttachment } from "@/components/announcement-attachment";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-/** The buttons the officer ticked for the post. Give now's own modal already
- *  offers goods, so Support only stands alone where Give now was left off.
- *  Comment is not offered on the card: the thread is reached by opening the
- *  full feed, which the whole card already is. */
+/** The buttons the officer ticked for the post — money (Give now) and goods
+ *  (Give in kind) as two buttons, each shown only when it was ticked. Comment
+ *  is not offered on the card: the thread is reached by opening the full feed,
+ *  which the whole card already is. */
 function chosenActions(item: Announcement): string[] {
-  const chosen = cardButtons(item.options);
-  return chosen
-    .filter((code) => code !== "in_kind" || !chosen.includes("give_now"))
-    .filter((code) => code !== "comment");
+  return cardButtons(item.options).filter((code) => code !== "comment");
 }
 
 type Announcement = {
@@ -75,11 +71,9 @@ export function DashboardAnnouncements() {
   // never loses their place to give — the same two forms the feed opens.
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindOpen, setInKindOpen] = useState(false);
-  // A contribution card's Give Now opens the money-or-goods choice here, so
-  // the rail keeps one button instead of the old inline combo of Pledge /
-  // In-kind / Give Money. An opinion card's Give input opens the comment
-  // thread; the other slides reach the thread through the full feed.
-  const [methodFor, setMethodFor] = useState<Announcement | null>(null);
+  // An opinion card's Give input opens the comment thread; the other slides
+  // reach the thread through the full feed.
+
   const [commentFor, setCommentFor] = useState<Announcement | null>(null);
 
   useEffect(() => {
@@ -123,7 +117,7 @@ export function DashboardAnnouncements() {
 
   // A modal over the rail holds the slides still — nothing should turn behind
   // a form the member is filling in.
-  const modalOpen = Boolean(pledgeTarget) || inKindOpen || Boolean(methodFor) || Boolean(commentFor);
+  const modalOpen = Boolean(pledgeTarget) || inKindOpen || Boolean(commentFor);
 
   useEffect(() => {
     if (!canRotate || isPaused || isInteracting || modalOpen) return;
@@ -181,8 +175,9 @@ export function DashboardAnnouncements() {
     event_date_to: announcement.event_date_to,
   });
 
-  /** The money-or-goods choice's target — a drive leaves for the giving page,
-      a support post opens the money modal with its account chosen. */
+  /** Give Now means money: the rail leaves for the giving page with the
+      post's purpose named, which is where the money form lives. Goods are the
+      card's own Give in kind button, never this one. */
   const giveMoneyFor = (announcement: Announcement) => {
     router.push(`/give?purpose=${encodeURIComponent(announcement.support_account_display || announcement.title || "")}`);
   };
@@ -308,17 +303,15 @@ export function DashboardAnnouncements() {
         </div>
 
         {/* The announcement's own actions. Clicking the card opens the full
-            announcement in the feed; a giving call carries one Give Now button
-            whose modal offers money or goods — the same two forms the old
-            three-wide combo opened — plus Pledge. Comment lives in the feed:
-            the thread is one tap away through the card itself, and the card's
-            foot stays one line of doing rather than talking. */}
+            announcement in the feed; a giving call carries the buttons its
+            officer ticked — Give Now for money, Give in kind for goods, Pledge
+            for a promise — and nothing it did not ask for. Comment lives in
+            the feed: the thread is one tap away through the card itself, and
+            the card's foot stays one line of doing rather than talking. */}
         <div className="flex items-center justify-between gap-3">
           {isGiving && (
             <div className="flex-1">
-              {/* Only the buttons the officer chose for this post; Give now's
-                  modal already offers goods, so Support stands alone only
-                  where Give now was left off. */}
+              {/* Only the buttons the officer chose for this post. */}
               <div className={`grid gap-2 ${(() => {
                 const count = current ? chosenActions(current).length : 0;
                 return count >= 4 ? "grid-cols-2 sm:grid-cols-4" : count === 3 ? "grid-cols-3" : count === 2 ? "grid-cols-2" : "grid-cols-1";
@@ -329,7 +322,7 @@ export function DashboardAnnouncements() {
                       <button
                         key={code}
                         type="button"
-                        onClick={() => { if (current) setMethodFor(current); }}
+                        onClick={() => { if (current) giveMoneyFor(current); }}
                         className="pointer-events-auto rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
                       >
                         Give Now
@@ -356,7 +349,7 @@ export function DashboardAnnouncements() {
                         onClick={() => setInKindOpen(true)}
                         className="pointer-events-auto rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                       >
-                        Support
+                        Give in kind
                       </button>
                     );
                   }
@@ -435,28 +428,6 @@ export function DashboardAnnouncements() {
         onClose={() => setInKindOpen(false)}
         defaultPurpose={current?.support_account_display || undefined}
         announcementTitle={current?.title}
-      />
-
-      {/* The money-or-goods choice behind a contribution card's Give Now.
-          Each option runs the same form the old inline button opened — a
-          drive's money still leaves for the giving page with its purpose
-          named, a support post opens the money modal in place.
-          The box only shows the doors the card actually offers: a photo-only
-          announcement has no money door, so it never carries the modal at all. */}
-      <GiveMethodModal
-        open={Boolean(methodFor) && isGiving}
-        onClose={() => setMethodFor(null)}
-        title={methodFor?.title || null}
-        onGiveMoney={isGiving ? () => {
-          const item = methodFor;
-          setMethodFor(null);
-          if (item) giveMoneyFor(item);
-        } : undefined}
-        onGiveInKind={isGiving ? () => {
-          const item = methodFor;
-          setMethodFor(null);
-          if (item) setInKindOpen(true);
-        } : undefined}
       />
 
       {/* An opinion card's Give input opens this box: the thread above, a

@@ -1049,8 +1049,8 @@ export function AnnouncementManager({
                     ))}
                   </select>
                   <span className="mt-1 block text-[10px] font-normal text-moss">
-                    The account the card&apos;s giving buttons name. Give now opens the money-or-goods
-                    choice; untick Support (in-kind) as well when the call wants money first.
+                    The account the card&apos;s giving buttons name. Give now asks for money, Give in
+                    kind asks for goods — tick both when the call takes either.
                   </span>
                 </label>
               )}
@@ -1257,7 +1257,7 @@ export function AnnouncementManager({
           type="submit"
           form={COMPOSER_FORM_ID}
           disabled={submitting}
-          className="rounded-full bg-sage px-6 py-2.5 text-xs font-semibold text-white transition hover:bg-sage-deep disabled:opacity-60"
+          className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep disabled:opacity-60"
         >
           {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
         </button>
@@ -1277,10 +1277,22 @@ export function AnnouncementManager({
         aria-labelledby="create-announcement-title"
         className={inline ? "w-full" : "flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"}
       >
-        <div className={`flex shrink-0 items-center justify-between border-b border-sand-line ${inline ? "pb-4" : "px-6 py-4 sm:px-8"}`}>
-          <h2 id="create-announcement-title" className="text-xl font-bold text-bark">
-            {editingId ? "Edit Announcement" : "Post Announcement"}
-          </h2>
+        {/* The frame is the fund-drive modal's, line for line: the same header
+            with its name and a line saying what the form asks for, the same
+            body padding, and a plain footer over the same border — so posting a
+            notice and opening a drive read as two desks of one office rather
+            than two designs. */}
+        <div className={`flex shrink-0 items-center justify-between border-b border-sand-line ${inline ? "pb-4" : "px-6 pb-4 pt-6 sm:px-8 sm:pt-8"}`}>
+          <div>
+            <h2 id="create-announcement-title" className="text-xl font-bold text-bark">
+              {editingId ? "Edit Announcement" : "Post Announcement"}
+            </h2>
+            <p className="mt-1 text-xs text-moss">
+              {editingId
+                ? "Update the post's wording, who it reaches, the buttons it carries and when it goes out."
+                : "Write the notice, choose who it reaches and what members can press on it, then post it now or schedule it."}
+            </p>
+          </div>
           <button
             type="button"
             disabled={submitting}
@@ -1291,10 +1303,10 @@ export function AnnouncementManager({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className={inline ? "mt-6" : "min-h-0 flex-1 overflow-y-auto px-6 py-5 sm:px-8"}>
+        <div className={inline ? "mt-6" : "min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-6 sm:px-8"}>
           {renderComposerFields()}
         </div>
-        <div className={`flex shrink-0 items-center justify-end border-t border-sand-line bg-sand-linen/40 ${inline ? "pt-4" : "px-6 py-4 sm:px-8"}`}>
+        <div className={`flex shrink-0 items-center justify-end border-t border-sand-line ${inline ? "pt-4" : "px-6 pb-4 pt-3 sm:px-8"}`}>
           {renderComposerActions()}
         </div>
       </div>

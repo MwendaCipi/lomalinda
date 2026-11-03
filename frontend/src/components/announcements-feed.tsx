@@ -16,7 +16,6 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { AnnouncementInlineComments } from "@/components/announcement-comment-modal";
-import { GiveMethodModal } from "@/components/give-method-modal";
 import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
@@ -77,14 +76,12 @@ type FeedItem = {
   repeat?: "none" | "daily" | "weekly" | "monthly";
 };
 
-/** The buttons an announcement's card actually shows, resolved from the
- *  officer's ticked options. Give now opens the money-or-goods choice — it
- *  already offers the in-kind form — so Support only gains its own button
- *  where Give now was left off; otherwise the two would be two doors to the
- *  same goods form on one card. */
+/** The buttons an announcement's card shows — exactly the officer's ticks,
+ *  in the strip's reading order. Money and goods are separate asks (Give now
+ *  and Give in kind), so a post that wants both carries both buttons and a
+ *  post that wants one is not quietly given the other as well. */
 function chosenActions(item: FeedItem): string[] {
-  const chosen = cardButtons(item.options);
-  return chosen.filter((code) => code !== "in_kind" || !chosen.includes("give_now"));
+  return cardButtons(item.options);
 }
 
 /** The drive's own giving link, opened straight into the giving modal. */
@@ -114,10 +111,7 @@ export function AnnouncementsFeed({
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindFor, setInKindFor] = useState<FeedItem | null>(null);
   const [pledgeDone, setPledgeDone] = useState<number[]>([]);
-  // A contribution card's Give Now opens the money-or-goods choice here, so
-  // the card keeps three buttons (Give Now, Pledge, Comment) instead of the
-  // old inline combo of Pledge / In-kind / Give Money.
-  const [methodFor, setMethodFor] = useState<FeedItem | null>(null);
+
   // Comments on announcements appear inline beneath the card.
   const [expandedComments, setExpandedComments] = useState<Record<number, boolean>>({});
   const toggleComment = (id: number) =>
@@ -246,6 +240,17 @@ export function AnnouncementsFeed({
     }
   }
 
+  /** Give Now means money, and only money: the goods door is the card's own
+   *  Give in kind button. A drive's gift leaves for the giving page with its
+   *  purpose named; a support post opens the money form in place. */
+  const giveMoneyFor = (item: FeedItem) => {
+    if (item.kind === "fund_drive" && item.fund_drive) {
+      router.push(driveGiveHref(item.fund_drive));
+      return;
+    }
+    setSupportAccount(item.support_account_display ?? item.title ?? null);
+  };
+
   /** One giving card's pledge target — a drive pledges as a response. */
   const pledgeTargetFor = (item: FeedItem): PledgeTarget => ({
     id: item.id,
@@ -271,9 +276,6 @@ export function AnnouncementsFeed({
           {visibleItems.map((item) => {
             const isDrive = item.kind === "fund_drive" && item.fund_drive;
             const drive = item.fund_drive;
-            // A support-account post carries its own giving actions —
-            // the same Pledge / In-kind / Give Money row a drive gets.
-            const supportGives = !isDrive && Boolean(item.support_account_display);
             // The buttons the officer chose for this post, in the
             // card's reading order.
             const feedActions = chosenActions(item);
@@ -440,11 +442,11 @@ export function AnnouncementsFeed({
                 )}
 
                 {/* The card's buttons, one row: only the ones the officer
-                    ticked for this post. The money-or-goods choice lives
-                    inside Give Now's own modal, so a full row still carries
-                    everything; a Support button only stands alone where Give
-                    now was left off. A meeting, class or form is a link —
-                    the same tie the card's own link opens. */}
+                    ticked for this post. Give now asks for money and Give in
+                    kind asks for goods, each on its own button, so the officer
+                    decides which of the two a post carries. A meeting, class
+                    or form is a link — the same tie the card's own link
+                    opens. */}
                 {feedActions.length > 0 && (
                   <div className="mt-3 border-t border-sand-line pt-3">
                     <div className={`grid gap-2 ${actionGrid}`}>
@@ -454,7 +456,7 @@ export function AnnouncementsFeed({
                             <button
                               key="give_now"
                               type="button"
-                              onClick={() => setMethodFor(item)}
+                              onClick={() => giveMoneyFor(item)}
                               className="rounded-full bg-sage-strong px-2 py-2 text-xs font-bold text-white transition hover:bg-sage-shade"
                             >
                               Give Now
@@ -481,7 +483,7 @@ export function AnnouncementsFeed({
                               onClick={() => setInKindFor(item)}
                               className="rounded-full border border-sand-mute bg-white px-2 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember"
                             >
-                              Support
+                              Give in kind
                             </button>
                           );
                         }
@@ -568,28 +570,6 @@ export function AnnouncementsFeed({
         onClose={() => setInKindFor(null)}
         defaultPurpose={inKindFor?.support_account_display || inKindFor?.fund_drive?.title || undefined}
         announcementTitle={inKindFor?.title}
-      />
-
-      {/* The money-or-goods choice behind a contribution card's Give Now.
-          Each option runs the same form the old inline button opened — a
-          drive's money still leaves for the giving page with its purpose
-          named, a support post opens the money modal with its account chosen. */}
-      <GiveMethodModal
-        open={Boolean(methodFor)}
-        onClose={() => setMethodFor(null)}
-        title={methodFor?.fund_drive?.title || methodFor?.title || null}
-        onGiveMoney={() => {
-          const item = methodFor;
-          setMethodFor(null);
-          if (!item) return;
-          if (item.kind === "fund_drive" && item.fund_drive) router.push(driveGiveHref(item.fund_drive));
-          else setSupportAccount(item.support_account_display ?? null);
-        }}
-        onGiveInKind={() => {
-          const item = methodFor;
-          setMethodFor(null);
-          if (item) setInKindFor(item);
-        }}
       />
     </>
   );

@@ -33,10 +33,13 @@ import { AddReceiptModal } from "./add-receipt-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// A drive's card carries the same buttons the announcement composer offers, and
+// money and goods are two of them: Give now asks for money, Give in kind asks
+// for goods, so the office decides whether the drive's post carries one or both.
 const GIVING_ACTION_OPTIONS = [
   { value: "give_now", label: "Give now" },
   { value: "pledge", label: "Pledge" },
-  { value: "in_kind", label: "Support (in-kind)" },
+  { value: "in_kind", label: "Give in kind" },
   { value: "comment", label: "Comment" },
 ];
 
