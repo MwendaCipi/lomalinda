@@ -20,6 +20,7 @@ import { brand } from "@/lib/brand";
 import { invalidateDepartments, useAllDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { DepartmentHub } from "@/components/department-hub";
+import { usePendingToggleCounts } from "@/hooks/use-pending-toggle-counts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -224,6 +225,12 @@ export function MyAreas() {
   const opensDeaconateDesk = openArea?.code === "deaconate" && holdsDeaconate;
   const holdsEldership = ELDER_ROLES.some((role) => roles.includes(role)) || ties.includes("eldership");
   const opensEldershipDesk = openArea?.code === "eldership" && holdsEldership;
+  // The queues the desks' own strips wear as badges: the elders' approvals,
+  // letters and asks, and the deaconate's funding asks. Counted once for the
+  // page, so the map's strips and the desks they open read the same numbers —
+  // and only while one of those two desks is actually open, since no other
+  // page here holds a queue.
+  const pendingToggles = usePendingToggleCounts(opensEldershipDesk || opensDeaconateDesk);
   const deaconateView = (deaconateViews.find((page) => page.view === openView)?.view ?? "members") as
     (typeof deaconateViews)[number]["view"];
   // The desk opens on Sharing — its first page and the default of every
@@ -304,11 +311,32 @@ export function MyAreas() {
         onChange={(next) => router.replace(`/my-areas?area=eldership&view=${next}`, { scroll: false })}
         items={eldershipViews
           .filter((page) => page.key !== "rota" || ELDER_ROLES.some((role) => roles.includes(role)))
-          .map((page) => ({ key: page.key, label: page.label, short: page.short }))}
+          .map((page) => ({
+            key: page.key,
+            label: page.label,
+            short: page.short,
+            count:
+              page.key === "treasury-approvals"
+                ? pendingToggles.treasury
+                : page.key === "letters"
+                  ? pendingToggles.letters
+                  : page.key === "requests"
+                    ? pendingToggles.members + pendingToggles.spiritual
+                    : undefined,
+          }))}
       />
     );
     return () => setCustomToggles(null);
-  }, [opensEldershipDesk, eldershipView, setCustomToggles, router]);
+  }, [
+    opensEldershipDesk,
+    eldershipView,
+    setCustomToggles,
+    router,
+    pendingToggles.treasury,
+    pendingToggles.letters,
+    pendingToggles.members,
+    pendingToggles.spiritual,
+  ]);
 
   // The deaconate's desk draws the desk's own six pages, the same ones the
   // console's strip names. Moving between them replaces the entry, so a
@@ -323,11 +351,18 @@ export function MyAreas() {
         onChange={(next) =>
           router.replace(`/my-areas?area=deaconate&view=${next}`, { scroll: false })
         }
-        items={deaconateViews.map((page) => ({ key: page.view, label: page.label, short: page.short }))}
+        items={deaconateViews.map((page) => ({
+          key: page.view,
+          label: page.label,
+          short: page.short,
+          // The funding page is the desk's one queue: the asks nobody has
+          // answered yet.
+          count: page.view === "funding" ? pendingToggles.funding : undefined,
+        }))}
       />
     );
     return () => setCustomToggles(null);
-  }, [opensDeaconateDesk, deaconateView, setCustomToggles, router]);
+  }, [opensDeaconateDesk, deaconateView, setCustomToggles, router, pendingToggles.funding]);
 
   // One card's actions popover at a time: a press anywhere outside the menu
   // closes it, the same way the desks' row menus behave.

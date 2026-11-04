@@ -111,6 +111,7 @@ import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { PrayerCellsDesk } from "@/components/prayer-cells";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { ChurchMembersPanel } from "@/components/church-members-panel";
+import { usePendingToggleCounts } from "@/hooks/use-pending-toggle-counts";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { MessageComposeModal, MessagingPanel } from "@/components/messages-desk";
 import { DeaconateManager, useRotaFilters } from "@/components/deaconate-manager";
@@ -5723,6 +5724,15 @@ function DepartmentDetail({
   // strip is what lets a phone lay them four by four (see `stripLayout`).
   const isPastor = isPastorate && viewerRoles.includes("pastor");
   const canShareFeed = canOpenOfficeViews || isPastor;
+  // What each of this desk's views is still holding: an ask nobody answered, a
+  // signature nobody gave, a guide nobody handed over. The strip's badges read
+  // it, so a queue is visible before its page is opened — and only a reader
+  // who answers for the desk asks for the numbers, since a member looking in
+  // answers none of them.
+  const pendingToggles = usePendingToggleCounts(
+    Boolean(me) &&
+      (holdsOffice || canOpenOfficeViews || isPastor || Boolean(me?.is_staff) || Boolean(me?.is_superuser))
+  );
   const canOpenEldershipRota = canOpenOfficeViews;
   // May this viewer document a moment from the desk? The same answer the
   // server gives on the POST — administrators, and the deaconate, whose desk
@@ -5755,6 +5765,9 @@ function DepartmentDetail({
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
   // The join asks raised from the rail, answered on this desk.
   const [joinRequests, setJoinRequests] = useState<JoinRequestRow[]>([]);
+  // The asks this desk answers, counted once: the roll's chip wears the badge
+  // and the roll's own filter reads the same number.
+  const waitingJoins = joinRequests.filter((row) => row.status === "pending").length;
   // The reply each ask is being answered with, and which ask is in flight.
   const [joinsReplies, setJoinsReplies] = useState<Record<number, string>>({});
   const [busyJoinId, setBusyJoinId] = useState<number | null>(null);
@@ -6207,6 +6220,7 @@ function DepartmentDetail({
               label: isSabbathSchool ? "Study Groups" : "All Members",
               short: isSabbathSchool ? "Groups" : "Members",
               icon: Users,
+              count: waitingJoins,
             },
           ]
         : []),
@@ -6227,6 +6241,7 @@ function DepartmentDetail({
                     : "All Members",
               short: isSabbathSchool ? "Groups" : isPastorate ? "Team" : "Members",
               icon: Users,
+              count: waitingJoins,
             },
           ]
         : []),
@@ -6257,7 +6272,17 @@ function DepartmentDetail({
       // the groups, rostered on the same rota panel the deaconate and the
       // pulpit team keep (see DeaconateManager's music desk).
       ...(isMusic ? [{ key: "duties", label: "Duties", short: "Duties", icon: ListMusic }] : []),
-      ...(isSabbathSchool ? [{ key: "lesson-orders", label: "Lesson Orders", short: "Orders", icon: BookOpen }] : []),
+      ...(isSabbathSchool
+        ? [
+            {
+              key: "lesson-orders" as const,
+              label: "Lesson Orders",
+              short: "Orders",
+              icon: BookOpen,
+              count: pendingToggles.lessonOrders,
+            },
+          ]
+        : []),
       // The baptismal class is one of the school's classes now: who is being
       // prepared for the font, their walk from studying to baptism, kept
       // beside the study groups rather than on the elders' desk.
@@ -6305,9 +6330,27 @@ function DepartmentDetail({
       // Requests chip this desk used to carry.
       ...(isPastorate
         ? [
-            { key: "treasury-approvals", label: "Treasury Approvals", short: "Treasury", icon: Wallet },
-            { key: "letter-approvals", label: "Letter Approvals", short: "Letters", icon: FileText },
-            { key: "spiritual", label: "Spiritual", short: "Spiritual", icon: HandHeart },
+            {
+              key: "treasury-approvals" as const,
+              label: "Treasury Approvals",
+              short: "Treasury",
+              icon: Wallet,
+              count: pendingToggles.treasury,
+            },
+            {
+              key: "letter-approvals" as const,
+              label: "Letter Approvals",
+              short: "Letters",
+              icon: FileText,
+              count: pendingToggles.letters,
+            },
+            {
+              key: "spiritual" as const,
+              label: "Spiritual",
+              short: "Spiritual",
+              icon: HandHeart,
+              count: pendingToggles.spiritual,
+            },
           ]
         : []),
       // The desk's accounts: its fund ledger and the money it asks of the
@@ -6351,7 +6394,17 @@ function DepartmentDetail({
         : []),
       // The prayer cells — the little companies of prayer registered under
       // this desk, with their rolls and their asks riding one panel.
-      ...(keepsTheWeek ? [{ key: "prayer_cells", label: "Prayer Cells", short: "Cells", icon: Handshake }] : []),
+      ...(keepsTheWeek
+        ? [
+            {
+              key: "prayer_cells" as const,
+              label: "Prayer Cells",
+              short: "Cells",
+              icon: Handshake,
+              count: pendingToggles.prayerCells,
+            },
+          ]
+        : []),
       // The office's own views, gated to the roles that hold them. The
       // baptismal class is not one of them any longer: it is a class of the
       // Sabbath School, and rides that desk's strip instead.
@@ -6362,7 +6415,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code, waitingJoins, pendingToggles.treasury, pendingToggles.letters, pendingToggles.spiritual, pendingToggles.prayerCells, pendingToggles.lessonOrders]);
 
   const handleStripChange = useCallback((key: string) => {
     // The leadership register is a page of this desk: Personal Ministries
@@ -6394,8 +6447,19 @@ function DepartmentDetail({
         short: view.short,
         icon: view.icon,
         help: view.description,
+        // The three of its views that hold a queue wear its count: the
+        // funds an elder still has to clear, the paper still missing a pen,
+        // and the church's asks nobody has answered yet.
+        count:
+          view.key === "treasury-approvals"
+            ? pendingToggles.treasury
+            : view.key === "letters"
+              ? pendingToggles.letters
+              : view.key === "requests"
+                ? pendingToggles.members + pendingToggles.spiritual
+                : undefined,
       })),
-    []
+    [pendingToggles.treasury, pendingToggles.letters, pendingToggles.members, pendingToggles.spiritual]
   );
   // Which chip the desk underlines while it stands on one of its own views:
   // Moments, Accounts and Announcements are the pages the console holds under
@@ -6515,6 +6579,9 @@ function DepartmentDetail({
             short: page.short,
             icon: page.icon,
             help: page.label,
+            // The funding page is the desk's one queue: the asks nobody has
+            // answered yet.
+            count: page.tab === "deaconate-funding" ? pendingToggles.funding : undefined,
           }))}
         />
       );
@@ -6551,6 +6618,7 @@ function DepartmentDetail({
     eldershipStripItems,
     eldershipChip,
     handleEldershipChip,
+    pendingToggles.funding,
   ]);
 
   const loadRoll = useCallback(() => {

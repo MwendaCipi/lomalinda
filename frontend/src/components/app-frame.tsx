@@ -15,6 +15,7 @@ import { isMarketingPage } from "@/lib/route-visibility";
 import { useAllDepartments, useMyDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
 import { useRailHere } from "@/hooks/use-rail-location";
+import { usePendingToggleCounts } from "@/hooks/use-pending-toggle-counts";
 
 type PageHeaderHeading = {
   label: string;
@@ -369,6 +370,19 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // `setCustomToggles`; the shell must not turn its `items` into a second,
   // older navigation that shows first and is then replaced.
   const ownsItsStrip = section !== null && "ownStrip" in section && section.ownStrip === true;
+  // The shell's strip is only asked for counts while it is the clerk's — the
+  // one strip it draws whose pages hold queues — so a ministry's strip costs
+  // nothing.
+  const shellQueues = Boolean(
+    section &&
+      "items" in section &&
+      section.items?.some((item) =>
+        ["clerk-requests", "clerk-letters", "clerkship-funding"].some((page) =>
+          String(item.href ?? "").includes(page)
+        )
+      )
+  );
+  const shellCounts = usePendingToggleCounts(shellQueues);
   const sectionPages = (section && !ownsItsStrip && "items" in section && section.items ? section.items : [])
     .filter((item) => Boolean(item.href))
     .map((item) => ({
@@ -380,6 +394,16 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       short: item.short,
       icon: item.icon,
       help: item.label,
+      // A page whose work waits on somebody wears its count: the clerk's
+      // join queue and letters, and the clerk's funding asks. The rest of
+      // the shell's strips are doors, not queues.
+      count: item.href?.includes("clerk-requests")
+        ? shellCounts.members
+        : item.href?.includes("clerk-letters")
+          ? shellCounts.letters
+          : item.href?.includes("clerkship-funding")
+            ? shellCounts.funding
+            : undefined,
     }));
 
   const locked = LOCKED_PREFIXES.some((prefix) => pathname.startsWith(prefix));

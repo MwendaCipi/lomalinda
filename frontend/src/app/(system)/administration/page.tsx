@@ -17,6 +17,7 @@ import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { TransferManagement } from "@/components/transfer-management";
 import { RequestsAdminManager } from "@/components/requests-admin-manager";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
+import { usePendingToggleCounts } from "@/hooks/use-pending-toggle-counts";
 import { TreasuryAccountsManager } from "@/components/treasury-accounts-manager";
 import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { ChurchBudgetManager } from "@/components/church-budget-manager";
@@ -145,6 +146,9 @@ function AdministrationContent() {
   // The unanswered-request count, shared with the sidebar so the phone card
   // and the desktop rail can never disagree about the number.
   const pendingRequests = usePendingRequestCounts();
+  // The queues the console's strips wear as badges — the deaconate's funding
+  // asks among them — so a page holding work shows it before it is opened.
+  const pendingToggles = usePendingToggleCounts();
   // The request-notification emails land here: ?request=<kind>-<id> opens the
   // desk on that one request instead of every piece of unfinished business.
   const searchRequest = searchParams.get("request");
@@ -458,11 +462,14 @@ function AdministrationContent() {
           short: page.short,
           icon: page.icon,
           help: page.description,
+          // The funding page is the desk's one queue: the asks nobody has
+          // answered yet.
+          count: page.tab === "deaconate-funding" ? pendingToggles.funding : undefined,
         }))}
       />
     );
     return () => setCustomToggles(null);
-  }, [activeTab, deaconateTab, setCustomToggles]);
+  }, [activeTab, deaconateTab, setCustomToggles, pendingToggles.funding]);
   // The budget is another view of the treasury's money, so it draws the
   // treasury's own strip — the same one the ledger, the accounts desk and the
   // drives page draw. Without this it fell back to the rail's older list of
@@ -603,6 +610,7 @@ function AdministrationContent() {
               label: "Join Requests",
               short: "Join",
               help: "New members, ministry asks and membership transfers waiting on an answer.",
+              count: pendingRequests.joins + pendingRequests.ministry + pendingRequests.transfers,
             },
           ]
         : []),
@@ -628,7 +636,18 @@ function AdministrationContent() {
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [activeTab, consoleTab, canSeeConsole, canAnswerJoins, setCustomToggles, setCustomHeader, setHeadingFirst]);
+  }, [
+    activeTab,
+    consoleTab,
+    canSeeConsole,
+    canAnswerJoins,
+    setCustomToggles,
+    setCustomHeader,
+    setHeadingFirst,
+    pendingRequests.joins,
+    pendingRequests.ministry,
+    pendingRequests.transfers,
+  ]);
 
   // The phone's overview, grouped by desk: each desk is a heading with a card
   // per page it holds. The desktop rail already names these places, which is

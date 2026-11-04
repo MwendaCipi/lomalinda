@@ -61,10 +61,16 @@ const tabClass = (active: boolean) =>
     active ? "border-bark text-bark" : "border-transparent text-moss hover:border-ember hover:text-bark"
   }`;
 
+/** The badge a toggle wears when its view holds something still waiting — the
+ *  same ember pill the treasury's strip counts its queues with, so a number on
+ *  a chip means the same thing on every desk in the app. */
+const countBadgeClass =
+  "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[9px] font-bold leading-none text-white shadow-2xs sm:h-5 sm:min-w-5 sm:px-1.5 sm:text-[10px]";
+
 /** The inside of a strip tab — the name and any count, no icon. A tab with a
     `short` says the one-worder on a phone and the full name everywhere else,
     so a strip can carry "Fund Drives" on a desk and "Drives" in a hand. */
-function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
+function TabBody({ item }: { item: SubNavItem }) {
   return (
     <>
       {item.short ? (
@@ -75,8 +81,18 @@ function TabBody({ item, active }: { item: SubNavItem; active: boolean }) {
       ) : (
         item.label
       )}
-      {typeof item.count === "number" ? (
-        <span className={`text-xs font-bold ${active ? "text-ember" : "text-moss-faint"}`}>{item.count}</span>
+      {/* A count is a badge, not a caption: it says the view is holding
+          something for the reader, so it is drawn only when there is
+          something to hold — a queue emptied reads as a plain toggle, not as
+          a zero worth noticing. */}
+      {typeof item.count === "number" && item.count > 0 ? (
+        <span
+          className={countBadgeClass}
+          title={`${item.count} waiting`}
+          aria-label={`${item.count} waiting`}
+        >
+          {item.count > 99 ? "99+" : item.count}
+        </span>
       ) : null}
     </>
   );
@@ -147,7 +163,7 @@ export function SubNav({
               title={item.help}
               className={tabClass(active)}
             >
-              <TabBody item={item} active={active} />
+              <TabBody item={item} />
             </button>
           );
         })}
@@ -206,7 +222,7 @@ export function SectionNav({
               }}
               className={tabClass(active)}
             >
-              <TabBody item={item} active={active} />
+              <TabBody item={item} />
             </button>
           );
         })}
