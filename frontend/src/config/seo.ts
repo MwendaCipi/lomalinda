@@ -80,8 +80,8 @@ export const churchSchema = {
       ],
       description: CHURCH.description,
       url: CHURCH.url,
-      logo: `${CHURCH.url}/icons/meru/church-icon-512.png`,
-      image: `${CHURCH.url}/icons/meru/church-icon-512.png`,
+      logo: `${CHURCH.url}/icons/meru/church-crest-512.png`,
+      image: `${CHURCH.url}/icons/meru/church-crest-512.png`,
       email: CHURCH.email,
       address: {
         "@type": "PostalAddress",
@@ -172,7 +172,7 @@ export const defaultMetadata: Metadata = {
     description: CHURCH.description,
     images: [
       {
-        url: "/icons/meru/church-icon-512.png",
+        url: "/icons/meru/church-crest-512.png",
         width: 512,
         height: 512,
         alt: `${CHURCH.name} logo`,
@@ -183,7 +183,7 @@ export const defaultMetadata: Metadata = {
     card: "summary",
     title: `${CHURCH.name} | Seventh-day Adventist Church in Meru, Kenya`,
     description: CHURCH.description,
-    images: ["/icons/meru/church-icon-512.png"],
+    images: ["/icons/meru/church-crest-512.png"],
   },
   /**
    * The town, named as plain meta. Only statements that are true of the place
@@ -228,7 +228,7 @@ export function openGraphFor({
     description,
     images: [
       {
-        url: "/icons/meru/church-icon-512.png",
+        url: "/icons/meru/church-crest-512.png",
         width: 512,
         height: 512,
         alt: `${CHURCH.name} logo`,

@@ -5722,7 +5722,17 @@ function DepartmentDetail({
   // writers, the desk keeps the one chip rather than also drawing the elders'
   // separate Daily Word and Announcements chips beside it. Eight toggles on the
   // strip is what lets a phone lay them four by four (see `stripLayout`).
-  const isPastor = isPastorate && viewerRoles.includes("pastor");
+  // The pastor's own two chips open the church's roll and the feed his notices
+  // go out from. They belong to the pastoral office however it is held: the
+  // pastor's own role, the pastoral team listed on the desk, and the
+  // administrators who keep the office's books all stand in it — a chip gated
+  // on one spelling of the role left the desk reading like any other ministry.
+  const pastoralOffice =
+    viewerRoles.includes("pastor") ||
+    viewerRoles.includes("admin") ||
+    Boolean(me?.is_staff) ||
+    Boolean(me?.is_superuser);
+  const isPastor = isPastorate && (pastoralOffice || holdsOffice);
   const canShareFeed = canOpenOfficeViews || isPastor;
   // What each of this desk's views is still holding: an ask nobody answered, a
   // signature nobody gave, a guide nobody handed over. The strip's badges read

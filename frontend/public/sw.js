@@ -452,7 +452,7 @@
    initials, and the desk's calendar opens every other ministry's calendar for
    its keeper to read and keep. Chrome changed, so installed apps must take
    the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v85";
+const CACHE_NAME = "sda-loma-linda-meru-v86";
 const STATIC_ASSETS = [
   "/",
   "/about/",
@@ -472,10 +472,10 @@ const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/adventist-logo.svg",
   "/adventist-logo-white.svg",
-  "/icons/meru/app-icon-192.png",
-  "/icons/meru/app-icon-512.png",
-  "/icons/meru/app-icon-512-maskable.png",
-  "/icons/meru/apple-touch-icon.png",
+  "/icons/meru/church-crest-192.png",
+  "/icons/meru/church-crest-512.png",
+  "/icons/meru/church-crest-512-maskable.png",
+  "/icons/meru/church-crest-apple-touch-icon.png",
 ];
 
 async function cacheStaticAssets() {
@@ -644,8 +644,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "SDA Church Loma Linda";
   const options = {
     body: payload.body || "",
-    icon: "/icons/meru/app-icon-192.png",
-    badge: "/icons/meru/app-icon-192.png",
+    icon: "/icons/meru/church-crest-192.png",
+    badge: "/icons/meru/church-crest-192.png",
     tag: payload.link || undefined, // one notice per destination, no stacking
     data: { link: payload.link || "/administration?tab=requests" },
     renotify: false,

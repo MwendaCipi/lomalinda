@@ -25,7 +25,7 @@ function createIconSvg(width, height, safePadding = 0) {
         <!-- Church identity on two rows below the SDA symbol: the name the
              church goes by, SDA CHURCH over LOMA LINDA — never the two
              stitched into one line. -->
-        <text x="${innerW / 2}" y="${innerH * 0.55}" font-family="sans-serif" font-weight="800" font-size="${innerW * 0.082}" fill="#f1c89e" text-anchor="middle" letter-spacing="1.5">SDA CHURCH</text>
+        <text x="${innerW / 2}" y="${innerH * 0.55}" font-family="sans-serif" font-weight="800" font-size="${innerW * 0.082}" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.5">SDA CHURCH</text>
         <text x="${innerW / 2}" y="${innerH * 0.68}" font-family="sans-serif" font-weight="800" font-size="${innerW * 0.088}" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.8">LOMA LINDA</text>
       </g>
     </svg>
@@ -41,15 +41,17 @@ async function generate() {
     fs.mkdirSync(meruDir, { recursive: true });
   }
 
-  // The served names carry "church-" because the manifest and the head point
-  // at brand-new file paths whenever the artwork changes — a query string is
-  // not enough for every cache layer between the phone and the server (see
-  // the icons block in src/app/layout.tsx).
+  // The served names carry "church-crest-" because the manifest and the head
+  // point at brand-new file paths whenever the artwork changes — a query
+  // string is not enough for every cache layer between the phone and the
+  // server, and the PNGs are served immutable for a month (see the icons
+  // block in src/app/layout.tsx). Rename the stem here when the art changes
+  // again, and point the manifest, the head, the schema and the worker at it.
   const variants = [
-    { out: 'icon-192x192.png', served: 'church-icon-192.png', size: 192, padding: 0 },
-    { out: 'icon-512x512.png', served: 'church-icon-512.png', size: 512, padding: 0 },
-    { out: 'icon-512x512-maskable.png', served: 'church-icon-512-maskable.png', size: 512, padding: 64 },
-    { out: 'apple-touch-icon.png', served: 'church-apple-touch-icon.png', size: 180, padding: 0 },
+    { out: 'icon-192x192.png', served: 'church-crest-192.png', size: 192, padding: 0 },
+    { out: 'icon-512x512.png', served: 'church-crest-512.png', size: 512, padding: 0 },
+    { out: 'icon-512x512-maskable.png', served: 'church-crest-512-maskable.png', size: 512, padding: 64 },
+    { out: 'apple-touch-icon.png', served: 'church-crest-apple-touch-icon.png', size: 180, padding: 0 },
   ];
 
   for (const variant of variants) {
@@ -60,7 +62,7 @@ async function generate() {
     fs.writeFileSync(path.join(meruDir, variant.served), png);
   }
 
-  console.log('PWA icons updated: SDA CHURCH / LOMA LINDA, in /icons and /icons/meru.');
+  console.log('PWA icons updated: SDA CHURCH / LOMA LINDA in white, in /icons and /icons/meru.');
 }
 
 generate().catch(console.error);
