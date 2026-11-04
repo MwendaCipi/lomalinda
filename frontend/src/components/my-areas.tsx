@@ -515,7 +515,12 @@ export function MyAreas() {
                 initialTab={
                   openView === "treasury-approvals" ||
                   openView === "letter-approvals" ||
-                  openView === "spiritual"
+                  openView === "spiritual" ||
+                  // The pastorate's own two, reached from its strip: the
+                  // church's roll and the Sharing feed the pastor publishes
+                  // his notices and the daily word from.
+                  openView === "church-members" ||
+                  openView === "sharing"
                     ? openView
                     : openView === "requests"
                       ? "letter-approvals"

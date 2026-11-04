@@ -31,6 +31,7 @@ import {
   ChevronDown,
   Church,
   Clock,
+  Contact,
   Copy,
   Crown,
   Download,
@@ -109,6 +110,7 @@ import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
 import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { PrayerCellsDesk } from "@/components/prayer-cells";
 import { DailyWordPanel } from "@/components/daily-word-panel";
+import { ChurchMembersPanel } from "@/components/church-members-panel";
 import { AreaMomentsPanel } from "@/components/area-moments-panel";
 import { MessageComposeModal, MessagingPanel } from "@/components/messages-desk";
 import { DeaconateManager, useRotaFilters } from "@/components/deaconate-manager";
@@ -5503,11 +5505,14 @@ type DeptSubTab =
   // this desk's structure when it opens from the map (see the panels block).
   | "inventory"
   | "rota"
-  // The pastorate's three pages — what the treasury asks to release, what
-  // waits on the pastor's signature, and the church's spiritual asks.
+  // The pastorate's pages — what the treasury asks to release, what waits on
+  // the pastor's signature, the church's spiritual asks, and the two the
+  // shepherd keeps for his own: the church's roll read beside them, and the
+  // Sharing feed where his notices and the daily word are published.
   | "treasury-approvals"
   | "letter-approvals"
-  | "spiritual";
+  | "spiritual"
+  | "church-members";
 
 /**
  * The month a search names, as an index into the year's wall: "mar",
@@ -5567,7 +5572,12 @@ function DepartmentDetail({
   // Children classes are membership metadata, not departments to navigate
   // between. Keeping this guard also protects the UI while an existing
   // installation is waiting for the data migration that clears old units.
-  const hasMemberUnitPages = department.code !== "children" && units.length > 0;
+  // Children and the pastorate read as one roll. A child's class is membership
+  // metadata, and the pastorate's people are the pastoral team itself — a chip
+  // per band would trade the office's pages for a list this desk already holds
+  // whole. Both therefore keep the single roll chip.
+  const hasMemberUnitPages =
+    department.code !== "children" && department.code !== "pastorate" && units.length > 0;
   // Personal Ministries runs the church's weekly rhythm, so the church's own
   // week is kept on its page — see WeeklyMeetingsPanel.
   const keepsTheWeek = department.code === "personal_ministries";
@@ -5704,6 +5714,15 @@ function DepartmentDetail({
   // are the seats this church actually fills.
   const canOpenOfficeViews =
     department.code === "eldership" && viewerRoles.some((role) => ELDERSHIP_ROLES.includes(role));
+  // The pastor keeps two views of his own on the pastorate's desk: the
+  // church's roll, read in place rather than managed, and the Sharing feed his
+  // notices and the daily word are published from. They are his by office, not
+  // by the elders' gate — and because the feed is one view that carries both
+  // writers, the desk keeps the one chip rather than also drawing the elders'
+  // separate Daily Word and Announcements chips beside it. Eight toggles on the
+  // strip is what lets a phone lay them four by four (see `stripLayout`).
+  const isPastor = isPastorate && viewerRoles.includes("pastor");
+  const canShareFeed = canOpenOfficeViews || isPastor;
   const canOpenEldershipRota = canOpenOfficeViews;
   // May this viewer document a moment from the desk? The same answer the
   // server gives on the POST — administrators, and the deaconate, whose desk
@@ -5728,8 +5747,8 @@ function DepartmentDetail({
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
   const officeViewBlocked =
-    (subTab === "daily-word" || subTab === "announcements" || subTab === "sharing") &&
-    !canOpenOfficeViews;
+    ((subTab === "daily-word" || subTab === "announcements") && !canOpenOfficeViews) ||
+    (subTab === "sharing" && !canShareFeed);
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   // The members view holds the roll *and* the asks to join it, so the desk
   // reads one list and narrows it here rather than opening a second view.
@@ -6197,12 +6216,30 @@ function DepartmentDetail({
         ? [
             {
               key: "members",
-              label: isMusic ? "Members" : isSabbathSchool ? "Study Groups" : "All Members",
-              short: isSabbathSchool ? "Groups" : "Members",
+              // The pastorate's roll is its own people, the pastoral team, so
+              // it says Team beside the church's whole roll that follows it.
+              label: isMusic
+                ? "Members"
+                : isSabbathSchool
+                  ? "Study Groups"
+                  : isPastorate
+                    ? "Team"
+                    : "All Members",
+              short: isSabbathSchool ? "Groups" : isPastorate ? "Team" : "Members",
               icon: Users,
             },
           ]
         : []),
+      // The church's whole roll, read on the pastor's desk: who the church is,
+      // how to reach them, and the office each holds. It is not the office's
+      // User Management — nothing is added or switched off here — but the
+      // shepherd's copy of the same list, kept beside his asks.
+      ...(isPastor
+        ? [{ key: "church-members", label: "Church Members", short: "Members", icon: Contact }]
+        : []),
+      // Sharing — the notices and the daily word in one place, the way the
+      // eldership keeps it: one feed, with the two buttons that post to it.
+      ...(isPastor ? [{ key: "sharing", label: "Sharing", short: "Sharing", icon: Sparkles }] : []),
       // Music sings in more than one voice, and the groups registered under
       // it get a view beside the roll — one word, Groups, so the strip reads
       // the same in a hand as on a desk.
@@ -6325,7 +6362,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastorate, department.code]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code]);
 
   const handleStripChange = useCallback((key: string) => {
     // The leadership register is a page of this desk: Personal Ministries
@@ -8193,7 +8230,7 @@ function DepartmentDetail({
           <DailyWordPanel />
         </div>
       )}
-      {(subTab === "announcements" || subTab === "sharing") && canOpenOfficeViews && (
+      {(subTab === "announcements" || subTab === "sharing") && canShareFeed && (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           {/* The posts themselves, read the simple way they are read in the
               fellowship feed — flat cards, no manager chrome, no nesting.
@@ -8203,7 +8240,7 @@ function DepartmentDetail({
             <AnnouncementsFeed
               key={shareFeedKey}
               embedded
-              canManage={canOpenOfficeViews}
+              canManage={canShareFeed}
               onEdit={(item) => {
                 setShareEditItem(item);
                 setShowShareComposer(true);
@@ -8233,6 +8270,17 @@ function DepartmentDetail({
             </button>
           </div>
         </div>
+      )}
+      {/* The church's roll on the pastor's desk: the whole church, read in
+          place, with none of the office's controls — User Management keeps
+          those, on the desk that owns the record. */}
+      {subTab === "church-members" && isPastor && <ChurchMembersPanel />}
+      {/* A deep link may name the church's roll on a desk that is not the
+          pastor's: the strip withholds it, and the desk says why. */}
+      {subTab === "church-members" && !isPastor && (
+        <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
+          The church&apos;s roll is the pastor&apos;s to read — ask the pastor to open it for you.
+        </p>
       )}
       {/* The pastorate's three pages. The letters come first in the strip's
           order because a signature waiting is the ask that cannot wait; the
