@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useHeaderData } from "@/hooks/use-header-data";
 import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { isWaiting } from "@/lib/requests";
 
@@ -21,16 +22,18 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  * so a desk and the requests page cannot disagree about how many are waiting.
  *
  * A reader with no right to a queue is handed an empty list by its endpoint,
- * so the badge simply never appears for them.
+ * and a queue nobody's pen can clear is not counted at all, so the badge
+ * simply never appears for them.
  */
 export type PendingToggleCounts = {
   /** The roll's asks — joins, ministry asks and membership transfers. */
   members: number;
   /** The church's asks — prayer, visitation, dedication and welfare. */
   spiritual: number;
-  /** Withdrawals still holding a signature, and givings whose change waits. */
+  /** Withdrawals still holding *this reader's* signature, and givings whose
+   *  change the treasury desk must answer. */
   treasury: number;
-  /** Letters still missing a pen: the pastor's, or the clerk's after his. */
+  /** Letters still missing *this reader's* pen: the pastor's, or the clerk's. */
   letters: number;
   /** Ministry funding asks no office has answered yet. */
   funding: number;
@@ -43,8 +46,10 @@ export type PendingToggleCounts = {
 
 /** The statuses a withdrawal still waiting holds, as the treasury desk reads them. */
 const WITHDRAWAL_WAITING = ["pending", "pastor_approved", "elder_approved"];
-/** The two letter statuses that are still waiting on a pen. */
+/** The two letter statuses that are still waiting on a pen, first then second. */
 const LETTER_WAITING = ["pending_pastor", "pastor_signed"];
+/** The seats that approve a withdrawal after the pastor has blessed it. */
+const ELDER_ROLES = ["elder", "first_elder", "second_elder", "third_elder"];
 
 const EMPTY: PendingToggleCounts = {
   members: 0,
@@ -80,6 +85,26 @@ export function usePendingToggleCounts(enabled = true): PendingToggleCounts {
   // The church's asks are already counted in one place for the console's
   // badges; asking the same endpoints twice would let the two drift.
   const requests = usePendingRequestCounts(enabled);
+  // A letter badge is only worth drawing when the paper is waiting on *this*
+  // reader's pen — the same two pens the signing buttons read, read here. The
+  // pastor clears the first line, the clerk countersigns it, an administrator
+  // holds both. Counting every letter the church has out told an elder, or a
+  // desk that can only look at the register, that something was theirs to
+  // sign; it opens on rows they cannot act on, or on none at all.
+  const { me } = useHeaderData();
+  const viewerRoles = (Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"]).map(
+    (role) => role.toLowerCase().trim()
+  );
+  const isAdminViewer = viewerRoles.includes("admin") || Boolean(me?.is_superuser);
+  const canSignPastor = viewerRoles.includes("pastor") || isAdminViewer;
+  const canSignClerk = viewerRoles.includes("clerk") || isAdminViewer;
+  // The same question of the money: a withdrawal is cleared three times over —
+  // the pastor blesses, an elder approves, the treasury releases — and each
+  // desk is offered only its own stamp. Counting all three for every reader
+  // put money on a pastor's badge that no button of his could move.
+  const clearsPastorStage = viewerRoles.includes("pastor") || isAdminViewer;
+  const clearsElderStage = isAdminViewer || viewerRoles.some((role) => ELDER_ROLES.includes(role));
+  const clearsRelease = isAdminViewer || viewerRoles.includes("treasurer");
   const [rest, setRest] = useState<PendingToggleCounts>(EMPTY);
 
   useEffect(() => {
@@ -107,9 +132,23 @@ export function usePendingToggleCounts(enabled = true): PendingToggleCounts {
         members: 0,
         spiritual: 0,
         treasury:
-          withdrawals.filter((row) => WITHDRAWAL_WAITING.includes(status(row))).length +
-          changes.filter((row) => status(row) === "pending").length,
-        letters: letters.filter((row) => LETTER_WAITING.includes(status(row))).length,
+          withdrawals.filter((row) => {
+            const state = status(row);
+            return (
+              (state === WITHDRAWAL_WAITING[0] && clearsPastorStage) ||
+              (state === WITHDRAWAL_WAITING[1] && clearsElderStage) ||
+              (state === WITHDRAWAL_WAITING[2] && clearsRelease)
+            );
+          }).length +
+          // A giver's change of heart on a receipt is the treasury's own desk.
+          (clearsRelease ? changes.filter((row) => status(row) === "pending").length : 0),
+        letters: letters.filter((row) => {
+          const state = status(row);
+          return (
+            (state === LETTER_WAITING[0] && canSignPastor) ||
+            (state === LETTER_WAITING[1] && canSignClerk)
+          );
+        }).length,
         funding: funding.filter((row) => isWaiting({ status: status(row) })).length,
         // A guide is pending until it is handed over: the panel's own reading
         // of the queue, so the badge and the list cannot differ.
@@ -122,7 +161,7 @@ export function usePendingToggleCounts(enabled = true): PendingToggleCounts {
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [enabled, canSignPastor, canSignClerk, clearsPastorStage, clearsElderStage, clearsRelease]);
 
   return {
     ...rest,
