@@ -19087,6 +19087,70 @@ class GhostAccountExpungeTests(TestCase):
             self.assertTrue(User.objects.filter(pk=user.pk).exists(), user.username)
 
 
+class RemainingGhostAccountExpungeTests(TestCase):
+    """The minted accounts the first pass spared are expunged by the second.
+
+    Migration 0256 stamped every profile then on record as email-confirmed, so
+    0259's "address never confirmed" guard excluded all of them and removed
+    nothing from the church's database. Migration 0260 decides on use alone —
+    no password, no sign-in, no gifts, no office — because that is what
+    actually separates a minted placeholder from a person's own account.
+    """
+
+    MIGRATION = 'members.migrations.0260_expunge_remaining_minted_friend_accounts'
+
+    def _minted(self, username, **profile_fields):
+        """A minted account in the shape the church's database holds them."""
+        user = User.objects.create(
+            username=username, email=profile_fields.pop('email', ''), is_active=True,
+        )
+        user.set_unusable_password()
+        user.save()
+        MemberProfile.objects.create(
+            user=user,
+            role='member',
+            # 0256 stamped every profile then on record, so the guard that read
+            # this could never tell a minted account from a real one.
+            email_verified_at=timezone.now(),
+            **profile_fields,
+        )
+        return user
+
+    def test_a_verified_stamp_does_not_make_an_unused_account_real(self):
+        from importlib import import_module
+        from django.apps import apps as django_apps
+
+        migration = import_module(self.MIGRATION)
+        ghost = self._minted(
+            'friend.0720306184', account_type='member', phone_number='0720306184',
+        )
+
+        migration.expunge_ghost_accounts(django_apps, None)
+
+        self.assertFalse(User.objects.filter(pk=ghost.pk).exists())
+        self.assertFalse(MemberProfile.objects.filter(user_id=ghost.pk).exists())
+
+    def test_an_account_somebody_claimed_or_gave_through_stays(self):
+        from importlib import import_module
+        from django.apps import apps as django_apps
+
+        migration = import_module(self.MIGRATION)
+
+        claimed = self._minted('friend.0702503300', phone_number='0702503300')
+        claimed.set_password('ChurchPass#2026')
+        claimed.save()
+
+        giving = self._minted('friend.0700023928', account_type='friend', phone_number='0700023928')
+        Contribution.objects.create(
+            member=giving, amount=Decimal('250.00'), purpose='Tithe', status='completed',
+        )
+
+        migration.expunge_ghost_accounts(django_apps, None)
+
+        for user in (claimed, giving):
+            self.assertTrue(User.objects.filter(pk=user.pk).exists(), user.username)
+
+
 class EmailChangeVerificationTests(APITestCase):
     REQUEST_URL = '/api/members/me/email-change/request/'
     VERIFY_URL = '/api/members/me/email-change/verify/'
