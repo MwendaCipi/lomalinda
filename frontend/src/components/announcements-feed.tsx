@@ -286,7 +286,11 @@ export function AnnouncementsFeed({
             // The area a post is addressed to, by name: the first of
             // this account's areas whose audience code the post carries.
             const itemBadge = (item.audience ?? [])
-              .map((code) => myDepartments.find((dept) => dept.audience_code === code)?.label)
+              .map((code) =>
+                code === "elders"
+                  ? "Elders"
+                  : myDepartments.find((dept) => dept.audience_code === code)?.label
+              )
               .find(Boolean);
             // A little more room than the ledger cards: the notice
             // reads as a card of its own, never a squashed strip.

@@ -105,6 +105,9 @@ MINISTRY_AUDIENCE_OPTIONS = (
     ('adventist_women', 'Adventist Women'),
     ('young_adults', 'Young Adults'),
     ('board', 'Board Members'),
+    # The church's eldership, addressed as one body: the post reaches every
+    # elder seat (First, Second and Third), not only a holder of one code.
+    ('elders', 'Elders'),
     ('pm_leader', 'PM Leader (Personal Ministries)'),
     ('apm_leader', 'APM Leader (Possibility Ministries)'),
     ('men_ministry', 'AMM Leader (Adventist Men)'),

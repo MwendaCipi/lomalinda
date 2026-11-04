@@ -2201,6 +2201,12 @@ def department_audience_user_ids(codes):
     return user_ids
 
 
+#: The seats the church fills with elders. The audience code `elders` names
+#: the whole body, since the church elects a First, Second and Third Elder
+#: rather than holding one "elder" role.
+ELDER_SEATS = frozenset({'elder', 'first_elder', 'second_elder', 'third_elder'})
+
+
 def announcement_audience_user_ids(audience_codes):
     """Users an audience addresses, or ``None`` when the post is to everyone.
 
@@ -2215,8 +2221,15 @@ def announcement_audience_user_ids(audience_codes):
     user_ids = department_audience_user_ids(codes)
     if 'board' in codes:
         user_ids |= set(board_audience().values_list('id', flat=True))
-    office_codes = codes - MEMBERSHIP_AUDIENCE_CODES - {c for c in codes if c.startswith('dept_')}
+    office_codes = (
+        codes - MEMBERSHIP_AUDIENCE_CODES - {'elders'} - {c for c in codes if c.startswith('dept_')}
+    )
     for profile in MemberProfile.objects.select_related('user').filter(user__is_active=True):
+        # Addressing "Elders" reaches every elder seat the church has filled —
+        # the same seats the eldership desk opens to.
+        if 'elders' in codes and set(profile.get_roles()) & ELDER_SEATS:
+            user_ids.add(profile.user_id)
+            continue
         if office_codes and set(profile.get_roles()) & office_codes:
             user_ids.add(profile.user_id)
             continue
@@ -10223,13 +10236,25 @@ class BaptismalClassEntryView(APIView):
         return Response({'detail': f'Marked {row.get_status_display().lower()}.', 'entry': BaptismalClassView._row(row)})
 
 
+def can_write_daily_word(user):
+    """The two desks that write the day's thought: the eldership's and the
+    pastorate's.
+
+    The feed is one: the pastor's Sharing view opens the same word/thought
+    composer the elders use, and a composer whose post the API refuses does
+    nothing when pressed. Both offices hold the pen, and the row records which
+    of them wrote it.
+    """
+    return can_manage_department(user, 'eldership') or can_manage_department(user, 'pastorate')
+
+
 class DailyWordView(APIView):
     """The daily word: today's devotional thought, and the desk that writes it.
 
     Any signed-in member may read it — a devotional thought meant to be
-    shared reads like one. The eldership desk writes it, and one day holds
-    one word: posting again replaces the day's own thought rather than
-    stacking two. Days before today are kept, so the record of what the
+    shared reads like one. The eldership and the pastorate write it, and one
+    day holds one word: posting again replaces the day's own thought rather
+    than stacking two. Days before today are kept, so the record of what the
     church has been fed does not vanish when the day turns over.
     """
 
@@ -10260,13 +10285,13 @@ class DailyWordView(APIView):
         return Response({
             'today': self._row(row) if row else None,
             'recent': [self._row(item) for item in recent],
-            'can_write': can_manage_department(request.user, 'eldership'),
+            'can_write': can_write_daily_word(request.user),
         })
 
     def post(self, request):
-        if not can_manage_department(request.user, 'eldership'):
+        if not can_write_daily_word(request.user):
             return Response(
-                {'detail': 'Only the eldership desk may write the daily word.'},
+                {'detail': 'Only the eldership desk or the pastorate may write the daily word.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         text = (request.data.get('text') or '').strip()

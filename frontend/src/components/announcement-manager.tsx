@@ -23,6 +23,9 @@ const POST_TO_OPTIONS: { value: string; label: string }[] = [
   { value: "adventist_women", label: "Adventist Women" },
   { value: "young_adults", label: "Young Adults" },
   { value: "board", label: "Board Members" },
+  // The eldership as one body — every seat, not only one code. The pastorate
+  // writes to the elders with it when a word is for their ears first.
+  { value: "elders", label: "Elders" },
   // Department addressing: a post to one of these reaches the department's
   // roll holders and its members (the backend resolves both).
   { value: "men_ministry", label: "AMM (Adventist Men)" },

@@ -8522,7 +8522,10 @@ function DepartmentDetail({
           </div>
         </>
       )}
-      {showShareComposer && canOpenOfficeViews && (
+      {/* The two writers' forms open for whoever holds the feed — the
+          eldership's office desks and the pastorate's Sharing alike — so the
+          buttons never stand beside a form the reader is not shown. */}
+      {showShareComposer && canShareFeed && (
         // The compose modal rides the desk: the same fields the console's
         // manager posts from, opened from the buttons panel's button and
         // closed — or handed back once a post has gone out — from within.
@@ -8561,7 +8564,7 @@ function DepartmentDetail({
           </div>
         </div>
       )}
-      {showThoughtComposer && canOpenOfficeViews && (
+      {showThoughtComposer && canShareFeed && (
         // The daily word's own composer: the same Share a Thought modal the
         // board carries, mounted on its own — closing it (cancelled or
         // shared) takes the desk back.

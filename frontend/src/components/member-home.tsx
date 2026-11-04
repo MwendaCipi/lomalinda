@@ -251,7 +251,7 @@ export function MemberHome() {
           : hourOfDay < 17
             ? "Good afternoon"
             : "Good evening";
-    return firstName ? `${part}, ${firstName} 👋` : `${part} 👋`;
+    return firstName ? `${part}, ${firstName}` : part;
   })();
 
   const FIELD_LABELS: Record<string, string> = {
