@@ -692,8 +692,14 @@ export function DepartmentLettersPanel({
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
   // The two pens: the pastor clears it first, the clerk countersigns. The
   // server refuses anything else; the buttons only show what it would take.
-  const canSignPastor = roles.includes("pastor") || roles.includes("admin");
-  const canSignClerk = roles.includes("clerk") || roles.includes("admin");
+  // The server's own test (is_pastor_or_admin / is_clerk_or_admin) counts the
+  // administrator role and the site's staff and superusers alike, so the two
+  // pens are read the same way here: a button the API would honour must not be
+  // withheld from the account holding it.
+  const isAdministrator =
+    roles.includes("admin") || Boolean(me?.is_staff) || Boolean(me?.is_superuser);
+  const canSignPastor = roles.includes("pastor") || isAdministrator;
+  const canSignClerk = roles.includes("clerk") || isAdministrator;
 
   const [letters, setLetters] = useState<LetterRow[]>([]);
   const [loading, setLoading] = useState(true);

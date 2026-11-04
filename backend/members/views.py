@@ -16628,7 +16628,10 @@ class DeaconateRequestReviewView(APIView):
 
     def get(self, request):
         profile = department_office_profile(request.user)
-        if not profile and not can_manage_department(request.user, 'deaconate'):
+        # The site's own staff and superusers answer everything, as they do at
+        # every other approval desk (is_elder_or_admin and its siblings).
+        is_admin = request.user.is_staff or request.user.is_superuser
+        if not profile and not is_admin and not can_manage_department(request.user, 'deaconate'):
             return Response({'requests': []})
         rows = DeaconateRequest.objects.select_related('requested_by', 'reviewed_by', 'item')
         return Response({
@@ -16660,7 +16663,9 @@ class DeaconateRequestReviewView(APIView):
         })
 
     def patch(self, request, pk):
-        if not department_office_profile(request.user):
+        if not department_office_profile(request.user) and not (
+            request.user.is_staff or request.user.is_superuser
+        ):
             return Response(
                 {'detail': 'Only the church offices can answer property requests.'},
                 status=status.HTTP_403_FORBIDDEN,

@@ -44,7 +44,11 @@ const ELDERSHIP_HEADING = {
  */
 const deskTabHeadings: Record<string, { label: string; description?: string }> = {
   announcements: {
-    label: "Sharing",
+    // The eldership's Sharing page names the desk, not the page. Sharing is
+    // the desk's first chip, so a band reading "Sharing" over the strip that
+    // already says which view is open left the desk unnamed there while every
+    // other view of it says where the reader is.
+    label: ELDERSHIP_HEADING.label,
     description: "Publish announcements and share a daily thought with the church.",
   },
   requests: {

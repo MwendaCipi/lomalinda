@@ -95,7 +95,11 @@ export function usePendingToggleCounts(enabled = true): PendingToggleCounts {
   const viewerRoles = (Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"]).map(
     (role) => role.toLowerCase().trim()
   );
-  const isAdminViewer = viewerRoles.includes("admin") || Boolean(me?.is_superuser);
+  // An administrator approves every stage, and the server counts the site's
+  // staff and superusers as administrators (is_pastor_or_admin and its
+  // siblings), so those accounts are read as holding the pens too.
+  const isAdminViewer =
+    viewerRoles.includes("admin") || Boolean(me?.is_staff) || Boolean(me?.is_superuser);
   const canSignPastor = viewerRoles.includes("pastor") || isAdminViewer;
   const canSignClerk = viewerRoles.includes("clerk") || isAdminViewer;
   // The same question of the money: a withdrawal is cleared three times over —
