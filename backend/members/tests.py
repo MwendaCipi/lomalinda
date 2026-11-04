@@ -18882,29 +18882,91 @@ class EldershipDeskToolsTests(APITestCase):
         self.assertEqual(DailyWord.objects.count(), 0)
 
 
-class NoGuessedEmailAddressTests(TestCase):
-    """A giver with no address gets no address — never an invented one.
+class ReceiptsNeverEnrollGiversTests(APITestCase):
+    """A receipt keeps the giver's details; it never stands an account up.
 
-    The desk once minted ``<username>@friend.church`` for a giver who gave no
-    email: a mailbox that cannot receive anything, stored where real addresses
-    live. Receipts sent to it left the server and read as sent, though nobody
-    could receive them. An account now stands up with an empty email, every
-    send treats an invented address the same as none at all, and rows already
-    carrying one are blanked by migrations 0005 / 0199.
+    The desk once enrolled every giver it receipted as a Friend — an active
+    ``friend.<phone>`` account with an unusable password — and earlier still
+    invented a ``<username>@friend.church`` address for one who gave no email.
+    Both put people on the roll who never signed up: counted as friends,
+    reached by "all users" announcements, and refused a join later, because
+    every join path rejects an email that already holds an account. A receipt
+    now carries the name, phone and address it was given and mints nothing.
     """
 
-    def test_a_giver_who_gives_no_address_gets_no_address(self):
-        from .views import ensure_giver_profile
+    CASH_URL = '/api/members/treasury/cash-contributions/'
 
-        user = ensure_giver_profile('Mercy Kananu', '0712345678', '')
-        self.assertIsNotNone(user)
-        self.assertEqual(user.email, '')
+    def setUp(self):
+        self.treasurer = User.objects.create_user(
+            'desk.treasurer', 'desk.treasurer@example.com', 'ChurchPass#2026'
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(self.treasurer)
 
-    def test_an_address_still_lands_on_the_account_when_one_is_given(self):
-        from .views import ensure_giver_profile
+    def _record(self, **overrides):
+        payload = {
+            'received_on': timezone.localdate().isoformat(),
+            'amount': '500.00',
+            'purpose': 'Tithe',
+            'donor_name': 'Mercy Kananu',
+            'giver_phone': '0712345678',
+            'giver_email': 'mercy.kananu@example.com',
+        }
+        payload.update(overrides)
+        response = self.client.post(self.CASH_URL, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        return response
 
-        user = ensure_giver_profile('Mercy Kananu', '0712345678', 'mercy@example.com')
-        self.assertEqual(user.email, 'mercy@example.com')
+    def test_a_giver_with_no_account_is_not_enrolled_by_a_receipt(self):
+        accounts = User.objects.count()
+        profiles = MemberProfile.objects.count()
+
+        self._record()
+
+        self.assertEqual(User.objects.count(), accounts)
+        self.assertEqual(MemberProfile.objects.count(), profiles)
+        self.assertFalse(User.objects.filter(email__iexact='mercy.kananu@example.com').exists())
+        # The receipt still carries everything the desk was told — that is the
+        # record, and the greeting finds a real account by email or phone when
+        # one happens to exist.
+        row = CashContribution.objects.get()
+        self.assertEqual(row.donor_name, 'Mercy Kananu')
+        self.assertEqual(row.giver_phone, '0712345678')
+        self.assertEqual(row.giver_email, 'mercy.kananu@example.com')
+
+    def test_a_split_receipt_enrolls_nobody_either(self):
+        TreasuryAccount.objects.create(name='Tithe', description='Tithe', balance=Decimal('0.00'))
+        TreasuryAccount.objects.create(name='Welfare', description='Welfare', balance=Decimal('0.00'))
+        accounts = User.objects.count()
+
+        response = self.client.post(self.CASH_URL, {
+            'received_on': timezone.localdate().isoformat(),
+            'donor_name': 'Mercy Kananu',
+            'giver_phone': '0712345678',
+            'giver_email': 'mercy.kananu@example.com',
+            'entry_type': 'individual',
+            'payment_method': 'cash',
+            'allocations': [
+                {'purpose': 'Tithe', 'amount': '300.00'},
+                {'purpose': 'Welfare', 'amount': '200.00'},
+            ],
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(User.objects.count(), accounts)
+        self.assertFalse(User.objects.filter(email__iexact='mercy.kananu@example.com').exists())
+
+    def test_a_receipt_for_a_real_member_creates_no_second_account(self):
+        member = User.objects.create_user(
+            'mercy.kananu', 'mercy.kananu@example.com', 'ChurchPass#2026',
+            first_name='Mercy', last_name='Kananu',
+        )
+        MemberProfile.objects.create(user=member, phone_number='0712345678')
+
+        self._record()
+
+        self.assertEqual(User.objects.filter(email__iexact='mercy.kananu@example.com').count(), 1)
+        self.assertEqual(MemberProfile.objects.filter(phone_number='0712345678').count(), 1)
 
     def test_an_invented_mailbox_is_treated_like_no_mailbox(self):
         from .serializers import usable_email
@@ -18956,6 +19018,73 @@ class NoGuessedEmailAddressTests(TestCase):
             email = 'friend.0712345678@friend.church'
 
         self.assertEqual(receipt_email_for(_SignedInGiver()), '')
+
+
+class GhostAccountExpungeTests(TestCase):
+    """The accounts the desk minted for givers are expunged; claimed ones stay.
+
+    Migration 0259 clears out the ``friend.*`` accounts the receipt desk used
+    to create for anyone it receipted. An account a person has since claimed —
+    set a password, signed in, confirmed an address, or given through — is a
+    real friend and is left exactly where it is.
+    """
+
+    MIGRATION = 'members.migrations.0259_expunge_minted_friend_accounts'
+
+    def _minted(self, username, **profile_fields):
+        """An account exactly as the desk used to mint one."""
+        user = User.objects.create(
+            username=username, email=profile_fields.pop('email', ''), is_active=True,
+        )
+        user.set_unusable_password()
+        user.save()
+        MemberProfile.objects.create(
+            user=user, account_type='friend', role='member', **profile_fields
+        )
+        return user
+
+    def test_untouched_minted_accounts_are_expunged(self):
+        from importlib import import_module
+        from django.apps import apps as django_apps
+
+        migration = import_module(self.MIGRATION)
+        phone_ghost = self._minted('friend.0712345678', phone_number='0712345678')
+        email_ghost = self._minted('friend.mercy.kananu', email='mercy@example.com')
+
+        migration.expunge_ghost_accounts(django_apps, None)
+
+        gone = [phone_ghost.pk, email_ghost.pk]
+        self.assertFalse(User.objects.filter(pk__in=gone).exists())
+        # The profile goes with the account; it described nobody.
+        self.assertFalse(MemberProfile.objects.filter(user_id__in=gone).exists())
+
+    def test_a_claimed_or_used_account_is_left_alone(self):
+        from importlib import import_module
+        from django.apps import apps as django_apps
+
+        migration = import_module(self.MIGRATION)
+
+        claimed = self._minted('friend.0712000001', phone_number='0712000001')
+        claimed.set_password('ChurchPass#2026')
+        claimed.save()
+
+        signed_in = self._minted('friend.0712000002')
+        signed_in.last_login = timezone.now()
+        signed_in.save(update_fields=['last_login'])
+
+        giving = self._minted('friend.0712000003')
+        Contribution.objects.create(
+            member=giving, amount=Decimal('100.00'), purpose='Tithe', status='completed',
+        )
+
+        # A genuine friend of the church: the type is right, the username is not
+        # the desk's, so nothing identifies it as minted.
+        real_friend = self._minted('mercy.kananu', email='mercy.kananu@example.com')
+
+        migration.expunge_ghost_accounts(django_apps, None)
+
+        for user in (claimed, signed_in, giving, real_friend):
+            self.assertTrue(User.objects.filter(pk=user.pk).exists(), user.username)
 
 
 class EmailChangeVerificationTests(APITestCase):

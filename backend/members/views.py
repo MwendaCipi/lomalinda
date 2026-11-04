@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from io import StringIO
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
@@ -4098,64 +4097,6 @@ class MemberThermalReceiptView(APIView):
         return response
 
 
-def ensure_giver_profile(donor_name, phone_number, donor_email):
-    """
-    Ensures that a giver exists as a User with a MemberProfile (account_type='friend' if new).
-    Returns the User object or None.
-    """
-    donor_name = (donor_name or '').strip()
-    phone_number = (phone_number or '').strip()
-    donor_email = (donor_email or '').strip()
-
-    if not donor_name and not phone_number and not donor_email:
-        return None
-
-    User = get_user_model()
-    user = None
-
-    if donor_email:
-        user = User.objects.filter(email__iexact=donor_email).first()
-    if not user and phone_number:
-        clean_phone = phone_number.replace('+', '').replace(' ', '')
-        user = User.objects.filter(member_profile__phone_number=clean_phone).first()
-
-    if not user and (donor_name or phone_number or donor_email):
-        name_parts = (donor_name or 'Friend').split(' ', 1)
-        first_name = name_parts[0]
-        last_name = name_parts[1] if len(name_parts) > 1 else ''
-
-        clean_phone = phone_number.replace('+', '').replace(' ', '')
-        slug_identifier = clean_phone if clean_phone else (donor_email.split('@')[0] if donor_email else donor_name.lower().replace(' ', ''))
-        base_username = f"friend.{slug_identifier}"
-        username = base_username[:140]
-        count = 1
-        while User.objects.filter(username=username).exists():
-            username = f"{base_username[:130]}_{count}"
-            count += 1
-
-        # No address was given, so the account carries none. An invented
-        # address is a mailbox that does not exist — a receipt sent to it is a
-        # receipt nobody receives, and the desk cannot tell the two apart.
-        user = User.objects.create(
-            username=username,
-            email=donor_email,
-            first_name=first_name,
-            last_name=last_name,
-            is_active=True
-        )
-        user.set_unusable_password()
-        user.save()
-
-        MemberProfile.objects.create(
-            user=user,
-            phone_number=phone_number,
-            account_type='friend',
-            role='member'
-        )
-
-    return user
-
-
 class TreasurerCashContributionView(generics.ListCreateAPIView):
     serializer_class = CashContributionSerializer
     permission_classes = [IsAuthenticated]
@@ -4220,8 +4161,14 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         self._number_receipt(cash)
         delivery_message = ''
         if cash.entry_type == 'individual':
-            if cash.donor_name or cash.giver_phone or cash.giver_email:
-                ensure_giver_profile(cash.donor_name, cash.giver_phone, cash.giver_email)
+            # A name written on a slip is not a sign-up. The receipt keeps the
+            # details it was given — they are the record, and the greeting
+            # already finds a real account by email or phone when there is one
+            # (see giver_display_name) — but the desk never enrolls a giver it
+            # is only receipting. Minting an account here put people who never
+            # asked on the roll, among the announcement audience and the
+            # directory's count, and could stop them joining later: every join
+            # path refuses an email that already holds an account.
             delivery = send_cash_receipt(cash, send_sms=send_sms, send_email=send_email)
             delivery_message = cash_receipt_delivery_message(
                 delivery,
@@ -4288,8 +4235,9 @@ class TreasurerCashContributionView(generics.ListCreateAPIView):
         first = rows[0]
         delivery_message = ''
         if entry_type == 'individual':
-            if first.donor_name or first.giver_phone or first.giver_email:
-                ensure_giver_profile(first.donor_name, first.giver_phone, first.giver_email)
+            # As above: one receipt spread over several purposes enrolls nobody
+            # either. The rows carry the giver's name, phone and address, and
+            # that is all a receipt — or a later statement — needs.
             delivery = send_grouped_cash_receipt(rows, send_sms=send_sms, send_email=send_email)
             delivery_message = cash_receipt_delivery_message(
                 delivery,

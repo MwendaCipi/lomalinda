@@ -944,10 +944,10 @@ def usable_email(value):
     """A real address to send to, or ``''`` when there isn't one.
 
     Givers who gave without an address once got an invented
-    ``<username>@friend.church`` account email (see ``ensure_giver_profile``) —
-    a mailbox that does not exist, so a receipt addressed to it is a receipt
-    nobody receives. An address like that, like no address at all, means "no
-    email": the send is skipped rather than guessed at.
+    ``<username>@friend.church`` account email — a mailbox that does not exist,
+    so a receipt addressed to it is a receipt nobody receives. An address like
+    that, like no address at all, means "no email": the send is skipped rather
+    than guessed at.
     """
     address = (value or '').strip()
     if not address or address.lower().endswith('@friend.church'):
