@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, Loader2, MessageSquare, Search, Trash2, UserPlus, X } from "lucide-react";
 
+import { SubNav } from "@/components/sub-nav";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -350,6 +351,10 @@ function NamePicker({
 export function PrayerCellsDesk() {
   const [register, setRegister] = useState<Register | null>(null);
   const [deskRequests, setDeskRequests] = useState<DeskRequest[]>([]);
+  // The desk keeps two things — the cells on its register, and the people
+  // asking to be on it — and they are two toggles of one view rather than two
+  // sections stacked, so neither is scrolled past to reach the other.
+  const [view, setView] = useState<"cells" | "requests">("cells");
   // A cell is formed in a modal over the desk, the way every other form here
   // opens: the register stays the page's one subject, and the three fields a
   // new cell needs are not a standing section nobody is using.
@@ -501,14 +506,32 @@ export function PrayerCellsDesk() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* The asks, answered first: a person is waiting. */}
+    <div className="space-y-4">
+      {/* The desk's two views, named as toggles — the register it keeps and
+          the asks waiting with it. The count rides the second one, so the
+          desk can see a person is waiting without opening it. */}
+      <SubNav
+        label="Prayer cells views"
+        items={[
+          { key: "cells", label: "Prayer Cells", help: "The cells on the register and the members in each" },
+          {
+            key: "requests",
+            label: "Join Requests",
+            short: "Requests",
+            count: deskRequests.length,
+            help: "Members asking to join a cell",
+          },
+        ]}
+        value={view}
+        onChange={(key) => setView(key === "requests" ? "requests" : "cells")}
+      />
+
+      {view === "requests" ? (
       <section className="rounded-2xl border border-sand-line bg-white p-5">
-        <h3 className="text-sm font-bold text-bark">Asks to join</h3>
         {deskRequests.length === 0 && (
-          <p className="mt-1 text-xs text-moss">No ask is waiting right now.</p>
+          <p className="text-xs text-moss">No ask is waiting right now.</p>
         )}
-        <ul className="mt-2 space-y-2">
+        <ul className="space-y-2">
           {deskRequests.map((row) => (
             <li key={row.id} className="rounded-xl bg-sand p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -547,9 +570,9 @@ export function PrayerCellsDesk() {
           ))}
         </ul>
       </section>
-
-      {/* The register: each cell and the roll the desk keeps. A cell is added
-          from the heading's own button, which opens the form over the desk. */}
+      ) : (
+      /* The register: each cell and the roll the desk keeps. A cell is added
+         from the heading's own button, which opens the form over the desk. */
       <section className="rounded-2xl border border-sand-line bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-bark">The register</h3>
@@ -648,6 +671,7 @@ export function PrayerCellsDesk() {
           ))}
         </div>
       </section>
+      )}
 
       {/* Forming a cell: the three fields a new company needs, over the desk
           rather than in a standing section — the register (and an empty
