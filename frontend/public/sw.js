@@ -451,8 +451,14 @@
    v85 — the rail names the Personal Ministries desk in full rather than its
    initials, and the desk's calendar opens every other ministry's calendar for
    its keeper to read and keep. Chrome changed, so installed apps must take
-   the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v86";
+   the new shell.
+
+   v87 — the bell's panel takes the height its notices need instead of a
+   window two of them deep, and the manifest the page links is the plain
+   `.json` one: the `.webmanifest` route was served as a binary, which Chrome
+   would not read, so an install minted from it painted Chrome's own icon.
+   Chrome changed, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v87";
 const STATIC_ASSETS = [
   "/",
   "/about/",

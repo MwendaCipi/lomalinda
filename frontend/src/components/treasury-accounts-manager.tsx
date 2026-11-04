@@ -134,6 +134,11 @@ export function WithdrawalRequestsPanel({
 } = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // What the server said when it would not hand the queue over. An office the
+  // endpoint refuses used to read as "Nothing waiting" — the desk reported an
+  // empty church instead of its own closed door, which is how a pastor whose
+  // authority the server did not recognise sat in front of an empty page.
+  const [error, setError] = useState("");
   const [openAction, setOpenAction] = useState<number | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
@@ -144,13 +149,23 @@ export function WithdrawalRequestsPanel({
   const load = useCallback(() => {
     setLoading(true);
     return fetch(`${API_URL}/api/members/department-withdrawals/review/`, { headers: fundAuthHeaders() })
-      .then((res) => (res.ok ? res.json() : { requests: [] }))
-      .then((data) => {
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(String(data?.detail || "The queue could not be read."));
+          setRows([]);
+          onLoaded?.([]);
+          return;
+        }
+        setError("");
         const loaded = Array.isArray(data?.requests) ? data.requests : [];
         setRows(loaded);
         onLoaded?.(loaded);
       })
-      .catch(() => setRows([]))
+      .catch(() => {
+        setError("The queue could not be read.");
+        setRows([]);
+      })
       .finally(() => setLoading(false));
   }, [onLoaded]);
 
@@ -356,8 +371,12 @@ export function WithdrawalRequestsPanel({
   /* An empty queue and a search that matches nothing are two different
      answers — the church has nothing waiting, versus the desk filtered its own
      list away — so they keep their own words. */
-  const emptyState =
-    rows.length === 0 ? (
+  const emptyState = error ? (
+    <>
+      <p className="text-sm font-semibold text-bark">The queue could not be read</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs text-moss">{error}</p>
+    </>
+  ) : rows.length === 0 ? (
       <>
         <p className="text-sm font-semibold text-bark">Nothing waiting</p>
         <p className="mx-auto mt-1 max-w-sm text-xs text-moss">

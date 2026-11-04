@@ -916,7 +916,28 @@ def is_pastor_or_admin(user):
     if user.is_staff or user.is_superuser:
         return True
     profile = getattr(user, 'member_profile', None)
-    return bool(profile and profile.has_role('pastor', 'admin'))
+    if profile and profile.has_role('pastor', 'admin'):
+        return True
+    # The pastorate's own appointment carries the office where the role flag
+    # was never granted — the same fallback the clerk has. A church that seats
+    # its pastor on the pastorate desk (the tenant this was written for has a
+    # Pastor in that seat and no `pastor` role) still has a pastor whose pen
+    # the funds chain waits on: reading the role code alone refused him every
+    # ask, and the desk showed an empty queue rather than the work. The seat
+    # is held by this member, so a church with several pastors — one flagged,
+    # one seated — lets each of them in.
+    from .models import DepartmentAssignment
+
+    return bool(
+        profile and DepartmentAssignment.objects.filter(
+            department__code='pastorate',
+            department__is_active=True,
+            kind='leader',
+            role__name__iexact='pastor',
+            member__pk=user.pk,
+            member__is_active=True,
+        ).exists()
+    )
 
 
 def is_clerk_or_admin(user):
@@ -15352,6 +15373,16 @@ class DepartmentAccountView(APIView):
             Q(member_profile__roles__contains='treasurer'),
             is_active=True,
         ).distinct()
+        # The pastorate's seat is the office where the role flag was never
+        # granted (see is_pastor_or_admin): a church that seats its pastor on
+        # the pastorate desk and never gave the `pastor` code must still have
+        # the first pen hear about the ask. The subquery keeps the role
+        # audience intact, the way the clerk's legacy holder is merged below.
+        pastor_profile = office_holder('pastor')
+        if pastor_profile:
+            audience = User.objects.filter(
+                Q(pk__in=audience.values('pk')) | Q(pk=pastor_profile.user_id)
+            )
         desk_link = f'{settings.FRONTEND_URL}{PASTORATE_APPROVALS_PATH}'
         subject = f'Funding request from {target.name}' if is_deaconate else f'Withdrawal request from {target.name}'
         account_name = account.description or account.name

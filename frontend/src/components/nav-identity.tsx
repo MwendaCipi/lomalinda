@@ -390,7 +390,11 @@ export function NavIdentity() {
                 </button>
               </div>
 
-              <div className="max-h-80 space-y-2 overflow-y-auto">
+              {/* The list, not the panel, is what scrolls: the panel takes the
+                  height its rows need up to most of the screen, so a member
+                  with three notices reads them without scrolling a window the
+                  size of two. */}
+              <div className="max-h-[min(60dvh,28rem)] space-y-2 overflow-y-auto">
                 {notifications.length > 0 && (
                   <div className="space-y-2">
                     {notifications.map((n) => (

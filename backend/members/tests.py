@@ -16021,6 +16021,49 @@ class DepartmentFundTests(APITestCase):
         from .models import DepartmentWithdrawalRequest
         return DepartmentWithdrawalRequest.objects.filter(status='pending').latest('id')
 
+    @patch('members.views.sms.send', return_value=True)
+    def test_the_pastorate_seat_carries_the_pastors_pen(self, _sms):
+        """A church that seats its pastor keeps the chain's first pen.
+
+        The tenant this was written for has a Pastor in the pastorate's seat
+        and no `pastor` role on the profile at all, so every check that read
+        the role code refused him: the queue came back 403, the desk drew it
+        as "Nothing waiting", and the ask never reached him. The appointment
+        is the office — as it already is for the clerk's pen.
+        """
+        seated = User.objects.create_user(
+            'fund.seated.pastor', 'fund.seated.pastor@example.com', 'StrongPass#2026',
+            first_name='Sam', last_name='Seated',
+        )
+        MemberProfile.objects.create(user=seated, role='member', roles='member')
+        pastorate = Department.objects.get(code='pastorate')
+        seat = DepartmentRole.objects.filter(department=pastorate, name__iexact='Pastor').first()
+        if seat is None:
+            seat = DepartmentRole.objects.create(department=pastorate, name='Pastor')
+        DepartmentAssignment.objects.create(
+            department=pastorate, role=seat, member=seated, kind='leader',
+        )
+
+        self._fund()
+        self.client.force_authenticate(self.leader)
+        self.client.post('/api/members/departments/music/account/', {
+            'amount': '120', 'reason': 'Chairs for the choir stall',
+        }, format='json')
+        row = self._open()
+
+        self.client.force_authenticate(seated)
+        listing = self.client.get('/api/members/department-withdrawals/review/')
+        self.assertEqual(listing.status_code, status.HTTP_200_OK)
+        self.assertIn(row.id, [item['id'] for item in listing.data['requests']])
+
+        answer = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': row.id, 'action': 'pastor_approve',
+        }, format='json')
+        self.assertEqual(answer.status_code, status.HTTP_200_OK)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'pastor_approved')
+        self.assertEqual(row.pastor_approved_by_id, seated.id)
+
     def test_the_desk_reads_its_own_fund(self):
         account = self._fund()
         TreasuryAccountTransaction.objects.create(
