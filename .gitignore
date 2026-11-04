@@ -76,3 +76,8 @@ verification/
 # Scratch files from local debugging sessions — same rule: not repo content,
 # and they must not block deploys.
 tmp/
+
+# Attachments and imported-conversation copies the desktop agent caches at the
+# repo root — tooling scratch, not church content, and they must not block a
+# deploy by leaving the tree dirty.
+/.cloud-attachments/
