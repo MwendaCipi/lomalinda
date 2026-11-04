@@ -5716,12 +5716,14 @@ function DepartmentDetail({
         viewerRoles.includes("admin") ||
         (isDeaconate && onRoll)),
   );
-  // The pastorate carries no Event Calendar of its own — the touch on its
-  // strip the other desks share is not a page this desk keeps, so a call for
-  // one opens the treasury's asks instead: the view the office actually
-  // answers first.
+  // The pastorate carries no Event Calendar and no duty rota of its own — the
+  // touches on its strip the other desks share are not pages this desk keeps,
+  // so a call for either opens the treasury's asks instead: the view the office
+  // actually answers first.
   const [subTab, setSubTab] = useState<DeptSubTab>(
-    initialTab === "calendar" && isPastorate ? "treasury-approvals" : initialTab
+    isPastorate && (initialTab === "calendar" || initialTab === "pulpit-team")
+      ? "treasury-approvals"
+      : initialTab
   );
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
@@ -6297,8 +6299,10 @@ function DepartmentDetail({
       // on the same panel and calls the page what it is there — a Duty Rota.
       // The desks that already keep a rota of their own under another name —
       // the Deaconate's duties, Music's duties, the Sabbath School's own duty
-      // rota — get no second page.
-      ...(!isDeaconate && !isMusic && !isSabbathSchool
+      // rota — get no second page. Nor does the pastorate keep one at all: the
+      // office answers the church's asks (treasury, letters, spiritual) rather
+      // than rostering who serves on a Sabbath.
+      ...(!isDeaconate && !isMusic && !isSabbathSchool && !isPastorate
         ? [
             {
               key: "pulpit-team",
@@ -8081,7 +8085,7 @@ function DepartmentDetail({
           on Personal Ministries, this desk's own duty rota everywhere else.
           Rostered on the same panel the deaconate keeps its duty on, so the
           desk hands it over with its own desk's lines. */}
-      {subTab === "pulpit-team" && !isDeaconate && !isMusic && !isSabbathSchool && (
+      {subTab === "pulpit-team" && !isDeaconate && !isMusic && !isSabbathSchool && !isPastorate && (
         <div className="h-full min-h-0">
           <DeaconateManager
             initialTab="rota"
