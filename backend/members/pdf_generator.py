@@ -690,11 +690,13 @@ def generate_treasury_pdf(
     digital_val = float(mpesa_val) + float(bank_transfer_val) + float(cheque_val)
 
     if is_individual:
-        # Dedicated Church Givings Report
+        # Dedicated Church Givings Report. Every shape of the paper carries its
+        # period: a single account's report used to read as the whole
+        # statement, with nothing saying which days it covered.
+        subtitle_text = "CHURCH GIVINGS REPORT"
         if purpose_title:
-            subtitle_text = f"CHURCH GIVINGS REPORT - {purpose_title.upper()}"
-        else:
-            subtitle_text = f"CHURCH GIVINGS REPORT FROM {date_compact(start_date)} TO {date_compact(end_date)}"
+            subtitle_text += f" - {purpose_title.upper()}"
+        subtitle_text += f" FROM {date_compact(start_date)} TO {date_compact(end_date)}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
         # The heading already names the period, so the line under it carries
         # only where the church is — printed under the middle of that title.

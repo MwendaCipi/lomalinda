@@ -3051,6 +3051,17 @@ class PdfGenerationAPITests(APITestCase):
             ''.join('CHURCH GIVINGS REPORT - TITHE, LOCAL CHURCH BUDGET'.split()), text,
         )
 
+        # One account's own paper names its period too, the way the
+        # church-wide statement does.
+        single = self.client.get(
+            '/api/members/reports/ledger/pdf/?include_individual=true&purpose=Tithe'
+            '&start_date=2026-01-01&end_date=2026-01-31'
+        )
+        single_text = _pdf_text(single.content)
+        self.assertIn(
+            ''.join('CHURCH GIVINGS REPORT - TITHE FROM 01/01/2026 TO 31/01/2026'.split()), single_text,
+        )
+
         whole = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
         whole_text = _pdf_text(whole.content)
         self.assertNotIn(''.join('CHURCH GIVINGS REPORT -'.split()), whole_text)
