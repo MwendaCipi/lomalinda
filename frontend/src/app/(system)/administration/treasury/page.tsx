@@ -110,6 +110,267 @@ const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.
  */
 const isMpesaGiving = (g: IndividualGiving) => g.source === "digital" && /^m-?pesa$/i.test(g.payment_method || "");
 
+/** The ways money reaches the church, as the report's mode filter names them. */
+const reportModeOptions = [
+  { value: "mpesa", label: "M-Pesa" },
+  { value: "cash", label: "Cash" },
+  { value: "cheque", label: "Cheque" },
+  { value: "bank_transfer", label: "Bank-to-Bank" },
+];
+
+/**
+ * One filter of the report picker: a trigger naming what is chosen, and a
+ * panel of checkboxes. The panel rides a portal (see ComboboxPopover) because
+ * the modal's own scroll pane would clip an absolutely-positioned list.
+ */
+function ReportCombo({
+  label,
+  summary,
+  open,
+  setOpen,
+  options,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  label: string;
+  summary: string;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onToggle: (value: string, checked: boolean) => void;
+  onClear: () => void;
+}) {
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  return (
+    <div>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">{label}</span>
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="mt-1 flex w-full items-center justify-between gap-2 rounded-xl border border-sand-line bg-sand px-3 py-2 text-left text-xs text-bark transition hover:border-sand-mute"
+      >
+        <span className="truncate">{summary}</span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-moss transition ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      <ComboboxPopover anchorRef={anchorRef} open={open} minW={260}>
+        <div className="max-h-56 space-y-0.5 overflow-y-auto">
+          {options.map((option) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-bark transition hover:bg-sand"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(option.value)}
+                onChange={(event) => onToggle(option.value, event.target.checked)}
+                className="h-3.5 w-3.5 rounded border-sand-mute text-ember focus:ring-ember"
+              />
+              <span className="truncate">{option.label}</span>
+            </label>
+          ))}
+          {options.length === 0 && (
+            <p className="px-2 py-2 text-[11px] text-moss">Nothing to choose.</p>
+          )}
+        </div>
+        <div className="mt-1 flex justify-end border-t border-sand-soft pt-1.5">
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] font-semibold text-moss transition hover:text-ember"
+          >
+            Clear
+          </button>
+        </div>
+      </ComboboxPopover>
+    </div>
+  );
+}
+
+/** The givers a report speaks for: search the church's people, pick the ones
+    the paper should carry, and hand the list back. */
+function ReportMembersModal({
+  picked,
+  onClose,
+  onDone,
+}: {
+  picked: { id: number; name: string }[];
+  onClose: () => void;
+  onDone: (members: { id: number; name: string }[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [chosen, setChosen] = useState(picked);
+  const chosenIds = new Set(chosen.map((member) => member.id));
+
+  useEffect(() => {
+    const needle = query.trim();
+    // The body only arranges the search; every state write waits for the timer.
+    const timer = window.setTimeout(() => {
+      if (needle.length < 2) {
+        setResults([]);
+        setSearching(false);
+        return;
+      }
+      setSearching(true);
+      fetch(`${API_URL}/api/members/users/`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` },
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const rows = Array.isArray(data) ? data : [];
+          const lower = needle.toLowerCase();
+          setResults(
+            rows
+              .filter(
+                (user: {
+                  first_name?: string;
+                  last_name?: string;
+                  username?: string;
+                  phone_number?: string;
+                }) =>
+                  `${user.first_name || ""} ${user.last_name || ""} ${user.username || ""} ${
+                    user.phone_number || ""
+                  }`
+                    .toLowerCase()
+                    .includes(lower),
+              )
+              .slice(0, 12)
+              .map(
+                (user: { id: number; first_name?: string; last_name?: string; username: string }) => ({
+                  id: user.id,
+                  name: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username,
+                  username: user.username,
+                }),
+              ),
+          );
+        })
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, needle.length < 2 ? 0 : 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose the individuals the report covers"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-5 pb-3 pt-5">
+          <h3 className="text-base font-bold text-bark">Individuals</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-moss transition hover:text-bark"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+          <input
+            autoFocus
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name, username or phone…"
+            className="w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+          />
+          <div className="mt-2 divide-y divide-sand-soft">
+            {searching && <p className="py-3 text-center text-xs text-moss">Searching…</p>}
+            {!searching && query.trim().length >= 2 && results.length === 0 && (
+              <p className="py-3 text-center text-xs text-moss">No members match that search.</p>
+            )}
+            {results.map((member) => {
+              const already = chosenIds.has(member.id);
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  disabled={already}
+                  onClick={() => {
+                    setChosen((current) => [...current, { id: member.id, name: member.name }]);
+                    setQuery("");
+                    setResults([]);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 py-2.5 text-left text-xs transition ${
+                    already ? "cursor-not-allowed opacity-50" : "hover:bg-sand"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-bark">{member.name}</span>
+                    <span className="block truncate text-[11px] text-moss">@{member.username}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-semibold text-ember">
+                    {already ? "Chosen" : "Add"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-5 pb-4 pt-3">
+          {chosen.length === 0 ? (
+            <p className="text-center text-[11px] text-moss">
+              Nobody chosen — the report covers every giver.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-1.5">
+              {chosen.map((member) => (
+                <li
+                  key={member.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-bark ring-1 ring-sand-line"
+                >
+                  {member.name}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setChosen((current) => current.filter((entry) => entry.id !== member.id))
+                    }
+                    aria-label={`Remove ${member.name}`}
+                    className="text-moss transition hover:text-ember"
+                  >
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onDone(chosen)}
+              className="rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark"
+            >
+              Use {chosen.length === 0 ? "every giver" : `${chosen.length} selected`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TreasuryPage() {
   // The ledger reads the month so far: the 1st, not the first Sabbath — a
   // from-date of the 3rd had the treasurer asking why receipts had vanished.
@@ -173,10 +434,20 @@ export default function TreasuryPage() {
   // A report is generated on demand — a “Preparing…” toast on the desk while
   // the server draws it, then its own tab shows the paper.
   const [preparing, setPreparing] = useState<null | "pdf">(null);
-  // Modal for selecting giving accounts to include in the report
+  // The report picker's filters: the accounts, a department's funds, how the
+  // money moved, the order the rows print in, and the givers it speaks for.
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSelectedPurposes, setReportSelectedPurposes] = useState<string[]>([]);
   const [reportMode, setReportMode] = useState<"summary" | "individual">("summary");
+  const [reportDepartments, setReportDepartments] = useState<string[]>([]);
+  const [reportModes, setReportModes] = useState<string[]>([]);
+  const [reportOrderBy, setReportOrderBy] = useState<"account" | "date" | "amount" | "name">("account");
+  const [reportOrder, setReportOrder] = useState<"asc" | "desc">("desc");
+  const [reportMembers, setReportMembers] = useState<{ id: number; name: string }[]>([]);
+  const [showMemberPicker, setShowMemberPicker] = useState(false);
+  const [reportDepartmentOptions, setReportDepartmentOptions] = useState<{ code: string; label: string }[]>([]);
+  // Which combo's panel is open — one at a time, so two panels never stack.
+  const [openReportCombo, setOpenReportCombo] = useState<null | "accounts" | "departments" | "modes">(null);
 
   // Purpose Expansion & View Mode State — `viewMode` sits up top, beside the
   // `?mode=` effect that reads it before anything else on the desk mounts.
@@ -1166,6 +1437,20 @@ export default function TreasuryPage() {
     for (const purpose of purposes) {
       if (purpose) params.append("purposes", purpose);
     }
+    for (const code of reportDepartments) {
+      if (code) params.append("departments", code);
+    }
+    for (const mode of reportModes) {
+      if (mode) params.append("modes", mode);
+    }
+    // The register's own order is the default; any other is asked for by name.
+    if (reportOrderBy !== "account") {
+      params.append("order_by", reportOrderBy);
+      params.append("order", reportOrder);
+    }
+    for (const member of reportMembers) {
+      params.append("member_ids", String(member.id));
+    }
     if (disposition === "attachment") params.append("disposition", "attachment");
     return `${API_URL}/api/members/reports/ledger/pdf/?${params.toString()}`;
   };
@@ -1208,7 +1493,31 @@ export default function TreasuryPage() {
   const openReportPicker = (mode: "summary" | "individual") => {
     setReportMode(mode);
     setReportSelectedPurposes(displayedRows.map((row) => row.purpose));
+    setReportDepartments([]);
+    setReportModes([]);
+    setReportMembers([]);
+    setReportOrderBy("account");
+    setReportOrder("desc");
+    setOpenReportCombo(null);
     setShowReportModal(true);
+    if (reportDepartmentOptions.length === 0) {
+      // The departments the church keeps, for the funds filter: read once and
+      // kept for the next report rather than fetched on every open.
+      fetch(`${API_URL}/api/members/departments/`, { headers: headers() })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const rows = Array.isArray(data) ? data : (data?.departments ?? data?.results ?? []);
+          setReportDepartmentOptions(
+            (Array.isArray(rows) ? rows : [])
+              .map((row: { code?: string; slug?: string; label?: string; name?: string }) => ({
+                code: row.code ?? row.slug ?? "",
+                label: row.label ?? row.name ?? row.code ?? "",
+              }))
+              .filter((row) => Boolean(row.code)),
+          );
+        })
+        .catch(() => setReportDepartmentOptions([]));
+    }
   };
 
   // The accounts the paper carries — none at all when the desk took every
@@ -2636,7 +2945,7 @@ export default function TreasuryPage() {
             role="dialog"
             aria-modal="true"
             aria-label="Choose the giving accounts for the report"
-            className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
+            className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
           >
             <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-5 pb-3 pt-5">
               <div>
@@ -2644,8 +2953,8 @@ export default function TreasuryPage() {
                   {reportMode === "individual" ? "Individual givings report" : "Summary report"}
                 </h3>
                 <p className="mt-0.5 text-[11px] text-moss">
-                  {fromDate === toDate ? dayFirst(fromDate) : `${dayFirst(fromDate)} to ${dayFirst(toDate)}`} · choose the
-                  accounts the paper carries.
+                  {fromDate === toDate ? dayFirst(fromDate) : `${dayFirst(fromDate)} to ${dayFirst(toDate)}`} · choose what the
+                  paper carries.
                 </p>
               </div>
               <button
@@ -2657,58 +2966,169 @@ export default function TreasuryPage() {
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
-              {(() => {
-                // The accounts the period actually holds: a giving account with
-                // no gift in these dates has nothing to print, so it is not
-                // offered as a choice that would come back empty.
-                const accounts = displayedRows.map((row) => row.purpose);
-                const allPicked =
-                  accounts.length > 0 && accounts.every((name) => reportSelectedPurposes.includes(name));
-                return (
-                  <>
-                    <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs font-semibold text-bark">
-                      <input
-                        type="checkbox"
-                        checked={allPicked}
-                        onChange={(event) =>
-                          setReportSelectedPurposes(event.target.checked ? accounts : [])
-                        }
-                        className="h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
-                      />
-                      <span>All accounts</span>
-                      <span className="ml-auto text-[11px] font-normal text-moss">{accounts.length}</span>
-                    </label>
-                    <div className="mt-2 space-y-1">
-                      {accounts.map((name) => (
-                        <label
-                          key={name}
-                          className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-1.5 text-xs text-bark transition hover:bg-sand"
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-3">
+              {/* The accounts the period actually holds: a giving account with
+                  no gift in these dates has nothing to print, so it is not
+                  offered as a choice that would come back empty. */}
+              <ReportCombo
+                label="Accounts"
+                summary={
+                  displayedRows.length === 0
+                    ? "No accounts"
+                    : reportSelectedPurposes.length === displayedRows.length
+                      ? "All accounts"
+                      : `${reportSelectedPurposes.length} of ${displayedRows.length} accounts`
+                }
+                open={openReportCombo === "accounts"}
+                setOpen={(open) => setOpenReportCombo(open ? "accounts" : null)}
+                options={displayedRows.map((row) => ({ value: row.purpose, label: row.purpose }))}
+                selected={reportSelectedPurposes}
+                onToggle={(value, checked) =>
+                  setReportSelectedPurposes((current) =>
+                    checked ? [...current, value] : current.filter((entry) => entry !== value),
+                  )
+                }
+                onClear={() => setReportSelectedPurposes([])}
+              />
+
+              <ReportCombo
+                label="Departments"
+                summary={
+                  reportDepartments.length === 0
+                    ? "All departments"
+                    : reportDepartments
+                        .map(
+                          (code) =>
+                            reportDepartmentOptions.find((option) => option.code === code)?.label ?? code,
+                        )
+                        .join(", ")
+                }
+                open={openReportCombo === "departments"}
+                setOpen={(open) => setOpenReportCombo(open ? "departments" : null)}
+                options={reportDepartmentOptions.map((option) => ({
+                  value: option.code,
+                  label: option.label,
+                }))}
+                selected={reportDepartments}
+                onToggle={(value, checked) =>
+                  setReportDepartments((current) =>
+                    checked ? [...current, value] : current.filter((entry) => entry !== value),
+                  )
+                }
+                onClear={() => setReportDepartments([])}
+              />
+
+              <ReportCombo
+                label="Mode of giving"
+                summary={
+                  reportModes.length === 0
+                    ? "Every mode"
+                    : reportModes
+                        .map(
+                          (code) =>
+                            reportModeOptions.find((option) => option.value === code)?.label ?? code,
+                        )
+                        .join(", ")
+                }
+                open={openReportCombo === "modes"}
+                setOpen={(open) => setOpenReportCombo(open ? "modes" : null)}
+                options={reportModeOptions}
+                selected={reportModes}
+                onToggle={(value, checked) =>
+                  setReportModes((current) =>
+                    checked ? [...current, value] : current.filter((entry) => entry !== value),
+                  )
+                }
+                onClear={() => setReportModes([])}
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">Order by</span>
+                  <select
+                    value={reportOrderBy}
+                    onChange={(event) =>
+                      setReportOrderBy(event.target.value as typeof reportOrderBy)
+                    }
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                  >
+                    <option value="account">Account</option>
+                    <option value="date">Date</option>
+                    <option value="amount">Amount</option>
+                    <option value="name">Giver</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">Order</span>
+                  <select
+                    value={reportOrder}
+                    onChange={(event) => setReportOrder(event.target.value as typeof reportOrder)}
+                    disabled={reportOrderBy === "account"}
+                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="desc">
+                      {reportOrderBy === "amount"
+                        ? "Largest first"
+                        : reportOrderBy === "date"
+                          ? "Newest first"
+                          : "Z to A"}
+                    </option>
+                    <option value="asc">
+                      {reportOrderBy === "amount"
+                        ? "Smallest first"
+                        : reportOrderBy === "date"
+                          ? "Oldest first"
+                          : "A to Z"}
+                    </option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
+                      Individuals
+                    </span>
+                    <p className="mt-0.5 text-[11px] text-moss">
+                      {reportMembers.length === 0
+                        ? "Every giver"
+                        : `${reportMembers.length} chosen`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMemberPicker(true)}
+                    className="shrink-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
+                  >
+                    Select individuals
+                  </button>
+                </div>
+                {reportMembers.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-1.5">
+                    {reportMembers.map((member) => (
+                      <li
+                        key={member.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-bark ring-1 ring-sand-line"
+                      >
+                        {member.name}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReportMembers((current) =>
+                              current.filter((entry) => entry.id !== member.id),
+                            )
+                          }
+                          aria-label={`Remove ${member.name}`}
+                          className="text-moss transition hover:text-ember"
                         >
-                          <input
-                            type="checkbox"
-                            checked={reportSelectedPurposes.includes(name)}
-                            onChange={(event) =>
-                              setReportSelectedPurposes((current) =>
-                                event.target.checked
-                                  ? [...current, name]
-                                  : current.filter((entry) => entry !== name),
-                              )
-                            }
-                            className="h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
-                          />
-                          <span className="truncate">{name}</span>
-                        </label>
-                      ))}
-                    </div>
-                    {accounts.length === 0 && (
-                      <p className="py-6 text-center text-xs text-moss">
-                        No giving accounts hold a gift in this period.
-                      </p>
-                    )}
-                  </>
-                );
-              })()}
+                          <X className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-sand-line bg-sand-linen/40 px-5 py-3">
               {reportSelectedPurposes.length === 0 && (
@@ -2740,6 +3160,20 @@ export default function TreasuryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Naming the givers a report speaks for: the same search the roll's
+          own pickers use, held above the report's modal so the two never
+          compete for the screen. */}
+      {showMemberPicker && (
+        <ReportMembersModal
+          picked={reportMembers}
+          onClose={() => setShowMemberPicker(false)}
+          onDone={(members) => {
+            setReportMembers(members);
+            setShowMemberPicker(false);
+          }}
+        />
       )}
 
       {/* Add Receipt Modal — the same modal the contributions ledger uses,

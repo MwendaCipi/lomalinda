@@ -829,14 +829,14 @@ def generate_treasury_pdf(
             story.append(p_table)
             story.append(Spacer(1, 20))
 
-        # The sign-off block: the pastor authorises, countersigned by an elder.
-        # Treasury still prepares/witnesses where space allows, but the
-        # authorising officer is the pastor and countersignature is the elder.
+        # The sign-off block prints the four pens in the order the church
+        # signs its money papers: the treasurer prepares, the head deacon
+        # witnesses, an elder countersigns, and the pastor authorises.
         sig_data = [[
-            signature_cell("<b>Authorised by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
-            signature_cell("<b>Countersigned by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
             signature_cell("<b>Prepared by: Treasurer</b>", offices.get("treasurer"), "Name: ______________________"),
             signature_cell("<b>Witnessed by: Head Deacon</b>", offices.get("head_deacon"), "Name: ______________________"),
+            signature_cell("<b>Countersigned by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
+            signature_cell("<b>Authorised by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
         ]]
         sig_table = Table(sig_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
         sig_table.setStyle(TableStyle([
@@ -980,12 +980,15 @@ def generate_treasury_pdf(
     story.append(cash_table)
     story.append(Spacer(1, 8))
 
-    # --- Signatures: Pastor (authorising), Elder (countersigned), Treasurer, Deacon ---
+    # --- Signatures: the same four pens, in the same order, as the individual
+    # givings report — the treasurer prepares the money's account, the head
+    # deacon witnesses it, an elder countersigns it, the pastor authorises it.
+    # The treasurer's cell used to read "Signed By", which named no duty.
     sig_data = [[
-        signature_cell("<b>Authorised by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
+        signature_cell("<b>Prepared by: Treasurer</b>", offices.get("treasurer"), "Name: ______________________"),
+        signature_cell("<b>Witnessed by: Head Deacon</b>", offices.get("head_deacon"), "Name: ______________________"),
         signature_cell("<b>Countersigned by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
-        signature_cell("<b>Signed By:</b> Treasurer", offices.get("treasurer"), "Name: ______________________"),
-        signature_cell("Deacon", offices.get("head_deacon"), "Name: ______________________"),
+        signature_cell("<b>Authorised by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
     ]]
     sig_table = Table(sig_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
     sig_table.setStyle(TableStyle([

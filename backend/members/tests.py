@@ -3092,6 +3092,100 @@ class PdfGenerationAPITests(APITestCase):
         self.assertIn('Authorisedby:Pastor', text)
         self.assertIn('GeorgeMwenda', text)
 
+    def test_the_report_narrows_by_mode(self):
+        digital_filter = {'status': 'completed', 'giving_type': 'financial', 'paid_at': timezone.now()}
+        Contribution.objects.create(
+            amount=Decimal('700.00'), purpose='Tithe', payment_method='mpesa',
+            mpesa_receipt_number='MODE111', **digital_filter,
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('300.00'), purpose='Tithe',
+            received_on=date.today(), payment_method='cash', receipt_number='MODE222',
+        )
+
+        response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true&modes=cash')
+
+        text = _pdf_text(response.content)
+        self.assertIn('MODE222', text)
+        self.assertNotIn('MODE111', text)
+
+    def test_the_report_narrows_to_one_giver(self):
+        digital_filter = {'status': 'completed', 'giving_type': 'financial', 'paid_at': timezone.now()}
+        other = User.objects.create_user(
+            'report.other', 'report.other@example.com', 'StrongPass#2026',
+            first_name='Other', last_name='Giver',
+        )
+        MemberProfile.objects.create(user=other, role='member', roles='member')
+        Contribution.objects.create(
+            amount=Decimal('100.00'), purpose='Tithe', payment_method='mpesa',
+            member=self.user, mpesa_receipt_number='GIVER1', **digital_filter,
+        )
+        Contribution.objects.create(
+            amount=Decimal('200.00'), purpose='Tithe', payment_method='mpesa',
+            member=other, mpesa_receipt_number='GIVER2', **digital_filter,
+        )
+
+        response = self.client.get(
+            f'/api/members/reports/ledger/pdf/?include_individual=true&member_ids={other.id}'
+        )
+
+        text = _pdf_text(response.content)
+        self.assertIn('GIVER2', text)
+        self.assertNotIn('GIVER1', text)
+
+    def test_the_report_narrows_to_a_departments_funds(self):
+        department = Department.objects.exclude(code='pastorate').first()
+        TreasuryAccount.objects.create(
+            name='YTHFUND', description='Youth Fund', department=department,
+            balance=Decimal('0.00'),
+        )
+        digital_filter = {'status': 'completed', 'giving_type': 'financial', 'paid_at': timezone.now()}
+        Contribution.objects.create(
+            amount=Decimal('400.00'), purpose='Youth Fund', payment_method='mpesa',
+            mpesa_receipt_number='DEPT11', **digital_filter,
+        )
+        Contribution.objects.create(
+            amount=Decimal('500.00'), purpose='Tithe', payment_method='mpesa',
+            mpesa_receipt_number='DEPT22', **digital_filter,
+        )
+
+        response = self.client.get(
+            f'/api/members/reports/ledger/pdf/?include_individual=true&departments={department.code}'
+        )
+
+        text = _pdf_text(response.content)
+        self.assertIn('DEPT11', text)
+        self.assertNotIn('DEPT22', text)
+
+    def test_both_reports_sign_off_in_the_churchs_order(self):
+        # The pens print left to right in one order on both shapes of the
+        # paper: the treasurer prepares, the head deacon witnesses, an elder
+        # countersigns, the pastor authorises. The summary's treasurer cell
+        # used to read "Signed By" and name no duty at all.
+        from .pdf_generator import generate_treasury_pdf
+
+        individual = _pdf_text(
+            self.client.get('/api/members/reports/ledger/pdf/?include_individual=true').content
+        )
+        summary = _pdf_text(generate_treasury_pdf(
+            church_name="SDA Church Test",
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            purpose_rows=[],
+            totals={"total": 0, "cash": 0, "mpesa": 0, "bank_transfer": 0, "cheque": 0},
+        ))
+
+        order = [
+            'Preparedby:Treasurer',
+            'Witnessedby:HeadDeacon',
+            'Countersignedby:Elder',
+            'Authorisedby:Pastor',
+        ]
+        for text in (individual, summary):
+            positions = [text.index(label) for label in order]
+            self.assertEqual(positions, sorted(positions), text[:400])
+        self.assertNotIn('SignedBy:Treasurer', summary)
+
     def test_individual_report_reads_mode_only(self):
         # The desk reads how the money moved — one Mode column. The type and
         # mode pair the table used to carry is no longer a question the

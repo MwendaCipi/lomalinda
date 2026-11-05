@@ -471,8 +471,13 @@
    v90 — the treasury's report buttons open a picker of the giving accounts
    they print, every account chosen by default, with Preview and Download side
    by side. Chrome changed on a cached document, so installed apps must take
+   the new shell.
+
+   v91 — the report picker grows its filters: accounts, departments and modes
+   as combos, an order-by and direction pair, and the givers named from a
+   search. Chrome changed on a cached document, so installed apps must take
    the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v90";
+const CACHE_NAME = "sda-loma-linda-meru-v91";
 const STATIC_ASSETS = [
   "/",
   "/about/",

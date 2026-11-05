@@ -10373,10 +10373,27 @@ class TreasuryPdfView(APIView):
         # of narrowing the accounts: a summary of three accounts is still the
         # summary, not the individual givings report.
         is_individual = request.query_params.get("include_individual", "false").lower() in ["true", "1", "yes"] or bool(purpose_param)
-        # The heading names the accounts only when the desk narrowed them: an
+        # The desk's other narrowings: the funds a department keeps, how the
+        # money moved, and the givers named. An empty list is the whole
+        # ledger, so nothing chosen never narrows anything.
+        department_codes = [code.strip() for code in request.query_params.getlist("departments") if code.strip()]
+        mode_codes = [mode.strip().lower() for mode in request.query_params.getlist("modes") if mode.strip()]
+        member_ids = []
+        for raw in request.query_params.getlist("member_ids"):
+            try:
+                member_ids.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        # The heading names what the desk narrowed to — the accounts and the
+        # departments — and names nothing when it took the lot: an
         # all-accounts report is the church's whole statement, and printing a
         # list of every account in its title says nothing worth reading.
-        purpose_title = purpose_param or ', '.join(purposes_multi)
+        scope_names = list(purposes_multi)
+        if department_codes:
+            scope_names += [
+                department.name for department in Department.objects.filter(code__in=department_codes)
+            ]
+        purpose_title = purpose_param or ', '.join(scope_names)
 
         digital_filter = Q(status__iexact="completed", giving_type="financial") & (
             Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
@@ -10397,6 +10414,45 @@ class TreasuryPdfView(APIView):
             p_q = _get_purpose_q(purpose_param)
             digital = digital.filter(p_q)
             cash = cash.filter(p_q)
+
+        if department_codes:
+            # A department's money is the money given to the funds it keeps:
+            # the treasury accounts it holds, folded the way the report folds
+            # every spelling.
+            fund_names = [
+                name for name in (
+                    (account.description or account.name or '').strip()
+                    for account in TreasuryAccount.objects.filter(department__code__in=department_codes)
+                ) if name
+            ]
+            if fund_names:
+                fund_q = Q()
+                for fund_name in fund_names:
+                    fund_q |= _get_purpose_q(fund_name)
+                digital = digital.filter(fund_q)
+                cash = cash.filter(fund_q)
+            else:
+                digital = digital.none()
+                cash = cash.none()
+
+        if mode_codes:
+            digital = digital.filter(payment_method__in=mode_codes)
+            cash = cash.filter(payment_method__in=mode_codes)
+
+        if member_ids:
+            digital = digital.filter(member_id__in=member_ids)
+            # Cash rows carry no account: they name the giver instead, so the
+            # giver's email, then the name typed at the counter, ties them in.
+            people = list(User.objects.filter(pk__in=member_ids))
+            giver_q = Q()
+            emails = [person.email for person in people if person.email]
+            if emails:
+                giver_q |= Q(giver_email__in=emails)
+            for person in people:
+                full_name = f"{person.first_name} {person.last_name}".strip()
+                if full_name:
+                    giver_q |= Q(donor_name__iexact=full_name)
+            cash = cash.filter(giver_q) if giver_q else cash.none()
 
         purposes_dict = {}
 
@@ -10478,6 +10534,23 @@ class TreasuryPdfView(APIView):
                     "amount": c.amount,
                     "item_name": c.item_description,
                 })
+
+        # The desk's own order. An account order is the register's, which the
+        # sheet already keeps; the rest answer a treasurer comparing gifts —
+        # the largest first, the newest, or the giver's name.
+        order_by = (request.query_params.get("order_by") or "").strip().lower()
+        descending = (request.query_params.get("order") or "desc").strip().lower() != "asc"
+        if order_by == "amount":
+            purpose_rows.sort(key=lambda row: row["total"], reverse=descending)
+            individual_rows.sort(key=lambda row: Decimal(str(row.get("amount", 0))), reverse=descending)
+        elif order_by in {"date", "name", "giver", "account"}:
+            field = {
+                "date": "date",
+                "name": "member_name",
+                "giver": "member_name",
+                "account": "purpose_name",
+            }[order_by]
+            individual_rows.sort(key=lambda row: str(row.get(field, "")).lower(), reverse=descending)
 
         church_setting = ChurchSettings.objects.first()
         church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
