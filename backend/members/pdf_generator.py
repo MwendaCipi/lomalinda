@@ -2098,13 +2098,15 @@ class SignatureSlotsFlowable(Flowable):
     """
 
     #: (office code or None, slot title, hint under it) — the withdrawal
-    #: paper's four: authorised, issued, received, and the pastor whose pen
-    #: answers on every paper the church prints.
+    #: paper's four slots, unchanged in order: an elder countersigns it, the
+    #: treasurer issues the money, the department's representative receives it,
+    #: and the pastor authorises it. These are the withdrawal paper's own
+    #: fields, not the givings reports' four pens.
     SLOTS = (
-        ('first_elder', "Authorizing Officer", "Elder / Church Office"),
+        ('first_elder', "Countersigned By", "Elder / Church Office"),
         ('treasurer', "Issued By", "Treasury Office"),
         (None, "Received By", "Department Representative"),
-        ('pastor', "Countersigned By", "Church Pastor"),
+        ('pastor', "Authorised By", "Church Pastor"),
     )
 
     #: A financial statement answers to three offices: prepared, authorised,
@@ -2115,16 +2117,6 @@ class SignatureSlotsFlowable(Flowable):
         ('pastor', "Countersigned By", "Church Pastor"),
     )
 
-    #: The church's money papers — the givings and summary reports, and the
-    #: withdrawal requests — carry the same four pens in the same order: the
-    #: treasurer prepares, the head deacon witnesses, an elder countersigns,
-    #: and the pastor authorises.
-    CHURCH_PAPER_SLOTS = (
-        ('treasurer', "Prepared by", "Treasurer"),
-        ('head_deacon', "Witnessed by", "Head Deacon"),
-        ('first_elder', "Countersigned by", "Elder"),
-        ('pastor', "Authorised by", "Church Pastor"),
-    )
 
     def __init__(self, height=3.9 * cm, signatures=None, slots=None):
         super().__init__()
@@ -2207,9 +2199,9 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
 
     ``rows`` are the review queue's own serialised requests, already filtered
     the way the desk filtered them on screen, so the paper matches the table.
-    The desk's wide report is signed like every other money paper the church
-    prints — the four offices in ``CHURCH_PAPER_SLOTS`` — because a list of
-    the church's requests still leaves the church's desk.
+    The desk's wide report is signed too — the same four slots the single
+    request sheet carries — because a list of the church's requests still
+    leaves the church's desk.
     """
     church_name = pdf_church_name(church_name)
     if signatures is None:
@@ -2337,13 +2329,10 @@ def generate_withdrawal_requests_pdf(church_name, rows, status_label="All reques
         table.setStyle(TableStyle(style_cmds))
         story.append(table)
 
-    # The same four pens, in the same order, as the givings and summary
-    # reports: this report used to print none at all.
+    # The withdrawal paper's own four slots: this report used to print none.
     story.append(Spacer(1, 14))
     story.append(Paragraph("Signatures", st["h2"]))
-    story.append(SignatureSlotsFlowable(
-        signatures=signatures, slots=SignatureSlotsFlowable.CHURCH_PAPER_SLOTS,
-    ))
+    story.append(SignatureSlotsFlowable(signatures=signatures))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
@@ -2416,9 +2405,9 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     The treasury desk's per-request Print: the same request the queue shows,
     set alone on its own page with the amount spelled out, so the department's
     representative can carry it to the treasury, sign for the money and file
-    it. It closes with the church's four pens, in the order every money paper
-    prints them: the treasurer prepares, the head deacon witnesses, an elder
-    countersigns, and the pastor authorises.
+    it. It closes with the withdrawal paper's four slots, unchanged in order:
+    an elder countersigns, the treasurer issues, the department's
+    representative receives, and the pastor authorises.
     """
     church_name = pdf_church_name(church_name)
     buffer = io.BytesIO()
@@ -2529,9 +2518,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
 
     story.append(Spacer(1, 16))
     story.append(Paragraph("Signatures", st["h2"]))
-    story.append(SignatureSlotsFlowable(
-        signatures=signatures, slots=SignatureSlotsFlowable.CHURCH_PAPER_SLOTS,
-    ))
+    story.append(SignatureSlotsFlowable(signatures=signatures))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     buffer.seek(0)
