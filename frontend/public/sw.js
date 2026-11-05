@@ -476,8 +476,12 @@
    v91 — the report picker grows its filters: accounts, departments and modes
    as combos, an order-by and direction pair, and the givers named from a
    search. Chrome changed on a cached document, so installed apps must take
-   the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v91";
+   the new shell.
+
+   v92 — the requests desk's report button moves to the middle of its footer
+   bar and reads "Print Requests" on a wide screen. Copy and chrome changed on
+   a cached document, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v92";
 const STATIC_ASSETS = [
   "/",
   "/about/",

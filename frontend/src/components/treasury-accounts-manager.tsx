@@ -686,7 +686,10 @@ export function WithdrawalRequestsPanel({
         );
       })()}
 
-      <div className="shrink-0 flex items-center justify-between border-t border-sand-line bg-white px-4 py-3 text-xs text-moss">
+      {/* The bar is three columns of equal footing on a wide screen — count,
+          the report, and an empty third — so the report sits in the middle of
+          the bar instead of hiding at its right edge. The phone stacks them. */}
+      <div className="shrink-0 flex flex-col gap-2 border-t border-sand-line bg-white px-4 py-3 text-xs text-moss sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-3">
         <div>
           {filteredRows.length} {filteredRows.length === 1 ? "request" : "requests"}
           {filteredRows.length !== rows.length ? ` (filtered from ${rows.length})` : ""} ·{" "}
@@ -699,12 +702,13 @@ export function WithdrawalRequestsPanel({
           type="button"
           onClick={printReport}
           disabled={printing}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-1.5 self-start rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60 sm:justify-self-center sm:self-auto"
           aria-label="Print withdrawal requests report"
         >
           <Printer className={`h-3.5 w-3.5 ${printing ? "animate-spin" : ""}`} />
-          <span>{printing ? "Preparing…" : "Print"}</span>
+          <span>{printing ? "Preparing…" : "Print Requests"}</span>
         </button>
+        <span className="hidden sm:block" aria-hidden="true" />
       </div>
     </div>
   );
