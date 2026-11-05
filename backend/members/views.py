@@ -10369,7 +10369,14 @@ class TreasuryPdfView(APIView):
         purposes_multi = request.query_params.getlist("purposes") or request.query_params.getlist("purpose[]")
         if not purposes_multi and purpose_param and "," in purpose_param:
             purposes_multi = [p.strip() for p in purpose_param.split(",") if p.strip()]
-        is_individual = request.query_params.get("include_individual", "false").lower() in ["true", "1", "yes"] or bool(purpose_param) or bool(purposes_multi)
+        # The shape of the paper is the desk's own choice, never a side effect
+        # of narrowing the accounts: a summary of three accounts is still the
+        # summary, not the individual givings report.
+        is_individual = request.query_params.get("include_individual", "false").lower() in ["true", "1", "yes"] or bool(purpose_param)
+        # The heading names the accounts only when the desk narrowed them: an
+        # all-accounts report is the church's whole statement, and printing a
+        # list of every account in its title says nothing worth reading.
+        purpose_title = purpose_param or ', '.join(purposes_multi)
 
         digital_filter = Q(status__iexact="completed", giving_type="financial") & (
             Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
@@ -10492,7 +10499,7 @@ class TreasuryPdfView(APIView):
             weekly_data=weekly_data,
             district=district,
             field_name=field_name,
-            purpose_title=purpose_param,
+            purpose_title=purpose_title,
             signatures=report_signatures(),
         )
 

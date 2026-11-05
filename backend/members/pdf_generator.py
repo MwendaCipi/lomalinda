@@ -862,10 +862,13 @@ def generate_treasury_pdf(
     except Exception:
         end_date_str = end_date
 
-    story.append(Paragraph(
-        f"CASH COUNT AND OFFERING REPORT SUMMARY FROM {date_compact(start_date)} TO {date_compact(end_date)}",
-        st["title_big"],
-    ))
+    # A narrowed summary names the accounts it carries; the whole statement
+    # names none, so its heading is the church's own.
+    summary_title = "CASH COUNT AND OFFERING REPORT SUMMARY"
+    if purpose_title:
+        summary_title += f" - {purpose_title.upper()}"
+    summary_title += f" FROM {date_compact(start_date)} TO {date_compact(end_date)}"
+    story.append(Paragraph(summary_title, st["title_big"]))
     meta_text = f"Name of Church: {church_name}"
     meta_text += f" &nbsp;&nbsp;|&nbsp;&nbsp; Field: {field_name or 'North East Kenya Field'}"
     if district:

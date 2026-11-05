@@ -1152,45 +1152,113 @@ export default function TreasuryPage() {
   const selectedGivings = expandedPurpose ? purposeGivings[expandedPurpose] || [] : [];
   const selectedPurposeTotal = selectedGivings.reduce((acc, g) => acc + Number(g.amount || 0), 0);
 
-  const handleDownloadBackendPdf = (includeIndividual: boolean = false, purposeName?: string | null, extraPurposes?: string[] | null) => {
+  // The report's address: the dates on screen and the accounts the picker
+  // chose — nothing chosen meaning the ledger as a whole.
+  const givingReportUrl = (
+    mode: "summary" | "individual",
+    purposes: string[],
+    disposition: "inline" | "attachment",
+  ) => {
+    const params = new URLSearchParams();
+    if (fromDate) params.append("start_date", fromDate);
+    if (toDate) params.append("end_date", toDate);
+    if (mode === "individual") params.append("include_individual", "true");
+    for (const purpose of purposes) {
+      if (purpose) params.append("purposes", purpose);
+    }
+    if (disposition === "attachment") params.append("disposition", "attachment");
+    return `${API_URL}/api/members/reports/ledger/pdf/?${params.toString()}`;
+  };
+
+  // Reading the paper: its own tab, which walks to the served sheet and hands
+  // it to the browser's own PDF reader — on every device, with its own save
+  // control. No frame, no overlay, nothing held over the ledger.
+  const openGivingReportTab = (pdfUrl: string) => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    openPdfTab(pdfUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      fallbackError: "The church's server could not produce the statement. Opening the printed page instead.",
+      onError: (message) => {
+        showAlert("Could not prepare the report", message, "error");
+        window.print();
+      },
+      onSettled: () => setPreparing(null),
+    });
+  };
+
+  // One account's own report, from its expanded view: the account on screen is
+  // the account the paper carries.
+  const handleDownloadBackendPdf = (includeIndividual: boolean = false, purposeName?: string | null) => {
     if (preparing) return;
     setPreparing("pdf");
     try {
-      // The report is cut to the dates on screen — always both ends of the
-      // selected range, never the month the range happens to sit in.
-      // Print what has been searched/filtered on screen for flexibility.
-      const params = new URLSearchParams();
-      if (fromDate) params.append("start_date", fromDate);
-      if (toDate) params.append("end_date", toDate);
-      if (includeIndividual) params.append("include_individual", "true");
-      if (purposeName) params.append("purpose", purposeName);
-      // If multiple purposes are passed (from current search/filter), send them all
-      if (extraPurposes && extraPurposes.length > 0) {
-        // Send as comma-separated and also as repeated params for compatibility
-        params.append("purpose", extraPurposes.join(","));
-        for (const p of extraPurposes) {
-          if (p) params.append("purposes", p);
-        }
-      }
-
-      const pdfUrl = `${API_URL}/api/members/reports/ledger/pdf/?${params.toString()}`;
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-      // The document is read the way the lessons under Materials read: its
-      // own tab, which walks to the served sheet and hands it to the
-      // browser's own PDF reader — on every device, with its own save
-      // control. No frame, no overlay, nothing held over the ledger.
-      openPdfTab(pdfUrl, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        fallbackError: "The church's server could not produce the statement. Opening the printed page instead.",
-        onError: (message) => {
-          showAlert("Could not prepare the report", message, "error");
-          window.print();
-        },
-        onSettled: () => setPreparing(null),
-      });
+      openGivingReportTab(
+        givingReportUrl(includeIndividual ? "individual" : "summary", purposeName ? [purposeName] : [], "inline"),
+      );
     } catch {
       setPreparing(null);
       window.print();
+    }
+  };
+
+  // The picker every report button opens: the desk names the accounts first,
+  // so one click leads either to the paper or to the file, never through the
+  // preview to reach the download. Every account is picked by default — the
+  // month's whole statement is what a treasurer asks for most often.
+  const openReportPicker = (mode: "summary" | "individual") => {
+    setReportMode(mode);
+    setReportSelectedPurposes(displayedRows.map((row) => row.purpose));
+    setShowReportModal(true);
+  };
+
+  // The accounts the paper carries — none at all when the desk took every
+  // one: a whole statement asks for the ledger as it is, so its heading stays
+  // the church's own instead of listing every account.
+  const reportPurposesToSend = () =>
+    reportSelectedPurposes.length === displayedRows.length ? [] : reportSelectedPurposes;
+
+  const previewGivingReport = () => {
+    if (preparing || reportSelectedPurposes.length === 0) return;
+    setShowReportModal(false);
+    setPreparing("pdf");
+    openGivingReportTab(givingReportUrl(reportMode, reportPurposesToSend(), "inline"));
+  };
+
+  const downloadGivingReport = async () => {
+    if (preparing || reportSelectedPurposes.length === 0) return;
+    const url = givingReportUrl(reportMode, reportPurposesToSend(), "attachment");
+    setShowReportModal(false);
+    setPreparing("pdf");
+    try {
+      // Read with the desk's token, then hand the browser a file: a bare link
+      // cannot carry the header, and the attachment disposition alone would
+      // open the reader rather than save.
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` },
+      });
+      if (!res.ok) throw new Error("The report could not be prepared.");
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = `${reportMode === "individual" ? "Givings" : "Church_Summary"}_${fromDate}_to_${toDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+      showAlert("Report downloaded", "The PDF is in your downloads folder.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+    } catch {
+      showAlert(
+        "Could not download the report",
+        "The church's server could not produce the statement. Try the preview instead.",
+        "error",
+      );
+    } finally {
+      setPreparing(null);
     }
   };
 
@@ -1801,8 +1869,8 @@ export default function TreasuryPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDownloadBackendPdf(false, null, visibleRows.map(r => r.purpose))}
-                          title="Print the period's summary for the church (using current search)"
+                          onClick={() => openReportPicker("summary")}
+                          title="Choose the accounts, then read or save the period's summary"
                           disabled={preparing !== null}
                           className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                         >
@@ -2490,11 +2558,8 @@ export default function TreasuryPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                const purposes = Array.from(new Set(listToDisplay.map(g => g.purpose).filter(Boolean)));
-                                handleDownloadBackendPdf(true, null, purposes.length > 0 ? purposes : null);
-                              }}
-                              title="Print the period's givings (using current search)"
+                              onClick={() => openReportPicker("individual")}
+                              title="Choose the accounts, then read or save the period's givings"
                               disabled={preparing !== null}
                               className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                             >
@@ -2560,6 +2625,122 @@ export default function TreasuryPage() {
           </div>
         </div>
       </div>
+
+      {/* Choosing the report's accounts: the desk says which giving accounts
+          the paper carries — every one of them by default — and then either
+          reads it in its own tab or saves it, without a trip through the
+          preview to reach the download. */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose the giving accounts for the report"
+            className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-5 pb-3 pt-5">
+              <div>
+                <h3 className="text-base font-bold text-bark">
+                  {reportMode === "individual" ? "Individual givings report" : "Summary report"}
+                </h3>
+                <p className="mt-0.5 text-[11px] text-moss">
+                  {fromDate === toDate ? dayFirst(fromDate) : `${dayFirst(fromDate)} to ${dayFirst(toDate)}`} · choose the
+                  accounts the paper carries.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                aria-label="Close"
+                className="text-moss transition hover:text-bark"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+              {(() => {
+                // The accounts the period actually holds: a giving account with
+                // no gift in these dates has nothing to print, so it is not
+                // offered as a choice that would come back empty.
+                const accounts = displayedRows.map((row) => row.purpose);
+                const allPicked =
+                  accounts.length > 0 && accounts.every((name) => reportSelectedPurposes.includes(name));
+                return (
+                  <>
+                    <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs font-semibold text-bark">
+                      <input
+                        type="checkbox"
+                        checked={allPicked}
+                        onChange={(event) =>
+                          setReportSelectedPurposes(event.target.checked ? accounts : [])
+                        }
+                        className="h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
+                      />
+                      <span>All accounts</span>
+                      <span className="ml-auto text-[11px] font-normal text-moss">{accounts.length}</span>
+                    </label>
+                    <div className="mt-2 space-y-1">
+                      {accounts.map((name) => (
+                        <label
+                          key={name}
+                          className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-1.5 text-xs text-bark transition hover:bg-sand"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={reportSelectedPurposes.includes(name)}
+                            onChange={(event) =>
+                              setReportSelectedPurposes((current) =>
+                                event.target.checked
+                                  ? [...current, name]
+                                  : current.filter((entry) => entry !== name),
+                              )
+                            }
+                            className="h-4 w-4 rounded border-sand-mute text-ember focus:ring-ember"
+                          />
+                          <span className="truncate">{name}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {accounts.length === 0 && (
+                      <p className="py-6 text-center text-xs text-moss">
+                        No giving accounts hold a gift in this period.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-sand-line bg-sand-linen/40 px-5 py-3">
+              {reportSelectedPurposes.length === 0 && (
+                <p className="mr-auto text-[11px] text-moss">Pick at least one account.</p>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadGivingReport()}
+                disabled={preparing !== null || reportSelectedPurposes.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark shadow-sm transition hover:bg-sand disabled:opacity-60"
+              >
+                <Download className="h-3.5 w-3.5 text-ember" aria-hidden="true" /> Download report
+              </button>
+              <button
+                type="button"
+                onClick={previewGivingReport}
+                disabled={preparing !== null || reportSelectedPurposes.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60"
+              >
+                <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Preview report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Receipt Modal — the same modal the contributions ledger uses,
           shared with the fund drives console. */}

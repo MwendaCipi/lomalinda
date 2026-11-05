@@ -466,8 +466,13 @@
    v89 — the Sabbath School's Study Groups page reads a register of groups
    rather than the church's roster, and opens the first one — a name, then the
    members enrolled in it — from the page itself. Copy and layout changed on a
-   cached document, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v89";
+   cached document, so installed apps must take the new shell.
+
+   v90 — the treasury's report buttons open a picker of the giving accounts
+   they print, every account chosen by default, with Preview and Download side
+   by side. Chrome changed on a cached document, so installed apps must take
+   the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v90";
 const STATIC_ASSETS = [
   "/",
   "/about/",

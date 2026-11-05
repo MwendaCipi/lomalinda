@@ -3025,17 +3025,35 @@ class PdfGenerationAPITests(APITestCase):
         self.assertEqual(text.count('LocalChurchBudget'), 3)
         self.assertEqual(text.count('ChildrenMinistry'), 3)
 
-    def test_the_treasury_report_names_its_three_offices(self):
-        # The sign-off block answers to the church's own desks: the treasurer
-        # prepares the report, the head deacon witnesses it, and the elder
-        # verifies it — each named on its own line, with whatever signature
-        # the office has on file printed on the rule.
+    def test_the_treasury_report_names_its_four_offices(self):
+        # The sign-off block answers to the church's own desks: the pastor
+        # authorises the paper, an elder countersigns it, the treasurer
+        # prepares it and the head deacon witnesses it — each named on its own
+        # line, with whatever signature the office has on file printed on the
+        # rule.
         response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         text = _pdf_text(response.content)
+        self.assertIn('Authorisedby:Pastor', text)
+        self.assertIn('Countersignedby:Elder', text)
         self.assertIn('Preparedby:Treasurer', text)
         self.assertIn('Witnessedby:HeadDeacon', text)
-        self.assertIn('Verifiedby:Elder', text)
+
+    def test_a_narrowed_report_names_its_accounts_in_the_heading(self):
+        # The heading names the accounts only when the desk narrowed them: two
+        # chosen accounts are named, an all-accounts report is not.
+        narrowed = self.client.get(
+            '/api/members/reports/ledger/pdf/?include_individual=true&purposes=Tithe&purposes=Local Church Budget'
+        )
+        self.assertEqual(narrowed.status_code, status.HTTP_200_OK)
+        text = _pdf_text(narrowed.content)
+        self.assertIn(
+            ''.join('CHURCH GIVINGS REPORT - TITHE, LOCAL CHURCH BUDGET'.split()), text,
+        )
+
+        whole = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
+        whole_text = _pdf_text(whole.content)
+        self.assertNotIn(''.join('CHURCH GIVINGS REPORT -'.split()), whole_text)
 
     def test_the_report_names_the_pastor_the_pastorate_seat_holds(self):
         # The pastorate desk appoints the pastor; the church that never granted
@@ -3060,7 +3078,7 @@ class PdfGenerationAPITests(APITestCase):
         response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         text = _pdf_text(response.content)
-        self.assertIn('Countersignedby:Pastor', text)
+        self.assertIn('Authorisedby:Pastor', text)
         self.assertIn('GeorgeMwenda', text)
 
     def test_individual_report_reads_mode_only(self):
