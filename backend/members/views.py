@@ -16023,7 +16023,7 @@ class WithdrawalRequestsPdfView(APIView):
             search=request.query_params.get('search', '').strip(),
             # This is the desk's wide report; a signed sheet belongs to one
             # request, printed from that request's own row.
-            signatures=False,
+            signatures=report_signatures(),
         )
 
         response = HttpResponse(pdf_bytes, content_type='application/pdf')

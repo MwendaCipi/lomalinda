@@ -3026,18 +3026,17 @@ class PdfGenerationAPITests(APITestCase):
         self.assertEqual(text.count('ChildrenMinistry'), 3)
 
     def test_the_treasury_report_names_its_four_offices(self):
-        # The sign-off block answers to the church's own desks: the pastor
-        # authorises the paper, an elder countersigns it, the treasurer
-        # prepares it and the head deacon witnesses it — each named on its own
-        # line, with whatever signature the office has on file printed on the
-        # rule.
+        # The sign-off block answers to the church's own desks: the treasurer
+        # prepares the paper, the head deacon witnesses it, an elder verifies
+        # it and the pastor countersigns it — each named on its own line, with
+        # whatever signature the office has on file printed on the rule.
         response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         text = _pdf_text(response.content)
-        self.assertIn('Authorisedby:Pastor', text)
-        self.assertIn('Countersignedby:Elder', text)
         self.assertIn('Preparedby:Treasurer', text)
         self.assertIn('Witnessedby:HeadDeacon', text)
+        self.assertIn('Verifiedby:Elder', text)
+        self.assertIn('Countersignedby:Pastor', text)
 
     def test_a_narrowed_report_names_its_accounts_in_the_heading(self):
         # The heading names the accounts only when the desk narrowed them: two
@@ -3089,7 +3088,7 @@ class PdfGenerationAPITests(APITestCase):
         response = self.client.get('/api/members/reports/ledger/pdf/?include_individual=true')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         text = _pdf_text(response.content)
-        self.assertIn('Authorisedby:Pastor', text)
+        self.assertIn('Countersignedby:Pastor', text)
         self.assertIn('GeorgeMwenda', text)
 
     def test_the_report_narrows_by_mode(self):
@@ -3157,6 +3156,34 @@ class PdfGenerationAPITests(APITestCase):
         self.assertIn('DEPT11', text)
         self.assertNotIn('DEPT22', text)
 
+    def test_the_request_reports_sign_off_in_the_churchs_order(self):
+        # The withdrawal papers carry the church's four pens in the same order
+        # as the givings and summary reports, and the desk's wide report — a
+        # list of the church's requests — is signed at all now.
+        from .pdf_generator import (
+            generate_withdrawal_request_pdf,
+            generate_withdrawal_requests_pdf,
+        )
+
+        row = {
+            'id': 7,
+            'department': 'Youth',
+            'account_name': 'Youth Fund',
+            'amount': '1500.00',
+            'account_balance': '9000.00',
+            'status': 'pending',
+            'reason': 'Camp transport',
+            'requested_by': 'Ada One',
+            'created_at': '2026-01-05T09:00:00',
+        }
+        single = _pdf_text(generate_withdrawal_request_pdf("SDA Church Test", row))
+        wide = _pdf_text(generate_withdrawal_requests_pdf("SDA Church Test", [row]))
+
+        order = ['Preparedby', 'Witnessedby', 'Countersignedby', 'Authorisedby']
+        for text in (single, wide):
+            positions = [text.index(label) for label in order]
+            self.assertEqual(positions, sorted(positions), text[:400])
+
     def test_both_reports_sign_off_in_the_churchs_order(self):
         # The pens print left to right in one order on both shapes of the
         # paper: the treasurer prepares, the head deacon witnesses, an elder
@@ -3178,8 +3205,8 @@ class PdfGenerationAPITests(APITestCase):
         order = [
             'Preparedby:Treasurer',
             'Witnessedby:HeadDeacon',
-            'Countersignedby:Elder',
-            'Authorisedby:Pastor',
+            'Verifiedby:Elder',
+            'Countersignedby:Pastor',
         ]
         for text in (individual, summary):
             positions = [text.index(label) for label in order]
