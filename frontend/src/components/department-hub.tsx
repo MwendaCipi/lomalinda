@@ -926,19 +926,23 @@ function CreateStudyGroupModal({
   const duplicate = takenNames.some((existing) => existing.toLowerCase() === name.trim().toLowerCase());
 
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    setSearching(true);
+    const needle = query.trim();
+    // Every state write waits for the timer: the effect body only arranges the
+    // search, so typing never renders from inside it.
     const timer = window.setTimeout(() => {
+      if (needle.length < 2) {
+        setResults([]);
+        setSearching(false);
+        return;
+      }
+      setSearching(true);
       // The same roster the roll's picker searches: one list of the church's
       // people, matched on name, username or phone.
       fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
           const rows = Array.isArray(data) ? data : [];
-          const q = query.trim().toLowerCase();
+          const q = needle.toLowerCase();
           const matched = rows
             .filter((u: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) => {
               const hay = `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase();
@@ -954,7 +958,7 @@ function CreateStudyGroupModal({
         })
         .catch(() => setResults([]))
         .finally(() => setSearching(false));
-    }, 250);
+    }, needle.length < 2 ? 0 : 250);
     return () => window.clearTimeout(timer);
   }, [query]);
 
@@ -3512,8 +3516,27 @@ function SingingGroupsPanel({
   }, [departmentCode]);
 
   useEffect(() => {
-    loadGroups();
-  }, [loadGroups]);
+    let ignore = false;
+    setLoading(true);
+    fetch(`${API_URL}/api/members/departments/${departmentCode}/singing-groups/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : { groups: [], can_manage: false }))
+      .then((data) => {
+        if (ignore) return;
+        setGroups(data.groups || []);
+        setCanManage(Boolean(data.can_manage));
+      })
+      .catch(() => {
+        if (ignore) return;
+        setGroups([]);
+      })
+      .finally(() => {
+        if (ignore) return;
+        setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [departmentCode]);
 
   const registerGroup = async (group: { name: string; description: string; leader_id: number | null; leader_name: string }) => {
     const res = await fetch(`${API_URL}/api/members/departments/${departmentCode}/singing-groups/`, {
