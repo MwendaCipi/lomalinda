@@ -44,11 +44,14 @@ def invitation_token_hash(raw_token):
 INVITATION_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 INVITATION_CODE_LENGTH = 8
 
-# Numeric codes (what is emailed to a person verifying their own enrollment)
-# use a separate constant so they stay readable down a phone line: six digits
-# with leading zeros preserved as a string, so 000123 is a real code, not 123.
-VERIFICATION_CODE_DIGITS = 6
-VERIFICATION_CODE_ALPHABET = '0123456789'
+# What is emailed to a person verifying their own enrollment (and to a member
+# confirming a new address) is the same kind of code as an invitation: letters
+# and digits from the readable alphabet above, eight of them, printed
+# "ABCD-EFGH". Digits alone are easy to misread off a screen and easy to guess
+# in bulk; letters mixed in keep the code alphanumeric without adding a
+# character a person has to squint at.
+VERIFICATION_CODE_LENGTH = INVITATION_CODE_LENGTH
+VERIFICATION_CODE_ALPHABET = INVITATION_CODE_ALPHABET
 
 
 def normalize_invitation_code(raw_code):
@@ -1021,10 +1024,9 @@ class EnrollmentRequest(models.Model):
 
     @staticmethod
     def _new_code():
-        # Six-digit numeric code for enrollment verification emails. Built from
-        # secrets.choice on the digit alphabet so leading zeros are real (the code
-        # is kept as a string, never coerced to an int).
-        return ''.join(secrets.choice(VERIFICATION_CODE_ALPHABET) for _ in range(VERIFICATION_CODE_DIGITS))
+        # An alphanumeric code for enrollment verification emails, drawn from the
+        # readable alphabet so a person can type it back off the screen.
+        return ''.join(secrets.choice(VERIFICATION_CODE_ALPHABET) for _ in range(VERIFICATION_CODE_LENGTH))
 
     @classmethod
     def from_code(cls, raw_code):
@@ -3090,7 +3092,7 @@ class EmailChangeRequest(models.Model):
 
     @staticmethod
     def _new_code():
-        return ''.join(secrets.choice(VERIFICATION_CODE_ALPHABET) for _ in range(VERIFICATION_CODE_DIGITS))
+        return ''.join(secrets.choice(VERIFICATION_CODE_ALPHABET) for _ in range(VERIFICATION_CODE_LENGTH))
 
     def check_code(self, raw_code):
         if not raw_code:

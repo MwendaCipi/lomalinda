@@ -827,18 +827,14 @@ def generate_treasury_pdf(
             story.append(p_table)
             story.append(Spacer(1, 20))
 
-        # The sign-off block names the four offices the report answers to —
-        # prepared by the Treasurer, witnessed by the Head Deacon, verified by
-        # the Elder, and countersigned by the Pastor, as every paper answers
-        # to the pastor — and checks the saved signatures too: each office's
-        # uploaded pen prints on its line, the same way the summary's sign-off
-        # does, and the rules stand where an office has no signature on file
-        # yet.
+        # The sign-off block: the pastor authorises, countersigned by an elder.
+        # Treasury still prepares/witnesses where space allows, but the
+        # authorising officer is the pastor and countersignature is the elder.
         sig_data = [[
+            signature_cell("<b>Authorised by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
+            signature_cell("<b>Countersigned by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
             signature_cell("<b>Prepared by: Treasurer</b>", offices.get("treasurer"), "Name: ______________________"),
             signature_cell("<b>Witnessed by: Head Deacon</b>", offices.get("head_deacon"), "Name: ______________________"),
-            signature_cell("<b>Verified by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
-            signature_cell("<b>Countersigned by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
         ]]
         sig_table = Table(sig_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
         sig_table.setStyle(TableStyle([
@@ -979,15 +975,12 @@ def generate_treasury_pdf(
     story.append(cash_table)
     story.append(Spacer(1, 8))
 
-    # --- Signatures: Treasurer, Deacon, Elder, Pastor ---
-    # The deacon's line reads the head deacon's own signature: passing no
-    # office left the cell blank even after the deacon had signed, so the
-    # sheet that arrives at the field was missing a pen the church holds.
+    # --- Signatures: Pastor (authorising), Elder (countersigned), Treasurer, Deacon ---
     sig_data = [[
+        signature_cell("<b>Authorised by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
+        signature_cell("<b>Countersigned by: Elder</b>", offices.get("first_elder"), "Name: ______________________"),
         signature_cell("<b>Signed By:</b> Treasurer", offices.get("treasurer"), "Name: ______________________"),
         signature_cell("Deacon", offices.get("head_deacon"), "Name: ______________________"),
-        signature_cell("Elder", offices.get("first_elder"), "Name: ______________________"),
-        signature_cell("<b>Countersigned by: Pastor</b>", offices.get("pastor"), "Name: ______________________"),
     ]]
     sig_table = Table(sig_data, colWidths=[4.5 * cm, 4.5 * cm, 4.5 * cm, 4.5 * cm])
     sig_table.setStyle(TableStyle([

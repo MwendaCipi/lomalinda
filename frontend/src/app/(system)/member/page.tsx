@@ -680,7 +680,7 @@ export default function MemberPage() {
                 <div>
                   <span className="font-semibold text-bark">Verification pending:</span>{" "}
                   <span className="text-moss">{pendingEmail}</span>
-                  <p className="mt-0.5 text-xs text-moss">A 6-digit verification code was sent to this address to verify ownership.</p>
+                  <p className="mt-0.5 text-xs text-moss">An 8-character verification code was sent to this address to verify ownership.</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -943,26 +943,27 @@ export default function MemberPage() {
                     Verify new email address
                   </h3>
                   <p className="mt-2 text-sm text-moss leading-relaxed">
-                    We sent a 6-digit verification code to <strong className="text-bark">{pendingEmail}</strong>. Enter the code below to confirm changing your account email.
+                    We sent an 8-character verification code to <strong className="text-bark">{pendingEmail}</strong>. Enter the code below to confirm changing your account email.
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-moss">
-                    6-Digit Verification Code
+                    Verification Code
                   </label>
                   <input
                     type="text"
-                    inputMode="numeric"
+                    autoCapitalize="characters"
+                    autoComplete="one-time-code"
                     autoFocus
-                    maxLength={6}
+                    maxLength={9}
                     value={verificationCode}
                     onChange={(e) => {
-                      const clean = e.target.value.replace(/\D/g, "");
+                      const clean = e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
                       setVerificationCode(clean);
                       setVerifyError("");
                     }}
-                    placeholder="000000"
+                    placeholder="ABCD-EFGH"
                     className="mt-1.5 block w-full rounded-2xl border border-sand-mute px-4 py-3 text-center text-2xl font-mono tracking-widest outline-none focus:border-ember"
                   />
                 </div>

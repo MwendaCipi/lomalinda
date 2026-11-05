@@ -457,8 +457,17 @@
    window two of them deep, and the manifest the page links is the plain
    `.json` one: the `.webmanifest` route was served as a binary, which Chrome
    would not read, so an install minted from it painted Chrome's own icon.
-   Chrome changed, so installed apps must take the new shell. */
-const CACHE_NAME = "sda-loma-linda-meru-v87";
+   Chrome changed, so installed apps must take the new shell.
+
+   v88 — the verification codes are alphanumeric now, printed ABCD-EFGH, and
+   the pages that ask for one say so. Copy and keyboard changed on cached
+   documents, so installed apps must take the new shell.
+
+   v89 — the Sabbath School's Study Groups page reads a register of groups
+   rather than the church's roster, and opens the first one — a name, then the
+   members enrolled in it — from the page itself. Copy and layout changed on a
+   cached document, so installed apps must take the new shell. */
+const CACHE_NAME = "sda-loma-linda-meru-v89";
 const STATIC_ASSETS = [
   "/",
   "/about/",

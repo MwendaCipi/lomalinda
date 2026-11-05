@@ -14213,6 +14213,26 @@ class EnrollmentCodeFlowTests(APITestCase):
         self.assertIn('Your verification code is:', body)
         self.assertNotIn('click the link below', body.lower())
 
+    def test_the_emailed_code_is_alphanumeric(self):
+        """Letters and digits, printed ABCD-EFGH — not six digits.
+
+        A digit-only code is easy to mistype and easy to guess in bulk; the
+        code now uses the invitation alphabet, which also drops the shapes
+        that look alike (no I/1, no O/0).
+        """
+        from .models import VERIFICATION_CODE_ALPHABET
+
+        self._signup()
+        body = mail.outbox[-1].body
+        raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
+
+        self.assertRegex(raw, r'^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$')
+        self.assertLessEqual(set(raw.replace('-', '')), set(VERIFICATION_CODE_ALPHABET))
+        self.assertTrue(any(character.isalpha() for character in VERIFICATION_CODE_ALPHABET))
+
+        verified = self.client.get(f'/api/members/auth/enrollment/verify/?code={raw}')
+        self.assertEqual(verified.status_code, status.HTTP_200_OK, verified.data)
+
     def test_existing_email_is_refused_at_signup(self):
         User.objects.create_user('taken.email', 'code.taken@example.com', 'ChurchPass#2026')
         response = self._signup(email='code.taken@example.com')
@@ -14230,7 +14250,7 @@ class EnrollmentCodeFlowTests(APITestCase):
         # The raw code is only ever in the letter: read it out of the email
         # the sign-up just sent, exactly as the person receiving it would.
         body = mail.outbox[-1].body
-        # The emailed code is a six-digit number with no separators, so read the
+        # The emailed code is alphanumeric, printed ABCD-EFGH, so read the
         # first non-blank line after the prompt — the same shape a person types.
         raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
 
@@ -14261,7 +14281,7 @@ class EnrollmentCodeFlowTests(APITestCase):
         response = self._signup()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         body = mail.outbox[-1].body
-        # The emailed code is a six-digit number with no separators.
+        # The emailed code is alphanumeric, printed ABCD-EFGH.
         raw = body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
         complete = self.client.post('/api/members/auth/enrollment/complete/', {
             'code': raw,
@@ -16020,6 +16040,35 @@ class DepartmentFundTests(APITestCase):
         """The ask just raised, where earlier answers have left rows behind."""
         from .models import DepartmentWithdrawalRequest
         return DepartmentWithdrawalRequest.objects.filter(status='pending').latest('id')
+
+    def test_the_pastorate_seat_creates_the_pastor_role(self):
+        """The shepherd's seat is what grants the `pastor` flag.
+
+        The role was in the catalogue, the pickers and the rights table all
+        along, but no office granted it: OFFICE_ROLE_CODES had no entry for
+        the pastorate's "Pastor" seat, so a church that appointed its pastor
+        there never had the flag created — the seat and the role stayed two
+        separate facts, and every check that reads the flag refused him.
+        """
+        from .views import is_pastor_or_admin, sync_role_flags_from_assignments
+
+        seated = User.objects.create_user(
+            'fund.role.pastor', 'fund.role.pastor@example.com', 'StrongPass#2026',
+        )
+        MemberProfile.objects.create(user=seated, role='member', roles='member')
+        pastorate = Department.objects.get(code='pastorate')
+        seat = DepartmentRole.objects.filter(department=pastorate, name__iexact='Pastor').first()
+        if seat is None:
+            seat = DepartmentRole.objects.create(department=pastorate, name='Pastor')
+        DepartmentAssignment.objects.create(
+            department=pastorate, role=seat, member=seated, kind='leader',
+        )
+
+        sync_role_flags_from_assignments()
+
+        seated.member_profile.refresh_from_db()
+        self.assertIn('pastor', seated.member_profile.get_roles())
+        self.assertTrue(is_pastor_or_admin(seated))
 
     @patch('members.views.sms.send', return_value=True)
     def test_the_pastorate_seat_carries_the_pastors_pen(self, _sms):
@@ -18766,6 +18815,71 @@ class SabbathSchoolLessonTests(APITestCase):
         self.assertEqual(order.served_by, self.superintendent)
         self.assertEqual(order.quantity, 3)
         self.assertTrue(order.is_delivered)
+
+
+class StudyGroupCreationTests(APITestCase):
+    """The Sabbath School names a study group, and the name arrives with people.
+
+    The school's Study Groups page is a register of groups, not the church's
+    roster: a group is opened once — a name, then the members the desk enrolls
+    in it — so no one has to file the same person twice.
+    """
+
+    URL = '/api/members/departments/sabbath_school/units/'
+
+    def setUp(self):
+        from .models import DepartmentMembership  # noqa: F401 - imported for the roll assertions below
+
+        self.leader = User.objects.create_user(
+            'group.leader', 'group.leader@example.com', 'StrongPass#2026',
+            first_name='Grace', last_name='Leader',
+        )
+        MemberProfile.objects.create(user=self.leader, role='sabbath_school', roles='sabbath_school')
+        self.school = Department.objects.get(code='sabbath_school')
+        self.school.units = ''
+        self.school.save(update_fields=['units'])
+        DepartmentAssignment.objects.create(
+            department=self.school, role=self.school.roles.first(),
+            member=self.leader, kind='leader',
+        )
+        self.one = User.objects.create_user('group.one', 'group.one@example.com', 'StrongPass#2026', first_name='Ada', last_name='One')
+        MemberProfile.objects.create(user=self.one, role='member', roles='member')
+        self.two = User.objects.create_user('group.two', 'group.two@example.com', 'StrongPass#2026', first_name='Bram', last_name='Two')
+        MemberProfile.objects.create(user=self.two, role='member', roles='member')
+
+    def test_a_leader_opens_a_group_with_its_first_members(self):
+        from .models import DepartmentMembership
+
+        self.client.force_authenticate(self.leader)
+        response = self.client.post(
+            self.URL, {'name': 'Grace Group', 'member_ids': [self.one.id, self.two.id]}, format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.school.refresh_from_db()
+        self.assertEqual(self.school.unit_names, ['Grace Group'])
+        self.assertEqual(
+            DepartmentMembership.objects.filter(department='sabbath_school', unit='Grace Group').count(), 2,
+        )
+        self.assertEqual(response.data['units'], ['Grace Group'])
+
+    def test_a_member_may_not_open_a_group(self):
+        self.client.force_authenticate(self.one)
+        response = self.client.post(self.URL, {'name': 'Someone Else\u2019s Group'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.school.refresh_from_db()
+        self.assertEqual(self.school.unit_names, [])
+
+    def test_one_group_name_is_not_given_twice(self):
+        self.school.units = 'Grace Group'
+        self.school.save(update_fields=['units'])
+        self.client.force_authenticate(self.leader)
+
+        response = self.client.post(self.URL, {'name': 'grace group'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('name', response.data)
 
 
 class EldershipDeskToolsTests(APITestCase):

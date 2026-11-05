@@ -173,6 +173,10 @@ export default function TreasuryPage() {
   // A report is generated on demand — a “Preparing…” toast on the desk while
   // the server draws it, then its own tab shows the paper.
   const [preparing, setPreparing] = useState<null | "pdf">(null);
+  // Modal for selecting giving accounts to include in the report
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSelectedPurposes, setReportSelectedPurposes] = useState<string[]>([]);
+  const [reportMode, setReportMode] = useState<"summary" | "individual">("summary");
 
   // Purpose Expansion & View Mode State — `viewMode` sits up top, beside the
   // `?mode=` effect that reads it before anything else on the desk mounts.
@@ -1148,17 +1152,26 @@ export default function TreasuryPage() {
   const selectedGivings = expandedPurpose ? purposeGivings[expandedPurpose] || [] : [];
   const selectedPurposeTotal = selectedGivings.reduce((acc, g) => acc + Number(g.amount || 0), 0);
 
-  const handleDownloadBackendPdf = (includeIndividual: boolean = false, purposeName?: string | null) => {
+  const handleDownloadBackendPdf = (includeIndividual: boolean = false, purposeName?: string | null, extraPurposes?: string[] | null) => {
     if (preparing) return;
     setPreparing("pdf");
     try {
       // The report is cut to the dates on screen — always both ends of the
       // selected range, never the month the range happens to sit in.
+      // Print what has been searched/filtered on screen for flexibility.
       const params = new URLSearchParams();
       if (fromDate) params.append("start_date", fromDate);
       if (toDate) params.append("end_date", toDate);
       if (includeIndividual) params.append("include_individual", "true");
       if (purposeName) params.append("purpose", purposeName);
+      // If multiple purposes are passed (from current search/filter), send them all
+      if (extraPurposes && extraPurposes.length > 0) {
+        // Send as comma-separated and also as repeated params for compatibility
+        params.append("purpose", extraPurposes.join(","));
+        for (const p of extraPurposes) {
+          if (p) params.append("purposes", p);
+        }
+      }
 
       const pdfUrl = `${API_URL}/api/members/reports/ledger/pdf/?${params.toString()}`;
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -1788,8 +1801,8 @@ export default function TreasuryPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDownloadBackendPdf(false)}
-                          title="Print the period's summary for the church"
+                          onClick={() => handleDownloadBackendPdf(false, null, visibleRows.map(r => r.purpose))}
+                          title="Print the period's summary for the church (using current search)"
                           disabled={preparing !== null}
                           className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                         >
@@ -2477,8 +2490,11 @@ export default function TreasuryPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDownloadBackendPdf(true)}
-                              title="Print the period's givings"
+                              onClick={() => {
+                                const purposes = Array.from(new Set(listToDisplay.map(g => g.purpose).filter(Boolean)));
+                                handleDownloadBackendPdf(true, null, purposes.length > 0 ? purposes : null);
+                              }}
+                              title="Print the period's givings (using current search)"
                               disabled={preparing !== null}
                               className="h-8.5 sm:h-9 min-w-0 inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl border border-sand-mute bg-white px-1.5 sm:px-3.5 text-[11px] sm:text-xs font-semibold text-bark hover:bg-sand transition shadow-sm disabled:opacity-60"
                             >

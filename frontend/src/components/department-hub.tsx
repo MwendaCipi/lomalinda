@@ -900,6 +900,203 @@ function AddMemberModal({
   );
 }
 
+function CreateStudyGroupModal({
+  departmentLabel,
+  takenNames = [],
+  onClose,
+  onCreate,
+}: {
+  departmentLabel: string;
+  takenNames?: string[];
+  onClose: () => void;
+  /** Opens the group; resolves false when the server refused it, so the modal
+      keeps the name and the picks for a retry. */
+  onCreate: (name: string, members: { id: number; name: string }[]) => Promise<boolean | void>;
+}) {
+  const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  // The members picked for the group, held here until Create group sends the
+  // name and the whole list in one request.
+  const [picked, setPicked] = useState<{ id: number; name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const pickedIds = new Set(picked.map((member) => member.id));
+  const duplicate = takenNames.some((existing) => existing.toLowerCase() === name.trim().toLowerCase());
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      // The same roster the roll's picker searches: one list of the church's
+      // people, matched on name, username or phone.
+      fetch(`${API_URL}/api/members/users/`, { headers: authHeaders() })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const rows = Array.isArray(data) ? data : [];
+          const q = query.trim().toLowerCase();
+          const matched = rows
+            .filter((u: { first_name?: string; last_name?: string; username?: string; phone_number?: string }) => {
+              const hay = `${u.first_name || ""} ${u.last_name || ""} ${u.username || ""} ${u.phone_number || ""}`.toLowerCase();
+              return hay.includes(q);
+            })
+            .slice(0, 12)
+            .map((u: { id: number; first_name?: string; last_name?: string; username: string }) => ({
+              id: u.id,
+              name: `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username,
+              username: u.username,
+            }));
+          setResults(matched);
+        })
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Create a study group on ${departmentLabel}`}
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
+          <h3 className="text-lg font-bold text-bark">Create a study group</h3>
+          <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <label className="block text-xs font-medium text-bark">
+            Group name
+            <input
+              autoFocus
+              type="text"
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError("");
+              }}
+              placeholder="e.g. Grace Group"
+              className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
+            />
+            <span className="mt-1 block text-[11px] font-normal text-moss">
+              The name the school calls the group, and the chip its roll rides under.
+            </span>
+          </label>
+          {duplicate && (
+            <p className="mt-1 text-[11px] font-medium text-ember">
+              This desk already has a group with that name.
+            </p>
+          )}
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-moss" />
+            <input
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search members to enroll…"
+              className="w-full rounded-xl border border-sand-line bg-sand py-2 pl-9 pr-3 text-xs focus:border-ember focus:outline-none"
+            />
+          </div>
+          <div className="mt-3 divide-y divide-sand-soft">
+            {searching && <p className="py-4 text-center text-xs text-moss">Searching…</p>}
+            {!searching && query.trim().length >= 2 && results.length === 0 && (
+              <p className="py-4 text-center text-xs text-moss">No members match that search.</p>
+            )}
+            {results.map((member) => {
+              const pickedAlready = pickedIds.has(member.id);
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  disabled={pickedAlready}
+                  onClick={() => {
+                    setPicked((current) => [...current, { id: member.id, name: member.name }]);
+                    setQuery("");
+                    setResults([]);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 py-2.5 text-left text-xs transition ${
+                    pickedAlready ? "cursor-not-allowed opacity-50" : "hover:bg-sand"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-bark">{member.name}</span>
+                    <span className="block truncate text-[11px] text-moss-faint">@{member.username}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] font-semibold text-ember">
+                    {pickedAlready ? "Picked" : "Pick"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-6 pb-4 pt-3">
+          {picked.length === 0 ? (
+            <p className="text-center text-[11px] text-moss">
+              Search and pick the members who study in this group — more can be enrolled from its roll later.
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {picked.map((member) => (
+                <li key={member.id} className="flex items-center justify-between gap-2 rounded-xl bg-sand px-3 py-2">
+                  <span className="min-w-0 truncate text-xs font-semibold text-bark">{member.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPicked((current) => current.filter((p) => p.id !== member.id))}
+                    aria-label={`Remove ${member.name} from the list`}
+                    className="shrink-0 text-[11px] font-semibold text-moss transition hover:text-ember"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {error && (
+            <p role="alert" className="mt-2 rounded-xl bg-ember/10 p-2 text-[11px] font-medium text-ember">
+              {error}
+            </p>
+          )}
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-sand-line bg-white px-4 py-2 text-xs font-semibold text-moss transition hover:text-bark"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!name.trim() || duplicate || saving}
+              onClick={async () => {
+                setSaving(true);
+                setError("");
+                try {
+                  const opened = await onCreate(name.trim(), picked);
+                  if (opened === false) setError("The group could not be created. Try again.");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
+            >
+              {saving ? "Creating…" : "Create group"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AddEventModal({
   departmentLabel,
   defaultLocation,
@@ -5569,7 +5766,17 @@ function DepartmentDetail({
    */
   embedded?: boolean;
 }) {
-  const units = department.units ?? [];
+  // Groups opened from the desk's own Create group button land on the
+  // department's list at once, before the directory is read back: the chip and
+  // the group's card read this page, not the next reload.
+  const [createdUnits, setCreatedUnits] = useState<string[]>([]);
+  const units = useMemo(() => {
+    const base = department.units ?? [];
+    const added = createdUnits.filter(
+      (name) => !base.some((existing) => existing.toLowerCase() === name.toLowerCase()),
+    );
+    return [...base, ...added];
+  }, [department.units, createdUnits]);
   // Children classes are membership metadata, not departments to navigate
   // between. Keeping this guard also protects the UI while an existing
   // installation is waiting for the data migration that clears old units.
@@ -5632,6 +5839,9 @@ function DepartmentDetail({
   const [loadingRoll, setLoadingRoll] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
+  // The Study Groups page's Create group opens a modal that names the group
+  // and picks the people the school enrolls in it.
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   // The Write Letter button on the Letters page opens the church-letterhead
@@ -6781,6 +6991,34 @@ function DepartmentDetail({
     }
   };
 
+  // Opening a study group: the name goes on the department's own list and the
+  // people picked beside it are enrolled in the same request, so the group
+  // exists whole — a name with nobody in it is not a group the school keeps.
+  const createStudyGroup = async (name: string, members: { id: number; name: string }[]) => {
+    const res = await fetch(`${API_URL}/api/members/departments/${department.code}/units/`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name, member_ids: members.map((member) => member.id) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showAlert("Could not create", data.name || data.detail || "The group could not be created.", "error");
+      return false;
+    }
+    setCreatedUnits(Array.isArray(data.units) ? data.units : [...units, name]);
+    setShowCreateGroup(false);
+    showAlert(
+      "Group created",
+      members.length === 0
+        ? `${data.name} is on the ${department.label} desk. Open it to add its members.`
+        : `${data.name} now studies with ${members.length} member${members.length === 1 ? "" : "s"}.`,
+      "success",
+      { toast: true, timer: 5000, showConfirmButton: false },
+    );
+    loadRoll();
+    onChanged();
+  };
+
   const removeMember = async (member: RollMember) => {
     const result = await showAlert(
       "Remove from roll",
@@ -7357,7 +7595,86 @@ function DepartmentDetail({
       {/* Members tab — a contained table: the page holds still, the rows
           scroll, the way the roster and treasury read. The department's board
           leads the table, so opening a department shows who leads it first. */}
-      {subTab === "members" && (
+      {/* Sabbath School's Study Groups page is a register of groups, never the
+          church's roster: the school studies in groups, so a page of every
+          member says nothing about how it studies. It reads the groups it has —
+          each one opening the roll that studies together — and its empty state
+          is the invitation to open the first. Create group sits at the foot of
+          the page in every state, and in the middle while there is nothing
+          yet to list. */}
+      {subTab === "members" && isSabbathSchool && !unit && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+          <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
+            {loadingRoll ? (
+              <p className="py-8 text-center text-xs text-moss">Loading the groups…</p>
+            ) : units.length === 0 ? (
+              <div className="flex h-full min-h-[15rem] flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                <span className="rounded-2xl bg-sand p-3 text-ember">
+                  <Users className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <h3 className="text-sm font-bold text-bark">No study groups yet</h3>
+                <p className="max-w-sm text-xs leading-6 text-moss">
+                  The school studies in groups. Name one, enroll the members who study
+                  together, and the desk keeps their register from there.
+                </p>
+                {canManageRoll && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateGroup(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Create group
+                  </button>
+                )}
+              </div>
+            ) : (
+              <ul className="divide-y divide-sand-soft">
+                {units.map((name) => {
+                  // The count reads the roll already on screen: the school's
+                  // read carries every member with the group they were filed
+                  // into, so one fetch answers for every card.
+                  const enrolled = roll.filter((row) => (row.unit || "") === name).length;
+                  return (
+                    <li key={name}>
+                      <button
+                        type="button"
+                        onClick={() => setUnit(name)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-sand"
+                      >
+                        <span className="flex min-w-0 items-center gap-3">
+                          <span className="rounded-xl bg-sand p-2 text-ember">
+                            <Users className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-bark">{name}</span>
+                            <span className="block text-[11px] text-moss">
+                              {enrolled} {enrolled === 1 ? "member" : "members"} enrolled
+                            </span>
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[11px] font-semibold text-ember">Open</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          {canManageRoll && (
+            <div className="flex shrink-0 justify-center border-t border-sand-line px-4 py-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCreateGroup(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+              >
+                <Plus className="h-3.5 w-3.5" /> Create group
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {subTab === "members" && !(isSabbathSchool && !unit) && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
@@ -8480,6 +8797,14 @@ function DepartmentDetail({
             loadRoll();
             onChanged();
           }}
+        />
+      )}
+      {showCreateGroup && (
+        <CreateStudyGroupModal
+          departmentLabel={department.label}
+          takenNames={units}
+          onClose={() => setShowCreateGroup(false)}
+          onCreate={createStudyGroup}
         />
       )}
       {showAddMember && (

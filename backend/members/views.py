@@ -238,7 +238,7 @@ def send_enrollment_email(enrollment):
         f'Verify your {church_name_plain(church_name)} account',
         f"Hello {enrollment.first_name or 'there'},\n\n"
         f"Thank you for choosing to join {short_name}.\n\n"
-        f"Your verification code is:\n\n{enrollment.raw_code}\n\n"
+        f"Your verification code is:\n\n{format_invitation_code(enrollment.raw_code)}\n\n"
         f"Enter this code on the create-account page to continue setting up your account. "
         f"It is valid for 48 hours.\n\n"
         f"Warm regards,\n{church_name}",
@@ -3661,7 +3661,7 @@ def send_email_change_verification(user, change_request):
         f'Verify your new email address — {church_name_plain(church_name)}',
         f"Hello {name},\n\n"
         f"You requested to change the email address on your church account to {change_request.new_email}.\n\n"
-        f"Your verification code is:\n\n{change_request.raw_code}\n\n"
+        f"Your verification code is:\n\n{format_invitation_code(change_request.raw_code)}\n\n"
         f"Enter this code on your profile page to confirm your new email address. "
         f"It is valid for 30 minutes.\n\n"
         f"If you did not request this change, you can safely ignore this email.\n\n"
@@ -10365,7 +10365,11 @@ class TreasuryPdfView(APIView):
             end_date = today
 
         purpose_param = request.query_params.get("purpose", "").strip()
-        is_individual = request.query_params.get("include_individual", "false").lower() in ["true", "1", "yes"] or bool(purpose_param)
+        # Allow selecting multiple giving accounts: comma-separated or repeated params
+        purposes_multi = request.query_params.getlist("purposes") or request.query_params.getlist("purpose[]")
+        if not purposes_multi and purpose_param and "," in purpose_param:
+            purposes_multi = [p.strip() for p in purpose_param.split(",") if p.strip()]
+        is_individual = request.query_params.get("include_individual", "false").lower() in ["true", "1", "yes"] or bool(purpose_param) or bool(purposes_multi)
 
         digital_filter = Q(status__iexact="completed", giving_type="financial") & (
             Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
@@ -10374,7 +10378,15 @@ class TreasuryPdfView(APIView):
         digital = Contribution.objects.filter(digital_filter)
         cash = CashContribution.objects.filter(received_on__range=(start_date, end_date))
 
-        if purpose_param:
+        if purposes_multi:
+            pq = Q()
+            for p in purposes_multi:
+                if p.strip():
+                    pq |= _get_purpose_q(p.strip())
+            if pq:
+                digital = digital.filter(pq)
+                cash = cash.filter(pq)
+        elif purpose_param:
             p_q = _get_purpose_q(purpose_param)
             digital = digital.filter(p_q)
             cash = cash.filter(p_q)
@@ -10486,7 +10498,11 @@ class TreasuryPdfView(APIView):
 
         filename = f"Individual_Givings_{purpose_param}_{start_date.strftime('%Y%m%d')}.pdf" if purpose_param else f"Financial_Treasury_{start_date.strftime('%Y%m%d')}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        disposition = request.query_params.get("disposition", "inline").lower()
+        if disposition == "attachment":
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        else:
+            response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response
 
 
@@ -12647,6 +12663,12 @@ class DepartmentBudgetView(APIView):
 #: the church's own Choir Director is the 'choir director' entry below, and
 #: an area's Choir Leader is deliberately not it.
 OFFICE_ROLE_CODES = {
+    # The pastorate's own seat. The `pastor` role has always existed in the
+    # catalogue and in every picker, yet no office granted it: a church that
+    # appointed its shepherd in the pastorate kept the seat and the role as
+    # two separate facts, so the flag was never created and every check that
+    # reads it refused him. The shepherd's seat now carries the role.
+    'pastor': 'pastor',
     'first elder': 'first_elder',
     'second elder': 'second_elder',
     'third elder': 'third_elder',
@@ -13658,6 +13680,65 @@ class DepartmentMembersView(APIView):
         if not deleted and not unfiled:
             return Response({'detail': 'That member is not on this roll.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Member removed from the roll.'})
+
+
+class DepartmentUnitsView(APIView):
+    """A desk's groups: open one, with the people who study in it.
+
+    A group is a name on the department's own unit list (``Department.units``)
+    and a tag on each member's roll row, so opening one is two writes in a
+    single request: the name first, then the enrollments. The Sabbath School's
+    Study Groups page is what this serves — a group that exists but holds
+    nobody is not a group the school can keep, so the people picked in the
+    modal arrive with the name rather than after it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, department):
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': 'Only church officers or this department\u2019s leader can create groups.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        name = ' '.join(str(request.data.get('name') or '').split())
+        if not name:
+            return Response({'name': 'Give the group a name.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(name) > 60:
+            return Response({'name': 'Keep the group name to 60 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        existing_names = target.unit_names
+        if any(existing.lower() == name.lower() for existing in existing_names):
+            return Response({'name': 'This desk already has a group with that name.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(', '.join([*existing_names, name])) > 200:
+            return Response({'name': 'This desk has no room for another group.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_ids = request.data.get('member_ids')
+        member_ids = (
+            list(dict.fromkeys(pk for pk in raw_ids if pk is not None))
+            if isinstance(raw_ids, (list, tuple)) else []
+        )
+        people = User.objects.filter(pk__in=member_ids, is_active=True)
+        if len(people) != len(member_ids):
+            return Response({'detail': 'One of the people named is not an active account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            target.units = ', '.join([*existing_names, name])
+            target.save(update_fields=['units'])
+            for person in people:
+                membership, created = DepartmentMembership.objects.get_or_create(
+                    member=person, department=department,
+                    defaults={'added_by': request.user, 'unit': name},
+                )
+                if not created and membership.unit != name:
+                    membership.unit = name
+                    membership.save(update_fields=['unit'])
+        return Response(
+            {'name': name, 'units': target.unit_names, 'enrolled': len(member_ids)},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 def department_message_payload(message):
