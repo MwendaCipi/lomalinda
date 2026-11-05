@@ -18817,6 +18817,44 @@ class SabbathSchoolLessonTests(APITestCase):
         self.assertTrue(order.is_delivered)
 
 
+class PastorSeatBackfillTests(APITestCase):
+    """Migration 0261 has work only on a church that has seated a pastor.
+
+    The test database is built from nothing, so no Pastor seat exists when the
+    migration runs and its seat branch is never walked — which is how a live
+    deploy met a TypeError the local run could not: the historical profile's
+    ``user`` cannot take the live Group objects ``sync_role_groups`` hands it.
+    Here the backfill is called with the migration's own model registry, the
+    shape it saw on the church.
+    """
+
+    def test_the_backfill_grants_a_seated_pastor_the_flag(self):
+        import importlib
+
+        from django.apps import apps as global_apps
+        from django.db.migrations.state import ProjectState
+
+        backfill = importlib.import_module('members.migrations.0261_pastorate_seat_grants_pastor_role')
+
+        seated = User.objects.create_user(
+            'backfill.pastor', 'backfill.pastor@example.com', 'StrongPass#2026',
+        )
+        profile = MemberProfile.objects.create(user=seated, role='member', roles='member')
+        pastorate = Department.objects.get(code='pastorate')
+        seat = DepartmentRole.objects.filter(department=pastorate, name__iexact='Pastor').first()
+        if seat is None:
+            seat = DepartmentRole.objects.create(department=pastorate, name='Pastor')
+        DepartmentAssignment.objects.create(
+            department=pastorate, role=seat, member=seated, kind='leader',
+        )
+
+        historic_apps = ProjectState.from_apps(global_apps).apps
+        backfill.grant_the_pastor_role_from_the_seat(historic_apps, None)
+
+        profile.refresh_from_db()
+        self.assertIn('pastor', profile.get_roles())
+
+
 class StudyGroupCreationTests(APITestCase):
     """The Sabbath School names a study group, and the name arrives with people.
 

@@ -39,11 +39,19 @@ def grant_the_pastor_role_from_the_seat(apps, schema_editor):
             # is written where every check reads it: the set itself.
             profile.roles = ', '.join(['pastor', *held])
             profile.save(update_fields=['roles'])
+            # The role's group is synced from the live models, never through
+            # this historical one: ``profile.user`` here is the migration
+            # state's User, and setting its ``groups`` with the real Group
+            # objects raised "Field 'id' expected a number" on the church
+            # that has a pastor — the one case the local test database, with
+            # no Pastor seat, could never reach.
             try:
+                from django.contrib.auth.models import User as UserModel
+
                 from members.roles import sync_role_groups
             except Exception:  # pragma: no cover - the flag stands without groups
                 continue
-            sync_role_groups(profile.user, held + ['pastor'])
+            sync_role_groups(UserModel.objects.get(pk=member_id), held + ['pastor'])
 
 
 def reverse_grant(apps, schema_editor):
