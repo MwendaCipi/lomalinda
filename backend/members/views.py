@@ -10537,20 +10537,64 @@ class TreasuryPdfView(APIView):
 
         # The desk's own order. An account order is the register's, which the
         # sheet already keeps; the rest answer a treasurer comparing gifts —
-        # the largest first, the newest, or the giver's name.
-        order_by = (request.query_params.get("order_by") or "").strip().lower()
-        descending = (request.query_params.get("order") or "desc").strip().lower() != "asc"
-        if order_by == "amount":
-            purpose_rows.sort(key=lambda row: row["total"], reverse=descending)
-            individual_rows.sort(key=lambda row: Decimal(str(row.get("amount", 0))), reverse=descending)
-        elif order_by in {"date", "name", "giver", "account"}:
-            field = {
-                "date": "date",
-                "name": "member_name",
-                "giver": "member_name",
-                "account": "purpose_name",
-            }[order_by]
-            individual_rows.sort(key=lambda row: str(row.get(field, "")).lower(), reverse=descending)
+        # the largest first, the newest, or the giver's name. More than one
+        # column may be named: the first is the primary key, and each later
+        # one only breaks the ties the ones before it left — successive stable
+        # sorts give that for free, applied least significant first.
+        order_fields = [
+            value.strip().lower()
+            for value in request.query_params.getlist("order_by")
+            if value.strip()
+        ]
+        order_directions = [
+            value.strip().lower()
+            for value in request.query_params.getlist("order")
+            if value.strip()
+        ]
+        order_rules = []
+        for index, field in enumerate(order_fields[:4]):
+            if field not in {"account", "date", "amount", "name", "giver"}:
+                continue
+            if index < len(order_directions):
+                direction = order_directions[index]
+            elif order_directions:
+                direction = order_directions[0]
+            else:
+                direction = "desc"
+            order_rules.append((field, direction != "asc"))
+
+        def _apply_order(rows, rules, *, purpose_side):
+            for field, descending in reversed(rules):
+                if purpose_side:
+                    if field == "amount":
+                        rows.sort(key=lambda row: row["total"], reverse=descending)
+                    elif field == "account":
+                        rows.sort(
+                            key=lambda row: str(row.get("name", "")).lower(),
+                            reverse=descending,
+                        )
+                    # A fund's row holds no date or giver of its own.
+                elif field == "amount":
+                    rows.sort(
+                        key=lambda row: Decimal(str(row.get("amount", 0))),
+                        reverse=descending,
+                    )
+                else:
+                    key = (
+                        "date"
+                        if field == "date"
+                        else "purpose_name"
+                        if field == "account"
+                        else "member_name"
+                    )
+                    rows.sort(
+                        key=lambda row: str(row.get(key, "")).lower(),
+                        reverse=descending,
+                    )
+            return rows
+
+        purpose_rows = _apply_order(purpose_rows, order_rules, purpose_side=True)
+        individual_rows = _apply_order(individual_rows, order_rules, purpose_side=False)
 
         church_setting = ChurchSettings.objects.first()
         church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME

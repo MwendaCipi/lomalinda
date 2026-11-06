@@ -17,6 +17,9 @@ interface ComboboxPopoverProps {
       outside-click handler can tell panel clicks from outside clicks. */
   panelRef?: RefObject<HTMLDivElement | null>;
   open: boolean;
+  /** Called when a press lands outside the trigger and the panel, or when
+      Escape is pressed: the caller owns the open state and closes it. */
+  onDismiss?: () => void;
   /** Minimum panel width in px; the panel is never narrower than its trigger. */
   minW?: number;
   /** Chrome (radius, padding, shadow, scrolling) on top of the positioning.
@@ -43,6 +46,7 @@ export function ComboboxPopover({
   anchorRef,
   panelRef,
   open,
+  onDismiss,
   minW = 0,
   panelClassName = "rounded-xl border border-sand-line bg-white p-2 shadow-lg",
   align = "left",
@@ -100,6 +104,29 @@ export function ComboboxPopover({
       window.clearInterval(poll);
     };
   }, [open, anchorRef, panel, minW, align]);
+
+  // A press anywhere but the trigger or the panel — and Escape — closes the
+  // panel, the way a popup is expected to give way. The owner holds the open
+  // state, so this only tells it to close; a press on the trigger is left to
+  // the trigger's own toggle.
+  useEffect(() => {
+    if (!open || !onDismiss) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (anchorRef.current?.contains(target)) return;
+      if (panel.current?.contains(target)) return;
+      onDismiss();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onDismiss();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onDismiss, anchorRef, panel]);
 
   if (!open || !style) return null;
   return createPortal(

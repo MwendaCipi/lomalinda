@@ -110,6 +110,9 @@ const isReceivedGiving = (g: IndividualGiving) => g.status === "Completed" || g.
  */
 const isMpesaGiving = (g: IndividualGiving) => g.source === "digital" && /^m-?pesa$/i.test(g.payment_method || "");
 
+/** One rule of the report's order: a column, and the way it runs. */
+type ReportOrderRule = { field: "account" | "date" | "amount" | "name"; direction: "asc" | "desc" };
+
 /** The ways money reaches the church, as the report's mode filter names them. */
 const reportModeOptions = [
   { value: "mpesa", label: "M-Pesa" },
@@ -132,6 +135,7 @@ function ReportCombo({
   selected,
   onToggle,
   onClear,
+  allOption,
 }: {
   label: string;
   summary: string;
@@ -141,6 +145,9 @@ function ReportCombo({
   selected: string[];
   onToggle: (value: string, checked: boolean) => void;
   onClear: () => void;
+  /** A row above the checkboxes that takes — or gives back — every option at
+      once, so narrowing to one account need not untick the rest one by one. */
+  allOption?: { label: string; checked: boolean; onChange: (checked: boolean) => void };
 }) {
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   return (
@@ -159,8 +166,22 @@ function ReportCombo({
           aria-hidden="true"
         />
       </button>
-      <ComboboxPopover anchorRef={anchorRef} open={open} minW={260}>
+      <ComboboxPopover anchorRef={anchorRef} open={open} minW={260} onDismiss={() => setOpen(false)}>
         <div className="max-h-56 space-y-0.5 overflow-y-auto">
+          {allOption && (
+            <>
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-bark transition hover:bg-sand">
+                <input
+                  type="checkbox"
+                  checked={allOption.checked}
+                  onChange={(event) => allOption.onChange(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-sand-mute text-ember focus:ring-ember"
+                />
+                <span className="truncate">{allOption.label}</span>
+              </label>
+              <div className="mx-2 border-t border-sand-soft" />
+            </>
+          )}
           {options.map((option) => (
             <label
               key={option.value}
@@ -441,8 +462,12 @@ export default function TreasuryPage() {
   const [reportMode, setReportMode] = useState<"summary" | "individual">("summary");
   const [reportDepartments, setReportDepartments] = useState<string[]>([]);
   const [reportModes, setReportModes] = useState<string[]>([]);
-  const [reportOrderBy, setReportOrderBy] = useState<"account" | "date" | "amount" | "name">("account");
-  const [reportOrder, setReportOrder] = useState<"asc" | "desc">("desc");
+  // The order the paper prints in: one rule, or several applied in turn —
+  // account first, then date within each account, say. A later rule only
+  // breaks the ties the ones before it left.
+  const [reportOrderRules, setReportOrderRules] = useState<ReportOrderRule[]>([
+    { field: "account", direction: "asc" },
+  ]);
   const [reportMembers, setReportMembers] = useState<{ id: number; name: string }[]>([]);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [reportDepartmentOptions, setReportDepartmentOptions] = useState<{ code: string; label: string }[]>([]);
@@ -1444,9 +1469,17 @@ export default function TreasuryPage() {
       if (mode) params.append("modes", mode);
     }
     // The register's own order is the default; any other is asked for by name.
-    if (reportOrderBy !== "account") {
-      params.append("order_by", reportOrderBy);
-      params.append("order", reportOrder);
+    // Several rules are sent in turn, first rule first, and the server applies
+    // them in that order — each one breaking the previous one's ties.
+    const defaultOrder =
+      reportOrderRules.length === 1 &&
+      reportOrderRules[0].field === "account" &&
+      reportOrderRules[0].direction === "asc";
+    if (!defaultOrder) {
+      for (const rule of reportOrderRules) {
+        params.append("order_by", rule.field);
+        params.append("order", rule.direction);
+      }
     }
     for (const member of reportMembers) {
       params.append("member_ids", String(member.id));
@@ -1496,8 +1529,7 @@ export default function TreasuryPage() {
     setReportDepartments([]);
     setReportModes([]);
     setReportMembers([]);
-    setReportOrderBy("account");
-    setReportOrder("desc");
+    setReportOrderRules([{ field: "account", direction: "asc" }]);
     setOpenReportCombo(null);
     setShowReportModal(true);
     if (reportDepartmentOptions.length === 0) {
@@ -2989,6 +3021,16 @@ export default function TreasuryPage() {
                   )
                 }
                 onClear={() => setReportSelectedPurposes([])}
+                allOption={{
+                  label: "All accounts",
+                  checked:
+                    displayedRows.length > 0 &&
+                    reportSelectedPurposes.length === displayedRows.length,
+                  onChange: (checked) =>
+                    setReportSelectedPurposes(
+                      checked ? displayedRows.map((row) => row.purpose) : [],
+                    ),
+                }}
               />
 
               <ReportCombo
@@ -3042,46 +3084,98 @@ export default function TreasuryPage() {
                 onClear={() => setReportModes([])}
               />
 
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">Order by</span>
-                  <select
-                    value={reportOrderBy}
-                    onChange={(event) =>
-                      setReportOrderBy(event.target.value as typeof reportOrderBy)
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
+                    Order by
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReportOrderRules((current) =>
+                        current.length >= 4
+                          ? current
+                          : [...current, { field: "date", direction: "desc" }],
+                      )
                     }
-                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                    disabled={reportOrderRules.length >= 4}
+                    className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-bark transition hover:bg-sand disabled:opacity-40"
                   >
-                    <option value="account">Account</option>
-                    <option value="date">Date</option>
-                    <option value="amount">Amount</option>
-                    <option value="name">Giver</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">Order</span>
-                  <select
-                    value={reportOrder}
-                    onChange={(event) => setReportOrder(event.target.value as typeof reportOrder)}
-                    disabled={reportOrderBy === "account"}
-                    className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none disabled:opacity-50"
-                  >
-                    <option value="desc">
-                      {reportOrderBy === "amount"
-                        ? "Largest first"
-                        : reportOrderBy === "date"
-                          ? "Newest first"
-                          : "Z to A"}
-                    </option>
-                    <option value="asc">
-                      {reportOrderBy === "amount"
-                        ? "Smallest first"
-                        : reportOrderBy === "date"
-                          ? "Oldest first"
-                          : "A to Z"}
-                    </option>
-                  </select>
-                </label>
+                    <Plus className="h-3 w-3" aria-hidden="true" /> Add sort
+                  </button>
+                </div>
+                {reportOrderRules.map((rule, index) => (
+                  <div key={`${index}-${rule.field}`} className="flex items-center gap-2">
+                    <select
+                      value={rule.field}
+                      aria-label={`Sort column ${index + 1}`}
+                      onChange={(event) =>
+                        setReportOrderRules((current) =>
+                          current.map((entry, position) =>
+                            position === index
+                              ? { ...entry, field: event.target.value as ReportOrderRule["field"] }
+                              : entry,
+                          ),
+                        )
+                      }
+                      className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                    >
+                      <option value="account">Account</option>
+                      <option value="date">Date</option>
+                      <option value="amount">Amount</option>
+                      <option value="name">Giver</option>
+                    </select>
+                    <select
+                      value={rule.direction}
+                      aria-label={`Sort direction ${index + 1}`}
+                      onChange={(event) =>
+                        setReportOrderRules((current) =>
+                          current.map((entry, position) =>
+                            position === index
+                              ? { ...entry, direction: event.target.value as "asc" | "desc" }
+                              : entry,
+                          ),
+                        )
+                      }
+                      className="w-32 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                    >
+                      <option value="asc">
+                        {rule.field === "amount"
+                          ? "Smallest first"
+                          : rule.field === "date"
+                            ? "Oldest first"
+                            : "A to Z"}
+                      </option>
+                      <option value="desc">
+                        {rule.field === "amount"
+                          ? "Largest first"
+                          : rule.field === "date"
+                            ? "Newest first"
+                            : "Z to A"}
+                      </option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReportOrderRules((current) =>
+                          current.length <= 1
+                            ? current
+                            : current.filter((_, position) => position !== index),
+                        )
+                      }
+                      disabled={reportOrderRules.length <= 1}
+                      aria-label={`Remove sort ${index + 1}`}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-sand-line text-moss transition hover:text-ember disabled:opacity-40"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+                {reportOrderRules.length > 1 && (
+                  <p className="text-[11px] text-moss">
+                    The first row sorts first; each next row breaks its ties.
+                  </p>
+                )}
               </div>
 
               <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">

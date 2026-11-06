@@ -2098,14 +2098,14 @@ class SignatureSlotsFlowable(Flowable):
     """
 
     #: (office code or None, slot title, hint under it) — the withdrawal
-    #: paper's four slots, unchanged in order: an elder countersigns it, the
-    #: treasurer issues the money, the department's representative receives it,
-    #: and the pastor authorises it. These are the withdrawal paper's own
-    #: fields, not the givings reports' four pens.
+    #: paper's four slots, in the order the treasury signs it: the treasurer
+    #: issues the money, the department's representative receives it, an elder
+    #: countersigns it, and the pastor authorises it. These are the withdrawal
+    #: paper's own fields, not the givings reports' four pens.
     SLOTS = (
-        ('first_elder', "Countersigned By", "Elder / Church Office"),
         ('treasurer', "Issued By", "Treasury Office"),
         (None, "Received By", "Department Representative"),
+        ('first_elder', "Countersigned By", "Elder / Church Office"),
         ('pastor', "Authorised By", "Church Pastor"),
     )
 

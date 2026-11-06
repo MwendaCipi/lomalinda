@@ -3157,10 +3157,10 @@ class PdfGenerationAPITests(APITestCase):
         self.assertNotIn('DEPT22', text)
 
     def test_the_request_reports_sign_off_in_the_churchs_order(self):
-        # The withdrawal paper keeps its own four slots in their own order —
-        # an elder countersigns, the treasurer issues, the department receives,
-        # the pastor authorises — and the desk's wide report, a list of the
-        # church's requests, is signed at all now.
+        # The withdrawal paper keeps its own four slots in the treasury's
+        # order — the treasurer issues, the department receives, an elder
+        # countersigns, the pastor authorises — and the desk's wide report, a
+        # list of the church's requests, is signed at all now.
         from .pdf_generator import (
             generate_withdrawal_request_pdf,
             generate_withdrawal_requests_pdf,
@@ -3180,7 +3180,7 @@ class PdfGenerationAPITests(APITestCase):
         single = _pdf_text(generate_withdrawal_request_pdf("SDA Church Test", row))
         wide = _pdf_text(generate_withdrawal_requests_pdf("SDA Church Test", [row]))
 
-        order = ['CountersignedBy', 'IssuedBy', 'ReceivedBy', 'AuthorisedBy']
+        order = ['IssuedBy', 'ReceivedBy', 'CountersignedBy', 'AuthorisedBy']
         for text in (single, wide):
             positions = [text.index(label) for label in order]
             self.assertEqual(positions, sorted(positions), text[:400])

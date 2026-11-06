@@ -53,6 +53,7 @@ import {
   Mail,
   Phone,
   Plus,
+  Printer,
   Pencil,
   Search,
   Send,
@@ -6526,11 +6527,11 @@ function DepartmentDetail({
             },
           ]
         : []),
-      // The baptismal class is one of the school's classes now: who is being
+      // The lesson classes are one of the school's classes now: who is being
       // prepared for the font, their walk from studying to baptism, kept
       // beside the study groups rather than on the elders' desk.
       ...(isSabbathSchool && canKeepBaptismalClass
-        ? [{ key: "baptismal-class", label: "Baptismal Class", short: "Baptism", icon: Droplets }]
+        ? [{ key: "baptismal-class", label: "Lesson Classes", short: "Classes", icon: Droplets }]
         : []),
       // Sabbath School rosters the hour: which study group leads the lesson,
       // keeps the register and reads the mission story. Its own rota, kept by
@@ -7040,6 +7041,41 @@ function DepartmentDetail({
     );
     loadRoll();
     onChanged();
+  };
+
+  // The Study Groups page's Print: the register as it stands, with the
+  // people filed into each group, opened in the browser's print dialog.
+  const printStudyGroups = () => {
+    const escape = (value: string) =>
+      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = units
+      .map((name, index) => {
+        const members = roll
+          .filter((row) => (row.unit || "") === name)
+          .map((row) => row.name);
+        return `<tr><td>${index + 1}</td><td>${escape(name)}</td><td>${members.length}</td><td>${escape(members.join(", ") || "—")}</td></tr>`;
+      })
+      .join("");
+    const popup = window.open("", "_blank");
+    if (!popup) return;
+    popup.document.write(`<!doctype html><html><head><title>Study Groups</title><style>
+      body{font-family:ui-sans-serif,system-ui,sans-serif;color:#28201c;margin:32px}
+      h1{font-size:22px;margin:0 0 4px}
+      p{color:#665a4f;font-size:11px;margin:0 0 18px}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th{text-align:left;border-bottom:2px solid #8c4c2f;padding:8px 6px;text-transform:uppercase;font-size:9px;color:#665a4f}
+      td{border-bottom:1px solid #e6ddd5;padding:8px 6px;vertical-align:top}
+      @media print{body{margin:16px}}
+    </style></head><body>
+      <h1>Study Groups</h1>
+      <p>${units.length} group${units.length === 1 ? "" : "s"} · Printed ${new Date().toLocaleDateString()}</p>
+      <table><thead><tr><th>#</th><th>Group</th><th>Members</th><th>Who studies together</th></tr></thead><tbody>${
+        rows || `<tr><td colspan="4">No study groups yet.</td></tr>`
+      }</tbody></table>
+    </body></html>`);
+    popup.document.close();
+    popup.focus();
+    popup.print();
   };
 
   const removeMember = async (member: RollMember) => {
@@ -7620,11 +7656,10 @@ function DepartmentDetail({
           leads the table, so opening a department shows who leads it first. */}
       {/* Sabbath School's Study Groups page is a register of groups, never the
           church's roster: the school studies in groups, so a page of every
-          member says nothing about how it studies. It reads the groups it has —
-          each one opening the roll that studies together — and its empty state
-          is the invitation to open the first. Create group sits at the foot of
-          the page in every state, and in the middle while there is nothing
-          yet to list. */}
+          member says nothing about how it studies. It reads the groups it has
+          in a table — each one opening the roll that studies together — with
+          an empty state before the first group and the page's buttons centred
+          at its foot. */}
       {subTab === "members" && isSabbathSchool && !unit && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
@@ -7640,60 +7675,106 @@ function DepartmentDetail({
                   The school studies in groups. Name one, enroll the members who study
                   together, and the desk keeps their register from there.
                 </p>
-                {canManageRoll && (
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateGroup(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Create group
-                  </button>
-                )}
+                <p className="text-[11px] text-moss-faint">
+                  Use &ldquo;Create group&rdquo; below to open the first.
+                </p>
               </div>
             ) : (
-              <ul className="divide-y divide-sand-soft">
-                {units.map((name) => {
+              <RecordList
+                rows={units}
+                loading={false}
+                rowKey={(name) => name}
+                loadingLabel="Loading the groups…"
+                headers={[
+                  { label: "Group", className: "px-4 py-3" },
+                  { label: "Members", className: "px-4 py-3" },
+                  { label: "Action", className: "px-4 py-3 text-center" },
+                ]}
+                tableClassName="w-full text-left text-xs"
+                headClassName="sticky top-0 z-10 border-b border-sand-line bg-white"
+                headRowClassName="text-[11px] font-bold uppercase tracking-wider text-ember"
+                headCellClassName="font-bold"
+                renderRow={(name) => {
                   // The count reads the roll already on screen: the school's
                   // read carries every member with the group they were filed
-                  // into, so one fetch answers for every card.
+                  // into, so one fetch answers for every row.
                   const enrolled = roll.filter((row) => (row.unit || "") === name).length;
                   return (
-                    <li key={name}>
-                      <button
-                        type="button"
-                        onClick={() => setUnit(name)}
-                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-sand"
-                      >
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className="rounded-xl bg-sand p-2 text-ember">
-                            <Users className="h-4 w-4" aria-hidden="true" />
+                    <tr key={name} className="transition hover:bg-sand-linen/50">
+                      <td className="px-4 py-3">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="rounded-lg bg-sand p-1.5 text-ember">
+                            <Users className="h-3.5 w-3.5" aria-hidden="true" />
                           </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-bark">{name}</span>
-                            <span className="block text-[11px] text-moss">
-                              {enrolled} {enrolled === 1 ? "member" : "members"} enrolled
-                            </span>
+                          <span className="truncate font-semibold text-bark">{name}</span>
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-moss">
+                        {enrolled} {enrolled === 1 ? "member" : "members"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setUnit(name)}
+                          className="rounded-lg border border-sand-line bg-white px-2.5 py-1 text-[10px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+                        >
+                          Open
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }}
+                renderCard={(name) => {
+                  const enrolled = roll.filter((row) => (row.unit || "") === name).length;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setUnit(name)}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-sand-line bg-white px-3.5 py-3 text-left transition hover:border-ember"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="rounded-lg bg-sand p-1.5 text-ember">
+                          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold text-bark">{name}</span>
+                          <span className="block text-[11px] text-moss">
+                            {enrolled} {enrolled === 1 ? "member" : "members"} enrolled
                           </span>
                         </span>
-                        <span className="shrink-0 text-[11px] font-semibold text-ember">Open</span>
-                      </button>
-                    </li>
+                      </span>
+                      <span className="shrink-0 text-[11px] font-semibold text-ember">Open</span>
+                    </button>
                   );
-                })}
-              </ul>
+                }}
+                cardsClassName="grid gap-2 p-2 md:hidden"
+              />
             )}
           </div>
-          {canManageRoll && (
-            <div className="flex shrink-0 justify-center border-t border-sand-line px-4 py-3 sm:justify-end">
+          <div className="page-actions">
+            <div className="flex flex-wrap items-center justify-center gap-2 border-t border-sand-line px-4 py-3">
               <button
                 type="button"
-                onClick={() => setShowCreateGroup(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep"
+                onClick={printStudyGroups}
+                disabled={units.length === 0}
+                className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3.5 text-xs font-semibold text-bark transition hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"
               >
-                <Plus className="h-3.5 w-3.5" /> Create group
+                <Printer className="h-4 w-4" aria-hidden="true" />
+                Print groups
               </button>
+              {canManageRoll && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateGroup(true)}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Create group
+                </button>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -8619,17 +8700,17 @@ function DepartmentDetail({
       )}
       {baptismalBlocked && (
         <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
-          The baptismal class is one of the Sabbath School&apos;s classes now — open it on the school&apos;s desk.
+          The lesson classes are one of the Sabbath School&apos;s classes now — open them on the school&apos;s desk.
         </p>
       )}
       {subTab === "baptismal-class" && !baptismalBlocked && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
           <div className="mb-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
-              <Droplets className="h-4 w-4 text-ember" aria-hidden="true" /> Baptismal Class
+              <Droplets className="h-4 w-4 text-ember" aria-hidden="true" /> Lesson Classes
             </h3>
             <p className="mt-0.5 text-xs text-moss">
-              The members being prepared for baptism, their walk from studying to the font, kept by the Sabbath School desk.
+              The members being prepared for baptism — the school&apos;s lesson classes, and their walk from studying to the font.
             </p>
           </div>
           <BaptismalClassPanel />
