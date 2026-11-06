@@ -20285,6 +20285,62 @@ class DepartmentLetterFlowTests(APITestCase):
     def _notices(self, prefix):
         return [m for m in mail.outbox if m.subject.startswith(prefix)]
 
+    def test_a_declined_letter_comes_back_unsigned(self):
+        """Declining returns the letter, not a signature: a sheet the pastor
+        had already signed loses its pen and carries only the reason back."""
+        from .models import DepartmentLetterRequest
+
+        pk = self._write().data['id']
+        signed = self._sign(self.pastor, 'pastor_sign', pk)
+        self.assertEqual(signed.status_code, status.HTTP_200_OK, signed.data)
+
+        self.client.force_authenticate(self.pastor)
+        declined = self.client.post(
+            f'/api/members/department-letters/{pk}/review/',
+            {'action': 'decline', 'reply': 'The robes budget is not approved yet.'},
+            format='json',
+        )
+        self.assertEqual(declined.status_code, status.HTTP_200_OK, declined.data)
+        row = DepartmentLetterRequest.objects.get(pk=pk)
+        self.assertEqual(row.status, 'declined')
+        self.assertEqual(row.reply, 'The robes budget is not approved yet.')
+        self.assertIsNone(row.pastor_signed_by_id)
+        self.assertIsNone(row.pastor_signed_at)
+        self.assertIsNone(row.clerk_signed_by_id)
+        self.assertIsNone(row.clerk_signed_at)
+        # The writer hears the reason, and nothing about a signature.
+        notice = self._notices('Letter Declined:')
+        self.assertEqual(len(notice), 1)
+        self.assertIn('The robes budget is not approved yet.', notice[0].body)
+
+    def test_a_note_rides_with_a_signature(self):
+        """Pastor and clerk may hand the desk a word with their pen: the note
+        stays on the letter, and a later signing without one keeps it."""
+        from .models import DepartmentLetterRequest
+
+        pk = self._write().data['id']
+        self.client.force_authenticate(self.pastor)
+        signed = self.client.post(
+            f'/api/members/department-letters/{pk}/review/',
+            {'action': 'pastor_sign', 'reply': 'Please stamp it before Friday.'},
+            format='json',
+        )
+        self.assertEqual(signed.status_code, status.HTTP_200_OK, signed.data)
+        row = DepartmentLetterRequest.objects.get(pk=pk)
+        self.assertEqual(row.reply, 'Please stamp it before Friday.')
+
+        # The clerk signs without a note: the pastor's word is not wiped.
+        self.client.force_authenticate(self.clerk)
+        clerk_signed = self.client.post(
+            f'/api/members/department-letters/{pk}/review/',
+            {'action': 'clerk_sign'},
+            format='json',
+        )
+        self.assertEqual(clerk_signed.status_code, status.HTTP_200_OK, clerk_signed.data)
+        row.refresh_from_db()
+        self.assertEqual(row.status, 'completed')
+        self.assertEqual(row.reply, 'Please stamp it before Friday.')
+
     def test_the_letter_leaves_for_the_pastor_at_the_requests_view(self):
         """A written letter lands as pending, and the pastor is told exactly
         where it waits — the department's Requests view, which is where the

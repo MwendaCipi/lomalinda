@@ -16253,13 +16253,17 @@ class DepartmentLetterReviewView(APIView):
 
             row.pastor_signed_by = request.user
             row.pastor_signed_at = timezone.now()
+            # The pen may carry a word for the desk. A blank note never
+            # wipes a note an earlier signer left on the letter.
+            if reply:
+                row.reply = reply
             if row.clerk_signed_by_id:
                 row.status = 'completed'
             elif row.status == 'pending_pastor' or row.status == 'pastor_signed':
                 row.status = 'pastor_signed'
             else:
                 row.status = 'pastor_signed' if not row.clerk_signed_by_id else 'completed'
-            row.save(update_fields=['status', 'pastor_signed_by', 'pastor_signed_at'])
+            row.save(update_fields=['status', 'pastor_signed_by', 'pastor_signed_at', 'reply'])
 
             if row.clerk_signed_by_id:
                 requester = row.requested_by
@@ -16318,11 +16322,13 @@ class DepartmentLetterReviewView(APIView):
 
             row.clerk_signed_by = request.user
             row.clerk_signed_at = timezone.now()
+            if reply:
+                row.reply = reply
             if row.pastor_signed_by_id:
                 row.status = 'completed'
             else:
                 row.status = 'pastor_signed'
-            row.save(update_fields=['status', 'clerk_signed_by', 'clerk_signed_at'])
+            row.save(update_fields=['status', 'clerk_signed_by', 'clerk_signed_at', 'reply'])
 
             if row.pastor_signed_by_id:
                 requester = row.requested_by
@@ -16368,7 +16374,18 @@ class DepartmentLetterReviewView(APIView):
             row.status = 'declined'
             row.declined_by = request.user
             row.reply = reply
-            row.save(update_fields=['status', 'declined_by', 'reply'])
+            # A declined letter comes back unsigned: any pen already on it is
+            # lifted, so the sheet never reads as cleared by an office that
+            # turned it down.
+            row.pastor_signed_by = None
+            row.pastor_signed_at = None
+            row.clerk_signed_by = None
+            row.clerk_signed_at = None
+            row.save(update_fields=[
+                'status', 'declined_by', 'reply',
+                'pastor_signed_by', 'pastor_signed_at',
+                'clerk_signed_by', 'clerk_signed_at',
+            ])
 
             requester = row.requested_by
             if requester:
@@ -16506,6 +16523,11 @@ class DepartmentLetterPdfView(APIView):
         # letter in flight already shows the pen it waits for.
         pastor_sig = user_signature_entry(row.pastor_signed_by, "Church Pastor") if row.pastor_signed_by else _default_letter_signatory('pastor', 'Church Pastor')
         clerk_sig = user_signature_entry(row.clerk_signed_by, "Church Clerk") if row.clerk_signed_by else _default_letter_signatory('clerk', 'Church Clerk')
+        if row.status == 'declined':
+            # A declined letter carries no pen: a row declined before the
+            # signatures were lifted still prints as an unsigned sheet.
+            pastor_sig = None
+            clerk_sig = None
 
         serializer = DepartmentLetterRequestSerializer(row)
         church_name = current_church_name()

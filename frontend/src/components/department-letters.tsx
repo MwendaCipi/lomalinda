@@ -706,6 +706,9 @@ export function DepartmentLettersPanel({
   // The letter being signed, and whose signature it is waiting for.
   const [signing, setSigning] = useState<{ row: LetterRow; action: "pastor_sign" | "clerk_sign" | "decline" } | null>(null);
   const [savingSignature, setSavingSignature] = useState(false);
+  // The word that rides with the pen: a reason when rejecting, an optional
+  // note when signing. Either way the desk reads it back on the letter.
+  const [reviewNote, setReviewNote] = useState("");
   // The signer's own saved signature, read when the modal opens so the paper
   // shows what the pen will actually put on it.
   const [mySignature, setMySignature] = useState<{ url: string; office: string; name: string } | null>(null);
@@ -742,6 +745,7 @@ export function DepartmentLettersPanel({
   const openSign = async (row: LetterRow, action: "pastor_sign" | "clerk_sign" | "decline") => {
     setSigning({ row, action });
     setMySignature(null);
+    setReviewNote("");
     try {
       const response = await fetch(`${API_URL}/api/members/me/`, { headers: authHeaders() });
       const data = await response.json().catch(() => ({}));
@@ -765,23 +769,27 @@ export function DepartmentLettersPanel({
       const response = await fetch(`${API_URL}/api/members/department-letters/${signing.row.id}/review/`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ action: signing.action }),
+        body: JSON.stringify({ action: signing.action, reply: reviewNote.trim() }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || "The signature could not be recorded.");
       setSigning(null);
       showAlert(
-        "Signed",
+        signing.action === "decline" ? "Letter rejected" : "Signed",
         signing.action === "pastor_sign"
           ? "Your signature is on the letter. The church clerk signs it next."
           : signing.action === "clerk_sign"
             ? "Your signature is on the letter. It is back with its writer, fully signed and ready for the stamp."
-            : "Your letter was declined. The requester has been notified.",
+            : "The letter is back with its writer, rejected with your reason. No signature was put on it.",
         "success"
       );
       load();
     } catch (error) {
-      showAlert("Could not sign", error instanceof Error ? error.message : "Try again.", "error");
+      showAlert(
+        signing.action === "decline" ? "Could not reject" : "Could not sign",
+        error instanceof Error ? error.message : "Try again.",
+        "error"
+      );
     } finally {
       setSavingSignature(false);
     }
@@ -887,6 +895,9 @@ export function DepartmentLettersPanel({
                   {row.status === "declined" && row.reply && (
                     <p className="mt-1 text-[11px] italic text-moss-faint">&quot;{row.reply}&quot;</p>
                   )}
+                  {row.status !== "declined" && row.reply && (
+                    <p className="mt-1 text-[11px] italic text-moss-faint">Note: &quot;{row.reply}&quot;</p>
+                  )}
 
                   {/* These delivery details belong to the clerk's work queue,
                       not to the printed correspondence. */}
@@ -971,13 +982,23 @@ export function DepartmentLettersPanel({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={signing.action === "pastor_sign" ? "Sign as pastor" : "Sign as clerk"}
+            aria-label={
+              signing.action === "decline"
+                ? "Reject this letter"
+                : signing.action === "pastor_sign"
+                  ? "Sign as pastor"
+                  : "Sign as clerk"
+            }
             className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
           >
             <div className="flex items-start justify-between gap-3 border-b border-sand-line px-5 py-4">
               <div className="min-w-0">
                 <h3 className="text-sm font-bold text-bark">
-                  {signing.action === "pastor_sign" ? "Pastor's signature" : "Church clerk's signature"}
+                  {signing.action === "decline"
+                    ? "Reject this letter"
+                    : signing.action === "pastor_sign"
+                      ? "Pastor's signature"
+                      : "Church clerk's signature"}
                 </h3>
                 <p className="mt-0.5 truncate text-xs text-moss">
                   {signing.row.title} · {signing.row.department_name}
@@ -998,32 +1019,76 @@ export function DepartmentLettersPanel({
                 {signing.row.content}
               </div>
 
-              <div className="rounded-xl border border-sand-line p-3">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Your signature</p>
-                {mySignature?.url ? (
-                  <div className="mt-2 flex h-16 items-end justify-center rounded-lg border border-sand-line bg-white px-4 pb-1">
-                    {/* Plain img: the signature is a same-origin upload. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={resolveAttachmentUrl(mySignature.url)}
-                      alt={mySignature.office || "Your saved signature"}
-                      className="max-h-12 w-full object-contain object-bottom"
-                    />
-                  </div>
-                ) : (
-                  <p className="mt-1.5 text-xs text-moss">
-                    No signature saved on your profile yet — the line prints blank.{" "}
-                    <Link href="/member" className="font-semibold text-ember underline underline-offset-2">
-                      Add your signature
-                    </Link>
+              {signing.action === "decline" ? (
+                <div className="rounded-xl border border-sand-line p-3">
+                  <label
+                    htmlFor="letter-decline-reply"
+                    className="block text-[11px] font-bold uppercase tracking-wide text-moss"
+                  >
+                    Reason for rejecting
+                  </label>
+                  <textarea
+                    id="letter-decline-reply"
+                    rows={4}
+                    maxLength={255}
+                    value={reviewNote}
+                    onChange={(event) => setReviewNote(event.target.value)}
+                    placeholder="Why is this letter going back? Its writer reads this word for word."
+                    autoFocus
+                    className="mt-1.5 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  />
+                  <p className="mt-1.5 text-[11px] text-moss-faint">
+                    Rejecting puts no signature on the letter — it goes back to {signing.row.requested_by_name} unsigned.
                   </p>
-                )}
-                <p className="mt-2 text-[11px] text-moss-faint">
-                  {mySignature?.name ? `${mySignature.name} · ` : ""}
-                  Signing records you as the {signing.action === "pastor_sign" ? "pastor" : "church clerk"} who cleared
-                  it, and the sheet carries your saved signature.
-                </p>
-              </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-sand-line p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-moss">Your signature</p>
+                  {mySignature?.url ? (
+                    <div className="mt-2 flex h-16 items-end justify-center rounded-lg border border-sand-line bg-white px-4 pb-1">
+                      {/* Plain img: the signature is a same-origin upload. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={resolveAttachmentUrl(mySignature.url)}
+                        alt={mySignature.office || "Your saved signature"}
+                        className="max-h-12 w-full object-contain object-bottom"
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-moss">
+                      No signature saved on your profile yet — the line prints blank.{" "}
+                      <Link href="/member" className="font-semibold text-ember underline underline-offset-2">
+                        Add your signature
+                      </Link>
+                    </p>
+                  )}
+                  <p className="mt-2 text-[11px] text-moss-faint">
+                    {mySignature?.name ? `${mySignature.name} · ` : ""}
+                    Signing records you as the {signing.action === "pastor_sign" ? "pastor" : "church clerk"} who cleared
+                    it, and the sheet carries your saved signature.
+                  </p>
+                </div>
+              )}
+
+              {signing.action !== "decline" && (
+                <div className="rounded-xl border border-sand-line p-3">
+                  <label
+                    htmlFor="letter-sign-note"
+                    className="block text-[11px] font-bold uppercase tracking-wide text-moss"
+                  >
+                    Notes <span className="font-normal normal-case tracking-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    id="letter-sign-note"
+                    rows={3}
+                    maxLength={255}
+                    value={reviewNote}
+                    onChange={(event) => setReviewNote(event.target.value)}
+                    placeholder="Anything the desk should read with this signature…"
+                    className="mt-1.5 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line px-5 py-3">
@@ -1038,9 +1103,17 @@ export function DepartmentLettersPanel({
                 type="button"
                 onClick={() => void sign()}
                 disabled={savingSignature}
-                className="rounded-xl bg-bark px-4 py-2 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                className={`rounded-xl px-4 py-2 text-xs font-semibold text-white transition disabled:opacity-60 ${
+                  signing.action === "decline" ? "bg-ember hover:bg-ember-deep" : "bg-bark hover:bg-bark/90"
+                }`}
               >
-                {savingSignature ? "Signing…" : "Sign this letter"}
+                {savingSignature
+                  ? signing.action === "decline"
+                    ? "Rejecting…"
+                    : "Signing…"
+                  : signing.action === "decline"
+                    ? "Reject letter"
+                    : "Sign this letter"}
               </button>
             </div>
           </div>
