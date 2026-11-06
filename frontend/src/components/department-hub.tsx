@@ -108,7 +108,6 @@ import { DepartmentLettersPanel, WriteLetterModal } from "./department-letters";
 import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles-combobox";
 import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
-import { BaptismalClassPanel } from "@/components/baptismal-class-panel";
 import { PrayerCellsDesk } from "@/components/prayer-cells";
 import { DailyWordPanel } from "@/components/daily-word-panel";
 import { ChurchMembersPanel } from "@/components/church-members-panel";
@@ -918,7 +917,7 @@ function CreateStudyGroupModal({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; username: string }[]>([]);
   const [searching, setSearching] = useState(false);
-  // The members picked for the group, held here until Create group sends the
+  // The members picked for the class, held here until Create class sends the
   // name and the whole list in one request.
   const [picked, setPicked] = useState<{ id: number; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -968,18 +967,18 @@ function CreateStudyGroupModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Create a study group on ${departmentLabel}`}
+        aria-label={`Create a study class on ${departmentLabel}`}
         className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-6 pb-3 pt-6">
-          <h3 className="text-lg font-bold text-bark">Create a study group</h3>
+          <h3 className="text-lg font-bold text-bark">Create a study class</h3>
           <button type="button" onClick={onClose} className="text-moss hover:text-bark" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           <label className="block text-xs font-medium text-bark">
-            Group name
+            Class name
             <input
               autoFocus
               type="text"
@@ -988,16 +987,16 @@ function CreateStudyGroupModal({
                 setName(event.target.value);
                 setError("");
               }}
-              placeholder="e.g. Grace Group"
+              placeholder="e.g. Grace Class"
               className="mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none"
             />
             <span className="mt-1 block text-[11px] font-normal text-moss">
-              The name the school calls the group, and the chip its roll rides under.
+              The name the school calls the class, and the chip its roll rides under.
             </span>
           </label>
           {duplicate && (
             <p className="mt-1 text-[11px] font-medium text-ember">
-              This desk already has a group with that name.
+              This desk already has a class with that name.
             </p>
           )}
           <div className="relative mt-4">
@@ -1046,7 +1045,7 @@ function CreateStudyGroupModal({
         <div className="shrink-0 border-t border-sand-line bg-sand-linen/40 px-6 pb-4 pt-3">
           {picked.length === 0 ? (
             <p className="text-center text-[11px] text-moss">
-              Search and pick the members who study in this group — more can be enrolled from its roll later.
+              Search and pick the members who study in this class — more can be enrolled from its roll later.
             </p>
           ) : (
             <ul className="space-y-1.5">
@@ -1086,14 +1085,14 @@ function CreateStudyGroupModal({
                 setError("");
                 try {
                   const opened = await onCreate(name.trim(), picked);
-                  if (opened === false) setError("The group could not be created. Try again.");
+                  if (opened === false) setError("The class could not be created. Try again.");
                 } finally {
                   setSaving(false);
                 }
               }}
               className="rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
             >
-              {saving ? "Creating…" : "Create group"}
+              {saving ? "Creating…" : "Create class"}
             </button>
           </div>
         </div>
@@ -5790,7 +5789,7 @@ function DepartmentDetail({
    */
   embedded?: boolean;
 }) {
-  // Groups opened from the desk's own Create group button land on the
+  // Classes opened from the desk's own Add class button land on the
   // department's list at once, before the directory is read back: the chip and
   // the group's card read this page, not the next reload.
   const [createdUnits, setCreatedUnits] = useState<string[]>([]);
@@ -5863,7 +5862,7 @@ function DepartmentDetail({
   const [loadingRoll, setLoadingRoll] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
-  // The Study Groups page's Create group opens a modal that names the group
+  // The Study Classes page's Add class opens a modal that names the class
   // and picks the people the school enrolls in it.
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
@@ -6454,23 +6453,22 @@ function DepartmentDetail({
       // A department that runs as units reads one at a time — the roll and
       // the calendar follow the toggle — so the units ride the strip beside
       // the views: All Members, then the desk's own fellowships.
-      ...(hasMemberUnitPages
+      ...(hasMemberUnitPages && !isSabbathSchool
         ? [
             {
               key: "unit:null",
-              // Sabbath School files its people by the group that studies
-              // together, so its roll is the study groups, not a membership
-              // list — the name says what the page holds.
-              label: isSabbathSchool ? "Study Groups" : "All Members",
-              short: isSabbathSchool ? "Groups" : "Members",
+              label: "All Members",
+              short: "Members",
               icon: Users,
               count: waitingJoins,
             },
           ]
         : []),
-      ...(hasMemberUnitPages ? names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users })) : []),
+      ...(hasMemberUnitPages && !isSabbathSchool
+        ? names.map((name) => ({ key: `unit:${name}`, label: name, icon: Users }))
+        : []),
       // A desk without units keeps the roll named "All Members".
-      ...(!hasMemberUnitPages
+      ...(!hasMemberUnitPages && !isSabbathSchool
         ? [
             {
               key: "members",
@@ -6478,12 +6476,10 @@ function DepartmentDetail({
               // it says Team beside the church's whole roll that follows it.
               label: isMusic
                 ? "Members"
-                : isSabbathSchool
-                  ? "Study Groups"
-                  : isPastorate
-                    ? "Team"
-                    : "All Members",
-              short: isSabbathSchool ? "Groups" : isPastorate ? "Team" : "Members",
+                : isPastorate
+                  ? "Team"
+                  : "All Members",
+              short: isPastorate ? "Team" : "Members",
               icon: Users,
               count: waitingJoins,
             },
@@ -6527,11 +6523,10 @@ function DepartmentDetail({
             },
           ]
         : []),
-      // The lesson classes are one of the school's classes now: who is being
-      // prepared for the font, their walk from studying to baptism, kept
-      // beside the study groups rather than on the elders' desk.
+      // The school's one class register: the study classes, each with its
+      // name and the people who study in it, kept on the school's desk.
       ...(isSabbathSchool && canKeepBaptismalClass
-        ? [{ key: "baptismal-class", label: "Lesson Classes", short: "Classes", icon: Droplets }]
+        ? [{ key: "baptismal-class", label: "Study Classes", short: "Classes", icon: Droplets }]
         : []),
       // Sabbath School rosters the hour: which study group leads the lesson,
       // keeps the register and reads the mission story. Its own rota, kept by
@@ -7026,13 +7021,13 @@ function DepartmentDetail({
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      showAlert("Could not create", data.name || data.detail || "The group could not be created.", "error");
+      showAlert("Could not create", data.name || data.detail || "The class could not be created.", "error");
       return false;
     }
     setCreatedUnits(Array.isArray(data.units) ? data.units : [...units, name]);
     setShowCreateGroup(false);
     showAlert(
-      "Group created",
+      "Class created",
       members.length === 0
         ? `${data.name} is on the ${department.label} desk. Open it to add its members.`
         : `${data.name} now studies with ${members.length} member${members.length === 1 ? "" : "s"}.`,
@@ -7043,9 +7038,9 @@ function DepartmentDetail({
     onChanged();
   };
 
-  // The Study Groups page's Print: the register as it stands, with the
-  // people filed into each group, opened in the browser's print dialog.
-  const printStudyGroups = () => {
+  // The Study Classes page's Print: the register as it stands, with the
+  // people filed into each class, opened in the browser's print dialog.
+  const printStudyClasses = () => {
     const escape = (value: string) =>
       value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const rows = units
@@ -7058,7 +7053,7 @@ function DepartmentDetail({
       .join("");
     const popup = window.open("", "_blank");
     if (!popup) return;
-    popup.document.write(`<!doctype html><html><head><title>Study Groups</title><style>
+    popup.document.write(`<!doctype html><html><head><title>Study Classes</title><style>
       body{font-family:ui-sans-serif,system-ui,sans-serif;color:#28201c;margin:32px}
       h1{font-size:22px;margin:0 0 4px}
       p{color:#665a4f;font-size:11px;margin:0 0 18px}
@@ -7067,10 +7062,10 @@ function DepartmentDetail({
       td{border-bottom:1px solid #e6ddd5;padding:8px 6px;vertical-align:top}
       @media print{body{margin:16px}}
     </style></head><body>
-      <h1>Study Groups</h1>
-      <p>${units.length} group${units.length === 1 ? "" : "s"} · Printed ${new Date().toLocaleDateString()}</p>
-      <table><thead><tr><th>#</th><th>Group</th><th>Members</th><th>Who studies together</th></tr></thead><tbody>${
-        rows || `<tr><td colspan="4">No study groups yet.</td></tr>`
+      <h1>Study Classes</h1>
+      <p>${units.length} class${units.length === 1 ? "" : "es"} · Printed ${new Date().toLocaleDateString()}</p>
+      <table><thead><tr><th>#</th><th>Class</th><th>Members</th><th>Who studies together</th></tr></thead><tbody>${
+        rows || `<tr><td colspan="4">No study classes yet.</td></tr>`
       }</tbody></table>
     </body></html>`);
     popup.document.close();
@@ -7654,14 +7649,37 @@ function DepartmentDetail({
       {/* Members tab — a contained table: the page holds still, the rows
           scroll, the way the roster and treasury read. The department's board
           leads the table, so opening a department shows who leads it first. */}
-      {/* Sabbath School's Study Groups page is a register of groups, never the
-          church's roster: the school studies in groups, so a page of every
-          member says nothing about how it studies. It reads the groups it has
-          in a table — each one opening the roll that studies together — with
-          an empty state before the first group and the page's buttons centred
-          at its foot. */}
-      {subTab === "members" && isSabbathSchool && !unit && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+      {/* The school's one class register: the study classes in a table, each
+          one opening the roll that studies together, with the add-class
+          action in the register's own header row, an empty state before the
+          first, and the print action centred at the foot. */}
+      {subTab === "baptismal-class" && isSabbathSchool && !unit && (
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
+            <div>
+              <h4 className="flex items-center gap-1.5 text-xs font-bold text-bark">
+                <Users className="h-3.5 w-3.5 text-ember" aria-hidden="true" /> Study Classes
+              </h4>
+              <p className="text-[11px] text-moss">
+                The school&apos;s classes and the people who study in them — open one to read its roll.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="text-[11px] font-semibold text-moss">
+                {units.length} {units.length === 1 ? "class" : "classes"}
+              </span>
+              {canManageRoll && (
+                <button
+                  type="button"
+                  onClick={() => setShowCreateGroup(true)}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-[11px] font-semibold text-white shadow-sm transition hover:bg-ember-dark"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add class
+                </button>
+              )}
+            </div>
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the groups…</p>
@@ -7670,13 +7688,13 @@ function DepartmentDetail({
                 <span className="rounded-2xl bg-sand p-3 text-ember">
                   <Users className="h-6 w-6" aria-hidden="true" />
                 </span>
-                <h3 className="text-sm font-bold text-bark">No study groups yet</h3>
+                <h3 className="text-sm font-bold text-bark">No study classes yet</h3>
                 <p className="max-w-sm text-xs leading-6 text-moss">
-                  The school studies in groups. Name one, enroll the members who study
-                  together, and the desk keeps their register from there.
+                  A class is the group of people who study together. Name one, enroll
+                  the members, and the desk keeps their register from there.
                 </p>
                 <p className="text-[11px] text-moss-faint">
-                  Use &ldquo;Create group&rdquo; below to open the first.
+                  Use &ldquo;Add class&rdquo; above to open the first.
                 </p>
               </div>
             ) : (
@@ -7686,7 +7704,7 @@ function DepartmentDetail({
                 rowKey={(name) => name}
                 loadingLabel="Loading the groups…"
                 headers={[
-                  { label: "Group", className: "px-4 py-3" },
+                  { label: "Class", className: "px-4 py-3" },
                   { label: "Members", className: "px-4 py-3" },
                   { label: "Action", className: "px-4 py-3 text-center" },
                 ]}
@@ -7756,30 +7774,37 @@ function DepartmentDetail({
             <div className="flex flex-wrap items-center justify-center gap-2 border-t border-sand-line px-4 py-3">
               <button
                 type="button"
-                onClick={printStudyGroups}
+                onClick={printStudyClasses}
                 disabled={units.length === 0}
                 className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-3.5 text-xs font-semibold text-bark transition hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Printer className="h-4 w-4" aria-hidden="true" />
-                Print groups
+                Print classes
               </button>
-              {canManageRoll && (
-                <button
-                  type="button"
-                  onClick={() => setShowCreateGroup(true)}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  Create group
-                </button>
-              )}
             </div>
           </div>
         </div>
       )}
 
-      {subTab === "members" && !(isSabbathSchool && !unit) && (
+      {((subTab === "members" && !(isSabbathSchool && !unit)) ||
+        (subTab === "baptismal-class" && isSabbathSchool && Boolean(unit))) && (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white shadow-sm">
+          {isSabbathSchool && unit && (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sand-line px-4 py-2.5">
+              <div className="min-w-0">
+                <span className="block truncate text-xs font-bold text-bark">{unit}</span>
+                <span className="block text-[11px] text-moss">The roll that studies together</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUnit(null)}
+                className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-sand-line bg-sand px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:bg-sand-line hover:text-bark"
+              >
+                <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+                Back to classes
+              </button>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-y-auto custom-table-scrollbar">
             {loadingRoll ? (
               <p className="py-8 text-center text-xs text-moss">Loading the roll…</p>
@@ -8700,21 +8725,8 @@ function DepartmentDetail({
       )}
       {baptismalBlocked && (
         <p className="rounded-2xl border border-sand-line bg-white p-5 text-xs text-moss">
-          The lesson classes are one of the Sabbath School&apos;s classes now — open them on the school&apos;s desk.
+          Study classes are kept on the Sabbath School&apos;s desk — open them there.
         </p>
-      )}
-      {subTab === "baptismal-class" && !baptismalBlocked && (
-        <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
-          <div className="mb-4">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
-              <Droplets className="h-4 w-4 text-ember" aria-hidden="true" /> Lesson Classes
-            </h3>
-            <p className="mt-0.5 text-xs text-moss">
-              The members being prepared for baptism — the school&apos;s lesson classes, and their walk from studying to the font.
-            </p>
-          </div>
-          <BaptismalClassPanel />
-        </div>
       )}
       {subTab === "daily-word" && canOpenOfficeViews && (
         <div className="rounded-2xl border border-sand-line bg-white p-5 sm:p-6">
