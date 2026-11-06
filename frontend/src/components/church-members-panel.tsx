@@ -5,16 +5,18 @@
  *
  * User Management is the office's desk for accounts — adding a member,
  * inviting one, switching a login off. This is the shepherd's copy of the same
- * roll: who the church is, how to reach them, the office each holds and
- * whether their account can sign in. It reads the roster the office keeps
- * (`/api/members/users/`), so the two can never disagree, and it writes
- * nothing — a correction belongs to the desk that owns the record.
+ * roll: who the church is, the office each holds and the ways the desk reaches
+ * them. It reads the roster the office keeps (`/api/members/users/`), so the
+ * two can never disagree, and it writes nothing — a correction belongs to the
+ * desk that owns the record.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Mail, MessageSquare, Search } from "lucide-react";
 
 import { accountTypeLabel, roleDisplayLabel } from "./roles-combobox";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
+import { waMeNumber } from "@/components/contact-modal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -25,6 +27,7 @@ type RosterRow = {
   last_name?: string;
   email?: string;
   phone_number?: string;
+  whatsapp_number?: string;
   role?: string;
   roles?: string[];
   account_type?: string;
@@ -51,33 +54,6 @@ function officeOf(row: RosterRow): string {
   const roles = (row.roles ?? []).filter(Boolean);
   if (roles.length > 0) return roles.map((role) => roleDisplayLabel(role)).join(", ");
   return row.role ? roleDisplayLabel(row.role) : "—";
-}
-
-/**
- * Whether the account can sign in, in the three states the roll actually
- * holds: running, switched off by an officer, or still waiting to be approved.
- * "Inactive" on its own would not say which of the last two it is.
- */
-function standing(row: RosterRow): { label: string; tone: string; title: string } {
-  if (row.is_active !== false) {
-    return {
-      label: "Active",
-      tone: "bg-mist-select text-moss-dark",
-      title: "This account can sign in",
-    };
-  }
-  if (row.deactivated_at) {
-    return {
-      label: "Switched off",
-      tone: "bg-sand text-moss",
-      title: "An officer switched this account off",
-    };
-  }
-  return {
-    label: "Not approved",
-    tone: "bg-ember/10 text-ember",
-    title: "Still waiting on the office's approval",
-  };
 }
 
 export function ChurchMembersPanel() {
@@ -173,12 +149,15 @@ export function ChurchMembersPanel() {
                 <th className="hidden px-4 pb-2.5 pt-2.5 text-center font-bold sm:table-cell sm:text-left">Contact</th>
                 <th className="hidden px-4 pb-2.5 pt-2.5 text-center font-bold sm:table-cell sm:text-left">Office</th>
                 <th className="hidden px-4 pb-2.5 pt-2.5 text-center font-bold sm:table-cell sm:text-left">Type</th>
-                <th className="px-4 pb-2.5 pt-2.5 text-center font-bold sm:text-right">Standing</th>
+                <th className="px-4 pb-2.5 pt-2.5 text-center font-bold sm:text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand-soft">
               {visible.map((row) => {
-                const state = standing(row);
+                const phone = (row.whatsapp_number || row.phone_number || "").trim();
+                const whatsapp = phone ? waMeNumber(phone) : "";
+                const smsNumber = (row.phone_number || "").replace(/[^\d+]/g, "");
+                const email = (row.email || "").trim();
                 return (
                   <tr key={row.id}>
                     <td className="px-4 py-2.5">
@@ -198,13 +177,62 @@ export function ChurchMembersPanel() {
                     <td className="hidden px-4 py-2.5 text-moss sm:table-cell">
                       {accountTypeLabel(row.account_type ?? "member")}
                     </td>
-                    <td className="px-4 py-2.5 text-center sm:text-right">
-                      <span
-                        title={state.title}
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${state.tone}`}
-                      >
-                        {state.label}
-                      </span>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-center gap-1 sm:justify-end">
+                        {whatsapp ? (
+                          <a
+                            href={`https://wa.me/${whatsapp}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`WhatsApp ${fullName(row)}`}
+                            aria-label={`WhatsApp ${fullName(row)}`}
+                            className="rounded-lg border border-sand-line p-1.5 text-sage transition hover:border-sage-strong hover:bg-sage/10"
+                          >
+                            <WhatsAppIcon className="h-3.5 w-3.5" />
+                          </a>
+                        ) : (
+                          <span
+                            title="No phone number on record"
+                            className="rounded-lg border border-sand-line p-1.5 text-moss-faint opacity-50"
+                          >
+                            <WhatsAppIcon className="h-3.5 w-3.5" />
+                          </span>
+                        )}
+                        {email ? (
+                          <a
+                            href={`mailto:${email}`}
+                            title={`Email ${fullName(row)}`}
+                            aria-label={`Email ${fullName(row)}`}
+                            className="rounded-lg border border-sand-line p-1.5 text-ember transition hover:border-ember hover:bg-ember/10"
+                          >
+                            <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                          </a>
+                        ) : (
+                          <span
+                            title="No email on record"
+                            className="rounded-lg border border-sand-line p-1.5 text-moss-faint opacity-50"
+                          >
+                            <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                        )}
+                        {smsNumber ? (
+                          <a
+                            href={`sms:${smsNumber}`}
+                            title={`SMS ${fullName(row)}`}
+                            aria-label={`SMS ${fullName(row)}`}
+                            className="rounded-lg border border-sand-line p-1.5 text-bark transition hover:border-bark hover:bg-sand"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                          </a>
+                        ) : (
+                          <span
+                            title="No phone number on record"
+                            className="rounded-lg border border-sand-line p-1.5 text-moss-faint opacity-50"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

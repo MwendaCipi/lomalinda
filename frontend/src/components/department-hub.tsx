@@ -6433,7 +6433,7 @@ function DepartmentDetail({
   // other desks place their toggles, so every desk reads one strip in one
   // place. The band draws it instead of the section's pages.
   const unitsKey = units.join("|");
-  const stripItems = useMemo(() => {
+  const stripItemsBuilt = useMemo(() => {
     // Ambassadors is its own separate department; remove it from the AYM
     // unit strip so it no longer appears as a sub-section of AYM.
     const names = (unitsKey ? unitsKey.split("|") : []).filter(
@@ -6490,7 +6490,7 @@ function DepartmentDetail({
       // User Management — nothing is added or switched off here — but the
       // shepherd's copy of the same list, kept beside his asks.
       ...(isPastor
-        ? [{ key: "church-members", label: "Church Members", short: "Members", icon: Contact }]
+        ? [{ key: "church-members", label: "Membership", short: "Members", icon: Contact }]
         : []),
       // Sharing — the notices and the daily word in one place, the way the
       // eldership keeps it: one feed, with the two buttons that post to it.
@@ -6571,14 +6571,14 @@ function DepartmentDetail({
         ? [
             {
               key: "treasury-approvals" as const,
-              label: "Treasury Approvals",
+              label: "Treasury",
               short: "Treasury",
               icon: Wallet,
               count: pendingToggles.treasury,
             },
             {
               key: "letter-approvals" as const,
-              label: "Letter Approvals",
+              label: "Letters",
               short: "Letters",
               icon: FileText,
               count: pendingToggles.letters,
@@ -6655,6 +6655,32 @@ function DepartmentDetail({
         : []),
     ];
   }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code, waitingJoins, pendingToggles.treasury, pendingToggles.letters, pendingToggles.spiritual, pendingToggles.prayerCells, pendingToggles.lessonOrders]);
+
+  // The pastorate's strip reads Spiritual first, Sharing second, and keeps
+  // Team where Spiritual stood: the office opens on the church's spiritual
+  // asks, publishes its notices next, and finds its own team further along.
+  const stripItems = useMemo(() => {
+    if (!isPastorate) return stripItemsBuilt;
+    const items = [...stripItemsBuilt];
+    const at = (key: string) => items.findIndex((item) => item.key === key);
+
+    const spiritualAt = at("spiritual");
+    const teamAt = at("members");
+    const spiritual = spiritualAt >= 0 ? items[spiritualAt] : undefined;
+    const team = teamAt >= 0 ? items[teamAt] : undefined;
+    if (spiritual && team) {
+      items[spiritualAt] = team;
+      items[teamAt] = spiritual;
+    }
+
+    const sharingAt = at("sharing");
+    const sharing = sharingAt >= 0 ? items[sharingAt] : undefined;
+    if (sharing && sharingAt > 1) {
+      items.splice(sharingAt, 1);
+      items.splice(1, 0, sharing);
+    }
+    return items;
+  }, [stripItemsBuilt, isPastorate]);
 
   const handleStripChange = useCallback((key: string) => {
     // The leadership register is a page of this desk: Personal Ministries
