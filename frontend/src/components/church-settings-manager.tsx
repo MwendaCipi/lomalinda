@@ -3,8 +3,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
-import { Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
+import { FileImage, Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
+import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
 
@@ -75,6 +76,12 @@ export function ChurchSettingsManager() {
   // public pages, so a church that never touches these loses nothing.
   const [privacyPolicy, setPrivacyPolicy] = useState("");
   const [termsOfUse, setTermsOfUse] = useState("");
+  // The head every official letter prints on. It saves on its own endpoint
+  // rather than with this form, so an image upload never rides a JSON save.
+  const [letterheadUrl, setLetterheadUrl] = useState("");
+  const [letterheadFile, setLetterheadFile] = useState<File | null>(null);
+  const [letterheadBusy, setLetterheadBusy] = useState(false);
+  const [letterheadInputKey, setLetterheadInputKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -146,6 +153,18 @@ export function ChurchSettingsManager() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    fetch(`${API_URL}/api/members/letterhead/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.letterhead_url) setLetterheadUrl(data.letterhead_url);
+      })
+      .catch(() => {});
+  }, []);
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -202,6 +221,63 @@ export function ChurchSettingsManager() {
       showAlert("Error", msg, "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function uploadLetterhead() {
+    if (!letterheadFile) {
+      showAlert("Choose an image", "Pick the letterhead image to upload first.", "warning");
+      return;
+    }
+    setLetterheadBusy(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const form = new FormData();
+      form.append("letterhead", letterheadFile);
+      const res = await fetch(`${API_URL}/api/members/letterhead/`, {
+        method: "PUT",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Unable to save the letterhead.");
+      setLetterheadUrl(data.letterhead_url || "");
+      setLetterheadFile(null);
+      setLetterheadInputKey((key) => key + 1);
+      showAlert("Letterhead saved", "Official letters now print on this head.", "success");
+    } catch (err) {
+      showAlert("Error", err instanceof Error ? err.message : "Save failed.", "error");
+    } finally {
+      setLetterheadBusy(false);
+    }
+  }
+
+  async function removeLetterhead() {
+    const answer = await showAlert(
+      "Remove the letterhead?",
+      "Official letters go back to the church's drawn mark.",
+      "warning",
+      { showCancelButton: true, confirmButtonText: "Remove", cancelButtonText: "Keep it" }
+    );
+    if (!answer.isConfirmed) return;
+
+    setLetterheadBusy(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${API_URL}/api/members/letterhead/`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Unable to remove the letterhead.");
+      setLetterheadUrl("");
+      setLetterheadFile(null);
+      setLetterheadInputKey((key) => key + 1);
+      showAlert("Letterhead removed", "Letters print the church's drawn mark again.", "success");
+    } catch (err) {
+      showAlert("Error", err instanceof Error ? err.message : "Remove failed.", "error");
+    } finally {
+      setLetterheadBusy(false);
     }
   }
 
@@ -304,6 +380,73 @@ export function ChurchSettingsManager() {
               placeholder="Dear {name}, your contribution of {amount} has been received and distributed accordingly as follows: {distribution}. Thank you, and may God bless you abundantly"
               className="mt-1.5 w-full rounded-xl border border-sand-mute bg-white px-4 py-2.5 text-sm outline-none focus:border-sage"
             />
+          </div>
+        </div>
+
+        {/* Letter format — the head every official letter prints on. */}
+        <div className="rounded-2xl border border-ember/30 bg-sand-linen p-5">
+          <h3 className="text-base font-bold text-ember flex items-center gap-2">
+            <FileImage size={16} aria-hidden="true" /> Letter Format &amp; Letterhead
+          </h3>
+          <p className="mt-1 text-xs text-moss">
+            The head every official letter prints on — symbol, church name and contact strip as one
+            image. Without one, letters fall back to the paper&apos;s drawn church mark. This saves on
+            its own, apart from the settings below.
+          </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="flex items-center justify-center rounded-xl border border-sand-line bg-white p-3">
+              {letterheadUrl ? (
+                /* Plain img: the letterhead is a same-origin upload. */
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={resolveAttachmentUrl(letterheadUrl)}
+                  alt="The church's letterhead"
+                  className="max-h-40 w-full object-contain"
+                />
+              ) : (
+                <p className="py-10 text-center text-xs text-moss">
+                  No letterhead on file — letters print the church&apos;s drawn mark.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="letterhead-file" className="block text-xs font-semibold text-bark">
+                Letterhead image
+              </label>
+              <input
+                key={letterheadInputKey}
+                id="letterhead-file"
+                type="file"
+                accept="image/*"
+                onChange={(event) => setLetterheadFile(event.target.files?.[0] ?? null)}
+                className="block w-full text-[11px] text-moss file:mr-2 file:rounded-lg file:border-0 file:bg-sand file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-bark"
+              />
+              <p className="text-[11px] text-moss-faint">
+                A wide image works best; it prints across the head of the first page.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void uploadLetterhead()}
+                  disabled={letterheadBusy || !letterheadFile}
+                  className="rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-ember-dark disabled:opacity-50"
+                >
+                  {letterheadBusy ? "Saving…" : letterheadUrl ? "Replace letterhead" : "Upload letterhead"}
+                </button>
+                {letterheadUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void removeLetterhead()}
+                    disabled={letterheadBusy}
+                    className="rounded-xl border border-sand-mute px-3.5 py-2 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
