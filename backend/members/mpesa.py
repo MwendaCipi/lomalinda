@@ -143,12 +143,14 @@ def _b2c_settings():
     return required
 
 
-def initiate_b2c_refund(refund):
-    """Request the B2C payout that refunds a member's contribution.
+def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
+    """Send one B2C payout to Safaricom.
 
     Daraja accepts the request synchronously but processes the payout
     asynchronously: the final result (success receipt or failure reason)
-    arrives at MPESA_B2C_RESULT_URL, handled by MpesaB2CResultView.
+    arrives at MPESA_B2C_RESULT_URL, handled by MpesaB2CResultView. The
+    callback carries the OriginatorConversationID back, which is how the
+    refund and the withdrawal payout each find their own row.
     """
     settings_map = _b2c_settings()
     base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
@@ -162,17 +164,17 @@ def initiate_b2c_refund(refund):
     access_token = token_response.json()['access_token']
 
     payload = {
-        'OriginatorConversationID': refund.originator_conversation_id or uuid.uuid4().hex,
+        'OriginatorConversationID': originator_id or uuid.uuid4().hex,
         'InitiatorName': settings_map['MPESA_INITIATOR_NAME'],
         'SecurityCredential': settings_map['MPESA_SECURITY_CREDENTIAL'],
         'CommandID': 'BusinessPayment',
-        'Amount': int(refund.amount),
+        'Amount': int(amount),
         'PartyA': settings_map['MPESA_B2C_SHORTCODE'],
-        'PartyB': refund.phone_number,
-        'Remarks': f"Refund for contribution {refund.contribution_id}",
+        'PartyB': phone_number,
+        'Remarks': remarks[:100],
         'QueueTimeOutURL': settings_map['MPESA_B2C_RESULT_URL'],
         'ResultURL': settings_map['MPESA_B2C_RESULT_URL'],
-        'Occasion': 'Contribution refund',
+        'Occasion': occasion[:100],
     }
     response = requests.post(
         f'{base_url}/mpesa/b2c/v3/paymentrequest',
@@ -182,6 +184,33 @@ def initiate_b2c_refund(refund):
     )
     response.raise_for_status()
     return response.json()
+
+
+def initiate_b2c_refund(refund):
+    """Request the B2C payout that refunds a member's contribution."""
+    return _initiate_b2c(
+        originator_id=refund.originator_conversation_id,
+        amount=refund.amount,
+        phone_number=refund.phone_number,
+        remarks=f"Refund for contribution {refund.contribution_id}",
+        occasion='Contribution refund',
+    )
+
+
+def initiate_b2c_payout(payout):
+    """Request the B2C payout that releases a department's withdrawal.
+
+    The money leaves the church paybill and lands on the requester's M-Pesa
+    number; MpesaB2CResultView writes the expense and debits the fund only
+    once Safaricom confirms the payout.
+    """
+    return _initiate_b2c(
+        originator_id=payout.originator_conversation_id,
+        amount=payout.amount,
+        phone_number=payout.phone_number,
+        remarks=f"Withdrawal WD-{payout.withdrawal_id}",
+        occasion='Withdrawal payout',
+    )
 
 
 def register_c2b_urls(validation_url=None, confirmation_url=None):

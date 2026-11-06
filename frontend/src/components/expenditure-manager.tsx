@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Printer, Receipt, RefreshCw, Trash2, X } from "lucide-react";
+import { Plus, Printer, Receipt, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
 import { densityCellPad } from "@/lib/table-density";
@@ -229,6 +229,37 @@ export function ExpenditureManager({
     }
   };
 
+  const handleReverseExpenditure = async (expenditure: Expenditure) => {
+    if (!confirm(`Reverse "${expenditure.title}"? KES ${Number(expenditure.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })} will be credited back to ${expenditure.account_name || "the account"} and the record removed.`)) return;
+    try {
+      const res = await fetch(`${API_URL}/api/members/treasury/expenditures/${expenditure.id}/reverse/`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showAlert("Expenditure reversed", "The account has been credited back and the record removed.", "success", {
+          toast: true,
+          timer: 4000,
+          showConfirmButton: false,
+        });
+        await fetchData();
+      } else {
+        showAlert("Could not reverse the expenditure", data.detail || "Try again.", "error", {
+          toast: true,
+          timer: 4500,
+          showConfirmButton: false,
+        });
+      }
+    } catch {
+      showAlert("Could not reverse the expenditure", "The desk could not be reached.", "error", {
+        toast: true,
+        timer: 4500,
+        showConfirmButton: false,
+      });
+    }
+  };
+
   const needle = search.trim().toLowerCase();
   const filteredExpenditures = expenditures.filter((exp) => {
     const matchesCategory = category === "all" || exp.category === category;
@@ -322,14 +353,25 @@ export function ExpenditureManager({
             </p>
             {exp.notes && <p className="text-[11px] leading-relaxed text-moss">{exp.notes}</p>}
             <div className="flex justify-end border-t border-sand-line pt-2">
-              <button
-                type="button"
-                onClick={() => handleDeleteExpenditure(exp)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-alert hover:text-alert"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </button>
+              {exp.account ? (
+                <button
+                  type="button"
+                  onClick={() => handleReverseExpenditure(exp)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reverse
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteExpenditure(exp)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-alert hover:text-alert"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -351,15 +393,27 @@ export function ExpenditureManager({
               KES {Number(exp.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
             </td>
             <td className={`px-4 ${rowPad} text-center`}>
-              <button
-                type="button"
-                onClick={() => handleDeleteExpenditure(exp)}
-                aria-label={`Delete ${exp.title}`}
-                className="rounded-lg p-1.5 text-moss transition hover:bg-alert-wash hover:text-alert"
-                title="Delete Expenditure"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {exp.account ? (
+                <button
+                  type="button"
+                  onClick={() => handleReverseExpenditure(exp)}
+                  aria-label={`Reverse ${exp.title}`}
+                  className="rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
+                  title="Reverse Expenditure"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteExpenditure(exp)}
+                  aria-label={`Delete ${exp.title}`}
+                  className="rounded-lg p-1.5 text-moss transition hover:bg-alert-wash hover:text-alert"
+                  title="Delete Expenditure"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </td>
           </tr>
         )}

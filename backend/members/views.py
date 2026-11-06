@@ -50,9 +50,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
 from .models import ReportSigning, ReportSignature
-from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
+from .mpesa import MpesaConfigurationError, initiate_b2c_payout, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
 from chat.realtime import broadcast_announcement_response
 from .validators import validate_phone_number
@@ -6829,34 +6829,101 @@ class AssignContributionAccountView(APIView):
 
 
 class MpesaB2CResultView(APIView):
-    """Receives the async outcome of a B2C refund request from Safaricom."""
+    """Receives the async outcome of a B2C refund or withdrawal payout."""
 
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    @payment_callback_alerts('M-Pesa refund result')
+    @payment_callback_alerts('M-Pesa payout result')
     def post(self, request):
         payload = request.data or {}
         originator_conversation_id = payload.get('OriginatorConversationID', '')
+        result = payload.get('Result', {}) or {}
+        result_code = result.get('ResultCode')
+        result_params = {
+            item.get('Key'): item.get('Value')
+            for item in (result.get('ResultParameters', {}) or {}).get('ResultParameter', [])
+        }
+
         refund = MpesaRefund.objects.filter(originator_conversation_id=originator_conversation_id).first()
-        if not refund:
-            # Safaricom requires an immediate acknowledgement, even for
-            # payloads we cannot match, or it keeps retrying the callback.
+        if refund:
+            refund.conversation_id = payload.get('ConversationID', '') or refund.conversation_id
+            refund.outcome_description = str(result.get('ResultDesc', ''))[:255]
+            refund.transaction_id = str(result_params.get('TransactionID', '') or '')
+            if result_code == 0:
+                refund.status = 'completed'
+                refund.completed_at = timezone.now()
+            else:
+                refund.status = 'failed'
+            refund.save(update_fields=['conversation_id', 'outcome_description', 'transaction_id', 'status', 'completed_at'])
             return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
 
-        result = payload.get('Result', {})
-        result_code = result.get('ResultCode')
-        result_params = {item.get('Key'): item.get('Value') for item in result.get('ResultParameters', {}).get('ResultParameter', [])}
-        refund.conversation_id = payload.get('ConversationID', '') or refund.conversation_id
-        refund.outcome_description = str(result.get('ResultDesc', ''))[:255]
-        refund.transaction_id = str(result_params.get('TransactionID', '') or '')
-        if result_code == 0:
-            refund.status = 'completed'
-            refund.completed_at = timezone.now()
-        else:
-            refund.status = 'failed'
-        refund.save(update_fields=['conversation_id', 'outcome_description', 'transaction_id', 'status', 'completed_at'])
+        payout = WithdrawalPayout.objects.filter(originator_conversation_id=originator_conversation_id).first()
+        if payout:
+            self._payout_result(payout, payload, result_code, result_params)
+        # Safaricom requires an immediate acknowledgement, even for payloads
+        # we cannot match, or it keeps retrying the callback.
         return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+    @staticmethod
+    def _payout_result(payout, payload, result_code, result_params):
+        """Settle a paybill payout and write its expense, exactly once."""
+        with transaction.atomic():
+            payout = WithdrawalPayout.objects.select_for_update().select_related(
+                'withdrawal__account', 'withdrawal__department', 'withdrawal__requested_by',
+            ).get(pk=payout.pk)
+            result = payload.get('Result', {}) or {}
+            payout.conversation_id = payload.get('ConversationID', '') or payout.conversation_id
+            payout.outcome_description = str(result.get('ResultDesc', ''))[:255]
+            payout.transaction_id = str(result_params.get('TransactionID', '') or '')
+            if str(result_code) == '0':
+                if payout.status != 'completed':
+                    row = payout.withdrawal
+                    if row.status == 'releasing':
+                        row.account.balance -= payout.amount
+                        row.account.save(update_fields=['balance'])
+                        TreasuryAccountTransaction.objects.create(
+                            account=row.account,
+                            transaction_type='debit',
+                            amount=payout.amount,
+                            description=f"Withdrawal for {row.department.name}: {row.reason}"[:255],
+                            reference=(payout.transaction_id or f'WD-{row.id}')[:100],
+                            created_by=payout.initiated_by,
+                        )
+                        expense = Expenditure.objects.create(
+                            title=f"{row.department.name} withdrawal: {row.reason}"[:200],
+                            amount=payout.amount,
+                            category='operations',
+                            account=row.account,
+                            payment_method='mpesa',
+                            vendor_payee=giver_display_name('', member=row.requested_by),
+                            receipt_number=(payout.transaction_id or f'WD-{row.id}')[:80],
+                            expenditure_date=timezone.localdate(),
+                            notes=(f"Released from the paybill to {safe_mpesa_phone(payout.phone_number)}."
+                                   + (f" {row.reply}" if row.reply else ''))[:1000],
+                            recorded_by=payout.initiated_by,
+                        )
+                        payout.expense = expense
+                        row.status = 'approved'
+                        row.treasurer_approved_by = payout.initiated_by
+                        row.treasurer_approved_at = timezone.now()
+                        row.decided_by = payout.initiated_by
+                        row.decided_at = timezone.now()
+                        row.save(update_fields=[
+                            'status', 'treasurer_approved_by', 'treasurer_approved_at',
+                            'decided_by', 'decided_at',
+                        ])
+                    payout.status = 'completed'
+                    payout.completed_at = timezone.now()
+            elif payout.status not in ('completed', 'reversed'):
+                payout.status = 'failed'
+                row = payout.withdrawal
+                # The money never left the paybill: the request goes back to
+                # the treasurer's queue so it can be released again.
+                if row.status == 'releasing':
+                    row.status = 'elder_approved'
+                    row.save(update_fields=['status'])
+            payout.save()
 
 
 class RefundableContributionsView(APIView):
@@ -11904,6 +11971,58 @@ class ExpenditureDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class ExpenditureReverseView(APIView):
+    """Undo a recorded expense properly: credit its account, then remove it.
+
+    Deleting a record used to leave the money movement standing, so the
+    ledger and the spending roll disagreed. A reversal is the correction the
+    desk actually means: the account is credited, a reversal line is written,
+    the expense comes off the roll, and a withdrawal behind it returns to
+    Reversed so the requests desk reads the same story.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not (request.user.is_staff or getattr(request.user, 'member_profile', None) and request.user.member_profile.has_role('admin', 'treasurer')):
+            return Response({'detail': 'Only admin or treasurer can reverse expenditure records.'}, status=status.HTTP_403_FORBIDDEN)
+        with transaction.atomic():
+            exp = Expenditure.objects.select_for_update().select_related('account').filter(pk=pk).first()
+            if exp is None:
+                return Response({'detail': 'Expenditure record not found.'}, status=status.HTTP_404_NOT_FOUND)
+            payout = getattr(exp, 'withdrawal_payout', None)
+            if payout is not None and payout.status in ('pending', 'accepted'):
+                return Response({'detail': 'The paybill payout is still being processed. Wait for M-Pesa before reversing it.'}, status=status.HTTP_400_BAD_REQUEST)
+            if exp.account:
+                exp.account.balance += exp.amount
+                exp.account.save(update_fields=['balance'])
+                TreasuryAccountTransaction.objects.create(
+                    account=exp.account,
+                    transaction_type='credit',
+                    amount=exp.amount,
+                    description=f"Reversal of expenditure: {exp.title}"[:255],
+                    reference=f'EXP-REV-{exp.id}',
+                    created_by=request.user,
+                )
+            if payout is not None:
+                withdrawal = payout.withdrawal
+                if withdrawal.status == 'approved':
+                    withdrawal.status = 'reversed'
+                    withdrawal.save(update_fields=['status'])
+                payout.status = 'reversed'
+                payout.save(update_fields=['status', 'updated_at'])
+            else:
+                # A withdrawal released before paybill payouts existed is
+                # tied to its record only by the WD-<id> receipt number.
+                match = re.match(r'^WD-(\d+)$', exp.receipt_number or '')
+                if match:
+                    DepartmentWithdrawalRequest.objects.filter(
+                        pk=int(match.group(1)), status='approved',
+                    ).update(status='reversed')
+            exp.delete()
+        return Response({'detail': 'Expenditure reversed and the account credited.'})
+
+
 def can_manage_deaconate(user):
     """Who keeps the deaconate's desks: the deacons themselves, and the office.
 
@@ -15740,12 +15859,13 @@ class DepartmentAccountView(APIView):
                 'created_at': row.created_at,
                 'decided_at': row.decided_at,
                 'accountability': _accountability_payload(row),
+                'payout': _withdrawal_payout_payload(row),
             }
             for row in DepartmentWithdrawalRequest.objects.filter(
                 department=target,
                 account__in=active_accounts,
             ).select_related(
-                'requested_by', 'decided_by', 'account',
+                'requested_by', 'decided_by', 'account', 'payout__initiated_by',
                 'accountability__submitted_by', 'accountability__reviewed_by',
             ).prefetch_related('accountability__receipts').order_by('-created_at')[:50]
         ]
@@ -15950,6 +16070,8 @@ def _withdrawal_review_row(row):
         'reason': row.reason,
         'status': row.status,
         'requested_by': giver_display_name('', member=row.requested_by),
+        'requested_by_phone': safe_mpesa_phone(_withdrawal_requester_phone(row)),
+        'payout': _withdrawal_payout_payload(row),
         # The three clearances in the order they are given: the pastor's
         # approval, the elder's blessing, then the treasury's release.
         'treasurer_approved_by': giver_display_name('', member=row.treasurer_approved_by) if row.treasurer_approved_by else None,
@@ -15998,6 +16120,31 @@ def _accountability_payload(row):
         'reviewed_at': accountability.reviewed_at,
         'reply': accountability.reply,
         'receipts': receipts,
+    }
+
+
+def _withdrawal_requester_phone(row):
+    """The M-Pesa number the payout will land on, as the profile keeps it."""
+    profile = getattr(row.requested_by, 'member_profile', None)
+    return (getattr(profile, 'phone_number', '') or '').strip()
+
+
+def _withdrawal_payout_payload(row):
+    """The paybill release on one withdrawal, as both desks read it."""
+    payout = getattr(row, 'payout', None)
+    if payout is None:
+        return None
+    return {
+        'id': payout.id,
+        'status': payout.status,
+        'status_display': payout.get_status_display(),
+        'phone_number': safe_mpesa_phone(payout.phone_number),
+        'transaction_id': payout.transaction_id,
+        'outcome_description': payout.outcome_description,
+        'initiated_by': giver_display_name('', member=payout.initiated_by) if payout.initiated_by else None,
+        'completed_at': payout.completed_at,
+        'created_at': payout.created_at,
+        'expense_id': payout.expense_id,
     }
 
 
@@ -16219,7 +16366,9 @@ class DepartmentWithdrawalReviewView(APIView):
         if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user) and not is_pastor_or_admin(request.user):
             return Response({'detail': 'Only pastors, elders, or treasurers can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
         rows = DepartmentWithdrawalRequest.objects.select_related(
-            'department', 'account', 'requested_by', 'treasurer_approved_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
+            'department', 'account', 'requested_by', 'requested_by__member_profile',
+            'treasurer_approved_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
+            'payout__initiated_by',
         ).order_by('-created_at')
         data = []
         for row in rows:
@@ -16315,6 +16464,82 @@ class DepartmentWithdrawalReviewView(APIView):
             _notify_withdrawal_audience(audience, title, msg, desk_link, sms_text)
             return Response({'id': row.id, 'status': row.status})
 
+        # The treasurer's release from the paybill. The pastor and elder have
+        # already blessed it; this sends the money by B2C to the requester's
+        # phone. The fund is debited and the expense written when Safaricom
+        # confirms the payout, not before.
+        if action == 'release':
+            if not is_treasurer_or_admin(request.user):
+                return Response({'detail': 'Only church treasurers or administrators can release funds.'}, status=status.HTTP_403_FORBIDDEN)
+            row = DepartmentWithdrawalRequest.objects.select_related(
+                'department', 'account', 'requested_by__member_profile', 'payout__initiated_by',
+            ).filter(pk=row_id, status__in=['elder_approved', 'reversed']).first()
+            if row is None:
+                return Response({'detail': 'That request is not waiting on treasury release, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            gave_prior_clearance = (
+                row.elder_approved_by_id == request.user.id
+                or row.pastor_approved_by_id == request.user.id
+                or (row.status == 'elder_approved' and row.treasurer_approved_by_id == request.user.id)
+            )
+            if gave_prior_clearance and not (request.user.is_superuser or request.user.is_staff):
+                return Response(
+                    {'detail': 'You gave this request prior clearance — a different treasurer must release the money.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if row.amount > row.account.balance:
+                return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
+            if row.amount != row.amount.to_integral_value():
+                return Response({'detail': 'M-Pesa payouts are whole shillings. Adjust the request before releasing it.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                phone = normalize_mpesa_phone(_withdrawal_requester_phone(row))
+            except ValueError:
+                return Response({'detail': 'The requester has no valid M-Pesa number on their profile. Add one before releasing the funds.'}, status=status.HTTP_400_BAD_REQUEST)
+            payout = getattr(row, 'payout', None)
+            if payout is not None and payout.status in ('pending', 'accepted', 'completed'):
+                return Response({'detail': 'This request already has a paybill payout in progress.'}, status=status.HTTP_400_BAD_REQUEST)
+            if payout is None:
+                payout = WithdrawalPayout(withdrawal=row, originator_conversation_id=uuid.uuid4().hex)
+            payout.amount = row.amount
+            payout.phone_number = phone
+            payout.status = 'pending'
+            # A fresh attempt gets a fresh id: reusing one Safaricom has
+            # already seen can be refused as a duplicate request.
+            payout.originator_conversation_id = uuid.uuid4().hex
+            payout.conversation_id = ''
+            payout.transaction_id = ''
+            payout.outcome_description = ''
+            payout.initiated_by = request.user
+            payout.completed_at = None
+            payout.expense = None
+            payout.save()
+            try:
+                result = initiate_b2c_payout(payout)
+            except MpesaConfigurationError as exc:
+                payout.status = 'failed'
+                payout.outcome_description = str(exc)[:255]
+                payout.save(update_fields=['status', 'outcome_description', 'updated_at'])
+                return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            except Exception:
+                payout.status = 'failed'
+                payout.outcome_description = 'M-Pesa rejected the payout request.'
+                payout.save(update_fields=['status', 'outcome_description', 'updated_at'])
+                return Response({'detail': 'M-Pesa rejected the payout request. Verify the credentials and try again.'}, status=status.HTTP_502_BAD_GATEWAY)
+            accepted = str(result.get('ResponseCode', '')) == '0'
+            payout.status = 'accepted' if accepted else 'failed'
+            payout.conversation_id = str(result.get('ConversationID', '') or '')
+            payout.outcome_description = str(result.get('ResponseDescription', ''))[:255]
+            payout.save(update_fields=['status', 'conversation_id', 'outcome_description', 'updated_at'])
+            if not accepted:
+                return Response(
+                    {'detail': result.get('ResponseDescription', 'M-Pesa rejected the payout request.'), 'payout': _withdrawal_payout_payload(row)},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            reply = str(request.data.get('reply') or '').strip()[:255]
+            row.status = 'releasing'
+            row.reply = reply
+            row.save(update_fields=['status', 'reply'])
+            return Response({'id': row.id, 'status': row.status, 'payout': _withdrawal_payout_payload(row)}, status=status.HTTP_201_CREATED)
+
         # The last clearance before the money moves: the pastor approved it,
         # the elder blessed it, and the treasurer's release is what moves the
         # money — the chain the model's STATUS_CHOICES lists in order.
@@ -16406,6 +16631,9 @@ class DepartmentWithdrawalReviewView(APIView):
             ).first()
             if row is None:
                 return Response({'detail': 'That request is not approved, or does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+            payout = getattr(row, 'payout', None)
+            if payout is not None and payout.status in ('pending', 'accepted'):
+                return Response({'detail': 'The paybill payout is still being processed. Wait for M-Pesa before reversing it.'}, status=status.HTTP_400_BAD_REQUEST)
             with transaction.atomic():
                 row.account.balance += row.amount
                 row.account.save()
@@ -16417,8 +16645,15 @@ class DepartmentWithdrawalReviewView(APIView):
                     reference=f'WD-REV-{row.id}',
                     created_by=request.user,
                 )
-                # Remove corresponding expenditure record upon reversal
+                # Remove corresponding expenditure record upon reversal. A
+                # paybill payout's expense carries Safaricom's receipt number,
+                # so it is found through the payout rather than by WD-<id>.
+                if payout is not None and payout.expense_id:
+                    payout.expense.delete()
                 Expenditure.objects.filter(receipt_number=f"WD-{row.id}").delete()
+                if payout is not None:
+                    payout.status = 'reversed'
+                    payout.save(update_fields=['status', 'updated_at'])
                 row.status = 'reversed'
                 row.save(update_fields=['status'])
             # Notify the department.
@@ -16480,7 +16715,7 @@ class WithdrawalRequestsPdfView(APIView):
     # The panel's status filter, mapped to the rows each choice shows — the
     # same mapping the on-screen table applies.
     STATUS_FILTERS = {
-        'pending': ('pending', 'pastor_approved', 'elder_approved'),
+        'pending': ('pending', 'pastor_approved', 'elder_approved', 'releasing'),
         'approved': ('approved',),
         'rejected': ('declined',),
     }

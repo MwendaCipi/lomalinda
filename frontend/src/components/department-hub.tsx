@@ -4893,7 +4893,7 @@ type FundWithdrawal = {
   account_description?: string;
   amount: string;
   reason: string;
-  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "pastor_approved" | "elder_approved" | "releasing" | "approved" | "declined" | "reversed";
   reply: string;
   requested_by: string;
   created_at: string;
@@ -4969,7 +4969,7 @@ type UnifiedAccountItem = {
   amount: number;
   isOutflow: boolean;
   category: "contribution" | "withdrawal";
-  status: "completed" | "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "completed" | "pending" | "pastor_approved" | "elder_approved" | "releasing" | "approved" | "declined" | "reversed";
   accountId?: number;
   accountName?: string;
   accountDescription?: string;
@@ -5362,6 +5362,7 @@ export function DepartmentAccountsPanel({
       pending: "bg-amber-50 text-amber-800",
       elder_approved: "bg-amber-50 text-amber-800",
       pastor_approved: "bg-purple-50 text-purple-800",
+      releasing: "bg-sky-50 text-sky-800",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
       reversed: "bg-red-50 text-red-700",
@@ -5371,6 +5372,7 @@ export function DepartmentAccountsPanel({
       pending: "Pending",
       elder_approved: "Elder Approved",
       pastor_approved: "Pastor Approved",
+      releasing: "Releasing",
       approved: "Approved",
       declined: "Declined",
       reversed: "Rejected",

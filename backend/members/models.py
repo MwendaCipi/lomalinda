@@ -2756,6 +2756,10 @@ class DepartmentWithdrawalRequest(models.Model):
         ('pending', 'Pending'),
         ('pastor_approved', 'Pastor Approved'),
         ('elder_approved', 'Elder Approved'),
+        # The treasurer has sent the release to the paybill and the money is
+        # on its way to the requester's phone. The fund is debited and the
+        # expense written when M-Pesa confirms the payout.
+        ('releasing', 'Releasing from Paybill'),
         ('approved', 'Approved'),
         ('declined', 'Declined'),
         ('reversed', 'Reversed'),
@@ -3542,3 +3546,53 @@ class WithdrawalAccountabilityReceipt(models.Model):
 
     def __str__(self):
         return self.filename or (self.file.name if self.file else 'Receipt')
+
+
+class WithdrawalPayout(models.Model):
+    """A release of withdrawal money from the church paybill by B2C.
+
+    The treasurer sends the money after the pastor and elder have cleared the
+    request. Safaricom answers the request at once and the payout later: this
+    row is the bridge between the two, carrying the conversation id the
+    callback quotes, and the expense that is written once the money lands.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Sending to M-Pesa'),
+        ('accepted', 'Accepted by M-Pesa'),
+        ('completed', 'Paid out'),
+        ('failed', 'Failed'),
+        ('reversed', 'Reversed'),
+    ]
+
+    withdrawal = models.OneToOneField(
+        DepartmentWithdrawalRequest, on_delete=models.CASCADE, related_name='payout',
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    phone_number = models.CharField(max_length=20)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    #: Safaricom's id for this request; the async result quotes it back so the
+    #: callback knows which payout it is answering.
+    originator_conversation_id = models.CharField(max_length=64, unique=True)
+    conversation_id = models.CharField(max_length=64, blank=True, default='')
+    transaction_id = models.CharField(max_length=64, blank=True, default='')
+    outcome_description = models.CharField(max_length=255, blank=True, default='')
+    initiated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='withdrawal_payouts_initiated',
+    )
+    #: The expense written when the payout confirms; reversing that record
+    #: also reverses this payout.
+    expense = models.OneToOneField(
+        Expenditure, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='withdrawal_payout',
+    )
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Payout WD-{self.withdrawal_id} to {self.phone_number} ({self.status})"

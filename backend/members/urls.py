@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ReportSigningsView, ReportSigningStatusView, ReportSigningRespondView, WithdrawalAccountabilityView, WithdrawalAccountabilityReceiptView
+from .views import ReportSigningsView, ReportSigningStatusView, ReportSigningRespondView, WithdrawalAccountabilityView, WithdrawalAccountabilityReceiptView, ExpenditureReverseView
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView, ProfileUpdateView, YaLessonRedirectView, EmailChangeRequestView, EmailChangeVerifyView, EmailChangeCancelView
 from .views import PrayerCellsView, PrayerCellDetailView, PrayerCellMembersView, PrayerCellJoinRequestView, PrayerCellJoinRequestReviewView
 from .views import EmailVerificationConfirmView, EmailVerificationResendView
@@ -75,6 +75,9 @@ urlpatterns = [
     path('treasury/awaiting/', TreasuryAwaitingView.as_view(), name='treasury-awaiting'),
     path('treasury/expenditures/', ExpenditureListCreateView.as_view(), name='treasury-expenditures'),
     path('treasury/expenditures/<int:pk>/', ExpenditureDetailView.as_view(), name='treasury-expenditure-detail'),
+    # Reverse a recorded expense: credit its account back and take the record
+    # off the roll. A withdrawal expense also returns its request to Reversed.
+    path('treasury/expenditures/<int:pk>/reverse/', ExpenditureReverseView.as_view(), name='treasury-expenditure-reverse'),
     path('support-submissions/', SupportSubmissionView.as_view(), name='support-submissions'),
     path('contributions/initiate/', InitiateContributionView.as_view(), name='contribution-initiate'),
     path('contributions/live-stats/', ContributionLiveStatsView.as_view(), name='contribution-live-stats'),

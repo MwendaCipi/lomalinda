@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw, X } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { openPdfTab } from "@/lib/pdf-lightbox";
 import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
@@ -52,7 +52,7 @@ type WithdrawalRequestRow = {
   account_balance: string;
   amount: string;
   reason: string;
-  status: "pending" | "pastor_approved" | "elder_approved" | "approved" | "declined" | "reversed";
+  status: "pending" | "pastor_approved" | "elder_approved" | "releasing" | "approved" | "declined" | "reversed";
   requested_by: string;
   /** The treasury's release of the money itself — the chain's last step. */
   treasurer_approved_by: string | null;
@@ -70,6 +70,21 @@ type WithdrawalRequestRow = {
   decided_at: string | null;
   reply: string;
   created_at: string;
+  /** The requester's M-Pesa number, masked for the treasury's confirmation. */
+  requested_by_phone?: string;
+  /** The paybill release sent to M-Pesa, once the treasurer has released it. */
+  payout?: {
+    id: number;
+    status: "pending" | "accepted" | "completed" | "failed" | "reversed";
+    status_display: string;
+    phone_number: string;
+    transaction_id: string;
+    outcome_description: string;
+    initiated_by: string | null;
+    completed_at: string | null;
+    created_at: string;
+    expense_id: number | null;
+  } | null;
   /** How the released money was spent, once the receiving desk has filed it. */
   accountability?: {
     status: "submitted" | "accepted" | "returned";
@@ -213,6 +228,7 @@ export function WithdrawalRequestsPanel({
         pastor_approve: ["Pastor's approval recorded", "The elder can now act on this request."],
         elder_approve: ["Elder approval recorded", "The treasury can release the money now."],
         approve: ["Withdrawal approved", "The fund has been debited and reflected in Expenses."],
+        release: ["Release sent to M-Pesa", "The paybill is paying the requester. The expense is written when M-Pesa confirms."],
         decline: ["Request declined", "The desk has your reply."],
         reverse: ["Withdrawal reversed", "The fund has been credited back and expense record removed."],
       };
@@ -234,6 +250,7 @@ export function WithdrawalRequestsPanel({
       pending: "bg-sand text-bark",
       elder_approved: "bg-amber-50 text-amber-800",
       pastor_approved: "bg-purple-50 text-purple-800",
+      releasing: "bg-sky-50 text-sky-800",
       approved: "bg-green-50 text-green-800",
       declined: "bg-red-50 text-red-700",
       reversed: "bg-sand text-moss",
@@ -242,6 +259,7 @@ export function WithdrawalRequestsPanel({
       pending: "Pending (pastor)",
       elder_approved: "Pending (treasurer)",
       pastor_approved: "Pending (elder)",
+      releasing: "Releasing",
       approved: "Approved",
       declined: "Rejected",
       reversed: "Reversed",
@@ -333,7 +351,7 @@ export function WithdrawalRequestsPanel({
 
   const filteredRows = rows.filter((row) => {
     if (statusFilter === "pending") {
-      if (!["pending", "pastor_approved", "elder_approved"].includes(row.status)) return false;
+      if (!["pending", "pastor_approved", "elder_approved", "releasing"].includes(row.status)) return false;
     } else if (statusFilter === "approved") {
       if (row.status !== "approved") return false;
     } else if (statusFilter === "rejected") {
@@ -581,6 +599,7 @@ export function WithdrawalRequestsPanel({
         const awaitingPastor = target.status === "pending";
         const awaitingElder = target.status === "pastor_approved";
         const awaitingRelease = target.status === "elder_approved";
+        const isReleasing = target.status === "releasing";
         const inFlight = awaitingPastor || awaitingElder || awaitingRelease;
         const canReverse = target.status === "approved";
         const isReversed = target.status === "reversed";
@@ -602,10 +621,26 @@ export function WithdrawalRequestsPanel({
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
-              <h4 className="text-sm font-bold text-bark">Respond to request</h4>
-              <p className="mt-0.5 text-xs text-moss">
-                {target.department} · {target.account_name}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-bark">Respond to request</h4>
+                  <p className="mt-0.5 text-xs text-moss">
+                    {target.department} · {target.account_name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenAction(null);
+                    setReply("");
+                    setAccountReply("");
+                  }}
+                  aria-label="Close"
+                  className="rounded-lg p-1 text-moss transition hover:bg-sand hover:text-bark"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
               <div className="mt-3 space-y-1.5 rounded-xl border border-sand-line bg-sand-plate p-3 text-xs">
                 <div className="flex items-center justify-between gap-3">
@@ -622,12 +657,21 @@ export function WithdrawalRequestsPanel({
                       ? "Blessed by the pastor. An elder approves it next."
                       : awaitingRelease
                         ? "Approved by the pastor and an elder. The treasury releases or declines it now."
-                        : canReverse
+                        : isReleasing
+                          ? "The paybill is paying the requester. The expense is written when M-Pesa confirms."
+                          : canReverse
                           ? `${target.decided_by ? `Treasurer-approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
                           : isReversed
                             ? "Reversed. The fund was credited back. It can be approved again while the account covers it."
                             : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
                 </p>
+                {target.payout && (
+                  <p className="mt-1 text-[11px] text-moss-faint">
+                    Paybill payout: {target.payout.status_display}
+                    {target.payout.phone_number ? ` · ${target.payout.phone_number}` : ""}
+                    {target.payout.transaction_id ? ` · ${target.payout.transaction_id}` : ""}
+                  </p>
+                )}
                 {awaitingRelease && selfCleared && (
                   <p className="mt-1.5 text-[11px] font-semibold text-ember">
                     {selfPastorCleared
@@ -758,18 +802,6 @@ export function WithdrawalRequestsPanel({
               )}
 
               <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-sand-line pt-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenAction(null);
-                    setReply("");
-                    setAccountReply("");
-                  }}
-                  className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
-                >
-                  {inFlight || isReversed ? "Cancel" : "Close"}
-                </button>
-
                 {awaitingPastor && workspace === "pastorate" && (
                   <button
                     type="button"
@@ -806,32 +838,40 @@ export function WithdrawalRequestsPanel({
                 {awaitingRelease && workspace === "treasury" && (
                   <button
                     type="button"
-                    onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy || selfCleared}
+                    onClick={() => act(target.id, "release", reply)}
+                    disabled={busy || selfCleared || !target.requested_by_phone || Number(target.amount) % 1 !== 0}
                     title={
                       selfCleared
                         ? "You gave this request an earlier clearance. A different treasurer must release the money."
-                        : undefined
+                        : !target.requested_by_phone
+                          ? "The requester has no M-Pesa number on their profile."
+                          : Number(target.amount) % 1 !== 0
+                            ? "M-Pesa payouts are whole shillings."
+                            : `Send ${money(target.amount)} from the paybill to ${target.requested_by_phone}.`
                     }
-                    className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                    className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                   >
-                    {busy ? "Saving…" : "Approve request"}
+                    {busy ? "Sending…" : "Release funds"}
                   </button>
                 )}
 
                 {isReversed && reversedCovered && workspace === "treasury" && (
                   <button
                     type="button"
-                    onClick={() => act(target.id, "approve", reply)}
-                    disabled={busy || selfCleared}
+                    onClick={() => act(target.id, "release", reply)}
+                    disabled={busy || selfCleared || !target.requested_by_phone || Number(target.amount) % 1 !== 0}
                     title={
                       selfCleared
-                        ? "You cleared this request earlier. A different treasurer must approve it again."
-                        : undefined
+                        ? "You cleared this request earlier. A different treasurer must release it again."
+                        : !target.requested_by_phone
+                          ? "The requester has no M-Pesa number on their profile."
+                          : Number(target.amount) % 1 !== 0
+                            ? "M-Pesa payouts are whole shillings."
+                            : `Send ${money(target.amount)} from the paybill to ${target.requested_by_phone}.`
                     }
-                    className="rounded-xl bg-bark px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                    className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                   >
-                    {busy ? "Saving…" : "Approve again"}
+                    {busy ? "Sending…" : "Release again"}
                   </button>
                 )}
 

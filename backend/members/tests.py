@@ -18501,6 +18501,151 @@ class WithdrawalAccountabilityTests(APITestCase):
         self.assertEqual(self._file(user=self.other).status_code, status.HTTP_403_FORBIDDEN)
 
 
+class WithdrawalPaybillReleaseTests(APITestCase):
+    """The treasurer releases an elder-approved request from the paybill.
+
+    The release is a B2C payout to the requester's phone. Safaricom's
+    callback is what debits the fund and writes the expense; a failed payout
+    returns the request to the treasury's queue instead of pretending money
+    moved.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user(
+            'pay.treasurer', 'pay.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tess', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.pastor = User.objects.create_user(
+            'pay.pastor', 'pay.pastor@example.com', 'StrongPass#2026',
+            first_name='Paul', last_name='Pastor',
+        )
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        self.elder = User.objects.create_user(
+            'pay.elder', 'pay.elder@example.com', 'StrongPass#2026',
+            first_name='Eli', last_name='Elder',
+        )
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.leader = User.objects.create_user(
+            'pay.leader', 'pay.leader@example.com', 'StrongPass#2026',
+            first_name='Lena', last_name='Leader',
+        )
+        MemberProfile.objects.create(
+            user=self.leader, role='member', roles='member',
+            phone_number='0712345678',
+        )
+        self.department = Department.objects.create(
+            name='Music Payout', code='music-payout', is_active=True,
+        )
+        self.account = TreasuryAccount.objects.create(
+            name='PayoutFund', description='Music Payout',
+            balance=Decimal('500.00'), department=self.department,
+        )
+        self.released = DepartmentWithdrawalRequest.objects.create(
+            department=self.department, account=self.account,
+            amount=Decimal('200.00'), reason='Sound system repair',
+            requested_by=self.leader, status='elder_approved',
+            pastor_approved_by=self.pastor, pastor_approved_at=timezone.now(),
+            elder_approved_by=self.elder, elder_approved_at=timezone.now(),
+        )
+
+    def _release(self, user=None):
+        self.client.force_authenticate(user or self.treasurer)
+        return self.client.post('/api/members/department-withdrawals/review/', {
+            'id': self.released.id, 'action': 'release',
+        }, format='json')
+
+    def _callback(self, payout, code=0, receipt='QK123456'):
+        return self.client.post('/api/members/payments/mpesa/b2c/result/', {
+            'OriginatorConversationID': payout.originator_conversation_id,
+            'ConversationID': 'conv-1',
+            'Result': {
+                'ResultCode': code,
+                'ResultDesc': 'Processed' if code == 0 else 'The payout failed.',
+                'ResultParameters': {
+                    'ResultParameter': [{'Key': 'TransactionID', 'Value': receipt}],
+                },
+            },
+        }, format='json')
+
+    @patch('members.views.initiate_b2c_payout')
+    def test_release_sends_the_money_and_the_callback_writes_the_expense(self, b2c):
+        b2c.return_value = {'ResponseCode': '0', 'ResponseDescription': 'Accepted', 'ConversationID': 'conv-1'}
+        response = self._release()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.released.refresh_from_db()
+        self.assertEqual(self.released.status, 'releasing')
+        self.assertEqual(self.released.payout.status, 'accepted')
+        self.assertEqual(self.released.payout.phone_number, '254712345678')
+        b2c.assert_called_once()
+
+        accepted = self._callback(self.released.payout)
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK)
+        self.released.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.released.status, 'approved')
+        self.assertEqual(self.released.payout.status, 'completed')
+        self.assertEqual(self.released.payout.transaction_id, 'QK123456')
+        self.assertEqual(self.account.balance, Decimal('300.00'))
+        expense = Expenditure.objects.get(withdrawal_payout__withdrawal=self.released)
+        self.assertEqual(expense.receipt_number, 'QK123456')
+        self.assertEqual(expense.amount, Decimal('200.00'))
+
+        # A re-delivered callback must not write a second expense or debit twice.
+        self._callback(self.released.payout)
+        self.assertEqual(Expenditure.objects.filter(withdrawal_payout__withdrawal=self.released).count(), 1)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('300.00'))
+
+    @patch('members.views.initiate_b2c_payout')
+    def test_a_failed_payout_returns_the_request_to_the_treasurer(self, b2c):
+        b2c.return_value = {'ResponseCode': '0', 'ResponseDescription': 'Accepted', 'ConversationID': 'conv-1'}
+        self._release()
+        self.released.refresh_from_db()
+        self._callback(self.released.payout, code=1)
+        self.released.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.released.status, 'elder_approved')
+        self.assertEqual(self.released.payout.status, 'failed')
+        self.assertEqual(self.account.balance, Decimal('500.00'))
+        self.assertFalse(Expenditure.objects.filter(withdrawal_payout__withdrawal=self.released).exists())
+
+    def test_release_needs_a_phone_and_multiple_shillings(self):
+        self.leader.member_profile.phone_number = ''
+        self.leader.member_profile.save(update_fields=['phone_number'])
+        self.assertEqual(self._release().status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.leader.member_profile.phone_number = '0712345678'
+        self.leader.member_profile.save(update_fields=['phone_number'])
+        self.released.amount = Decimal('200.50')
+        self.released.save(update_fields=['amount'])
+        self.assertEqual(self._release().status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_only_the_treasury_releases_and_not_its_prior_clearer(self):
+        self.assertEqual(self._release(user=self.leader).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._release(user=self.elder).status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch('members.views.initiate_b2c_payout')
+    def test_reversing_the_expense_credits_the_account_and_the_request(self, b2c):
+        b2c.return_value = {'ResponseCode': '0', 'ResponseDescription': 'Accepted', 'ConversationID': 'conv-1'}
+        self._release()
+        self.released.refresh_from_db()
+        self._callback(self.released.payout)
+        self.released.refresh_from_db()
+        expense = Expenditure.objects.get(withdrawal_payout__withdrawal=self.released)
+
+        self.client.force_authenticate(self.treasurer)
+        answer = self.client.post(f'/api/members/treasury/expenditures/{expense.id}/reverse/', {}, format='json')
+        self.assertEqual(answer.status_code, status.HTTP_200_OK, answer.content)
+        self.released.refresh_from_db()
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.balance, Decimal('500.00'))
+        self.assertEqual(self.released.status, 'reversed')
+        self.assertEqual(self.released.payout.status, 'reversed')
+        self.assertFalse(Expenditure.objects.filter(pk=expense.id).exists())
+        self.assertEqual(TreasuryAccountTransaction.objects.filter(transaction_type='credit').count(), 1)
+
+
 class ReportSigningRequestTests(APITestCase):
     """Sending a report round the offices, and their answers.
 
