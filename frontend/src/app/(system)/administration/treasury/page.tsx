@@ -455,6 +455,7 @@ export default function TreasuryPage() {
   // A report is generated on demand — a “Preparing…” toast on the desk while
   // the server draws it, then its own tab shows the paper.
   const [preparing, setPreparing] = useState<null | "pdf">(null);
+  const [sendingSignature, setSendingSignature] = useState(false);
   // The report picker's filters: the accounts, a department's funds, how the
   // money moved, the order the rows print in, and the givers it speaks for.
   const [showReportModal, setShowReportModal] = useState(false);
@@ -1600,6 +1601,62 @@ export default function TreasuryPage() {
       );
     } finally {
       setPreparing(null);
+    }
+  };
+
+  // Send the paper round the offices instead of only printing it. The kind
+  // follows the picker: the summary goes to the four offices, the individual
+  // report to the same four, and each office signs from the Requests desk.
+  const sendGivingReportForSignature = async () => {
+    if (sendingSignature || reportSelectedPurposes.length === 0) return;
+    setSendingSignature(true);
+    try {
+      const kind = reportMode === "individual" ? "givings_individual" : "givings_summary";
+      const label = reportMode === "individual" ? "Individual givings report" : "Givings summary report";
+      const period = fromDate === toDate ? dayFirst(fromDate) : `${dayFirst(fromDate)} – ${dayFirst(toDate)}`;
+      const accountNames = reportPurposesToSend();
+      const departmentNames = reportDepartments.map(
+        (code) => reportDepartmentOptions.find((option) => option.code === code)?.label ?? code,
+      );
+      const modeNames = reportModes.map(
+        (code) => reportModeOptions.find((option) => option.value === code)?.label ?? code,
+      );
+      const details = [
+        accountNames.length ? `Accounts: ${accountNames.join(", ")}` : "All accounts",
+        departmentNames.length ? `Departments: ${departmentNames.join(", ")}` : "",
+        modeNames.length ? `Modes: ${modeNames.join(", ")}` : "",
+        reportMembers.length ? `Individuals: ${reportMembers.map((member) => member.name).join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 255);
+      const res = await fetch(`${API_URL}/api/members/reports/signings/`, {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          title: `${label} — ${period}`,
+          period_start: fromDate || null,
+          period_end: toDate || null,
+          details,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "The report could not be sent for signature.");
+      setShowReportModal(false);
+      showAlert(
+        "Sent for signature",
+        "The treasurer, head deacon, an elder and the pastor can sign it from Requests.",
+        "success",
+      );
+    } catch (error) {
+      showAlert(
+        "Could not send for signature",
+        error instanceof Error ? error.message : "Try again.",
+        "error",
+      );
+    } finally {
+      setSendingSignature(false);
     }
   };
 
@@ -3234,6 +3291,19 @@ export default function TreasuryPage() {
                 className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-moss transition hover:text-bark"
               >
                 Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendGivingReportForSignature()}
+                disabled={sendingSignature || preparing !== null || reportSelectedPurposes.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90 disabled:opacity-60"
+              >
+                {sendingSignature ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {sendingSignature ? "Sending…" : "Send for signature"}
               </button>
               <button
                 type="button"

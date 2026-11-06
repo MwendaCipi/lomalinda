@@ -6307,7 +6307,7 @@ def record_direct_paybill_payment(payload):
     # credit, because the credit only follows a fresh completion. Unassigned
     # gifts are held — not credited — until a treasurer assigns an account
     # from the Unassigned tab.
-    if not was_new_record and not contribution.needs_review:
+    if was_new_record and not contribution.needs_review:
         credit_contribution_lines(contribution)
     return contribution
 
@@ -7517,7 +7517,12 @@ class ReportSigningsView(APIView):
                 code for code in REPORT_SIGNING_ROLE
                 if _may_answer_report_office(request.user, code)
             ]
-            rows = rows.filter(office__in=offices)
+            # A signatory reads its own pen; the desk that raised the report
+            # reads every pen on it, so it can follow the paper round the
+            # offices after the send has left the screen.
+            rows = rows.filter(
+                Q(office__in=offices) | Q(signing__requested_by=request.user)
+            )
         return Response({'requests': [_report_signing_row(row, request.user) for row in rows]})
 
     def post(self, request):
@@ -15940,9 +15945,26 @@ class DepartmentAccountView(APIView):
         if not reason:
             return Response({'reason': 'Tell the treasurer what the money is for.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # The payout number starts from the requester's saved number and is
+        # carried on the ask itself, so the treasury pays the line the desk
+        # named even if the profile changes before the release.
+        phone_number = str(request.data.get('phone_number') or '').strip()
+        if not phone_number:
+            profile = getattr(request.user, 'member_profile', None)
+            phone_number = (getattr(profile, 'phone_number', '') or '').strip()
+        if phone_number:
+            try:
+                phone_number = normalize_mpesa_phone(phone_number)
+            except ValueError:
+                return Response(
+                    {'phone_number': 'Enter a valid M-Pesa number, for example 0712345678.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         row = DepartmentWithdrawalRequest.objects.create(
             department=target, account=account, amount=amount,
             reason=reason[:255], requested_by=request.user,
+            phone_number=phone_number,
         )
 
         is_deaconate = target.code == 'deaconate'
@@ -16124,7 +16146,15 @@ def _accountability_payload(row):
 
 
 def _withdrawal_requester_phone(row):
-    """The M-Pesa number the payout will land on, as the profile keeps it."""
+    """The M-Pesa number the payout will land on.
+
+    The number saved on the request wins: the desk named it when it asked,
+    and a later profile edit must not silently redirect the money. Requests
+    filed before that field existed fall back to the requester's profile.
+    """
+    stored = (getattr(row, 'phone_number', '') or '').strip()
+    if stored:
+        return stored
     profile = getattr(row.requested_by, 'member_profile', None)
     return (getattr(profile, 'phone_number', '') or '').strip()
 
@@ -16490,10 +16520,15 @@ class DepartmentWithdrawalReviewView(APIView):
                 return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
             if row.amount != row.amount.to_integral_value():
                 return Response({'detail': 'M-Pesa payouts are whole shillings. Adjust the request before releasing it.'}, status=status.HTTP_400_BAD_REQUEST)
+            # The payout goes to the number the treasurer confirms for this
+            # release. It starts from the requester's saved number, but the
+            # desk may send it to another line (the requester's own instruction,
+            # a joint account, a corrected profile).
+            entered_phone = str(request.data.get('phone_number') or '').strip()
             try:
-                phone = normalize_mpesa_phone(_withdrawal_requester_phone(row))
+                phone = normalize_mpesa_phone(entered_phone or _withdrawal_requester_phone(row))
             except ValueError:
-                return Response({'detail': 'The requester has no valid M-Pesa number on their profile. Add one before releasing the funds.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'detail': 'Enter a valid Kenyan M-Pesa number for the payout.'}, status=status.HTTP_400_BAD_REQUEST)
             payout = getattr(row, 'payout', None)
             if payout is not None and payout.status in ('pending', 'accepted', 'completed'):
                 return Response({'detail': 'This request already has a paybill payout in progress.'}, status=status.HTTP_400_BAD_REQUEST)

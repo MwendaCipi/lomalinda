@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw, X } from "lucide-react";
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Building2, Smartphone, Wallet, Landmark, HandHeart, Megaphone, Copy, MessageCircle, MoreVertical, Pencil, Trash2, FileText, Printer, MoveLeft, Settings2, Check, RefreshCw, Send, X } from "lucide-react";
 import { CampaignManagement } from "@/components/campaign-management";
 import { openPdfTab } from "@/lib/pdf-lightbox";
 import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
@@ -171,6 +171,11 @@ export function WithdrawalRequestsPanel({
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printingId, setPrintingId] = useState<number | null>(null);
+  const [sendingForSignature, setSendingForSignature] = useState(false);
+  // The number this release pays. It starts from the requester's saved
+  // number and stays editable, so the desk can pay a corrected or
+  // alternative line without changing the member's profile.
+  const [releasePhone, setReleasePhone] = useState("");
   // The treasury's reading of the spending account filed after a release.
   const [accountReply, setAccountReply] = useState("");
   const [accountBusy, setAccountBusy] = useState(false);
@@ -212,13 +217,18 @@ export function WithdrawalRequestsPanel({
     return () => registerRefresh?.(null);
   }, [load, registerRefresh]);
 
-  const act = async (id: number, action: string, extraReply?: string) => {
+  const act = async (id: number, action: string, extraReply?: string, phoneNumber?: string) => {
     setBusy(true);
     try {
       const res = await fetch(`${API_URL}/api/members/department-withdrawals/review/`, {
         method: "POST",
         headers: { ...fundAuthHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ id, action, reply: (extraReply ?? "").trim() }),
+        body: JSON.stringify({
+          id,
+          action,
+          reply: (extraReply ?? "").trim(),
+          ...(action === "release" ? { phone_number: (phoneNumber ?? "").trim() } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Could not save the answer.");
@@ -288,6 +298,51 @@ export function WithdrawalRequestsPanel({
       onError: (message) => showAlert("Could not print", message, "error"),
       onSettled: () => setPrinting(false),
     });
+  };
+
+  // The same report, sent round the offices instead of only printed. The
+  // treasury keeps the first pen; an elder and the pastor add theirs from the
+  // Requests desk, and the report is signed only when all three have.
+  const sendReportForSignature = async () => {
+    if (sendingForSignature) return;
+    setSendingForSignature(true);
+    try {
+      const period = fromDate || toDate ? `${fromDate || "Start"} to ${toDate || "Today"}` : "All dates";
+      const details = [
+        statusFilter === "all" ? "All statuses" : statusFilter.replace(/_/g, " "),
+        search.trim() ? `Search: ${search.trim()}` : "",
+        `${filteredRows.length} ${filteredRows.length === 1 ? "request" : "requests"}`,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 255);
+      const res = await fetch(`${API_URL}/api/members/reports/signings/`, {
+        method: "POST",
+        headers: { ...fundAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "requests",
+          title: `Withdrawal requests report — ${period}`,
+          period_start: fromDate || null,
+          period_end: toDate || null,
+          details,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "The report could not be sent for signature.");
+      showAlert(
+        "Sent for signature",
+        "The treasurer, an elder and the pastor can sign it from Requests.",
+        "success",
+      );
+    } catch (error) {
+      showAlert(
+        "Could not send for signature",
+        error instanceof Error ? error.message : "Try again.",
+        "error",
+      );
+    } finally {
+      setSendingForSignature(false);
+    }
   };
 
   // Each request prints itself: one request on its own sheet, with the amount
@@ -447,6 +502,7 @@ export function WithdrawalRequestsPanel({
         type="button"
         onClick={() => {
           setOpenAction(row.id);
+          setReleasePhone(row.requested_by_phone ?? "");
           setAccountReply("");
         }}
         className={`rounded-lg border border-sand-mute font-semibold text-moss transition hover:border-ember hover:text-ember ${
@@ -618,6 +674,7 @@ export function WithdrawalRequestsPanel({
         // option is offered only while the account still covers the ask — the
         // API enforces the same rule; this keeps the button honest.
         const reversedCovered = Number(target.account_balance) >= Number(target.amount);
+        const releaseNumber = releasePhone.trim();
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
@@ -692,6 +749,31 @@ export function WithdrawalRequestsPanel({
                   </p>
                 )}
               </div>
+
+              {workspace === "treasury" && (awaitingRelease || (isReversed && reversedCovered)) && (
+                <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3">
+                  <label
+                    htmlFor="withdrawal-release-phone"
+                    className="block text-[11px] font-bold uppercase tracking-wide text-moss"
+                  >
+                    M-Pesa number
+                  </label>
+                  <input
+                    id="withdrawal-release-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={releasePhone}
+                    onChange={(event) => setReleasePhone(event.target.value)}
+                    placeholder="07XX XXX XXX"
+                    maxLength={20}
+                    className="mt-1.5 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  />
+                  <p className="mt-1.5 text-[11px] text-moss-faint">
+                    Starts with the number the requester saved. Change it if the money should land on a different line.
+                  </p>
+                </div>
+              )}
 
               {target.status === "approved" && (
                 <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3 text-xs">
@@ -838,16 +920,16 @@ export function WithdrawalRequestsPanel({
                 {awaitingRelease && workspace === "treasury" && (
                   <button
                     type="button"
-                    onClick={() => act(target.id, "release", reply)}
-                    disabled={busy || selfCleared || !target.requested_by_phone || Number(target.amount) % 1 !== 0}
+                    onClick={() => act(target.id, "release", reply, releasePhone)}
+                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0}
                     title={
                       selfCleared
                         ? "You gave this request an earlier clearance. A different treasurer must release the money."
-                        : !target.requested_by_phone
-                          ? "The requester has no M-Pesa number on their profile."
+                        : !releaseNumber
+                          ? "Enter the M-Pesa number the money should be paid to."
                           : Number(target.amount) % 1 !== 0
                             ? "M-Pesa payouts are whole shillings."
-                            : `Send ${money(target.amount)} from the paybill to ${target.requested_by_phone}.`
+                            : `Send ${money(target.amount)} from the paybill to ${releaseNumber}.`
                     }
                     className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                   >
@@ -858,16 +940,16 @@ export function WithdrawalRequestsPanel({
                 {isReversed && reversedCovered && workspace === "treasury" && (
                   <button
                     type="button"
-                    onClick={() => act(target.id, "release", reply)}
-                    disabled={busy || selfCleared || !target.requested_by_phone || Number(target.amount) % 1 !== 0}
+                    onClick={() => act(target.id, "release", reply, releasePhone)}
+                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0}
                     title={
                       selfCleared
                         ? "You cleared this request earlier. A different treasurer must release it again."
-                        : !target.requested_by_phone
-                          ? "The requester has no M-Pesa number on their profile."
+                        : !releaseNumber
+                          ? "Enter the M-Pesa number the money should be paid to."
                           : Number(target.amount) % 1 !== 0
                             ? "M-Pesa payouts are whole shillings."
-                            : `Send ${money(target.amount)} from the paybill to ${target.requested_by_phone}.`
+                            : `Send ${money(target.amount)} from the paybill to ${releaseNumber}.`
                     }
                     className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                   >
@@ -919,16 +1001,30 @@ export function WithdrawalRequestsPanel({
         {/* Refresh re-reads the request roll: gives a pending withdrawal its
             answer the instant it is approved elsewhere. Its icon lives in
             the header band now, beside the filters it serves. */}
-        <button
-          type="button"
-          onClick={printReport}
-          disabled={printing}
-          className="inline-flex items-center justify-center gap-1.5 self-start rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60 sm:justify-self-center sm:self-auto"
-          aria-label="Print withdrawal requests report"
-        >
-          <Printer className={`h-3.5 w-3.5 ${printing ? "animate-spin" : ""}`} />
-          <span>{printing ? "Preparing…" : "Print Requests"}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5 sm:justify-self-center">
+          <button
+            type="button"
+            onClick={printReport}
+            disabled={printing}
+            className="inline-flex items-center justify-center gap-1.5 self-start rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60 sm:self-auto"
+            aria-label="Print withdrawal requests report"
+          >
+            <Printer className={`h-3.5 w-3.5 ${printing ? "animate-spin" : ""}`} />
+            <span>{printing ? "Preparing…" : "Print Requests"}</span>
+          </button>
+          {workspace === "treasury" && (
+            <button
+              type="button"
+              onClick={() => void sendReportForSignature()}
+              disabled={sendingForSignature}
+              className="inline-flex items-center justify-center gap-1.5 self-start rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60 sm:self-auto"
+              aria-label="Send withdrawal requests report for signature"
+            >
+              <Send className={`h-3.5 w-3.5 ${sendingForSignature ? "animate-pulse" : ""}`} />
+              <span>{sendingForSignature ? "Sending…" : "Send for signature"}</span>
+            </button>
+          )}
+        </div>
         <span className="hidden sm:block" aria-hidden="true" />
       </div>
     </div>

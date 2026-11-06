@@ -16350,6 +16350,46 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(posted.status_code, status.HTTP_201_CREATED, posted.data)
         self.assertEqual(self._pending().account_id, lcb.id)
 
+    def test_a_withdrawal_request_saves_the_phone_it_names(self):
+        self._fund()
+        MemberProfile.objects.filter(user=self.leader).update(phone_number='0712345678')
+        self.client.force_authenticate(self.leader)
+
+        response = self.client.post('/api/members/departments/music/account/', {
+            'amount': '120', 'reason': 'Choir chairs', 'phone_number': '0722000111',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(self._open().phone_number, '254722000111')
+
+    def test_a_withdrawal_request_defaults_the_phone_from_the_requester(self):
+        self._fund()
+        profile = self.leader.member_profile
+        profile.phone_number = '0712345678'
+        profile.save(update_fields=['phone_number'])
+        self.client.force_authenticate(self.leader)
+
+        response = self.client.post('/api/members/departments/music/account/', {
+            'amount': '120', 'reason': 'Choir chairs',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(self._open().phone_number, '254712345678')
+
+    def test_a_withdrawal_request_refuses_an_invalid_phone(self):
+        from .models import DepartmentWithdrawalRequest
+
+        self._fund()
+        self.client.force_authenticate(self.leader)
+
+        response = self.client.post('/api/members/departments/music/account/', {
+            'amount': '120', 'reason': 'Choir chairs', 'phone_number': '12345',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone_number', response.data)
+        self.assertFalse(DepartmentWithdrawalRequest.objects.exists())
+
     def _seat_leader_of(self, code, account_name, description):
         """A department with its own fund and the leader seated at its desk."""
         department = Department.objects.get(code=code)
@@ -18549,11 +18589,12 @@ class WithdrawalPaybillReleaseTests(APITestCase):
             elder_approved_by=self.elder, elder_approved_at=timezone.now(),
         )
 
-    def _release(self, user=None):
+    def _release(self, user=None, phone=None):
         self.client.force_authenticate(user or self.treasurer)
-        return self.client.post('/api/members/department-withdrawals/review/', {
-            'id': self.released.id, 'action': 'release',
-        }, format='json')
+        payload = {'id': self.released.id, 'action': 'release'}
+        if phone is not None:
+            payload['phone_number'] = phone
+        return self.client.post('/api/members/department-withdrawals/review/', payload, format='json')
 
     def _callback(self, payout, code=0, receipt='QK123456'):
         return self.client.post('/api/members/payments/mpesa/b2c/result/', {
@@ -18596,6 +18637,38 @@ class WithdrawalPaybillReleaseTests(APITestCase):
         self.assertEqual(Expenditure.objects.filter(withdrawal_payout__withdrawal=self.released).count(), 1)
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal('300.00'))
+
+    @patch('members.views.initiate_b2c_payout')
+    def test_release_can_pay_a_number_entered_for_this_payout(self, b2c):
+        from .models import WithdrawalPayout
+
+        b2c.return_value = {'ResponseCode': '0', 'ResponseDescription': 'Accepted', 'ConversationID': 'conv-1'}
+        response = self._release(phone='0722000111')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.released.refresh_from_db()
+        self.assertEqual(self.released.payout.phone_number, '254722000111')
+        self.assertEqual(b2c.call_args.args[0].phone_number, '254722000111')
+        self.assertEqual(WithdrawalPayout.objects.get(withdrawal=self.released).phone_number, '254722000111')
+
+    def test_release_refuses_an_invalid_entered_number(self):
+        from .models import WithdrawalPayout
+
+        response = self._release(phone='12345')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(WithdrawalPayout.objects.filter(withdrawal=self.released).exists())
+
+    @patch('members.views.initiate_b2c_payout')
+    def test_release_uses_the_number_saved_on_the_request(self, b2c):
+        self.released.phone_number = '0722000222'
+        self.released.save(update_fields=['phone_number'])
+        b2c.return_value = {'ResponseCode': '0', 'ResponseDescription': 'Accepted', 'ConversationID': 'conv-1'}
+
+        response = self._release()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.released.refresh_from_db()
+        self.assertEqual(self.released.payout.phone_number, '254722000222')
+        self.assertEqual(b2c.call_args.args[0].phone_number, '254722000222')
 
     @patch('members.views.initiate_b2c_payout')
     def test_a_failed_payout_returns_the_request_to_the_treasurer(self, b2c):
@@ -18722,6 +18795,19 @@ class ReportSigningRequestTests(APITestCase):
             )
             self.assertEqual(answer.status_code, status.HTTP_200_OK, answer.content)
         self.assertEqual(ReportSigning.objects.get(pk=signing_id).status, 'signed')
+
+    def test_the_sending_desk_reads_every_office_answer(self):
+        self._send()
+        self.client.force_authenticate(self.treasurer)
+        listing = self.client.get(self.SEND_URL)
+        self.assertEqual(listing.status_code, status.HTTP_200_OK, listing.content)
+        # The treasurer's own pen plus the other three offices: the sender
+        # follows the whole paper, not only the row that belongs to treasury.
+        self.assertEqual(len(listing.data['requests']), 4)
+        self.assertEqual(
+            {row['office'] for row in listing.data['requests']},
+            {'treasury', 'deaconate', 'eldership', 'pastorate'},
+        )
 
     def test_a_rejection_carries_the_reason_back(self):
         from .models import ReportSignature

@@ -2769,6 +2769,10 @@ class DepartmentWithdrawalRequest(models.Model):
     account = models.ForeignKey(TreasuryAccount, on_delete=models.PROTECT, related_name='withdrawal_requests')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reason = models.CharField(max_length=255)
+    #: The M-Pesa number the desk asked the payout to reach. It starts from
+    #: the requester's profile but travels with the ask, so a later release
+    #: does not depend on the profile still carrying the same number.
+    phone_number = models.CharField(max_length=20, blank=True, default='')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_withdrawals_requested')
     # Pastor gate — the first clearance, set when a pastor (or admin) blesses

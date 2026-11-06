@@ -5053,7 +5053,23 @@ export function DepartmentAccountsPanel({
   const [withdrawAccountId, setWithdrawAccountId] = useState<number | null>(null);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  // The payout number starts from the signed-in member's saved number. It
+  // travels with the ask, and the treasury can still correct it at release.
+  const [withdrawPhone, setWithdrawPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_URL}/api/members/me/`, { headers: authHeaders() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (alive && data?.phone_number) {
+          setWithdrawPhone((current) => current || String(data.phone_number));
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
   // The spending account: the desk writes how the money was used and files
   // the receipts it was given, for the treasury to accept or send back.
   const [accountingFor, setAccountingFor] = useState<FundWithdrawal | null>(null);
@@ -5157,6 +5173,7 @@ export function DepartmentAccountsPanel({
           amount,
           reason: reason.trim(),
           account_id: chosenAccountId,
+          phone_number: withdrawPhone.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -5844,6 +5861,23 @@ export function DepartmentAccountsPanel({
                 <span className="mt-1 block text-xs text-moss">
                   Available in {selectedWithdrawAccount?.description || selectedWithdrawAccount?.name || "account"}: KES{" "}
                   {withdrawBalance.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </span>
+              </label>
+              <label className="block text-sm font-medium text-bark">
+                M-Pesa number *
+                <input
+                  type="tel"
+                  required
+                  inputMode="tel"
+                  autoComplete="tel"
+                  maxLength={20}
+                  value={withdrawPhone}
+                  onChange={(e) => setWithdrawPhone(e.target.value)}
+                  placeholder="07XX XXX XXX"
+                  className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                />
+                <span className="mt-1 block text-xs text-moss">
+                  Defaults to the number on your profile. The treasury pays this line when it releases the money.
                 </span>
               </label>
               <label className="block text-sm font-medium text-bark">

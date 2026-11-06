@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { ReportSigningsPanel } from "@/components/report-signings-panel";
 import { RequestsModal, type RequestType } from "@/components/requests-modal";
 
 const REQUEST_TYPES = [
@@ -63,6 +64,10 @@ export default function RequestsPage() {
       )}
 
       <div className={signedIn ? "mx-auto max-w-5xl px-5 py-5 sm:px-8 lg:px-10" : "mx-auto max-w-6xl px-6 py-8 lg:px-8"}>
+        {/* An office holder meets the reports waiting for a signature before
+            the four care desks: the paper cannot move until their pen is on
+            it, and this is where the notification points. */}
+        {signedIn && <ReportSigningsPanel className="mb-5" />}
         <div className="grid gap-5 sm:grid-cols-2">
           {REQUEST_TYPES.map((type) => (
             <button
