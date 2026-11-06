@@ -16711,6 +16711,7 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual([row['reason'] for row in queue.data['requests']], ['Buses to the camporee'])
         response = self.client.post('/api/members/department-withdrawals/review/', {
             'id': queue.data['requests'][0]['id'], 'action': 'approve',
+            'payment_method': 'cash',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         account.refresh_from_db()
@@ -16719,6 +16720,8 @@ class DepartmentFundTests(APITestCase):
         self.assertEqual(movement.amount, Decimal('200.00'))
         self.assertEqual(movement.reference, f"WD-{self._pending().id}")
         self.assertEqual(self._pending().status, 'approved')
+        expense = Expenditure.objects.get(receipt_number=f"WD-{row.id}")
+        self.assertEqual(expense.payment_method, 'cash')
 
     def test_the_elder_who_cleared_it_cannot_also_release_it(self):
         """Two desks, two people: an officer holding both the elder's seat and

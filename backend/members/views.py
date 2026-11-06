@@ -16607,6 +16607,9 @@ class DepartmentWithdrawalReviewView(APIView):
             if row.amount > row.account.balance:
                 return Response({'detail': f'The {row.account.description or row.account.name} account holds KES {row.account.balance:,.2f} — less than the KES {row.amount:,.2f} asked for.'}, status=status.HTTP_400_BAD_REQUEST)
             reply = str(request.data.get('reply') or '').strip()[:255]
+            payment_method = str(request.data.get('payment_method') or 'mpesa').strip().lower()
+            if payment_method not in dict(Expenditure.PAYMENT_METHOD_CHOICES):
+                return Response({'detail': 'Choose a valid payment method.'}, status=status.HTTP_400_BAD_REQUEST)
             with transaction.atomic():
                 row.account.balance -= row.amount
                 row.account.save()
@@ -16624,7 +16627,7 @@ class DepartmentWithdrawalReviewView(APIView):
                     amount=row.amount,
                     category='operations',
                     account=row.account,
-                    payment_method='mpesa',
+                    payment_method=payment_method,
                     vendor_payee=giver_display_name('', member=row.requested_by),
                     receipt_number=f"WD-{row.id}",
                     expenditure_date=timezone.localdate(),
