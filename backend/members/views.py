@@ -12,7 +12,7 @@ from django.core import signing
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage, send_mail
 from django.core.validators import validate_email
-from django.http import HttpResponse, HttpResponseRedirect, Http404
+from django.http import HttpResponse, HttpResponseRedirect, Http404, FileResponse
 from django.db import connection, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
@@ -21,6 +21,7 @@ from django.utils.crypto import get_random_string
 from django.utils.dateparse import parse_date
 from datetime import date, datetime, timedelta
 import logging
+import mimetypes
 import uuid
 import re
 import json
@@ -49,7 +50,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt
+from .models import ReportSigning, ReportSignature
 from .mpesa import MpesaConfigurationError, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
 from chat.realtime import broadcast_announcement_response
@@ -7314,6 +7316,259 @@ class ChurchFinancialReportPdfView(APIView):
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename}"'
         return response
+
+
+#: The offices each report answers to, in the order the paper prints them.
+#: The givings report carries the head deacon's witness beside the three
+#: offices; the requests report names no witness, so its pen list is shorter.
+REPORT_SIGNING_OFFICES = {
+    'givings_summary': (
+        ('treasury', 'Treasury Office', 'Treasurer'),
+        ('deaconate', 'Deaconate', 'Head Deacon'),
+        ('eldership', 'Eldership', 'Elder'),
+        ('pastorate', 'Pastorate', 'Pastor'),
+    ),
+    'givings_individual': (
+        ('treasury', 'Treasury Office', 'Treasurer'),
+        ('deaconate', 'Deaconate', 'Head Deacon'),
+        ('eldership', 'Eldership', 'Elder'),
+        ('pastorate', 'Pastorate', 'Pastor'),
+    ),
+    'requests': (
+        ('treasury', 'Treasury Office', 'Treasurer'),
+        ('eldership', 'Eldership', 'Elder'),
+        ('pastorate', 'Pastorate', 'Pastor'),
+    ),
+}
+
+#: The role a member must hold to answer for an office on a report.
+REPORT_SIGNING_ROLE = {
+    'treasury': 'treasurer',
+    'deaconate': 'head_deacon',
+    'eldership': 'elder',
+    'pastorate': 'pastor',
+}
+
+
+def _may_answer_report_office(user, office):
+    """Whether this member's office is the one the signature belongs to."""
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    role = REPORT_SIGNING_ROLE.get(office)
+    return bool(profile and role and profile.has_role(role))
+
+
+def _report_signing_row(row, user=None):
+    signing = row.signing
+    return {
+        'id': row.id,
+        'signing_id': signing.id,
+        'kind': signing.kind,
+        'kind_label': signing.get_kind_display(),
+        'title': signing.title,
+        'period_start': signing.period_start.isoformat() if signing.period_start else None,
+        'period_end': signing.period_end.isoformat() if signing.period_end else None,
+        'details': signing.details,
+        'office': row.office,
+        'office_label': row.get_office_display(),
+        'office_title': row.office_title,
+        'status': row.status,
+        'response': row.response,
+        'responded_by_name': (
+            giver_display_name('', member=row.responded_by) if row.responded_by_id else ''
+        ),
+        'responded_at': row.responded_at,
+        'created_at': signing.created_at,
+        'can_respond': row.status == 'pending' and bool(
+            user and _may_answer_report_office(user, row.office)
+        ),
+    }
+
+
+def _report_signing_payload(signing, user=None):
+    rows = list(signing.signatures.select_related('responded_by').all())
+    return {
+        'id': signing.id,
+        'kind': signing.kind,
+        'title': signing.title,
+        'period_start': signing.period_start.isoformat() if signing.period_start else None,
+        'period_end': signing.period_end.isoformat() if signing.period_end else None,
+        'details': signing.details,
+        'status': signing.status,
+        'created_at': signing.created_at,
+        'requested_by_name': (
+            giver_display_name('', member=signing.requested_by) if signing.requested_by_id else ''
+        ),
+        'requests': [_report_signing_row(row, user) for row in rows],
+    }
+
+
+def _notify_report_signatories(signing):
+    """Put the ask on each signatory office's own notifications shelf."""
+    roles = [
+        REPORT_SIGNING_ROLE[code]
+        for code, _label, _title in REPORT_SIGNING_OFFICES.get(signing.kind, ())
+        if code in REPORT_SIGNING_ROLE
+    ]
+    if not roles:
+        return
+    query = Q()
+    for role in roles:
+        query |= Q(member_profile__roles__contains=role) | Q(member_profile__role=role)
+    audience = User.objects.filter(query, is_active=True).distinct()
+    for member in audience:
+        ChurchNotification.objects.create(
+            user=member,
+            title=f'Signature requested: {signing.title}',
+            message=(
+                f"The {signing.get_kind_display().lower()} is waiting for your office's "
+                'signature. Sign it, or send it back with a reason.'
+            ),
+            link='/requests',
+        )
+
+
+class ReportSigningsView(APIView):
+    """The signature asks a report raises — sent by the desk, answered here.
+
+    The treasury sends its report round the offices; each signatory office
+    reads its own ask, signs it, or sends it back with a reason. The report is
+    signed only when every office has signed.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = ReportSignature.objects.select_related('signing', 'responded_by').order_by(
+            '-signing__created_at', 'id'
+        )
+        if not (request.user.is_staff or request.user.is_superuser):
+            offices = [
+                code for code in REPORT_SIGNING_ROLE
+                if _may_answer_report_office(request.user, code)
+            ]
+            rows = rows.filter(office__in=offices)
+        return Response({'requests': [_report_signing_row(row, request.user) for row in rows]})
+
+    def post(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can send a report for signing.')
+        kind = str(request.data.get('kind') or '')
+        offices = REPORT_SIGNING_OFFICES.get(kind)
+        if not offices:
+            return Response({'detail': 'Name a report kind that can be signed.'}, status=status.HTTP_400_BAD_REQUEST)
+        title = str(request.data.get('title') or '').strip()[:200]
+        if not title:
+            return Response({'detail': 'Give the report a title.'}, status=status.HTTP_400_BAD_REQUEST)
+        start = parse_date(str(request.data.get('period_start') or ''))
+        end = parse_date(str(request.data.get('period_end') or ''))
+
+        # One live ask per report: sending again while the offices are still
+        # holding it would only multiply the same signature.
+        previous = (
+            ReportSigning.objects.filter(kind=kind, period_start=start, period_end=end)
+            .order_by('-created_at')
+            .first()
+        )
+        if previous and previous.status in ('pending', 'signed'):
+            return Response(
+                {
+                    'detail': 'This report has already been sent for signing.',
+                    'signing': _report_signing_payload(previous, request.user),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        signing = ReportSigning.objects.create(
+            kind=kind,
+            title=title,
+            period_start=start,
+            period_end=end,
+            details=str(request.data.get('details') or '').strip()[:255],
+            requested_by=request.user,
+        )
+        for code, _label, office_title in offices:
+            ReportSignature.objects.create(signing=signing, office=code, office_title=office_title)
+        _notify_report_signatories(signing)
+        return Response(
+            {'signing': _report_signing_payload(signing, request.user)},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ReportSigningStatusView(APIView):
+    """Where a report stands, so its desk can grey out the send button."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not is_treasurer_or_admin(request.user):
+            raise PermissionDenied('Only church treasurers or administrators can read a report\'s signing state.')
+        kind = str(request.query_params.get('kind') or '')
+        if kind not in REPORT_SIGNING_OFFICES:
+            return Response({'status': 'none', 'id': None})
+        start = parse_date(str(request.query_params.get('start') or ''))
+        end = parse_date(str(request.query_params.get('end') or ''))
+        signing = (
+            ReportSigning.objects.filter(kind=kind, period_start=start, period_end=end)
+            .order_by('-created_at')
+            .first()
+        )
+        return Response({
+            'status': signing.status if signing else 'none',
+            'id': signing.id if signing else None,
+        })
+
+
+class ReportSigningRespondView(APIView):
+    """One office's answer to a report's signature ask: sign, or refuse."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        row = (
+            ReportSignature.objects.select_related('signing', 'signing__requested_by')
+            .filter(pk=pk)
+            .first()
+        )
+        if not row:
+            return Response({'detail': 'Signature request not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if row.status != 'pending':
+            return Response({'detail': 'This signature has already been answered.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not _may_answer_report_office(request.user, row.office):
+            return Response(
+                {'detail': f'Only the {row.get_office_display()} can answer this signature.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        action = str(request.data.get('action') or '')
+        if action not in ('sign', 'reject'):
+            return Response({'detail': 'Answer with sign or reject.'}, status=status.HTTP_400_BAD_REQUEST)
+        response = str(request.data.get('response') or '').strip()[:1000]
+        if action == 'reject' and not response:
+            return Response({'detail': 'Say why the report is being sent back.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        row.status = 'signed' if action == 'sign' else 'rejected'
+        row.response = response
+        row.responded_by = request.user
+        row.responded_at = timezone.now()
+        row.save(update_fields=['status', 'response', 'responded_by', 'responded_at'])
+
+        signing = row.signing
+        if signing.requested_by_id:
+            verb = 'signed' if action == 'sign' else 'sent back'
+            ChurchNotification.objects.create(
+                user=signing.requested_by,
+                title=f'{row.get_office_display()} {verb} "{signing.title}"',
+                message=response or f'The {row.office_title.lower()} has {verb} the report.',
+                link='/requests',
+            )
+        return Response({
+            'request': _report_signing_row(row, request.user),
+            'signing_status': signing.status,
+        })
 
 
 class ChurchBudgetsView(generics.ListCreateAPIView):
@@ -15484,11 +15739,15 @@ class DepartmentAccountView(APIView):
                 'requested_by': giver_display_name('', member=row.requested_by),
                 'created_at': row.created_at,
                 'decided_at': row.decided_at,
+                'accountability': _accountability_payload(row),
             }
             for row in DepartmentWithdrawalRequest.objects.filter(
                 department=target,
                 account__in=active_accounts,
-            ).select_related('requested_by', 'decided_by', 'account').order_by('-created_at')[:50]
+            ).select_related(
+                'requested_by', 'decided_by', 'account',
+                'accountability__submitted_by', 'accountability__reviewed_by',
+            ).prefetch_related('accountability__receipts').order_by('-created_at')[:50]
         ]
 
         is_deaconate = target.code == 'deaconate'
@@ -15703,7 +15962,229 @@ def _withdrawal_review_row(row):
         'decided_at': row.decided_at,
         'reply': row.reply,
         'created_at': row.created_at,
+        'accountability': _accountability_payload(row),
     }
+
+
+#: What the receiving desk may file as proof of spending: the paper trails a
+#: Kenyan desk actually gets — a PDF invoice, or a photo of a receipt — and a
+#: cap that keeps one upload from filling the church's disk.
+ACCOUNTABILITY_RECEIPT_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'}
+ACCOUNTABILITY_RECEIPT_MAX_BYTES = 10 * 1024 * 1024
+ACCOUNTABILITY_RECEIPT_MAX_FILES = 10
+
+
+def _accountability_payload(row):
+    """The account filed against one released withdrawal, as both desks read it."""
+    accountability = getattr(row, 'accountability', None)
+    if accountability is None:
+        return None
+    receipts = [
+        {
+            'id': receipt.id,
+            'filename': receipt.filename or os.path.basename(receipt.file.name),
+            'caption': receipt.caption,
+            'url': f'/api/members/department-withdrawals/{row.id}/accountability/receipts/{receipt.id}/',
+        }
+        for receipt in accountability.receipts.all()
+    ]
+    return {
+        'status': accountability.status,
+        'notes': accountability.notes,
+        'spent_on': accountability.spent_on,
+        'submitted_by': giver_display_name('', member=accountability.submitted_by) if accountability.submitted_by else None,
+        'submitted_at': accountability.submitted_at,
+        'reviewed_by': giver_display_name('', member=accountability.reviewed_by) if accountability.reviewed_by else None,
+        'reviewed_at': accountability.reviewed_at,
+        'reply': accountability.reply,
+        'receipts': receipts,
+    }
+
+
+def _accountability_upload_error(upload):
+    """Why this upload cannot be filed, or None when it can."""
+    extension = os.path.splitext(upload.name or '')[1].lower()
+    if extension not in ACCOUNTABILITY_RECEIPT_EXTENSIONS:
+        return f"{upload.name} is not a PDF or an image. Attach a PDF, PNG, JPG or WEBP."
+    if upload.size > ACCOUNTABILITY_RECEIPT_MAX_BYTES:
+        return f"{upload.name} is larger than 10 MB. Attach a smaller copy."
+    return None
+
+
+class WithdrawalAccountabilityView(APIView):
+    """How a released withdrawal was spent, and the treasury's reading of it.
+
+    GET  — the account filed against one withdrawal (or null), with its
+           receipts, and whether this viewer may file or review it.
+    POST — the receiving desk files its account with ``notes`` and, where it
+           has them, ``receipts`` files (multipart). A returned account may
+           be corrected and resubmitted; an accepted one is closed.
+           ``action=review`` is the treasury's answer — ``decision`` is
+           ``accepted`` or ``returned``, and a return must carry a reason.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _row(self, pk):
+        return DepartmentWithdrawalRequest.objects.select_related(
+            'department', 'account', 'requested_by',
+            'accountability__submitted_by', 'accountability__reviewed_by',
+        ).prefetch_related('accountability__receipts').filter(pk=pk).first()
+
+    @staticmethod
+    def _may_read(user, row):
+        return bool(
+            is_treasurer_or_admin(user)
+            or can_manage_department(user, row.department.code)
+            or row.requested_by_id == user.id
+            or department_accounts(user, row.department.code)
+        )
+
+    def get(self, request, pk):
+        row = self._row(pk)
+        if row is None:
+            return Response({'detail': 'That withdrawal request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        if not self._may_read(request.user, row):
+            return Response({'detail': 'This fund is not yours to read.'}, status=status.HTTP_403_FORBIDDEN)
+        accountability = getattr(row, 'accountability', None)
+        return Response({
+            'withdrawal': {
+                'id': row.id,
+                'department': row.department.name,
+                'department_code': row.department.code,
+                'amount': str(row.amount),
+                'reason': row.reason,
+                'status': row.status,
+            },
+            'accountability': _accountability_payload(row),
+            'can_submit': bool(
+                row.status == 'approved'
+                and (accountability is None or accountability.status != 'accepted')
+            ),
+            'can_review': bool(is_treasurer_or_admin(request.user) and accountability is not None),
+        })
+
+    def post(self, request, pk):
+        row = self._row(pk)
+        if row is None:
+            return Response({'detail': 'That withdrawal request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        action = str(request.data.get('action') or 'submit').strip()
+
+        if action == 'review':
+            if not is_treasurer_or_admin(request.user):
+                return Response({'detail': 'Only the treasury can accept or return an accountability.'}, status=status.HTTP_403_FORBIDDEN)
+            accountability = getattr(row, 'accountability', None)
+            if accountability is None:
+                return Response({'detail': 'This withdrawal has no accountability filed yet.'}, status=status.HTTP_400_BAD_REQUEST)
+            decision = str(request.data.get('decision') or '').strip()
+            if decision not in ('accepted', 'returned'):
+                return Response({'detail': 'Answer with accepted or returned.'}, status=status.HTTP_400_BAD_REQUEST)
+            reply = str(request.data.get('reply') or '').strip()[:255]
+            if decision == 'returned' and not reply:
+                return Response({'detail': 'Tell the desk what is missing before sending the account back.'}, status=status.HTTP_400_BAD_REQUEST)
+            accountability.status = decision
+            accountability.reviewed_by = request.user
+            accountability.reviewed_at = timezone.now()
+            accountability.reply = reply
+            accountability.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'reply', 'updated_at'])
+            return Response({'accountability': _accountability_payload(row)})
+
+        if action != 'submit':
+            return Response({'detail': 'Unknown action.'}, status=status.HTTP_400_BAD_REQUEST)
+        if row.status != 'approved':
+            return Response({'detail': 'Only money released from the fund can be accounted for.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not (
+            row.requested_by_id == request.user.id
+            or can_manage_department(request.user, row.department.code)
+            or is_treasurer_or_admin(request.user)
+        ):
+            return Response({'detail': 'Only the desk that received the money can account for it.'}, status=status.HTTP_403_FORBIDDEN)
+
+        accountability = getattr(row, 'accountability', None)
+        if accountability is not None and accountability.status == 'accepted':
+            return Response({'detail': 'The treasury has already accepted this account.'}, status=status.HTTP_400_BAD_REQUEST)
+        notes = str(request.data.get('notes') or '').strip()
+        if not notes:
+            return Response({'detail': 'Say how the money was used.'}, status=status.HTTP_400_BAD_REQUEST)
+        spent_on = None
+        if str(request.data.get('spent_on') or '').strip():
+            spent_on = parse_date(str(request.data.get('spent_on')).strip())
+            if spent_on is None:
+                return Response({'detail': 'The date spent is not a date.'}, status=status.HTTP_400_BAD_REQUEST)
+        uploads = request.FILES.getlist('receipts')
+        if len(uploads) > ACCOUNTABILITY_RECEIPT_MAX_FILES:
+            return Response(
+                {'detail': f'Attach at most {ACCOUNTABILITY_RECEIPT_MAX_FILES} receipts at a time.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        for upload in uploads:
+            problem = _accountability_upload_error(upload)
+            if problem:
+                return Response({'detail': problem}, status=status.HTTP_400_BAD_REQUEST)
+
+        created = accountability is None
+        with transaction.atomic():
+            if accountability is None:
+                accountability = WithdrawalAccountability.objects.create(
+                    withdrawal=row, notes=notes, spent_on=spent_on,
+                    submitted_by=request.user,
+                )
+            else:
+                accountability.notes = notes
+                accountability.spent_on = spent_on
+                accountability.status = 'submitted'
+                accountability.submitted_by = request.user
+                accountability.submitted_at = timezone.now()
+                accountability.reviewed_by = None
+                accountability.reviewed_at = None
+                accountability.reply = ''
+                accountability.save(update_fields=[
+                    'notes', 'spent_on', 'status', 'submitted_by', 'submitted_at',
+                    'reviewed_by', 'reviewed_at', 'reply', 'updated_at',
+                ])
+            for upload in uploads:
+                WithdrawalAccountabilityReceipt.objects.create(
+                    accountability=accountability,
+                    file=upload,
+                    filename=(upload.name or '')[:255],
+                )
+        # The row was read with its old accountability and receipts prefetched;
+        # the response must describe what was just filed, not that snapshot.
+        row._prefetched_objects_cache = {}
+        accountability._prefetched_objects_cache = {}
+        return Response(
+            {'accountability': _accountability_payload(row)},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class WithdrawalAccountabilityReceiptView(APIView):
+    """One filed receipt, streamed to a viewer the fund is open to."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, receipt_id):
+        row = DepartmentWithdrawalRequest.objects.select_related('department').filter(pk=pk).first()
+        if row is None:
+            return Response({'detail': 'That withdrawal request does not exist.'}, status=status.HTTP_404_NOT_FOUND)
+        if not WithdrawalAccountabilityView._may_read(request.user, row):
+            return Response({'detail': 'This fund is not yours to read.'}, status=status.HTTP_403_FORBIDDEN)
+        receipt = WithdrawalAccountabilityReceipt.objects.filter(
+            pk=receipt_id, accountability__withdrawal=row,
+        ).first()
+        if receipt is None or not receipt.file:
+            return Response({'detail': 'That receipt was not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            handle = receipt.file.open('rb')
+        except FileNotFoundError:
+            return Response({'detail': 'That receipt file has gone missing.'}, status=status.HTTP_404_NOT_FOUND)
+        content_type = mimetypes.guess_type(receipt.file.name)[0] or 'application/octet-stream'
+        return FileResponse(
+            handle,
+            as_attachment=False,
+            filename=receipt.filename or os.path.basename(receipt.file.name),
+            content_type=content_type,
+        )
 
 
 class DepartmentWithdrawalReviewView(APIView):

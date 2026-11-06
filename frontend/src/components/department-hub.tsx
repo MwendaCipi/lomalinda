@@ -4898,6 +4898,18 @@ type FundWithdrawal = {
   requested_by: string;
   created_at: string;
   decided_at?: string | null;
+  /** The spending account filed after the money was released. */
+  accountability?: {
+    status: "submitted" | "accepted" | "returned";
+    notes: string;
+    spent_on: string | null;
+    submitted_by: string | null;
+    submitted_at: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    reply: string;
+    receipts: { id: number; filename: string; caption: string; url: string }[];
+  } | null;
 };
 
 /**
@@ -4963,6 +4975,8 @@ type UnifiedAccountItem = {
   accountDescription?: string;
   requestedBy?: string;
   reply?: string;
+  /** The released withdrawal this line belongs to, when it has one. */
+  withdrawal?: FundWithdrawal;
 };
 
 /**
@@ -5040,6 +5054,13 @@ export function DepartmentAccountsPanel({
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // The spending account: the desk writes how the money was used and files
+  // the receipts it was given, for the treasury to accept or send back.
+  const [accountingFor, setAccountingFor] = useState<FundWithdrawal | null>(null);
+  const [accountNotes, setAccountNotes] = useState("");
+  const [accountSpentOn, setAccountSpentOn] = useState("");
+  const [accountFiles, setAccountFiles] = useState<File[]>([]);
+  const [accountSaving, setAccountSaving] = useState(false);
   const [internalSearch, setInternalSearch] = useState("");
   const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   const rowPad = densityCellPad();
@@ -5157,6 +5178,56 @@ export function DepartmentAccountsPanel({
     }
   };
 
+  const openAccountability = (row: FundWithdrawal) => {
+    setAccountingFor(row);
+    setAccountNotes(row.accountability?.notes ?? "");
+    setAccountSpentOn(row.accountability?.spent_on ?? "");
+    setAccountFiles([]);
+  };
+
+  const submitAccountability = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!accountingFor || !accountNotes.trim()) return;
+    setAccountSaving(true);
+    try {
+      const body = new FormData();
+      body.append("notes", accountNotes.trim());
+      if (accountSpentOn) body.append("spent_on", accountSpentOn);
+      for (const file of accountFiles) body.append("receipts", file);
+      const res = await fetch(`${API_URL}/api/members/department-withdrawals/${accountingFor.id}/accountability/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not file the account.");
+      showAlert("Account filed", "The treasury will read how the money was spent.", "success");
+      setAccountingFor(null);
+      setAccountFiles([]);
+      load();
+      if (onChanged) onChanged();
+    } catch (error) {
+      showAlert("Could not file the account", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  // A receipt is private to the fund, so it is fetched with the desk's token
+  // and opened from a local blob rather than a bare link.
+  const openAccountReceipt = async (receipt: { id: number; filename: string; url: string }) => {
+    if (!accountingFor) return;
+    try {
+      const res = await fetch(`${API_URL}${receipt.url}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("The receipt could not be read.");
+      const url = URL.createObjectURL(await res.blob());
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      showAlert("Could not open the receipt", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
   const movementQuery = effectiveSearch.trim().toLowerCase();
@@ -5177,6 +5248,7 @@ export function DepartmentAccountsPanel({
       const category: UnifiedAccountItem["category"] = isOutflow ? "withdrawal" : "contribution";
       let requestedBy: string | undefined;
       let reply: string | undefined;
+      let linkedWithdrawal: FundWithdrawal | undefined;
 
       if (wdMatch) {
         const wdId = parseInt(wdMatch[1], 10);
@@ -5186,6 +5258,7 @@ export function DepartmentAccountsPanel({
           status = "approved";
           requestedBy = wd.requested_by;
           reply = wd.reply;
+          linkedWithdrawal = wd;
         }
       }
 
@@ -5203,6 +5276,7 @@ export function DepartmentAccountsPanel({
         accountDescription: mov.account_description,
         requestedBy,
         reply,
+        withdrawal: linkedWithdrawal,
       });
     }
 
@@ -5222,6 +5296,7 @@ export function DepartmentAccountsPanel({
           accountDescription: wd.account_description,
           requestedBy: wd.requested_by,
           reply: wd.reply,
+          withdrawal: wd,
         });
       }
     }
@@ -5457,6 +5532,29 @@ export function DepartmentAccountsPanel({
                             {item.reply && (item.status === "declined" || item.status === "approved") && (
                               <p className="text-[10px] italic text-moss-faint">{item.reply}</p>
                             )}
+                            {item.withdrawal?.status === "approved" && (
+                              <button
+                                type="button"
+                                onClick={() => openAccountability(item.withdrawal!)}
+                                className={`mt-1 block rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                                  item.withdrawal.accountability?.status === "accepted"
+                                    ? "border-green-200 bg-green-50 text-green-800"
+                                    : item.withdrawal.accountability?.status === "returned"
+                                      ? "border-red-200 bg-red-50 text-red-700"
+                                      : item.withdrawal.accountability
+                                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                                        : "border-sand-mute text-moss hover:border-ember hover:text-ember"
+                                }`}
+                              >
+                                {item.withdrawal.accountability?.status === "accepted"
+                                  ? "Accounted — accepted"
+                                  : item.withdrawal.accountability?.status === "returned"
+                                    ? "Accountability returned — resubmit"
+                                    : item.withdrawal.accountability
+                                      ? "Accountability waiting on treasury"
+                                      : "Account for spending"}
+                              </button>
+                            )}
                             {/* Phone: the date and status fold under the
                                 description — the row's other columns stand
                                 aside so nothing is cut off widthwise, and the
@@ -5574,6 +5672,119 @@ export function DepartmentAccountsPanel({
             </div>
           </div>
         </>
+      )}
+
+      {/* The spending account: what the released money bought, with the
+          receipts the desk was given. A returned account can be corrected and
+          resubmitted; an accepted one is the treasury's last word. */}
+      {accountingFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Account for the spending"
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
+          >
+            <div className="flex items-start justify-between border-b border-sand-line pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-bark">Account for the spending</h3>
+                <p className="mt-0.5 text-xs text-moss">
+                  KES {Number(accountingFor.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} · {accountingFor.reason}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountingFor(null)}
+                aria-label="Close"
+                className="rounded-lg p-1 text-moss hover:bg-sand hover:text-bark"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {accountingFor.accountability?.status === "returned" && (
+              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                The treasury sent this back
+                {accountingFor.accountability.reply ? `: “${accountingFor.accountability.reply}”` : "."}
+              </p>
+            )}
+            {accountingFor.accountability?.status === "accepted" && (
+              <p className="mt-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-800">
+                The treasury accepted this account on{" "}
+                {dayFirstTime(accountingFor.accountability.reviewed_at ?? accountingFor.accountability.submitted_at)}.
+              </p>
+            )}
+
+            {accountingFor.accountability && accountingFor.accountability.receipts.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {accountingFor.accountability.receipts.map((receipt) => (
+                  <button
+                    key={receipt.id}
+                    type="button"
+                    onClick={() => void openAccountReceipt(receipt)}
+                    className="rounded-md border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                  >
+                    {receipt.filename}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {accountingFor.accountability?.status !== "accepted" && (
+              <form onSubmit={submitAccountability} className="mt-4 space-y-4">
+                <label className="block text-sm font-medium text-bark">
+                  How the money was used *
+                  <textarea
+                    required
+                    rows={4}
+                    value={accountNotes}
+                    onChange={(e) => setAccountNotes(e.target.value)}
+                    placeholder="What was bought, and for which activity…"
+                    className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-bark">
+                  Date spent
+                  <input
+                    type="date"
+                    value={accountSpentOn}
+                    onChange={(e) => setAccountSpentOn(e.target.value)}
+                    className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                  />
+                </label>
+                <label className="block text-sm font-medium text-bark">
+                  Receipts
+                  <span className="mt-0.5 block text-[11px] font-normal text-moss">
+                    PDFs or photos, up to 10 MB each.
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.webp"
+                    onChange={(e) => setAccountFiles(Array.from(e.target.files ?? []))}
+                    className="mt-1 block w-full text-xs text-moss file:mr-2 file:rounded-lg file:border-0 file:bg-sand file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-bark"
+                  />
+                </label>
+                <div className="flex justify-end gap-2 border-t border-sand-line pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setAccountingFor(null)}
+                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={accountSaving || !accountNotes.trim()}
+                    className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-ember-deep disabled:opacity-50"
+                  >
+                    {accountSaving ? "Filing…" : accountingFor.accountability ? "Update account" : "File account"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Withdrawal / Funding Request Modal */}
@@ -5990,11 +6201,14 @@ function DepartmentDetail({
   );
   // The pastorate carries no Event Calendar and no duty rota of its own — the
   // touches on its strip the other desks share are not pages this desk keeps,
-  // so a call for either opens the treasury's asks instead: the view the office
-  // actually answers first.
+  // so a call for either opens the desk's own first view. That is Sharing for
+  // the pastoral office, whose notices the desk publishes; a reader who may not
+  // publish lands on the treasury's asks instead.
   const [subTab, setSubTab] = useState<DeptSubTab>(
     isPastorate && (initialTab === "calendar" || initialTab === "pulpit-team")
-      ? "treasury-approvals"
+      ? isPastor
+        ? "sharing"
+        : "treasury-approvals"
       : initialTab
   );
   // A deep link may name a view the reader is not entitled to; the strip
@@ -6585,8 +6799,8 @@ function DepartmentDetail({
             },
             {
               key: "spiritual" as const,
-              label: "Spiritual",
-              short: "Spiritual",
+              label: "Requests",
+              short: "Requests",
               icon: HandHeart,
               count: pendingToggles.spiritual,
             },
@@ -6656,9 +6870,9 @@ function DepartmentDetail({
     ];
   }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code, waitingJoins, pendingToggles.treasury, pendingToggles.letters, pendingToggles.spiritual, pendingToggles.prayerCells, pendingToggles.lessonOrders]);
 
-  // The pastorate's strip reads Spiritual first, Sharing second, and keeps
-  // Team where Spiritual stood: the office opens on the church's spiritual
-  // asks, publishes its notices next, and finds its own team further along.
+  // The pastorate's strip reads Sharing first, Requests second, and keeps
+  // Team where Requests stood: the office publishes its notices as it opens,
+  // answers the church's asks next, and finds its own team further along.
   const stripItems = useMemo(() => {
     if (!isPastorate) return stripItemsBuilt;
     const items = [...stripItemsBuilt];
@@ -6675,9 +6889,9 @@ function DepartmentDetail({
 
     const sharingAt = at("sharing");
     const sharing = sharingAt >= 0 ? items[sharingAt] : undefined;
-    if (sharing && sharingAt > 1) {
+    if (sharing && sharingAt > 0) {
       items.splice(sharingAt, 1);
-      items.splice(1, 0, sharing);
+      items.splice(0, 0, sharing);
     }
     return items;
   }, [stripItemsBuilt, isPastorate]);

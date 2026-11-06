@@ -644,26 +644,14 @@ def generate_treasury_pdf(
     st = get_pdf_styles()
 
     def signature_cell(heading, entry, fallback):
-        """One signature cell: the named officer, their signature on the line,
-        or the blank rules the cell has always kept when nobody has signed.
+        """One signature cell: the office's title and a blank pen line.
 
-        The upload is checked, not assumed — a holder who has not signed yet,
-        or whose file has gone missing, leaves their ruled line as it was.
+        The reports print titles, not names — the office signs, whoever holds
+        it — so the cell keeps only the ruled lines and the space a hand needs.
         """
-        entry = entry or {}
-        cell = [Paragraph(heading, st["cell"])]
-        if entry.get("name"):
-            cell.append(Paragraph(f"Name: <b>{escape(entry['name'])}</b>", st["cell"]))
-        else:
-            cell.append(Paragraph(fallback, st["cell"]))
-        image = _signature_flowable(entry.get("image"), 4.8 * cm, 1.3 * cm)
-        # One fixed-height signing slot for every office: an uploaded pen
-        # prints inside it, an office still unsigning keeps its ruled line in
-        # it — so the signing space reads the same on the row whether the
-        # report is printed before or after the officers have signed, and it
-        # always holds a passage of pen worth the name it signs.
+        cell = [Paragraph(heading, st["cell"]), Paragraph(fallback, st["cell"])]
         slot_table = Table(
-            [[image if image else Paragraph("Signature: _______________", st["cell"])]],
+            [[Paragraph("Signature: _______________", st["cell"])]],
             colWidths=[5.2 * cm],
             rowHeights=[1.7 * cm],
         )
@@ -2087,10 +2075,9 @@ class SignatureSlotsFlowable(Flowable):
     """Ruled slots at the foot of a report: where the people who touch it put
     their pens.
 
-    Each slot names an office and, where that office has a saved signature
-    (see ``members.signatures``), prints it on the line with the officer's
-    name beneath — so a report comes off the printer already signed. A slot
-    with no signature keeps the ruled line it has always drawn.
+    Each slot names an office and keeps its pen line blank: the office signs,
+    whoever holds it, so the paper never prints a name that a later holder
+    would have to explain.
 
     Drawn straight onto the canvas — one ``drawString`` per slot title, rather
     than as paragraphs — so each title lands in the PDF as a single text
@@ -2158,36 +2145,22 @@ class SignatureSlotsFlowable(Flowable):
             c.drawString(x + (box_w - c.stringWidth(hint, "Helvetica", 6.5)) / 2, h - 1.18 * cm, hint)
 
             inner_l, inner_r = x + 0.3 * cm, x + box_w - 0.3 * cm
-            signed = self.signatures.get(code) if code else None
-            # The signature rule, with the saved signature resting on it and
-            # its caption beneath.
+            # The pen line is left blank for the office's current holder: the
+            # paper names the office, never the person who happened to hold it
+            # when the report was printed.
             c.setStrokeColor(accent)
             c.setLineWidth(0.75)
             c.line(inner_l, 1.15 * cm, inner_r, 1.15 * cm)
-            if signed:
-                _draw_signature(
-                    c, signed.get("image"),
-                    inner_l + 0.15 * cm, 1.22 * cm,
-                    inner_r - inner_l - 0.3 * cm, max(h - 2.52 * cm, 0.6 * cm),
-                )
             c.setFillColor(muted)
             c.setFont("Helvetica", 6)
             c.drawString(inner_l, 0.8 * cm, "Signature")
-            # Name and date, each on its own short rule — the officer's name
-            # printed where a pen would have written it.
+            # Name and date, each on its own short rule — filled by the hand
+            # that signs the paper.
             c.setStrokeColor(border)
             c.setLineWidth(0.5)
             c.setFont("Helvetica", 6)
-            name = (signed or {}).get("name") or ""
-            if name:
-                c.setFillColor(primary)
-                c.setFont("Helvetica-Bold", 6)
-                c.drawString(inner_l, 0.32 * cm, name[:30])
-                c.setFillColor(muted)
-                c.setFont("Helvetica", 6)
-            else:
-                c.drawString(inner_l, 0.32 * cm, "Name")
-                c.line(inner_l + 0.7 * cm, 0.3 * cm, x + box_w * 0.6, 0.3 * cm)
+            c.drawString(inner_l, 0.32 * cm, "Name")
+            c.line(inner_l + 0.7 * cm, 0.3 * cm, x + box_w * 0.6, 0.3 * cm)
             date_l = x + box_w * 0.66
             c.drawString(date_l, 0.32 * cm, "Date")
             c.line(date_l + 0.62 * cm, 0.3 * cm, inner_r, 0.3 * cm)

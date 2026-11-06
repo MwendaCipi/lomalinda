@@ -1953,6 +1953,93 @@ class ChurchFinancialReport(models.Model):
         return self.total_offerings - self.total_expenses
 
 
+class ReportSigning(models.Model):
+    """A report sent round the offices for the signatures it prints.
+
+    The paper itself carries titles, not names (see ``pdf_generator``): the
+    office signs, whoever holds it. The requests raised here are the digital
+    half of that — one row per signatory office — and the desk that raised the
+    report reads their answers back.
+    """
+
+    KIND_CHOICES = [
+        ('givings_summary', 'Summary report'),
+        ('givings_individual', 'Individual givings report'),
+        ('requests', 'Withdrawal requests report'),
+    ]
+
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+    title = models.CharField(max_length=200)
+    # A report's period is a pair of plain days, and may be open-ended when the
+    # desk printed the whole ledger.
+    period_start = models.DateField(null=True, blank=True)
+    period_end = models.DateField(null=True, blank=True)
+    # What the paper carries, in the desk's own words — accounts, filters, the
+    # count of requests. Kept beside the report so a signatory knows what they
+    # are signing without opening the treasury's books.
+    details = models.CharField(max_length=255, blank=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='report_signings_requested',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.title}"
+
+    @property
+    def status(self):
+        """Signed only when every office has signed; rejected if one refused."""
+        signatures = list(self.signatures.all())
+        if signatures and all(row.status == 'signed' for row in signatures):
+            return 'signed'
+        if any(row.status == 'rejected' for row in signatures):
+            return 'rejected'
+        return 'pending'
+
+
+class ReportSignature(models.Model):
+    """One office's pen on a report — pending, signed, or sent back."""
+
+    OFFICE_CHOICES = [
+        ('treasury', 'Treasury Office'),
+        ('deaconate', 'Deaconate'),
+        ('eldership', 'Eldership'),
+        ('pastorate', 'Pastorate'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Awaiting signature'),
+        ('signed', 'Signed'),
+        ('rejected', 'Rejected'),
+    ]
+
+    signing = models.ForeignKey(ReportSigning, on_delete=models.CASCADE, related_name='signatures')
+    office = models.CharField(max_length=32, choices=OFFICE_CHOICES)
+    # The title the paper prints for this pen: Treasurer, Head Deacon, Elder,
+    # Pastor. A title, not a person, so the office's current holder signs.
+    office_title = models.CharField(max_length=80)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    response = models.TextField(blank=True)
+    responded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='report_signatures_answered',
+    )
+    responded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(fields=('signing', 'office'), name='uniq_report_signature_office')
+        ]
+
+    def __str__(self):
+        return f"{self.get_office_display()} — {self.get_status_display()}"
+
+
 class ChurchBudget(models.Model):
     year = models.PositiveIntegerField(unique=True)
     total_income = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -3391,3 +3478,67 @@ class TreasuryPeriod(models.Model):
 
     def __str__(self):
         return f"Treasury period closed {self.closed_at:%Y-%m-%d %H:%M}"
+
+
+class WithdrawalAccountability(models.Model):
+    """The receiving desk's account of how a released withdrawal was spent.
+
+    Money that leaves the fund is not accounted for by the release alone: the
+    desk that received it writes down what it bought, attaches the receipts it
+    was given, and the treasury accepts the account or sends it back for more.
+    A returned account can be corrected and resubmitted — the receipts already
+    filed stay on it, so nothing has to be uploaded twice.
+    """
+
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted'),
+        ('accepted', 'Accepted'),
+        ('returned', 'Returned'),
+    ]
+
+    withdrawal = models.OneToOneField(
+        DepartmentWithdrawalRequest, on_delete=models.CASCADE,
+        related_name='accountability',
+    )
+    notes = models.TextField(help_text='How the money was used.')
+    spent_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted', db_index=True)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='withdrawal_accountabilities_submitted',
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='withdrawal_accountabilities_reviewed',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reply = models.CharField(max_length=255, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        verbose_name_plural = 'withdrawal accountabilities'
+
+    def __str__(self):
+        return f"Accountability for WD-{self.withdrawal_id} ({self.get_status_display()})"
+
+
+class WithdrawalAccountabilityReceipt(models.Model):
+    """One receipt, invoice or photo filed with a withdrawal's account."""
+
+    accountability = models.ForeignKey(
+        WithdrawalAccountability, on_delete=models.CASCADE, related_name='receipts',
+    )
+    file = models.FileField(upload_to='withdrawal_receipts/%Y/%m/')
+    #: The name the uploader's device gave the file, kept because storage may
+    #: rename a collision — the desk still reads the name it chose.
+    filename = models.CharField(max_length=255, blank=True, default='')
+    caption = models.CharField(max_length=160, blank=True, default='')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return self.filename or (self.file.name if self.file else 'Receipt')

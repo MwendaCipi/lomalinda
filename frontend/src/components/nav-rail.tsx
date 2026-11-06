@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Mail, Menu, Search, UserPlus } from "lucide-react";
 
@@ -29,6 +29,7 @@ import { AreaJoinModal, AreaContactModal } from "./area-modals";
  */
 export function NavRail() {
   const pathname = normalizePath(usePathname());
+  const router = useRouter();
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
 
@@ -123,6 +124,16 @@ export function NavRail() {
         )
         .filter((page, index, all) => all.findIndex((other) => other.href === page.href) === index)
     : [];
+  // What Enter opens: the first row the search is showing, in the order the
+  // rail draws them — a member who typed a name should not have to reach for
+  // the mouse and pick it out of the list.
+  const firstHitHref = needle
+    ? sections
+        .flatMap((section) => section.entries.map((entry) => entryHref(entry)))
+        .find((href): href is string => Boolean(href)) ??
+      pageRows[0]?.href ??
+      null
+    : null;
 
   return (
     <aside
@@ -180,6 +191,12 @@ export function NavRail() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || !firstHitHref) return;
+                event.preventDefault();
+                setQuery("");
+                router.push(firstHitHref);
+              }}
               aria-label="Search the rail"
               placeholder="Search the rail…"
               className="w-full rounded-xl border border-sand-line bg-white py-2 pl-8 pr-3 text-xs text-bark outline-none placeholder:text-moss focus:border-ember"

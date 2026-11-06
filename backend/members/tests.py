@@ -71,7 +71,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, DepartmentWithdrawalRequest, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -18329,11 +18329,13 @@ class SignatureOnTheChurchsPaperTests(APITestCase):
         text = _pdf_text(response.content)
         self.assertTrue(self._printed(text, 'Prepared By'))
         self.assertTrue(self._printed(text, 'Authorizing Officer'))
-        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
-        self.assertTrue(self._printed(text, 'Fred Elder'))
+        # The statement names the office, never the officer: whoever holds the
+        # pen signs it.
+        self.assertFalse(self._printed(text, 'Tessa Treasurer'))
+        self.assertFalse(self._printed(text, 'Fred Elder'))
 
-    def test_an_office_without_a_saved_signature_still_names_its_officer(self):
-        """The name prints and the line stays blank: a statement is not held
+    def test_an_office_without_a_saved_signature_still_carries_its_title(self):
+        """The title prints and the line stays blank: a statement is not held
         back because one office has not drawn their signature yet."""
         self._upload(self.treasurer)
         report = ChurchFinancialReport.objects.create(
@@ -18342,8 +18344,10 @@ class SignatureOnTheChurchsPaperTests(APITestCase):
         )
         self.client.force_authenticate(self.treasurer)
         text = _pdf_text(self.client.get(f'/api/members/reports/{report.pk}/pdf/').content)
-        self.assertTrue(self._printed(text, 'Tessa Treasurer'))
-        self.assertTrue(self._printed(text, 'Fred Elder'))
+        self.assertTrue(self._printed(text, 'Prepared By'))
+        self.assertTrue(self._printed(text, 'Authorizing Officer'))
+        self.assertFalse(self._printed(text, 'Tessa Treasurer'))
+        self.assertFalse(self._printed(text, 'Fred Elder'))
 
     def test_the_office_holder_who_has_signed_answers_for_the_office(self):
         """Roles are shared: a second treasurer who has not drawn theirs must
@@ -18378,6 +18382,238 @@ class SignatureOnTheChurchsPaperTests(APITestCase):
         text = _pdf_text(self.client.get(f'/api/members/contributions/{row.pk}/receipt/').content)
         self.assertEqual(text.count('BothaOfficer'), 1, text)
         self.assertTrue(self._printed(text, 'FIRST ELDER'))
+
+
+class WithdrawalAccountabilityTests(APITestCase):
+    """The desk accounts for released money, with the receipts it was given.
+
+    A release is not the end of the paper: the desk that received the money
+    writes down what it bought and files its receipts, and the treasury
+    accepts the account or sends it back to be corrected.
+    """
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user(
+            'acc.treasurer', 'acc.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tessa', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.leader = User.objects.create_user(
+            'acc.leader', 'acc.leader@example.com', 'StrongPass#2026',
+            first_name='Lena', last_name='Leader',
+        )
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        self.other = User.objects.create_user(
+            'acc.other', 'acc.other@example.com', 'StrongPass#2026',
+            first_name='Owen', last_name='Other',
+        )
+        MemberProfile.objects.create(user=self.other, role='member', roles='member')
+        self.department = Department.objects.create(
+            name='Music Accountability', code='music-accountability', is_active=True,
+        )
+        self.account = TreasuryAccount.objects.create(
+            name='MusicAcc', description='Music Accountability',
+            balance=Decimal('500.00'), department=self.department,
+        )
+        self.released = DepartmentWithdrawalRequest.objects.create(
+            department=self.department, account=self.account,
+            amount=Decimal('200.00'), reason='Tent and chairs',
+            requested_by=self.leader, status='approved',
+        )
+
+    def _file(self, notes='Tent, chairs and transport', receipt=True, user=None):
+        self.client.force_authenticate(user or self.leader)
+        payload = {'notes': notes, 'spent_on': '2026-10-12'}
+        if receipt:
+            payload['receipts'] = SimpleUploadedFile(
+                'tent.pdf', b'%PDF-1.4 receipt', content_type='application/pdf',
+            )
+        return self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            payload, format='multipart',
+        )
+
+    def test_the_receiving_desk_files_how_the_money_was_spent(self):
+        response = self._file()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(response.data['accountability']['status'], 'submitted')
+        self.assertEqual(response.data['accountability']['notes'], 'Tent, chairs and transport')
+        self.assertEqual(len(response.data['accountability']['receipts']), 1)
+        self.assertEqual(response.data['accountability']['receipts'][0]['filename'], 'tent.pdf')
+
+        # The receipt is readable by the fund's desk and the treasury, and by
+        # nobody else.
+        receipt_url = response.data['accountability']['receipts'][0]['url']
+        receipt = self.client.get(receipt_url)
+        self.assertEqual(receipt.status_code, status.HTTP_200_OK)
+        self.assertEqual(b''.join(receipt.streaming_content), b'%PDF-1.4 receipt')
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.get(receipt_url).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_the_treasury_accepts_or_sends_the_account_back(self):
+        self._file()
+        self.client.force_authenticate(self.leader)
+        forbidden = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'review', 'decision': 'accepted'}, format='json',
+        )
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.treasurer)
+        blank = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'review', 'decision': 'returned'}, format='json',
+        )
+        self.assertEqual(blank.status_code, status.HTTP_400_BAD_REQUEST)
+        sent_back = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'review', 'decision': 'returned', 'reply': 'The transport receipt is missing.'},
+            format='json',
+        )
+        self.assertEqual(sent_back.status_code, status.HTTP_200_OK, sent_back.content)
+        self.assertEqual(sent_back.data['accountability']['status'], 'returned')
+        self.assertEqual(sent_back.data['accountability']['reply'], 'The transport receipt is missing.')
+
+        # The desk corrects it; the receipt already filed stays on the account.
+        again = self._file(notes='Tent and chairs, transport included')
+        self.assertEqual(again.status_code, status.HTTP_200_OK, again.content)
+        self.assertEqual(again.data['accountability']['status'], 'submitted')
+        self.assertEqual(len(again.data['accountability']['receipts']), 2)
+        self.assertEqual(again.data['accountability']['reply'], '')
+
+        self.client.force_authenticate(self.treasurer)
+        accepted = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'review', 'decision': 'accepted'}, format='json',
+        )
+        self.assertEqual(accepted.status_code, status.HTTP_200_OK, accepted.content)
+        self.assertEqual(accepted.data['accountability']['status'], 'accepted')
+
+        # An accepted account is closed: neither desk can reopen it by filing.
+        self.assertEqual(self._file(user=self.leader).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_only_money_already_released_can_be_accounted_for(self):
+        self.released.status = 'elder_approved'
+        self.released.save(update_fields=['status'])
+        self.assertEqual(self._file().status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_another_desk_cannot_file_on_this_money(self):
+        self.assertEqual(self._file(user=self.other).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ReportSigningRequestTests(APITestCase):
+    """Sending a report round the offices, and their answers.
+
+    The report prints titles, not names, so the ask belongs to an office —
+    the eldership, the treasury, the pastorate — and its current holder
+    answers from the requests table.
+    """
+
+    SEND_URL = '/api/members/reports/signings/'
+
+    def setUp(self):
+        self.treasurer = User.objects.create_user(
+            'rs.treasurer', 'rs.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tessa', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.deacon = User.objects.create_user(
+            'rs.deacon', 'rs.deacon@example.com', 'StrongPass#2026',
+            first_name='Dan', last_name='Deacon',
+        )
+        MemberProfile.objects.create(user=self.deacon, role='head_deacon', roles='head_deacon,member')
+        self.elder = User.objects.create_user(
+            'rs.elder', 'rs.elder@example.com', 'StrongPass#2026',
+            first_name='Fred', last_name='Elder',
+        )
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.pastor = User.objects.create_user(
+            'rs.pastor', 'rs.pastor@example.com', 'StrongPass#2026',
+            first_name='Pat', last_name='Pastor',
+        )
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        self.member = User.objects.create_user(
+            'rs.member', 'rs.member@example.com', 'StrongPass#2026',
+            first_name='Mo', last_name='Member',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+    def _send(self):
+        self.client.force_authenticate(self.treasurer)
+        return self.client.post(self.SEND_URL, {
+            'kind': 'givings_summary',
+            'title': 'October 2026 stewardship report',
+            'period_start': '2026-10-01',
+            'period_end': '2026-10-31',
+            'details': 'All accounts',
+        }, format='json')
+
+    def test_sending_a_givings_report_raises_one_ask_per_office(self):
+        from .models import ReportSigning, ReportSignature
+
+        response = self._send()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        self.assertEqual(ReportSigning.objects.count(), 1)
+        self.assertEqual(ReportSignature.objects.count(), 4)
+        self.assertEqual(response.data['signing']['status'], 'pending')
+        self.assertEqual(len(response.data['signing']['requests']), 4)
+
+    def test_each_office_signs_and_the_last_pen_closes_the_report(self):
+        from .models import ReportSigning, ReportSignature
+
+        response = self._send()
+        signing_id = response.data['signing']['id']
+        for office, user in (
+            ('treasury', self.treasurer),
+            ('deaconate', self.deacon),
+            ('eldership', self.elder),
+            ('pastorate', self.pastor),
+        ):
+            row = ReportSignature.objects.get(signing_id=signing_id, office=office)
+            self.client.force_authenticate(user)
+            answer = self.client.post(
+                f'/api/members/reports/signings/{row.id}/respond/',
+                {'action': 'sign'}, format='json',
+            )
+            self.assertEqual(answer.status_code, status.HTTP_200_OK, answer.content)
+        self.assertEqual(ReportSigning.objects.get(pk=signing_id).status, 'signed')
+
+    def test_a_rejection_carries_the_reason_back(self):
+        from .models import ReportSignature
+
+        response = self._send()
+        row = ReportSignature.objects.get(
+            signing_id=response.data['signing']['id'], office='eldership',
+        )
+        self.client.force_authenticate(self.elder)
+        blank = self.client.post(
+            f'/api/members/reports/signings/{row.id}/respond/',
+            {'action': 'reject'}, format='json',
+        )
+        self.assertEqual(blank.status_code, status.HTTP_400_BAD_REQUEST)
+        answer = self.client.post(
+            f'/api/members/reports/signings/{row.id}/respond/',
+            {'action': 'reject', 'response': 'The expenditure line needs a note.'},
+            format='json',
+        )
+        self.assertEqual(answer.status_code, status.HTTP_200_OK, answer.content)
+        self.assertEqual(answer.data['signing_status'], 'rejected')
+        row.refresh_from_db()
+        self.assertEqual(row.response, 'The expenditure line needs a note.')
+
+    def test_only_the_office_may_answer_its_own_pen(self):
+        from .models import ReportSignature
+
+        response = self._send()
+        row = ReportSignature.objects.get(
+            signing_id=response.data['signing']['id'], office='pastorate',
+        )
+        self.client.force_authenticate(self.treasurer)
+        answer = self.client.post(
+            f'/api/members/reports/signings/{row.id}/respond/',
+            {'action': 'sign'}, format='json',
+        )
+        self.assertEqual(answer.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class UserDetailUpdateViewTests(APITestCase):

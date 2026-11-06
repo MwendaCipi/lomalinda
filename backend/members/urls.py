@@ -1,4 +1,5 @@
 from django.urls import path
+from .views import ReportSigningsView, ReportSigningStatusView, ReportSigningRespondView, WithdrawalAccountabilityView, WithdrawalAccountabilityReceiptView
 from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView, ProfileUpdateView, YaLessonRedirectView, EmailChangeRequestView, EmailChangeVerifyView, EmailChangeCancelView
 from .views import PrayerCellsView, PrayerCellDetailView, PrayerCellMembersView, PrayerCellJoinRequestView, PrayerCellJoinRequestReviewView
 from .views import EmailVerificationConfirmView, EmailVerificationResendView
@@ -143,6 +144,11 @@ urlpatterns = [
     path('notifications/', ChurchNotificationView.as_view(), name='notifications'),
     path('reports/', ChurchFinancialReportsView.as_view(), name='church-reports'),
     path('reports/suggestions/', ChurchFinancialReportSuggestionsView.as_view(), name='church-report-suggestions'),
+    # The report's sign-off: the desk sends it round the offices, and each
+    # office answers from the requests table.
+    path('reports/signings/', ReportSigningsView.as_view(), name='report-signings'),
+    path('reports/signings/status/', ReportSigningStatusView.as_view(), name='report-signing-status'),
+    path('reports/signings/<int:pk>/respond/', ReportSigningRespondView.as_view(), name='report-signing-respond'),
     # The pdf route must stand before the <int:pk> route, which would swallow it.
     path('reports/<int:pk>/pdf/', ChurchFinancialReportPdfView.as_view(), name='church-report-pdf'),
     path('reports/<int:pk>/', ChurchFinancialReportDetailView.as_view(), name='church-report-detail'),
@@ -199,6 +205,10 @@ urlpatterns = [
     path('department-withdrawals/pdf/', WithdrawalRequestsPdfView.as_view(), name='department-withdrawals-pdf'),
     path('department-withdrawals/<int:pk>/pdf/', WithdrawalRequestPdfView.as_view(), name='department-withdrawal-pdf'),
     path('department-withdrawals/review/', DepartmentWithdrawalReviewView.as_view(), name='department-withdrawal-review'),
+    # The account of money already released: the receiving desk files how it
+    # was spent with its receipts, and the treasury accepts it or sends it back.
+    path('department-withdrawals/<int:pk>/accountability/', WithdrawalAccountabilityView.as_view(), name='department-withdrawal-accountability'),
+    path('department-withdrawals/<int:pk>/accountability/receipts/<int:receipt_id>/', WithdrawalAccountabilityReceiptView.as_view(), name='department-withdrawal-accountability-receipt'),
     path('treasury/giving-change-requests/', GivingChangeRequestView.as_view(), name='treasury-giving-change-requests'),
     path('departments/create/', DepartmentCreateView.as_view(), name='department-create'),
     path('departments/<str:department>/leadership/', DepartmentLeadershipView.as_view(), name='department-leadership'),

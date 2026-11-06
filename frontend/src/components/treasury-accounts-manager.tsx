@@ -70,6 +70,18 @@ type WithdrawalRequestRow = {
   decided_at: string | null;
   reply: string;
   created_at: string;
+  /** How the released money was spent, once the receiving desk has filed it. */
+  accountability?: {
+    status: "submitted" | "accepted" | "returned";
+    notes: string;
+    spent_on: string | null;
+    submitted_by: string | null;
+    submitted_at: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    reply: string;
+    receipts: { id: number; filename: string; caption: string; url: string }[];
+  } | null;
 };
 
 /**
@@ -144,6 +156,9 @@ export function WithdrawalRequestsPanel({
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printingId, setPrintingId] = useState<number | null>(null);
+  // The treasury's reading of the spending account filed after a release.
+  const [accountReply, setAccountReply] = useState("");
+  const [accountBusy, setAccountBusy] = useState(false);
   const rowPad = densityCellPad();
 
   const load = useCallback(() => {
@@ -271,6 +286,51 @@ export function WithdrawalRequestsPanel({
     });
   };
 
+  // The spending account is the treasury's last word on a released withdrawal:
+  // accept it, or send it back with what is missing so the desk can resubmit.
+  const reviewAccountability = async (row: WithdrawalRequestRow, decision: "accepted" | "returned") => {
+    if (accountBusy) return;
+    if (decision === "returned" && !accountReply.trim()) return;
+    setAccountBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/department-withdrawals/${row.id}/accountability/`, {
+        method: "POST",
+        headers: { ...fundAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "review", decision, reply: accountReply.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not save the treasury's answer.");
+      showAlert(
+        decision === "accepted" ? "Account accepted" : "Account sent back",
+        decision === "accepted"
+          ? "The desk's spending is accounted for."
+          : "The desk has your reason and can resubmit.",
+        "success",
+      );
+      setAccountReply("");
+      setOpenAction(null);
+      load();
+    } catch (error) {
+      showAlert("Could not save the answer", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  // Receipts are private to the fund, so they are fetched with the desk's
+  // bearer token and shown from a local blob rather than a bare link.
+  const openAccountReceipt = async (receipt: { id: number; filename: string; url: string }) => {
+    try {
+      const res = await fetch(`${API_URL}${receipt.url}`, { headers: fundAuthHeaders() });
+      if (!res.ok) throw new Error("The receipt could not be read.");
+      const url = URL.createObjectURL(await res.blob());
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      showAlert("Could not open the receipt", error instanceof Error ? error.message : "Try again.", "error");
+    }
+  };
+
   const filteredRows = rows.filter((row) => {
     if (statusFilter === "pending") {
       if (!["pending", "pastor_approved", "elder_approved"].includes(row.status)) return false;
@@ -335,6 +395,27 @@ export function WithdrawalRequestsPanel({
           {row.reply ? `: "${row.reply}"` : ""}
         </p>
       )}
+      {row.status === "approved" && (
+        <p
+          className={`text-[10px] font-semibold ${
+            row.accountability?.status === "accepted"
+              ? "text-green-700"
+              : row.accountability?.status === "returned"
+                ? "text-red-600"
+                : row.accountability
+                  ? "text-amber-700"
+                  : "text-moss-faint"
+          }`}
+        >
+          {row.accountability
+            ? row.accountability.status === "accepted"
+              ? "Accountability accepted"
+              : row.accountability.status === "returned"
+                ? "Accountability sent back"
+                : "Accountability submitted"
+            : "Accountability not filed"}
+        </p>
+      )}
     </>
   );
 
@@ -346,7 +427,10 @@ export function WithdrawalRequestsPanel({
     <div className={`flex gap-1.5 ${roomy ? "" : "justify-end"}`}>
       <button
         type="button"
-        onClick={() => setOpenAction(row.id)}
+        onClick={() => {
+          setOpenAction(row.id);
+          setAccountReply("");
+        }}
         className={`rounded-lg border border-sand-mute font-semibold text-moss transition hover:border-ember hover:text-ember ${
           roomy ? "px-3 py-2 text-xs" : "px-2.5 py-1 text-[11px]"
         }`}
@@ -565,6 +649,102 @@ export function WithdrawalRequestsPanel({
                 )}
               </div>
 
+              {target.status === "approved" && (
+                <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-bark">Accountability</p>
+                    {target.accountability ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                          target.accountability.status === "accepted"
+                            ? "bg-green-50 text-green-800"
+                            : target.accountability.status === "returned"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-amber-50 text-amber-800"
+                        }`}
+                      >
+                        {target.accountability.status === "accepted"
+                          ? "Accepted"
+                          : target.accountability.status === "returned"
+                            ? "Returned"
+                            : "Submitted"}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
+                        Not filed
+                      </span>
+                    )}
+                  </div>
+                  {target.accountability ? (
+                    <>
+                      <p className="mt-1.5 whitespace-pre-wrap text-moss">{target.accountability.notes}</p>
+                      <p className="mt-1 text-[11px] text-moss-faint">
+                        {target.accountability.submitted_by ? `Filed by ${target.accountability.submitted_by}` : ""}
+                        {target.accountability.spent_on ? ` · spent ${dayFirst(target.accountability.spent_on)}` : ""}
+                      </p>
+                      {target.accountability.receipts.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {target.accountability.receipts.map((receipt) => (
+                            <button
+                              key={receipt.id}
+                              type="button"
+                              onClick={() => void openAccountReceipt(receipt)}
+                              className="rounded-md border border-sand-mute bg-white px-1.5 py-0.5 text-[10px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                            >
+                              {receipt.filename}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {target.accountability.status === "returned" && target.accountability.reply && (
+                        <p className="mt-1.5 text-[11px] font-semibold text-red-600">
+                          Sent back: “{target.accountability.reply}”
+                        </p>
+                      )}
+                      {target.accountability.status === "accepted" && target.accountability.reviewed_by && (
+                        <p className="mt-1.5 text-[11px] text-moss-faint">
+                          Accepted by {target.accountability.reviewed_by}.
+                        </p>
+                      )}
+                      {workspace === "treasury" && target.accountability.status === "submitted" && (
+                        <div className="mt-2 space-y-2 border-t border-sand-line pt-2">
+                          <textarea
+                            rows={2}
+                            maxLength={255}
+                            value={accountReply}
+                            onChange={(e) => setAccountReply(e.target.value)}
+                            placeholder="A note for the desk (required when sending it back)…"
+                            className="block w-full resize-y rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void reviewAccountability(target, "returned")}
+                              disabled={accountBusy || !accountReply.trim()}
+                              className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                            >
+                              Send back
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void reviewAccountability(target, "accepted")}
+                              disabled={accountBusy}
+                              className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                            >
+                              {accountBusy ? "Saving…" : "Accept account"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-1 text-[11px] italic text-moss-faint">
+                      Waiting on {target.department} to file how the money was spent.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {(inFlight || isReversed) && (
                 <textarea
                   rows={3}
@@ -583,6 +763,7 @@ export function WithdrawalRequestsPanel({
                   onClick={() => {
                     setOpenAction(null);
                     setReply("");
+                    setAccountReply("");
                   }}
                   className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
                 >
