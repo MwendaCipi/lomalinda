@@ -5096,10 +5096,12 @@ export function DepartmentAccountsPanel({
   }, [accountRows.length]);
   const [internalSearch, setInternalSearch] = useState("");
   const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
+  const [internalUnitFilter, setInternalUnitFilter] = useState<string>("");
   const rowPad = densityCellPad();
 
   const effectiveSearch = (search && search.trim() !== "") ? search : internalSearch;
   const effectiveTypeFilter = typeFilter !== "all" ? typeFilter : internalTypeFilter;
+  const effectiveUnitFilter = unitFilter && unitFilter.trim() !== "" ? unitFilter : internalUnitFilter;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -5494,6 +5496,10 @@ export function DepartmentAccountsPanel({
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const safePageNum = Math.min(page, totalPages);
   const visibleItems = filteredItems.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
+  // Filter by unit if specified
+  const unitFilteredItems = internalUnitFilter 
+    ? filteredItems.filter((item) => item.unit && item.unit.toLowerCase().includes(internalUnitFilter.toLowerCase()))
+    : filteredItems;
 
   const selectedAccountInfo = useMemo(() => {
     if (accountFilter === "all") return null;
@@ -5590,6 +5596,17 @@ export function DepartmentAccountsPanel({
                   setPage(1);
                 }}
               />
+              <label className="flex items-center gap-2" title="Filter by unit">
+                <input
+                  type="text"
+                  value={internalUnitFilter}
+                  onChange={(e) => setInternalUnitFilter(e.target.value)}
+                  className="flex-1 rounded-lg border border-sand-line bg-sand px-3 py-1.5 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember focus:outline-none"
+                  placeholder="Filter by unit"
+                  aria-label="Filter by unit"
+                />
+                <span className="text-[10px] font-normal text-moss">Unit</span>
+              </label>
             </div>
           )}
 
@@ -5655,6 +5672,7 @@ export function DepartmentAccountsPanel({
                   <tr>
                     <th className="hidden px-4 py-3 sm:table-cell">Date</th>
                     <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3">Unit</th>
                     <th className="hidden px-4 py-3 sm:table-cell">Reference / Type</th>
                     <th className="px-4 py-3 text-right">Amount (KES)</th>
                     <th className="hidden px-4 py-3 text-center sm:table-cell">Status</th>
@@ -5668,6 +5686,8 @@ export function DepartmentAccountsPanel({
                       </td>
                       <td className={`px-4 ${rowPad} font-medium text-bark`}>
                         <div className="flex items-center gap-1.5">
+                          {item.unit && <span className="text-[10px] font-semibold text-ember">({item.unit})</span>}
+                          
                           {item.isOutflow ? (
                             <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ember" />
                           ) : (
