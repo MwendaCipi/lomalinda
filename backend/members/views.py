@@ -12922,6 +12922,24 @@ def department_holders(department, unit=None):
             'kind': assignment.kind,
         }
 
+    if department == 'eldership':
+        first_elder = next((a for a in assignments if a.role.name == 'First Elder' and a.member.is_active), None)
+        second_elder = next((a for a in assignments if a.role.name == 'Second Elder' and a.member.is_active), None)
+        third_elder = next((a for a in assignments if a.role.name == 'Third Elder' and a.member.is_active), None)
+        other_assistants = [
+            a for a in assignments
+            if a.member.is_active and a.role.name not in ('First Elder', 'Second Elder', 'Third Elder')
+        ]
+        leader = holder_dict(first_elder) if first_elder else None
+        assistants = []
+        if second_elder:
+            assistants.append(holder_dict(second_elder))
+        if third_elder:
+            assistants.append(holder_dict(third_elder))
+        for a in other_assistants:
+            assistants.append(holder_dict(a))
+        return leader, assistants
+
     leader = None
     assistants = []
     for assignment in assignments:

@@ -13461,6 +13461,50 @@ class DepartmentApiTests(APITestCase):
         self.assertIn('Assistant Sponsor', appointment.subject)
         self.assertNotIn('Assistant Assistant', appointment.subject)
 
+    def test_eldership_holders_distinguishes_first_second_and_third_elder(self):
+        """Eldership leadership distinguishes First Elder (leader), Second Elder
+        (first assistant), and Third Elder (second assistant), even when Second Elder is absent."""
+        from .views import department_holders
+        eldership = Department.objects.get(code='eldership')
+        first_role = eldership.roles.get(name='First Elder')
+        second_role = eldership.roles.get(name='Second Elder')
+        third_role = eldership.roles.get(name='Third Elder')
+
+        # Clean slate for eldership assignments
+        DepartmentAssignment.objects.filter(department=eldership).delete()
+
+        # Case 1: First Elder and Third Elder are appointed; Second Elder is absent
+        DepartmentAssignment.objects.create(
+            department=eldership, role=first_role, member=self.elder, kind='leader',
+        )
+        DepartmentAssignment.objects.create(
+            department=eldership, role=third_role, member=self.plain, kind='leader',
+        )
+
+        leader, assistants = department_holders('eldership')
+        self.assertIsNotNone(leader)
+        self.assertEqual(leader['id'], self.elder.id)
+        self.assertEqual(leader['position'], 'First Elder')
+        self.assertEqual(len(assistants), 1)
+        self.assertEqual(assistants[0]['id'], self.plain.id)
+        self.assertEqual(assistants[0]['position'], 'Third Elder')
+
+        # Case 2: First Elder absent, Second Elder and Third Elder appointed
+        DepartmentAssignment.objects.filter(department=eldership).delete()
+        DepartmentAssignment.objects.create(
+            department=eldership, role=second_role, member=self.assistant, kind='leader',
+        )
+        DepartmentAssignment.objects.create(
+            department=eldership, role=third_role, member=self.plain, kind='leader',
+        )
+        leader, assistants = department_holders('eldership')
+        self.assertIsNone(leader)
+        self.assertEqual(len(assistants), 2)
+        self.assertEqual(assistants[0]['id'], self.assistant.id)
+        self.assertEqual(assistants[0]['position'], 'Second Elder')
+        self.assertEqual(assistants[1]['id'], self.plain.id)
+        self.assertEqual(assistants[1]['position'], 'Third Elder')
+
     def test_area_offices_are_seeded_not_typed(self):
         """The office list is the church's, not the desk's: every area carries
         the base pair and the catalogue beside it, nothing can be created by

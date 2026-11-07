@@ -9922,7 +9922,30 @@ export function DepartmentHub({
           <tbody>
             {visibleDepartments.map((department) => {
               const style = areaStyle(department.code);
-              const [firstAssistant, secondAssistant] = department.assistants;
+              const isEldership = department.code === "eldership";
+              let firstAssistant: Holder | undefined;
+              let secondAssistant: Holder | undefined;
+              if (isEldership) {
+                firstAssistant = department.assistants.find(
+                  (a) => a.position?.toLowerCase() === "second elder",
+                );
+                secondAssistant = department.assistants.find(
+                  (a) => a.position?.toLowerCase() === "third elder",
+                );
+              } else {
+                const explicitFirst = department.assistants.find(
+                  (a) => a.position?.toLowerCase() === "first assistant",
+                );
+                const explicitSecond = department.assistants.find(
+                  (a) => a.position?.toLowerCase() === "second assistant",
+                );
+                if (explicitFirst || explicitSecond) {
+                  firstAssistant = explicitFirst ?? department.assistants.find((a) => a !== explicitSecond);
+                  secondAssistant = explicitSecond;
+                } else {
+                  [firstAssistant, secondAssistant] = department.assistants;
+                }
+              }
               return (
                 <tr key={department.code} className="border-b border-sand-soft last:border-0 hover:bg-sand/60">
                   <td className="px-3 py-3">
@@ -9958,6 +9981,12 @@ export function DepartmentHub({
                     {firstAssistant ? (
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-bark" title={firstAssistant.name}>{firstAssistant.name}</p>
+                        {firstAssistant.position &&
+                          firstAssistant.position.toLowerCase() !== "assistant" && (
+                            <p className="truncate text-[11px] font-semibold text-ember">
+                              {seatTitle(department.code, firstAssistant.position, firstAssistant.kind)}
+                            </p>
+                          )}
                         <p className="truncate text-[11px] text-moss">{firstAssistant.phone_number || firstAssistant.email || ""}</p>
                       </div>
                     ) : (
@@ -9968,6 +9997,12 @@ export function DepartmentHub({
                     {secondAssistant ? (
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-bark" title={secondAssistant.name}>{secondAssistant.name}</p>
+                        {secondAssistant.position &&
+                          secondAssistant.position.toLowerCase() !== "assistant" && (
+                            <p className="truncate text-[11px] font-semibold text-ember">
+                              {seatTitle(department.code, secondAssistant.position, secondAssistant.kind)}
+                            </p>
+                          )}
                         <p className="truncate text-[11px] text-moss">{secondAssistant.phone_number || secondAssistant.email || ""}</p>
                       </div>
                     ) : (
