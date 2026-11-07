@@ -29,7 +29,8 @@ export function dayFirstToIso(text: string): string | null {
 /**
  * Read a previously filed account back into editable rows. Lines already in
  * the "item — amount · date" shape split back into rows; older free text
- * becomes one row's item so nothing ever typed is lost.
+ * becomes one row's item so nothing ever typed is lost. No lines means no
+ * rows — the form starts empty and the desk adds what it needs.
  */
 export function accountNotesToRows(notes: string, startId: number): { rows: AccountRow[]; nextId: number } {
   const lines = notes
@@ -47,7 +48,6 @@ export function accountNotesToRows(notes: string, startId: number): { rows: Acco
       receipt: null as File | null,
     };
   });
-  if (rows.length === 0) rows.push({ id: nextId++, item: "", amount: "", spentOn: "", receipt: null });
   return { rows, nextId };
 }
 

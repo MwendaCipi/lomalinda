@@ -5077,7 +5077,9 @@ export function DepartmentAccountsPanel({
   // accept or send back. The rows travel as one notes text so the treasury
   // keeps reading the account exactly as before.
   const [accountingFor, setAccountingFor] = useState<FundWithdrawal | null>(null);
-  const [accountRows, setAccountRows] = useState<AccountRow[]>([{ id: 1, item: "", amount: "", spentOn: "", receipt: null }]);
+  // The form starts with no rows at all — the desk adds one per item it
+  // bought, and may clear them all again without the form forcing one back.
+  const [accountRows, setAccountRows] = useState<AccountRow[]>([]);
   const [accountSaving, setAccountSaving] = useState(false);
   // A confirmed item removal files itself straight away; the X waits while it does.
   const [accountDeleting, setAccountDeleting] = useState(false);
@@ -5215,45 +5217,21 @@ export function DepartmentAccountsPanel({
     setAccountRows((rows) => [...rows, { id, item: "", amount: "", spentOn: "", receipt: null }]);
   };
 
-  // Dropping the final row leaves a fresh empty row behind, so the list is
-  // never stuck with a line the desk cannot clear.
-  const dropAccountRow = (id: number, rows: AccountRow[]) => {
-    if (rows.length === 1) {
-      const fresh = accountRowId.current++;
-      return [{ id: fresh, item: "", amount: "", spentOn: "", receipt: null }];
-    }
-    return rows.filter((row) => row.id !== id);
-  };
-
-  /* A row with something on it asks first. On a filed account the confirmed
-     removal is filed straight away, so the treasury never reads a line the
-     desk deleted; on a fresh account it simply comes off the form. A blank
-     row carries nothing worth confirming, so it goes at once. */
+  /* Every row can go, even the last one. A row with something on it asks
+     first. On a filed account the confirmed removal is filed straight away,
+     so the treasury never reads a line the desk deleted; on a fresh account
+     it simply comes off the form. A blank row carries nothing worth
+     confirming, so it goes at once. */
   const removeAccountRow = (id: number) => {
     const row = accountRows.find((entry) => entry.id === id);
     if (!row || accountSaving || accountDeleting) return;
     const touched =
       row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null;
     if (!touched) {
-      setAccountRows((rows) => dropAccountRow(id, rows));
+      setAccountRows((rows) => rows.filter((entry) => entry.id !== id));
       return;
     }
     const filed = accountingFor?.accountability != null && accountingFor.accountability.status !== "accepted";
-    if (filed) {
-      const kept = accountRows.some(
-        (entry) =>
-          entry.id !== id &&
-          (entry.item.trim() !== "" || entry.amount.trim() !== "" || entry.spentOn !== "" || entry.receipt !== null)
-      );
-      if (!kept) {
-        showAlert(
-          "One item must stay",
-          "The filed account needs at least one item. Change this row instead of removing it.",
-          "info"
-        );
-        return;
-      }
-    }
     const name = row.item.trim() ? `“${row.item.trim()}”` : "This row";
     showAlert(
       "Remove this item?",
@@ -5262,7 +5240,7 @@ export function DepartmentAccountsPanel({
       { showCancelButton: true, confirmButtonText: "Remove it", cancelButtonText: "Keep it", confirmButtonColor: brand.ember }
     ).then((result) => {
       if (!result.isConfirmed || !accountingFor) return;
-      const next = dropAccountRow(id, accountRows);
+      const next = accountRows.filter((entry) => entry.id !== id);
       setAccountRows(next);
       if (filed) void removeFiledAccountRow(next);
     });
@@ -5282,6 +5260,14 @@ export function DepartmentAccountsPanel({
       touched: row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null,
     }));
     const filled = parsed.filter((entry) => entry.touched);
+    if (filled.length === 0) {
+      showAlert(
+        "Removed from the form",
+        "Add the replacement item(s), then press Update account so the filed account changes too.",
+        "info"
+      );
+      return;
+    }
     if (filled.some((entry) => entry.item === "" || entry.amount === null || entry.spentOn === "")) {
       showAlert(
         "Removed from the form",
@@ -5389,8 +5375,8 @@ export function DepartmentAccountsPanel({
       );
       showAlert("Account filed", "The treasury will read how the money was spent.", "success");
       setAccountingFor(null);
-      accountRowId.current = 2;
-      setAccountRows([{ id: 1, item: "", amount: "", spentOn: "", receipt: null }]);
+      accountRowId.current = 1;
+      setAccountRows([]);
       load();
       if (onChanged) onChanged();
     } catch (error) {
@@ -5926,25 +5912,27 @@ export function DepartmentAccountsPanel({
                   <div className="mt-1 space-y-2">
                     {accountRows.map((row) => (
                       <div key={row.id} className="relative rounded-xl border border-sand-line bg-white p-2.5 pr-10">
-                        <input
-                          value={row.item}
-                          onChange={(e) => updateAccountRow(row.id, { item: e.target.value })}
-                          placeholder="Item, e.g. 20 kg sugar"
-                          aria-label="Item bought"
-                          className="block w-full rounded-lg border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={row.item}
+                            onChange={(e) => updateAccountRow(row.id, { item: e.target.value })}
+                            placeholder="Item, e.g. 20 kg sugar"
+                            aria-label="Item bought"
+                            className="min-w-0 flex-1 rounded-lg border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={row.amount}
+                            onChange={(e) => updateAccountRow(row.id, { amount: e.target.value })}
+                            placeholder="0.00"
+                            aria-label="Amount in KES"
+                            className="w-28 shrink-0 rounded-lg border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                          />
+                        </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          inputMode="decimal"
-                          value={row.amount}
-                          onChange={(e) => updateAccountRow(row.id, { amount: e.target.value })}
-                          placeholder="0.00"
-                          aria-label="Amount in KES"
-                          className="w-28 rounded-lg border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                        />
                         <input
                           id={`account-date-${row.id}`}
                           type="date"
@@ -6029,6 +6017,11 @@ export function DepartmentAccountsPanel({
                         </button>
                       </div>
                     ))}
+                    {accountRows.length === 0 && (
+                      <p className="rounded-xl border border-dashed border-sand-mute px-3 py-2.5 text-xs italic text-moss">
+                        No items yet — add the first thing the money bought.
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
