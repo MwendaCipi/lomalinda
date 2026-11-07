@@ -129,7 +129,9 @@ function EventActionsMenu({
 }: {
   row: CalendarEvent;
   mapUrl: string | null;
-  /** The table's row keeps the full menu; the tighter the listing, the fewer words. */
+  /** The table's row keeps the full menu; the tighter the listing, the fewer
+      words — but the programme opener rides along everywhere, because on a
+      phone the card's own footer carries Support program instead. */
   variant: "row" | "card";
   onClose: () => void;
   onProgram: (row: CalendarEvent) => void;
@@ -162,26 +164,24 @@ function EventActionsMenu({
         Contact department
       </a>
       {variant === "row" && (
-        <>
-          <a
-            href={`mailto:info@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
-            onClick={onClose}
-            className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
-          >
-            Give suggestion
-          </a>
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              onProgram(row);
-            }}
-            className={`block w-full text-left rounded-lg px-3 py-2 ${item} font-semibold text-ember hover:bg-sand`}
-          >
-            View Sabbath program
-          </button>
-        </>
+        <a
+          href={`mailto:info@sdalomalinda.or.ke?subject=${encodeURIComponent(`Suggestion: ${row.title}`)}`}
+          onClick={onClose}
+          className={`block rounded-lg px-3 py-2 ${item} hover:bg-sand`}
+        >
+          Give suggestion
+        </a>
       )}
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          onProgram(row);
+        }}
+        className={`block w-full text-left rounded-lg px-3 py-2 ${item} font-semibold text-ember hover:bg-sand`}
+      >
+        View Sabbath program
+      </button>
     </>
   );
 }
@@ -543,13 +543,12 @@ function CalendarPageContent() {
                 )}
 
                 <div data-calendar-action-menu className="relative pt-3 border-t border-sand-line/60 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => openProgram(row)}
+                  <Link
+                    href={`/give?purpose=${encodeURIComponent(row.giving_purpose || getMinistryGivingPurpose(row.department_name || row.title))}`}
                     className="text-xs font-bold text-ember hover:underline"
                   >
-                    View Sabbath Program &rarr;
-                  </button>
+                    Support program &rarr;
+                  </Link>
 
                   <div className="relative">
                     <button
