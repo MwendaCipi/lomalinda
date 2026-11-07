@@ -17553,14 +17553,18 @@ class DepartmentVisibilityTests(APITestCase):
     def test_the_fellowships_are_their_own_areas_not_units(self):
         """Young Couples and Single Parents left AMM's and AWM's sub-units and
         became areas of their own; the desks carry no duplicate."""
-        for code in ('amm', 'awm'):
+        for code in ('amm', 'awm', 'family_life'):
             department = Department.objects.get(code=code)
             self.assertNotIn('Young Couples', department.unit_names)
             self.assertNotIn('Single Parents', department.unit_names)
+            if code == 'family_life':
+                self.assertNotIn('Married Couples', department.unit_names)
+                self.assertEqual(department.unit_names, [])
         self.client.force_authenticate(self.elder)
         codes = {row['code'] for row in self.client.get('/api/members/departments/').data['departments']}
         self.assertIn('young_couples', codes)
         self.assertIn('single_parents', codes)
+        self.assertIn('family_life', codes)
 
 
 class ProfileAreaRefTests(APITestCase):

@@ -6311,22 +6311,27 @@ function DepartmentDetail({
   // department's list at once, before the directory is read back: the chip and
   // the group's card read this page, not the next reload.
   const [createdUnits, setCreatedUnits] = useState<string[]>([]);
+  const isFamilyLife = department.code === "family_life" || department.code === "family-life";
   const units = useMemo(() => {
+    if (isFamilyLife) return [];
     const base = department.units ?? [];
     const added = createdUnits.filter(
       (name) => !base.some((existing) => existing.toLowerCase() === name.toLowerCase()),
     );
     return [...base, ...added];
-  }, [department.units, createdUnits]);
+  }, [department.units, createdUnits, isFamilyLife]);
   // Children classes are membership metadata, not departments to navigate
   // between. Keeping this guard also protects the UI while an existing
   // installation is waiting for the data migration that clears old units.
-  // Children and the pastorate read as one roll. A child's class is membership
+  // Children, the pastorate, and family life read as one roll. A child's class is membership
   // metadata, and the pastorate's people are the pastoral team itself — a chip
   // per band would trade the office's pages for a list this desk already holds
-  // whole. Both therefore keep the single roll chip.
+  // whole. All three therefore keep the single roll chip.
   const hasMemberUnitPages =
-    department.code !== "children" && department.code !== "pastorate" && units.length > 0;
+    department.code !== "children" &&
+    department.code !== "pastorate" &&
+    !isFamilyLife &&
+    units.length > 0;
   // Personal Ministries runs the church's weekly rhythm, so the church's own
   // week is kept on its page — see WeeklyMeetingsPanel.
   const keepsTheWeek = department.code === "personal_ministries";
