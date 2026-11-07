@@ -13522,6 +13522,171 @@ class DepartmentApiTests(APITestCase):
         self.assertEqual(res.status_code, 400)
 
 
+class TreasuryLeadershipAndAssistantPermissionsTests(APITestCase):
+    """Test setting Leader and Assistant in Treasury, role sync, and permissions."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user('t_admin', 't_admin@example.com', 'Pass#1234', first_name='Admin', last_name='User')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin,member')
+
+        self.lead_cand = User.objects.create_user('t_lead', 't_lead@example.com', 'Pass#1234', first_name='Lead', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.lead_cand, role='member', roles='member')
+
+        self.asst_cand = User.objects.create_user('t_asst', 't_asst@example.com', 'Pass#1234', first_name='Asst', last_name='Treasurer')
+        MemberProfile.objects.create(user=self.asst_cand, role='member', roles='member')
+
+        self.treasury = Department.objects.get(code='treasury')
+        self.acc = TreasuryAccount.objects.create(
+            name='TreasuryGen', description='General Fund', balance=Decimal('10000.00')
+        )
+
+    def test_treasury_has_leader_and_assistant_slots_and_syncs_roles(self):
+        # 1. Verify Leader and Assistant roles exist for treasury
+        leader_role = self.treasury.roles.filter(name='Leader').first()
+        assistant_role = self.treasury.roles.filter(name='Assistant').first()
+        self.assertIsNotNone(leader_role)
+        self.assertIsNotNone(assistant_role)
+        self.assertFalse(leader_role.is_optional)
+        self.assertFalse(assistant_role.is_optional)
+        self.assertTrue(leader_role.has_assistant)
+        self.assertTrue(assistant_role.has_assistant)
+
+        # 2. Assign leader and assistant via the leadership endpoint
+        self.client.force_authenticate(self.admin)
+        res = self.client.put('/api/members/departments/treasury/leadership/', {
+            'assignments': [
+                {'role_id': leader_role.id, 'member_id': self.lead_cand.id, 'kind': 'leader'},
+                {'role_id': assistant_role.id, 'member_id': self.asst_cand.id, 'kind': 'assistant'},
+            ],
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+
+        # 3. Check role synchronization
+        self.lead_cand.member_profile.refresh_from_db()
+        self.asst_cand.member_profile.refresh_from_db()
+
+        self.assertIn('treasurer', self.lead_cand.member_profile.get_roles())
+        self.assertNotIn('treasurer', self.lead_cand.member_profile.get_assistant_roles())
+
+        self.assertIn('treasurer', self.asst_cand.member_profile.get_roles())
+        self.assertIn('treasurer', self.asst_cand.member_profile.get_assistant_roles())
+
+        # 4. GET /api/members/departments/treasury/leadership/ returns them correctly
+        get_res = self.client.get('/api/members/departments/treasury/leadership/')
+        self.assertEqual(get_res.status_code, 200)
+        data = get_res.json()
+        self.assertEqual(data['leader']['id'], self.lead_cand.id)
+        self.assertTrue(any(a['id'] == self.asst_cand.id for a in data['assistants']))
+
+    def test_assistant_treasurer_permitted_operations(self):
+        self.asst_cand.member_profile.set_roles(['treasurer', 'member'], assistants=['treasurer'])
+        self.client.force_authenticate(self.asst_cand)
+
+        # Ledger
+        res = self.client.get('/api/members/treasury/ledger/')
+        self.assertEqual(res.status_code, 200)
+
+        # Cash contributions
+        res = self.client.get('/api/members/treasury/cash-contributions/')
+        self.assertEqual(res.status_code, 200)
+
+        # Unassigned givings
+        res = self.client.get('/api/members/treasury/unassigned/')
+        self.assertEqual(res.status_code, 200)
+
+        # Giving change requests list
+        res = self.client.get('/api/members/treasury/giving-change-requests/')
+        self.assertEqual(res.status_code, 200)
+
+        # Withdrawal review list (allowed to view, but can_approve_treasury is False)
+        res = self.client.get('/api/members/department-withdrawals/review/')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.json().get('can_approve_treasury'))
+
+    def test_assistant_treasurer_blocked_from_approvals_and_reversals(self):
+        self.asst_cand.member_profile.set_roles(['treasurer', 'member'], assistants=['treasurer'])
+        self.client.force_authenticate(self.asst_cand)
+
+        # 1. Withdrawal review actions
+        wd = DepartmentWithdrawalRequest.objects.create(
+            department=self.treasury, account=self.acc, amount=Decimal('500.00'),
+            reason='Supplies', requested_by=self.admin, status='elder_approved',
+        )
+
+        res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': wd.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('Assistant treasurers cannot approve withdrawals', res.json().get('detail', ''))
+
+        res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': wd.id, 'action': 'release', 'phone_number': '0712345678',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('Assistant treasurers cannot release funds', res.json().get('detail', ''))
+
+        res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': wd.id, 'action': 'decline', 'reply': 'No funds',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('Assistant treasurers cannot decline withdrawal requests', res.json().get('detail', ''))
+
+        wd.status = 'approved'
+        wd.save()
+        res = self.client.post('/api/members/department-withdrawals/review/', {
+            'id': wd.id, 'action': 'reverse',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('Assistant treasurers cannot reverse withdrawals', res.json().get('detail', ''))
+
+        # 2. M-Pesa refund
+        contrib = Contribution.objects.create(
+            member=self.admin, amount=Decimal('100.00'), purpose='Tithe',
+            status='completed', payment_method='mpesa', mpesa_receipt_number='ABC12345',
+        )
+        res = self.client.post(f'/api/members/treasury/contributions/{contrib.id}/refund/', {
+            'phone_number': '0712345678', 'reason': 'Duplicate',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+
+        # 3. Expenditure reverse
+        exp = Expenditure.objects.create(
+            title='Office repair', amount=Decimal('200.00'), category='operations',
+            account=self.acc, payment_method='cash', expenditure_date='2026-11-01',
+        )
+        res = self.client.post(f'/api/members/treasury/expenditures/{exp.id}/reverse/')
+        self.assertEqual(res.status_code, 403)
+        self.assertIn('Assistant treasurers cannot reverse expenditure records', res.json().get('detail', ''))
+
+        # 4. Giving change request review
+        from .models import GivingChangeRequest
+        gcr = GivingChangeRequest.objects.create(
+            contribution=contrib, requested_by=self.admin, request_type='reverse', status='pending',
+        )
+        res = self.client.post('/api/members/treasury/giving-change-requests/', {
+            'id': gcr.id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(res.status_code, 403)
+
+    def test_full_treasurer_permitted_approvals_and_reversals(self):
+        self.lead_cand.member_profile.set_roles(['treasurer', 'member'])
+        self.client.force_authenticate(self.lead_cand)
+
+        # Withdrawal review GET says can_approve_treasury is True
+        res = self.client.get('/api/members/department-withdrawals/review/')
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json().get('can_approve_treasury'))
+
+        # Expenditure reverse is permitted
+        exp = Expenditure.objects.create(
+            title='Lead treasurer office expense', amount=Decimal('150.00'), category='operations',
+            account=self.acc, payment_method='cash', expenditure_date='2026-11-01',
+        )
+        res = self.client.post(f'/api/members/treasury/expenditures/{exp.id}/reverse/')
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Expenditure.objects.filter(pk=exp.pk).exists())
+
+
 class CalendarSlotConflictTests(APITestCase):
     """The church calendar is one sheet, and a slot is a slot.
 

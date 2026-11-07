@@ -229,12 +229,16 @@ export function seatTitle(
 ): string {
   const pos = (position || "").trim().toLowerCase();
   const isSchool = departmentCode === "sabbath_school" || departmentCode === "sabbath-school";
+  const isTreasury = departmentCode === "treasury";
   // The base seats are the ones every area is seeded with: an unnamed seat,
   // "Leader" or "Assistant". Any other title is the office's own
   // (Secretary, Head Deacon, an elder's name) and stays as it reads.
   const isBaseSeat = pos === "" || pos === "leader" || pos === "assistant";
   if (isSchool && isBaseSeat) {
     return kind === "assistant" || pos === "assistant" ? "Assistant Superintendent" : "Superintendent";
+  }
+  if (isTreasury && isBaseSeat) {
+    return kind === "assistant" || pos === "assistant" ? "Assistant Treasurer" : "Treasurer";
   }
   return formatOfficeRole(position, kind);
 }

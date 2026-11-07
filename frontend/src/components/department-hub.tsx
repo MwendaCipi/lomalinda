@@ -3850,8 +3850,8 @@ function LeadershipEditModal({
     return () => controller.abort();
   }, [department.code, unit]);
 
-  const leaderRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "leader") ?? null;
-  const assistantRole = draft.find((r) => !r.is_optional && r.name.toLowerCase() === "assistant") ?? null;
+  const leaderRole = draft.find((r) => r.name.toLowerCase() === "leader") ?? null;
+  const assistantRole = draft.find((r) => r.name.toLowerCase() === "assistant") ?? null;
   const officeRoles = draft.filter((r) => r.name.toLowerCase() !== "leader" && r.name.toLowerCase() !== "assistant");
   const customRoles = officeRoles.filter((r) => r.is_custom);
 
@@ -4046,7 +4046,7 @@ function LeadershipEditModal({
           {rolesToDisplay.map(({ role, kind }) => {
             const assignedPeople = role.people.filter((p) => p.kind === kind);
             const seatSex = SEAT_SEX_BY_OFFICE[role.name.toLowerCase()];
-            const roleTitle = kind === "leader" ? seatTitle(department.code, role.name, "leader") : "Assistant";
+            const roleTitle = seatTitle(department.code, role.name, kind);
             const query = roleQueries[role.id] || "";
             const results = roleResults[role.id] || [];
             const searching = roleSearching[role.id] || false;

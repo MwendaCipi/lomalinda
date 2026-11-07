@@ -517,6 +517,7 @@ export default function TreasuryPage() {
   // action cannot be pressed twice on the same payment.
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [refundedIds, setRefundedIds] = useState<number[]>([]);
+  const [isAssistantTreasurer, setIsAssistantTreasurer] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [actionDropUp, setActionDropUp] = useState(false);
   // The Failed badge is counted from the exact rows rendered by the Failed
@@ -815,6 +816,10 @@ export default function TreasuryPage() {
   // desk asks for the number and the reason before anything leaves the church
   // account — the reason is what the refund record keeps for the audit.
   const handleRefundGiving = async (giving: IndividualGiving) => {
+    if (isAssistantTreasurer) {
+      void showAlert("Permission Denied", "Assistant treasurers cannot do M-Pesa reversals.", "warning");
+      return;
+    }
     const escape = (value: string) =>
       value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const result = await showAlert("Refund this M-Pesa gift?", "", "warning", {
@@ -1184,6 +1189,14 @@ export default function TreasuryPage() {
     const profile = await fetch(`${API_URL}/api/members/me/`, { headers: headers() }).then((res) => res.ok ? res.json() : null);
     const profileRoles: string[] = Array.isArray(profile?.roles) && profile.roles.length > 0 ? profile.roles : [profile?.role].filter(Boolean);
     if (!profile || !profileRoles.some((r) => financeRoles.includes(r))) { setStatus("denied"); return; }
+    const isAsst = Boolean(
+      profileRoles.includes("treasurer") &&
+      Array.isArray(profile?.assistant_roles) &&
+      profile.assistant_roles.includes("treasurer") &&
+      !profileRoles.includes("admin") &&
+      !profileRoles.some((r) => ["elder", "first_elder", "second_elder", "third_elder"].includes(r))
+    );
+    setIsAssistantTreasurer(isAsst);
     const [summaryRes, cashRes] = await Promise.all([
       fetch(`${API_URL}/api/members/treasury/ledger/?from_date=${fDate}&to_date=${tDate}`, { headers: headers() }),
       fetch(`${API_URL}/api/members/treasury/cash-contributions/?from_date=${fDate}&to_date=${tDate}`, { headers: headers() }),
@@ -2443,9 +2456,11 @@ export default function TreasuryPage() {
                                                 {isMpesaGiving(giving) && (
                                                   <button
                                                     type="button"
-                                                    disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                    disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id) || isAssistantTreasurer}
                                                     title={
-                                                      refundedIds.includes(giving.raw_id)
+                                                      isAssistantTreasurer
+                                                        ? "Assistant treasurers cannot do M-Pesa reversals"
+                                                        : refundedIds.includes(giving.raw_id)
                                                         ? "This payment has already been refunded"
                                                         : "Hand this payment back to the payer's phone through M-Pesa"
                                                     }
@@ -2519,9 +2534,11 @@ export default function TreasuryPage() {
                                             {isReceivedGiving(giving) && isMpesaGiving(giving) && (
                                               <button
                                                 type="button"
-                                                disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id) || isAssistantTreasurer}
                                                 title={
-                                                  refundedIds.includes(giving.raw_id)
+                                                  isAssistantTreasurer
+                                                    ? "Assistant treasurers cannot do M-Pesa reversals"
+                                                    : refundedIds.includes(giving.raw_id)
                                                     ? "This gift has already been refunded"
                                                     : "Send this gift back to the giver's phone through M-Pesa"
                                                 }
@@ -2747,9 +2764,11 @@ export default function TreasuryPage() {
                                                 {isMpesaGiving(giving) && (
                                                   <button
                                                     type="button"
-                                                    disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                    disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id) || isAssistantTreasurer}
                                                     title={
-                                                      refundedIds.includes(giving.raw_id)
+                                                      isAssistantTreasurer
+                                                        ? "Assistant treasurers cannot do M-Pesa reversals"
+                                                        : refundedIds.includes(giving.raw_id)
                                                         ? "This payment has already been refunded"
                                                         : "Hand this payment back to the payer's phone through M-Pesa"
                                                     }
@@ -2826,9 +2845,11 @@ export default function TreasuryPage() {
                                             {isReceivedGiving(giving) && isMpesaGiving(giving) && (
                                               <button
                                                 type="button"
-                                                disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id)}
+                                                disabled={refundingId === giving.id || refundedIds.includes(giving.raw_id) || isAssistantTreasurer}
                                                 title={
-                                                  refundedIds.includes(giving.raw_id)
+                                                  isAssistantTreasurer
+                                                    ? "Assistant treasurers cannot do M-Pesa reversals"
+                                                    : refundedIds.includes(giving.raw_id)
                                                     ? "This gift has already been refunded"
                                                     : "Send this gift back to the giver's phone through M-Pesa"
                                                 }

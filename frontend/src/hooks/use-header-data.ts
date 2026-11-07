@@ -50,6 +50,7 @@ export type ChurchNotificationItem = {
 export type HeaderMe = {
   role: string;
   roles: string[];
+  assistant_roles: string[];
   username: string;
   name: string;
   email: string;
@@ -132,6 +133,7 @@ async function fetchMe(token: string): Promise<MeResult> {
     me: {
       role: data.role || "member",
       roles: Array.isArray(data.roles) && data.roles.length > 0 ? data.roles : [data.role || "member"],
+      assistant_roles: Array.isArray(data.assistant_roles) ? data.assistant_roles : [],
       username: data.username || "Member",
       name: fullName || data.username || "Member",
       email: data.email || "",

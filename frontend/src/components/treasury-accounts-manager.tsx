@@ -162,6 +162,7 @@ export function WithdrawalRequestsPanel({
   registerRefresh?: (fn: (() => void) | null) => void;
 } = {}) {
   const [rows, setRows] = useState<WithdrawalRequestRow[]>([]);
+  const [canApproveTreasury, setCanApproveTreasury] = useState(true);
   const [loading, setLoading] = useState(true);
   // What the server said when it would not hand the queue over. An office the
   // endpoint refuses used to read as "Nothing waiting" — the desk reported an
@@ -178,9 +179,6 @@ export function WithdrawalRequestsPanel({
   // number and stays editable, so the desk can pay a corrected or
   // alternative line without changing the member's profile.
   const [releasePhone, setReleasePhone] = useState("");
-  // How a manual approval was paid: cash, bank, cheque or M-Pesa already
-  // sent outside the paybill. The expense keeps the method the desk chose.
-  const [approveMethod, setApproveMethod] = useState("cash");
   // The treasury's reading of the spending account filed after a release.
   const [accountReply, setAccountReply] = useState("");
   const [accountBusy, setAccountBusy] = useState(false);
@@ -215,6 +213,7 @@ export function WithdrawalRequestsPanel({
         setError("");
         const loaded = Array.isArray(data?.requests) ? data.requests : [];
         setRows(loaded);
+        setCanApproveTreasury(data?.can_approve_treasury !== false);
         onLoaded?.(loaded);
       })
       .catch(() => {
@@ -238,6 +237,10 @@ export function WithdrawalRequestsPanel({
   }, [load, registerRefresh]);
 
   const act = async (id: number, action: string, extraReply?: string, phoneNumber?: string, paymentMethod?: string) => {
+    if (workspace === "treasury" && !canApproveTreasury) {
+      void showAlert("Permission Denied", "Assistant treasurers cannot do treasury approvals or reversals.", "warning");
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch(`${API_URL}/api/members/department-withdrawals/review/`, {
@@ -734,9 +737,6 @@ export function WithdrawalRequestsPanel({
         // option is offered only while the account still covers the ask — the
         // API enforces the same rule; this keeps the button honest.
         const reversedCovered = Number(target.account_balance) >= Number(target.amount);
-        // The manual path: the treasurer paid from the counter or another
-        // source, so the record is approved and expensed without a B2C payout.
-        const canApproveManually = workspace === "treasury" && (awaitingRelease || (isReversed && reversedCovered));
         const releaseNumber = releasePhone.trim();
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -776,13 +776,13 @@ export function WithdrawalRequestsPanel({
                     : awaitingElder
                       ? "Blessed by the pastor. An elder approves it next."
                       : awaitingRelease
-                        ? "Approved by the pastor and an elder. Release it from the paybill, approve a cash or other payment, or decline it."
+                        ? "Approved by the pastor and an elder. Release it from the paybill to the requester's phone, or decline it."
                         : isReleasing
                           ? "The paybill is paying the requester. The expense is written when M-Pesa confirms."
                           : canReverse
                           ? `${target.decided_by ? `Treasurer-approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
                           : isReversed
-                            ? "Reversed. The fund was credited back. It can be released or approved again while the account covers it."
+                            ? "Reversed. The fund was credited back. It can be released again while the account covers it."
                             : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
                 </p>
                 {target.payout && (
@@ -801,42 +801,17 @@ export function WithdrawalRequestsPanel({
                 )}
                 {isReversed && selfCleared && (
                   <p className="mt-1.5 text-[11px] font-semibold text-ember">
-                    You cleared this request earlier. The treasurer who approves it again has to be someone else.
+                    You cleared this request earlier. The treasurer who releases it again has to be someone else.
                   </p>
                 )}
                 {isReversed && !reversedCovered && (
                   <p className="mt-1.5 text-[11px] font-semibold text-red-600">
                     {target.account_name} holds KES {Number(target.account_balance).toLocaleString("en-KE", { minimumFractionDigits: 2 })},
                     less than the KES {Number(target.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} asked for, so it cannot be
-                    approved yet.
+                    released yet.
                   </p>
                 )}
               </div>
-
-              {canApproveManually && (
-                <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3">
-                  <label
-                    htmlFor="withdrawal-approve-method"
-                    className="block text-[11px] font-bold uppercase tracking-wide text-moss"
-                  >
-                    If approving without the paybill
-                  </label>
-                  <select
-                    id="withdrawal-approve-method"
-                    value={approveMethod}
-                    onChange={(event) => setApproveMethod(event.target.value)}
-                    className="mt-1.5 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="bank_transfer">Bank transfer</option>
-                    <option value="cheque">Cheque</option>
-                    <option value="mpesa">M-Pesa (already paid)</option>
-                  </select>
-                  <p className="mt-1.5 text-[11px] text-moss-faint">
-                    Used for the expense when you press Approve. Release funds sends a fresh paybill payout.
-                  </p>
-                </div>
-              )}
 
               {workspace === "treasury" && (awaitingRelease || (isReversed && reversedCovered)) && (
                 <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3">
@@ -903,36 +878,28 @@ export function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "decline", reply)}
-                    disabled={busy || !reply.trim()}
+                    disabled={busy || !reply.trim() || (workspace === "treasury" && !canApproveTreasury)}
+                    title={
+                      workspace === "treasury" && !canApproveTreasury
+                        ? "Assistant treasurers cannot decline withdrawal requests."
+                        : undefined
+                    }
                     className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
                   >
                     Decline request
                   </button>
                 )}
 
-                {canApproveManually && (
-                  <button
-                    type="button"
-                    onClick={() => act(target.id, "approve", reply, undefined, approveMethod)}
-                    disabled={busy || selfCleared}
-                    title={
-                      selfCleared
-                        ? "You gave this request an earlier clearance. A different treasurer must approve the payment."
-                        : "Record this withdrawal as paid outside the paybill — cash, bank transfer or cheque. The fund is debited now."
-                    }
-                    className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60"
-                  >
-                    {busy ? "Saving…" : isReversed ? "Approve again" : "Approve"}
-                  </button>
-                )}
 
                 {awaitingRelease && workspace === "treasury" && (
                   <button
                     type="button"
                     onClick={() => act(target.id, "release", reply, releasePhone)}
-                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0}
+                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0 || !canApproveTreasury}
                     title={
-                      selfCleared
+                      !canApproveTreasury
+                        ? "Assistant treasurers cannot release withdrawals."
+                        : selfCleared
                         ? "You gave this request an earlier clearance. A different treasurer must release the money."
                         : !releaseNumber
                           ? "Enter the M-Pesa number the money should be paid to."
@@ -950,9 +917,11 @@ export function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => act(target.id, "release", reply, releasePhone)}
-                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0}
+                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0 || !canApproveTreasury}
                     title={
-                      selfCleared
+                      !canApproveTreasury
+                        ? "Assistant treasurers cannot release withdrawals."
+                        : selfCleared
                         ? "You cleared this request earlier. A different treasurer must release it again."
                         : !releaseNumber
                           ? "Enter the M-Pesa number the money should be paid to."
@@ -986,7 +955,8 @@ export function WithdrawalRequestsPanel({
                         }
                       });
                     }}
-                    disabled={busy}
+                    disabled={busy || !canApproveTreasury}
+                    title={!canApproveTreasury ? "Assistant treasurers cannot reverse withdrawals." : undefined}
                     className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
                   >
                     Reverse withdrawal

@@ -6,6 +6,7 @@ import { RecordList } from "./record-list";
 import { showAlert } from "@/lib/alerts";
 import { densityCellPad } from "@/lib/table-density";
 import { dayFirst, localDate } from "@/lib/dates";
+import { useHeaderData } from "@/hooks/use-header-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -80,6 +81,14 @@ export function ExpenditureManager({
   const [expenditures, setExpenditures] = useState<Expenditure[]>([]);
   const [accounts, setAccounts] = useState<TreasuryAccount[]>([]);
   const [loading, setLoading] = useState(false);
+  const { me } = useHeaderData();
+  const roles = me?.roles || [];
+  const assistantRoles = me?.assistant_roles || [];
+  const isAssistantTreasurer =
+    roles.includes("treasurer") &&
+    assistantRoles.includes("treasurer") &&
+    !roles.includes("admin") &&
+    !roles.some((r) => ["elder", "first_elder", "second_elder", "third_elder"].includes(r));
   // The desk-wide compact-rows preference, shared with the other tables.
   const rowPad = densityCellPad();
 
@@ -230,6 +239,10 @@ export function ExpenditureManager({
   };
 
   const handleReverseExpenditure = async (expenditure: Expenditure) => {
+    if (isAssistantTreasurer) {
+      showAlert("Permission Denied", "Assistant treasurers cannot reverse expenditure records.", "warning");
+      return;
+    }
     if (!confirm(`Reverse "${expenditure.title}"? KES ${Number(expenditure.amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })} will be credited back to ${expenditure.account_name || "the account"} and the record removed.`)) return;
     try {
       const res = await fetch(`${API_URL}/api/members/treasury/expenditures/${expenditure.id}/reverse/`, {
@@ -357,7 +370,9 @@ export function ExpenditureManager({
                 <button
                   type="button"
                   onClick={() => handleReverseExpenditure(exp)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                  disabled={isAssistantTreasurer}
+                  title={isAssistantTreasurer ? "Assistant treasurers cannot reverse expenditure records." : undefined}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-sand-mute bg-white px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember disabled:opacity-50"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Reverse
@@ -397,9 +412,10 @@ export function ExpenditureManager({
                 <button
                   type="button"
                   onClick={() => handleReverseExpenditure(exp)}
+                  disabled={isAssistantTreasurer}
                   aria-label={`Reverse ${exp.title}`}
-                  className="rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
-                  title="Reverse Expenditure"
+                  className="rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember disabled:opacity-50"
+                  title={isAssistantTreasurer ? "Assistant treasurers cannot reverse expenditure records." : "Reverse Expenditure"}
                 >
                   <RotateCcw className="h-4 w-4" />
                 </button>

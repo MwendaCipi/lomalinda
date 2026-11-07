@@ -903,6 +903,29 @@ def is_treasurer_or_admin(user):
     )
 
 
+def is_full_treasurer_or_admin(user):
+    """True only for the head treasurer (or admin/elder), not an assistant treasurer.
+
+    An assistant treasurer holds the ``treasurer`` role flag plus an entry in
+    ``assistant_roles``; this helper distinguishes the two so that treasury
+    operations requiring full authority (releasing funds, M-Pesa refunds,
+    expenditure reversals, withdrawal reviews) are gated on the head treasurer
+    while still allowing the assistant read and operational access.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'member_profile', None)
+    if not profile:
+        return False
+    if profile.has_role('admin', 'elder', 'first_elder', 'second_elder', 'third_elder'):
+        return True
+    if profile.has_role('treasurer') and 'treasurer' not in profile.get_assistant_roles():
+        return True
+    return False
+
+
 def is_elder_or_admin(user):
     if not user or not user.is_authenticated:
         return False
@@ -4030,6 +4053,8 @@ class GivingChangeRequestView(APIView):
     def _review(self, request):
         if not is_treasurer_or_admin(request.user):
             raise PermissionDenied('Only church treasurers or administrators can review giving requests.')
+        if not is_full_treasurer_or_admin(request.user):
+            raise PermissionDenied('Assistant treasurers cannot review giving requests or approve reversals.')
         row = GivingChangeRequest.objects.select_related('contribution', 'requested_by').filter(
             pk=request.data.get('id'), status='pending',
         ).first()
@@ -6978,6 +7003,8 @@ class MpesaRefundView(APIView):
     def post(self, request, pk):
         if not is_treasurer_or_admin(request.user):
             raise PermissionDenied('Only church treasurers or administrators can refund contributions.')
+        if not is_full_treasurer_or_admin(request.user):
+            raise PermissionDenied('Assistant treasurers cannot do M-Pesa reversals.')
         contribution = generics.get_object_or_404(Contribution, pk=pk)
         if contribution.payment_method != 'mpesa':
             return Response({'detail': 'Only M-Pesa contributions can be refunded via B2C.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -11989,8 +12016,10 @@ class ExpenditureReverseView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        if not (request.user.is_staff or getattr(request.user, 'member_profile', None) and request.user.member_profile.has_role('admin', 'treasurer')):
+        if not is_treasurer_or_admin(request.user):
             return Response({'detail': 'Only admin or treasurer can reverse expenditure records.'}, status=status.HTTP_403_FORBIDDEN)
+        if not is_full_treasurer_or_admin(request.user):
+            return Response({'detail': 'Assistant treasurers cannot reverse expenditure records.'}, status=status.HTTP_403_FORBIDDEN)
         with transaction.atomic():
             exp = Expenditure.objects.select_for_update().select_related('account').filter(pk=pk).first()
             if exp is None:
@@ -12849,6 +12878,10 @@ DEPARTMENT_LEAD_ROLE = {
     'development': 'development',
     'dorcas': 'dorcas_leader',
     'pastorate': 'pastor',
+    # Treasury's Leader is the church's Treasurer; appointing from the
+    # leadership desk synchronises the treasurer role flag so permission
+    # checks and notification audiences reach the right person.
+    'treasury': 'treasurer',
 }
 
 
@@ -12901,6 +12934,23 @@ def department_holders(department, unit=None):
     return leader, assistants
 
 
+def ensure_treasury_roles():
+    """Ensure the treasury department has its base Leader and Assistant roles."""
+    treasury = Department.objects.filter(code='treasury', is_active=True).first()
+    if not treasury:
+        return
+    if not DepartmentRole.objects.filter(department=treasury, name='Leader').exists():
+        DepartmentRole.objects.create(
+            department=treasury, name='Leader', has_assistant=True,
+            sort_order=0, is_optional=False, is_custom=False,
+        )
+    if not DepartmentRole.objects.filter(department=treasury, name='Assistant').exists():
+        DepartmentRole.objects.create(
+            department=treasury, name='Assistant', has_assistant=True,
+            sort_order=1, is_optional=False, is_custom=False,
+        )
+
+
 class DepartmentDirectoryView(APIView):
     """One row per department: leadership, roles, roll size, calendar count.
 
@@ -12913,6 +12963,7 @@ class DepartmentDirectoryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        ensure_treasury_roles()
         if request.query_params.get('all') in ('true', '1', 'yes', 'True'):
             visible_codes = set(Department.objects.filter(is_active=True).values_list('code', flat=True))
         else:
@@ -13417,6 +13468,8 @@ class DepartmentLeadershipView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _department(self, code):
+        if code == 'treasury':
+            ensure_treasury_roles()
         return Department.objects.filter(code=code, is_active=True).first()
 
     def get(self, request, department):
@@ -16488,7 +16541,7 @@ class DepartmentWithdrawalReviewView(APIView):
             item['you_elder_approved'] = row.elder_approved_by_id == request.user.id
             item['you_treasurer_approved'] = row.treasurer_approved_by_id == request.user.id
             data.append(item)
-        return Response({'requests': data})
+        return Response({'requests': data, 'can_approve_treasury': is_full_treasurer_or_admin(request.user)})
 
     def post(self, request):
         action = str(request.data.get('action') or '').strip()
@@ -16578,6 +16631,8 @@ class DepartmentWithdrawalReviewView(APIView):
         if action == 'release':
             if not is_treasurer_or_admin(request.user):
                 return Response({'detail': 'Only church treasurers or administrators can release funds.'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_full_treasurer_or_admin(request.user):
+                return Response({'detail': 'Assistant treasurers cannot release funds.'}, status=status.HTTP_403_FORBIDDEN)
             row = DepartmentWithdrawalRequest.objects.select_related(
                 'department', 'account', 'requested_by__member_profile', 'payout__initiated_by',
             ).filter(pk=row_id, status__in=['elder_approved', 'reversed']).first()
@@ -16658,6 +16713,8 @@ class DepartmentWithdrawalReviewView(APIView):
         if action == 'approve':
             if not is_treasurer_or_admin(request.user):
                 return Response({'detail': 'Only church treasurers or administrators can approve withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_full_treasurer_or_admin(request.user):
+                return Response({'detail': 'Assistant treasurers cannot approve withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
             # A reversed request may be approved again: the reversal credited
             # the fund back, so releasing it a second time is a fresh debit —
             # still gated by the balance check below, so the fund can never
@@ -16724,6 +16781,8 @@ class DepartmentWithdrawalReviewView(APIView):
         if action == 'decline':
             if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user) and not is_pastor_or_admin(request.user):
                 return Response({'detail': 'Only pastors, elders, or treasurers can decline withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_elder_or_admin(request.user) and not is_pastor_or_admin(request.user) and not is_full_treasurer_or_admin(request.user):
+                return Response({'detail': 'Assistant treasurers cannot decline withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
                 pk=row_id, status__in=['pending', 'pastor_approved', 'elder_approved'],
             ).first()
@@ -16741,6 +16800,8 @@ class DepartmentWithdrawalReviewView(APIView):
         if action == 'reverse':
             if not is_treasurer_or_admin(request.user):
                 return Response({'detail': 'Only church treasurers or administrators can reverse withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
+            if not is_full_treasurer_or_admin(request.user):
+                return Response({'detail': 'Assistant treasurers cannot reverse withdrawals.'}, status=status.HTTP_403_FORBIDDEN)
             row = DepartmentWithdrawalRequest.objects.select_related('department', 'account', 'requested_by').filter(
                 pk=row_id, status='approved',
             ).first()
