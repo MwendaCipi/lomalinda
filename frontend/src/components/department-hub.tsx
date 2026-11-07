@@ -4979,6 +4979,7 @@ type UnifiedAccountItem = {
   reply?: string;
   /** The released withdrawal this line belongs to, when it has one. */
   withdrawal?: FundWithdrawal;
+  unit?: string;
 };
 
 /**
