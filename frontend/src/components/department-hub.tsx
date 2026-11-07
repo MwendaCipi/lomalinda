@@ -5026,7 +5026,7 @@ export function DepartmentAccountsPanel({
   search = "",
   typeFilter = "all",
   showInlineControls = false,
-  className = "flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm h-full sm:overflow-hidden",
+  className = "flex min-h-0 flex-1 flex-col border border-sand-line bg-white h-full",
   footer,
 }: {
   department: { code: string; label: string };
