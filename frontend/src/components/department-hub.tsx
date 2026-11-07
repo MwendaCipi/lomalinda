@@ -52,6 +52,7 @@ import {
   PenLine,
   Mail,
   Phone,
+  Paperclip,
   Plus,
   Printer,
   Pencil,
@@ -4961,6 +4962,44 @@ export function AccountsFilterButton({
   );
 }
 
+/** One line of a spending account: what was bought, for how much, and its receipt. */
+type AccountRow = { id: number; item: string; amount: string; receipt: File | null };
+
+/**
+ * A row amount counts only when it is a plain positive number with at most
+ * two decimals — no words, no negatives, no zero-amount lines.
+ */
+function parseAccountAmount(value: string): number | null {
+  const text = value.trim().replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
+  const num = Number(text);
+  return num > 0 ? num : null;
+}
+
+/**
+ * Read a previously filed account back into editable rows. Lines already in
+ * the "item — amount" shape split back into pairs; older free text becomes
+ * one row's item so nothing ever typed is lost.
+ */
+function accountNotesToRows(notes: string, startId: number): { rows: AccountRow[]; nextId: number } {
+  const lines = notes
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  let nextId = startId;
+  const rows = lines.map((line) => {
+    const match = /^(.*?)\s*[—–-]\s*([\d,]+(?:\.\d{1,2})?)\s*$/.exec(line);
+    return {
+      id: nextId++,
+      item: (match ? match[1] : line).trim(),
+      amount: match ? match[2].replace(/,/g, "") : "",
+      receipt: null as File | null,
+    };
+  });
+  if (rows.length === 0) rows.push({ id: nextId++, item: "", amount: "", receipt: null });
+  return { rows, nextId };
+}
+
 type UnifiedAccountItem = {
   key: string;
   date: string;
@@ -5070,13 +5109,15 @@ export function DepartmentAccountsPanel({
       .catch(() => {});
     return () => { alive = false; };
   }, []);
-  // The spending account: the desk writes how the money was used and files
-  // the receipts it was given, for the treasury to accept or send back.
+  // The spending account: the desk lists what was bought, row by row, each
+  // with its amount and its own receipt, for the treasury to accept or send
+  // back. The rows travel as one notes text so the treasury keeps reading
+  // the account exactly as before.
   const [accountingFor, setAccountingFor] = useState<FundWithdrawal | null>(null);
-  const [accountNotes, setAccountNotes] = useState("");
+  const [accountRows, setAccountRows] = useState<AccountRow[]>([{ id: 1, item: "", amount: "", receipt: null }]);
   const [accountSpentOn, setAccountSpentOn] = useState("");
-  const [accountFiles, setAccountFiles] = useState<File[]>([]);
   const [accountSaving, setAccountSaving] = useState(false);
+  const accountRowId = useRef(2);
   const [internalSearch, setInternalSearch] = useState("");
   const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   const rowPad = densityCellPad();
@@ -5197,20 +5238,59 @@ export function DepartmentAccountsPanel({
 
   const openAccountability = (row: FundWithdrawal) => {
     setAccountingFor(row);
-    setAccountNotes(row.accountability?.notes ?? "");
+    const parsed = accountNotesToRows(row.accountability?.notes ?? "", 1);
+    accountRowId.current = parsed.nextId;
+    setAccountRows(parsed.rows);
     setAccountSpentOn(row.accountability?.spent_on ?? "");
-    setAccountFiles([]);
   };
+
+  const updateAccountRow = (id: number, patch: Partial<AccountRow>) =>
+    setAccountRows((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+
+  const addAccountRow = () => {
+    const id = accountRowId.current++;
+    setAccountRows((rows) => [...rows, { id, item: "", amount: "", receipt: null }]);
+  };
+
+  const removeAccountRow = (id: number) =>
+    setAccountRows((rows) => (rows.length > 1 ? rows.filter((row) => row.id !== id) : rows));
+
+  const accountGiven = Number(accountingFor?.amount ?? 0);
+  const accountParsedRows = accountRows.map((row) => ({
+    row,
+    item: row.item.trim(),
+    amount: parseAccountAmount(row.amount),
+    touched: row.item.trim() !== "" || row.amount.trim() !== "" || row.receipt !== null,
+  }));
+  const accountTotal = accountParsedRows.reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
 
   const submitAccountability = async (event: FormEvent) => {
     event.preventDefault();
-    if (!accountingFor || !accountNotes.trim()) return;
+    if (!accountingFor) return;
+    const filled = accountParsedRows.filter((entry) => entry.touched);
+    if (filled.length === 0) {
+      showAlert("Nothing to file", "Add at least one item with its amount.", "error");
+      return;
+    }
+    if (filled.some((entry) => entry.item === "" || entry.amount === null)) {
+      showAlert("Check the rows", "Every row needs both an item and a valid amount.", "error");
+      return;
+    }
+    const total = filled.reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
+    if (total > accountGiven) {
+      showAlert(
+        "Over the amount given",
+        `The rows come to KES ${total.toLocaleString("en-KE", { minimumFractionDigits: 2 })} but only KES ${accountGiven.toLocaleString("en-KE", { minimumFractionDigits: 2 })} was released.`,
+        "error"
+      );
+      return;
+    }
     setAccountSaving(true);
     try {
       const body = new FormData();
-      body.append("notes", accountNotes.trim());
+      body.append("notes", filled.map((entry) => `${entry.item} — ${(entry.amount ?? 0).toFixed(2)}`).join("\n"));
       if (accountSpentOn) body.append("spent_on", accountSpentOn);
-      for (const file of accountFiles) body.append("receipts", file);
+      for (const entry of filled) if (entry.row.receipt) body.append("receipts", entry.row.receipt);
       const res = await fetch(`${API_URL}/api/members/department-withdrawals/${accountingFor.id}/accountability/`, {
         method: "POST",
         headers: authHeaders(),
@@ -5220,7 +5300,8 @@ export function DepartmentAccountsPanel({
       if (!res.ok) throw new Error(data.detail || "Could not file the account.");
       showAlert("Account filed", "The treasury will read how the money was spent.", "success");
       setAccountingFor(null);
-      setAccountFiles([]);
+      accountRowId.current = 2;
+      setAccountRows([{ id: 1, item: "", amount: "", receipt: null }]);
       load();
       if (onChanged) onChanged();
     } catch (error) {
@@ -5751,17 +5832,89 @@ export function DepartmentAccountsPanel({
 
             {accountingFor.accountability?.status !== "accepted" && (
               <form onSubmit={submitAccountability} className="mt-4 space-y-4">
-                <label className="block text-sm font-medium text-bark">
-                  How the money was used *
-                  <textarea
-                    required
-                    rows={4}
-                    value={accountNotes}
-                    onChange={(e) => setAccountNotes(e.target.value)}
-                    placeholder="What was bought, and for which activity…"
-                    className="mt-1 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  />
-                </label>
+                <div>
+                  <span className="block text-sm font-medium text-bark">What the money bought *</span>
+                  <div className="mt-1 space-y-2">
+                    {accountRows.map((row) => (
+                      <div key={row.id} className="flex items-center gap-2">
+                        <input
+                          value={row.item}
+                          onChange={(e) => updateAccountRow(row.id, { item: e.target.value })}
+                          placeholder="Item, e.g. 20 kg sugar"
+                          aria-label="Item bought"
+                          className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={row.amount}
+                          onChange={(e) => updateAccountRow(row.id, { amount: e.target.value })}
+                          placeholder="0.00"
+                          aria-label="Amount in KES"
+                          className="w-24 shrink-0 rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                        />
+                        <input
+                          id={`account-receipt-${row.id}`}
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.webp"
+                          className="sr-only"
+                          onChange={(e) => {
+                            updateAccountRow(row.id, { receipt: e.target.files?.[0] ?? null });
+                            e.target.value = "";
+                          }}
+                        />
+                        {row.receipt ? (
+                          <span className="flex max-w-28 items-center gap-1 rounded-lg bg-sand px-1.5 py-1 text-[11px] font-semibold text-bark">
+                            <span className="truncate">{row.receipt.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateAccountRow(row.id, { receipt: null })}
+                              aria-label={`Remove the receipt for ${row.item.trim() || "this item"}`}
+                              className="shrink-0 rounded p-0.5 text-moss transition hover:text-ember"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        ) : (
+                          <label
+                            htmlFor={`account-receipt-${row.id}`}
+                            title="Attach a receipt for this item"
+                            className="shrink-0 cursor-pointer rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
+                          >
+                            <Paperclip className="h-4 w-4" />
+                            <span className="sr-only">Attach a receipt for {row.item.trim() || "this item"}</span>
+                          </label>
+                        )}
+                        {accountRows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeAccountRow(row.id)}
+                            aria-label={`Remove ${row.item.trim() || "this row"}`}
+                            className="shrink-0 rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addAccountRow}
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-sand-mute px-2.5 py-1.5 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add item
+                  </button>
+                  <p className={`mt-2 text-xs font-semibold ${accountTotal > accountGiven ? "text-red-700" : "text-moss"}`}>
+                    Total KES {accountTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })} of KES{" "}
+                    {accountGiven.toLocaleString("en-KE", { minimumFractionDigits: 2 })} given
+                    {accountTotal > accountGiven
+                      ? " — over the amount released"
+                      : ` · KES ${(accountGiven - accountTotal).toLocaleString("en-KE", { minimumFractionDigits: 2 })} left`}
+                  </p>
+                </div>
                 <label className="block text-sm font-medium text-bark">
                   Date spent
                   <input
@@ -5769,19 +5922,6 @@ export function DepartmentAccountsPanel({
                     value={accountSpentOn}
                     onChange={(e) => setAccountSpentOn(e.target.value)}
                     className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  />
-                </label>
-                <label className="block text-sm font-medium text-bark">
-                  Receipts
-                  <span className="mt-0.5 block text-[11px] font-normal text-moss">
-                    PDFs or photos, up to 10 MB each.
-                  </span>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.webp"
-                    onChange={(e) => setAccountFiles(Array.from(e.target.files ?? []))}
-                    className="mt-1 block w-full text-xs text-moss file:mr-2 file:rounded-lg file:border-0 file:bg-sand file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-bark"
                   />
                 </label>
                 <div className="flex justify-end gap-2 border-t border-sand-line pt-3">
@@ -5794,7 +5934,7 @@ export function DepartmentAccountsPanel({
                   </button>
                   <button
                     type="submit"
-                    disabled={accountSaving || !accountNotes.trim()}
+                    disabled={accountSaving || accountTotal <= 0 || accountTotal > accountGiven}
                     className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-ember-deep disabled:opacity-50"
                   >
                     {accountSaving ? "Filing…" : accountingFor.accountability ? "Update account" : "File account"}
