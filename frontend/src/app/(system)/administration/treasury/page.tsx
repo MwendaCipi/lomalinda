@@ -463,9 +463,9 @@ export default function TreasuryPage() {
   const [reportMode, setReportMode] = useState<"summary" | "individual">("summary");
   const [reportDepartments, setReportDepartments] = useState<string[]>([]);
   const [reportModes, setReportModes] = useState<string[]>([]);
-  // The order the paper prints in: one rule, or several applied in turn —
-  // account first, then date within each account, say. A later rule only
-  // breaks the ties the ones before it left.
+  // The order the paper prints in: one column at a time — account, date,
+  // amount or giver. Sectioned sorts (by month, by account) will arrive as
+  // their own control; until then this stays a single rule.
   const [reportOrderRules, setReportOrderRules] = useState<ReportOrderRule[]>([
     { field: "account", direction: "asc" },
   ]);
@@ -1470,8 +1470,6 @@ export default function TreasuryPage() {
       if (mode) params.append("modes", mode);
     }
     // The register's own order is the default; any other is asked for by name.
-    // Several rules are sent in turn, first rule first, and the server applies
-    // them in that order — each one breaking the previous one's ties.
     const defaultOrder =
       reportOrderRules.length === 1 &&
       reportOrderRules[0].field === "account" &&
@@ -3141,98 +3139,56 @@ export default function TreasuryPage() {
                 onClear={() => setReportModes([])}
               />
 
+              {/* One column at a time: the paper prints in this order, and a
+                  sectioned sort (by month, by account) will arrive as its own
+                  control rather than another row here. */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
-                    Order by
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReportOrderRules((current) =>
-                        current.length >= 4
-                          ? current
-                          : [...current, { field: "date", direction: "desc" }],
-                      )
-                    }
-                    disabled={reportOrderRules.length >= 4}
-                    className="inline-flex items-center gap-1 rounded-lg border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-bark transition hover:bg-sand disabled:opacity-40"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add sort
-                  </button>
-                </div>
-                {reportOrderRules.map((rule, index) => (
-                  <div key={`${index}-${rule.field}`} className="flex items-center gap-2">
-                    <select
-                      value={rule.field}
-                      aria-label={`Sort column ${index + 1}`}
-                      onChange={(event) =>
-                        setReportOrderRules((current) =>
-                          current.map((entry, position) =>
-                            position === index
-                              ? { ...entry, field: event.target.value as ReportOrderRule["field"] }
-                              : entry,
-                          ),
-                        )
-                      }
-                      className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
-                    >
-                      <option value="account">Account</option>
-                      <option value="date">Date</option>
-                      <option value="amount">Amount</option>
-                      <option value="name">Giver</option>
-                    </select>
-                    <select
-                      value={rule.direction}
-                      aria-label={`Sort direction ${index + 1}`}
-                      onChange={(event) =>
-                        setReportOrderRules((current) =>
-                          current.map((entry, position) =>
-                            position === index
-                              ? { ...entry, direction: event.target.value as "asc" | "desc" }
-                              : entry,
-                          ),
-                        )
-                      }
-                      className="w-32 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs text-bark focus:border-ember focus:outline-none"
-                    >
-                      <option value="asc">
-                        {rule.field === "amount"
-                          ? "Smallest first"
-                          : rule.field === "date"
-                            ? "Oldest first"
-                            : "A to Z"}
-                      </option>
-                      <option value="desc">
-                        {rule.field === "amount"
-                          ? "Largest first"
-                          : rule.field === "date"
-                            ? "Newest first"
-                            : "Z to A"}
-                      </option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setReportOrderRules((current) =>
-                          current.length <= 1
-                            ? current
-                            : current.filter((_, position) => position !== index),
-                        )
-                      }
-                      disabled={reportOrderRules.length <= 1}
-                      aria-label={`Remove sort ${index + 1}`}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-sand-line text-moss transition hover:text-ember disabled:opacity-40"
-                    >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
-                ))}
-                {reportOrderRules.length > 1 && (
-                  <p className="text-[11px] text-moss">
-                    The first row sorts first; each next row breaks its ties.
-                  </p>
-                )}
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
+                  Order by
+                </span>
+                {(() => {
+                  const rule = reportOrderRules[0] ?? { field: "account", direction: "asc" };
+                  const setRule = (patch: Partial<ReportOrderRule>) =>
+                    setReportOrderRules([{ ...rule, ...patch }]);
+                  return (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={rule.field}
+                        aria-label="Sort column"
+                        onChange={(event) =>
+                          setRule({ field: event.target.value as ReportOrderRule["field"] })
+                        }
+                        className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                      >
+                        <option value="account">Account</option>
+                        <option value="date">Date</option>
+                        <option value="amount">Amount</option>
+                        <option value="name">Giver</option>
+                      </select>
+                      <select
+                        value={rule.direction}
+                        aria-label="Sort direction"
+                        onChange={(event) => setRule({ direction: event.target.value as "asc" | "desc" })}
+                        className="w-32 shrink-0 rounded-xl border border-sand-line bg-sand px-2 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                      >
+                        <option value="asc">
+                          {rule.field === "amount"
+                            ? "Smallest first"
+                            : rule.field === "date"
+                              ? "Oldest first"
+                              : "A to Z"}
+                        </option>
+                        <option value="desc">
+                          {rule.field === "amount"
+                            ? "Largest first"
+                            : rule.field === "date"
+                              ? "Newest first"
+                              : "Z to A"}
+                        </option>
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
@@ -3281,22 +3237,17 @@ export default function TreasuryPage() {
                 )}
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-sand-line bg-sand-linen/40 px-5 py-3">
+            {/* One column of answers: the X at the top already closes, so no
+                Cancel — Send, Download and Preview stack full-width. */}
+            <div className="flex shrink-0 flex-col items-stretch gap-2 border-t border-sand-line bg-sand-linen/40 px-5 py-3">
               {reportSelectedPurposes.length === 0 && (
-                <p className="mr-auto text-[11px] text-moss">Pick at least one account.</p>
+                <p className="text-center text-[11px] text-moss">Pick at least one account.</p>
               )}
-              <button
-                type="button"
-                onClick={() => setShowReportModal(false)}
-                className="rounded-xl border border-sand-line bg-white px-3.5 py-2 text-xs font-semibold text-moss transition hover:text-bark"
-              >
-                Cancel
-              </button>
               <button
                 type="button"
                 onClick={() => void sendGivingReportForSignature()}
                 disabled={sendingSignature || preparing !== null || reportSelectedPurposes.length === 0}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90 disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90 disabled:opacity-60"
               >
                 {sendingSignature ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -3309,7 +3260,7 @@ export default function TreasuryPage() {
                 type="button"
                 onClick={() => void downloadGivingReport()}
                 disabled={preparing !== null || reportSelectedPurposes.length === 0}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark shadow-sm transition hover:bg-sand disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark shadow-sm transition hover:bg-sand disabled:opacity-60"
               >
                 <Download className="h-3.5 w-3.5 text-ember" aria-hidden="true" /> Download report
               </button>
@@ -3317,7 +3268,7 @@ export default function TreasuryPage() {
                 type="button"
                 onClick={previewGivingReport}
                 disabled={preparing !== null || reportSelectedPurposes.length === 0}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60"
               >
                 <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Preview report
               </button>
