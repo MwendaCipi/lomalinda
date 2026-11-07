@@ -5102,7 +5102,7 @@ export function DepartmentAccountsPanel({
 
   const effectiveSearch = (search && search.trim() !== "") ? search : internalSearch;
   const effectiveTypeFilter = typeFilter !== "all" ? typeFilter : internalTypeFilter;
-  const effectiveUnitFilter = unitFilter && unitFilter.trim() !== "" ? unitFilter : internalUnitFilter;
+  const effectiveUnitFilter = internalUnitFilter;
 
   const load = useCallback(() => {
     setLoading(true);
