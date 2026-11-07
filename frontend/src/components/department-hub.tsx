@@ -5083,7 +5083,17 @@ export function DepartmentAccountsPanel({
   const [accountSaving, setAccountSaving] = useState(false);
   // A confirmed item removal files itself straight away; the X waits while it does.
   const [accountDeleting, setAccountDeleting] = useState(false);
-  const accountRowId = useRef(2);
+  const accountRowId = useRef(1);
+  // The rows the desk sees: when one is added the list carries the newest
+  // row into view, so it never hides below the modal's bottom.
+  const accountListRef = useRef<HTMLDivElement | null>(null);
+  const accountListGrew = useRef(false);
+  useEffect(() => {
+    if (accountListGrew.current) {
+      accountListGrew.current = false;
+      accountListRef.current?.scrollTo({ top: accountListRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [accountRows.length]);
   const [internalSearch, setInternalSearch] = useState("");
   const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
   const rowPad = densityCellPad();
@@ -5214,6 +5224,7 @@ export function DepartmentAccountsPanel({
 
   const addAccountRow = () => {
     const id = accountRowId.current++;
+    accountListGrew.current = true;
     setAccountRows((rows) => [...rows, { id, item: "", amount: "", spentOn: "", receipt: null }]);
   };
 
@@ -5909,7 +5920,9 @@ export function DepartmentAccountsPanel({
               <form onSubmit={submitAccountability} className="mt-4 space-y-4">
                 <div>
                   <span className="block text-sm font-medium text-bark">What the money bought *</span>
-                  <div className="mt-1 space-y-2">
+                  {/* Past a few rows the old ones scroll up inside the list,
+                      so new rows never push Add item and File below the modal. */}
+                  <div ref={accountListRef} className="mt-1 max-h-[36vh] space-y-2 overflow-y-auto pr-1">
                     {accountRows.map((row) => (
                       <div key={row.id} className="relative rounded-xl border border-sand-line bg-white p-2.5 pr-10">
                         <div className="flex items-center gap-2">
