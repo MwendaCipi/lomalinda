@@ -401,6 +401,7 @@ SEED_DEPARTMENTS = (
 SEED_DEPARTMENT_ROLES = {
     'eldership': (('First Elder', False), ('Second Elder', False), ('Third Elder', False)),
     'pastorate': (('Pastor', True), ('Leader', True), ('Assistant', True)),
+    'treasury': (('First Elder', False), ('Second Elder', False), ('Third Elder', False)),
 }
 
 #: The roles a new department starts with: its Leader and the Assistant
