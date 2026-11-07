@@ -40,9 +40,12 @@ const phoneGridClass =
 /** A long strip's phone layout: the grid above, three chips a row — or four
  *  when the count divides by four, so the four study shelves read as one level
  *  row and eight toggles as two level rows of four (the elders' strip among
- *  them — four a row is its rule, as the treasury's is). Six keeps three a
- *  row, leaving Giving's six pages as the two level rows they are. Same shape
- *  as the grid above with the count the strip needs. */
+ *  them — four a row is its rule, as the treasury's is). Seven also reads
+ *  four a row (four over three, as the youth desk's seven views do): three
+ *  a row would strand the seventh chip alone on a last line that is easy to
+ *  miss. Six keeps three a row, leaving Giving's six pages as the two level
+ *  rows they are. Same shape as the grid above with the count the strip
+ *  needs. */
 const fourUpGridClass =
   "grid min-h-12 w-full grid-cols-4 items-stretch gap-1 sm:flex sm:w-auto sm:flex-nowrap sm:shrink-0 sm:overflow-x-auto";
 
@@ -50,9 +53,10 @@ function stripLayout(items: readonly { key: string }[]): string {
   // Three or fewer items fit a phone on one natural row; from four up the
   // strip wraps anyway, so it switches to the equal-share grid instead —
   // four to a row when the count divides by four (the treasury's four, Music's
-  // eight, the school's where they come in fours) and three a row otherwise,
-  // so a long strip's last line is level instead of a lone chip under it.
-  if (items.length > 3 && items.length % 4 === 0) return fourUpGridClass;
+  // eight, the school's where they come in fours) or numbers seven (four over
+  // three, the youth desk), and three a row otherwise, so a long strip's
+  // last line stays a row of its own instead of a lone chip under it.
+  if (items.length > 3 && (items.length % 4 === 0 || items.length === 7)) return fourUpGridClass;
   return items.length > 3 ? phoneGridClass : `${stripClass} flex`;
 }
 
