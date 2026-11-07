@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   // back stack. Bump the query whenever the manifest changes — and only then:
   // a new manifest URL makes Chrome re-mint the WebAPK, and its own icon
   // shows for a moment while it does.
-  manifest: "/manifest.json?v=9-crest-centered",
+  manifest: "/manifest.json?v=10-crest-unified",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -59,10 +59,10 @@ export const metadata: Metadata = {
     // Chrome's WebAPK minting server — has never seen these URLs, so a
     // reinstall is guaranteed to fetch the current Meru artwork.
     icon: [
-      { url: "/icons/meru/church-crest-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/meru/church-crest-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/meru/church-crest-v2-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/meru/church-crest-v2-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/meru/church-crest-apple-touch-icon.png",
+    apple: "/icons/meru/church-crest-v2-apple-touch-icon.png",
   },
 };
 

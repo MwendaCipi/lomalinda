@@ -501,10 +501,10 @@ const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/adventist-logo.svg",
   "/adventist-logo-white.svg",
-  "/icons/meru/church-crest-192.png",
-  "/icons/meru/church-crest-512.png",
-  "/icons/meru/church-crest-512-maskable.png",
-  "/icons/meru/church-crest-apple-touch-icon.png",
+  "/icons/meru/church-crest-v2-192.png",
+  "/icons/meru/church-crest-v2-512.png",
+  "/icons/meru/church-crest-v2-512-maskable.png",
+  "/icons/meru/church-crest-v2-apple-touch-icon.png",
 ];
 
 async function cacheStaticAssets() {
@@ -673,8 +673,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "SDA Church Loma Linda";
   const options = {
     body: payload.body || "",
-    icon: "/icons/meru/church-crest-192.png",
-    badge: "/icons/meru/church-crest-192.png",
+    icon: "/icons/meru/church-crest-v2-192.png",
+    badge: "/icons/meru/church-crest-v2-192.png",
     tag: payload.link || undefined, // one notice per destination, no stacking
     data: { link: payload.link || "/administration?tab=requests" },
     renotify: false,

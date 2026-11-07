@@ -11,19 +11,19 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/icons/meru/church-crest-192.png",
+      "src": "/icons/meru/church-crest-v2-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/meru/church-crest-512.png",
+      "src": "/icons/meru/church-crest-v2-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/meru/church-crest-512-maskable.png",
+      "src": "/icons/meru/church-crest-v2-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

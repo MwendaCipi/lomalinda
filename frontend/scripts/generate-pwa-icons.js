@@ -51,11 +51,19 @@ async function generate() {
   // server, and the PNGs are served immutable for a month (see the icons
   // block in src/app/layout.tsx). Rename the stem here when the art changes
   // again, and point the manifest, the head, the schema and the worker at it.
+  // Every variant shares padding 0 — the same lockup geometry in the
+  // launcher icon and the splash icon. The maskable file used to shrink the
+  // lockup with an extra 64px inset, so Android morphed a small crest (the
+  // masked launcher icon) into a larger one (the splash icon) on every cold
+  // start and the logo visibly adjusted itself. The full-bleed tile already
+  // satisfies the maskable contract (any mask shape shows only green outside
+  // the lockup), and the lockup itself sits well inside the safe zone, so no
+  // extra inset is needed — identical composition everywhere.
   const variants = [
-    { out: 'icon-192x192.png', served: 'church-crest-192.png', size: 192, padding: 0 },
-    { out: 'icon-512x512.png', served: 'church-crest-512.png', size: 512, padding: 0 },
-    { out: 'icon-512x512-maskable.png', served: 'church-crest-512-maskable.png', size: 512, padding: 64 },
-    { out: 'apple-touch-icon.png', served: 'church-crest-apple-touch-icon.png', size: 180, padding: 0 },
+    { out: 'icon-192x192.png', served: 'church-crest-v2-192.png', size: 192, padding: 0 },
+    { out: 'icon-512x512.png', served: 'church-crest-v2-512.png', size: 512, padding: 0 },
+    { out: 'icon-512x512-maskable.png', served: 'church-crest-v2-512-maskable.png', size: 512, padding: 0 },
+    { out: 'apple-touch-icon.png', served: 'church-crest-v2-apple-touch-icon.png', size: 180, padding: 0 },
   ];
 
   for (const variant of variants) {
