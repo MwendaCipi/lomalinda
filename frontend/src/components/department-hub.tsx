@@ -4962,8 +4962,20 @@ export function AccountsFilterButton({
   );
 }
 
-/** One line of a spending account: what was bought, for how much, and its receipt. */
-type AccountRow = { id: number; item: string; amount: string; receipt: File | null };
+/** One line of a spending account: what was bought, for how much, when, and its receipt. */
+type AccountRow = { id: number; item: string; amount: string; spentOn: string; receipt: File | null };
+
+/** "2026-05-12" → "12/05/2026"; null when the text is not a real calendar date. */
+function dayFirstToIso(text: string): string | null {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text.trim());
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+}
 
 /**
  * A row amount counts only when it is a plain positive number with at most
@@ -4978,8 +4990,8 @@ function parseAccountAmount(value: string): number | null {
 
 /**
  * Read a previously filed account back into editable rows. Lines already in
- * the "item — amount" shape split back into pairs; older free text becomes
- * one row's item so nothing ever typed is lost.
+ * the "item — amount · date" shape split back into rows; older free text
+ * becomes one row's item so nothing ever typed is lost.
  */
 function accountNotesToRows(notes: string, startId: number): { rows: AccountRow[]; nextId: number } {
   const lines = notes
@@ -4988,15 +5000,16 @@ function accountNotesToRows(notes: string, startId: number): { rows: AccountRow[
     .filter(Boolean);
   let nextId = startId;
   const rows = lines.map((line) => {
-    const match = /^(.*?)\s*[—–-]\s*([\d,]+(?:\.\d{1,2})?)\s*$/.exec(line);
+    const match = /^(.*?)\s*[—–-]\s*([\d,]+(?:\.\d{1,2})?)(?:\s*·\s*(\d{1,2}\/\d{1,2}\/\d{4}))?\s*$/.exec(line);
     return {
       id: nextId++,
       item: (match ? match[1] : line).trim(),
       amount: match ? match[2].replace(/,/g, "") : "",
+      spentOn: match?.[3] ? (dayFirstToIso(match[3]) ?? "") : "",
       receipt: null as File | null,
     };
   });
-  if (rows.length === 0) rows.push({ id: nextId++, item: "", amount: "", receipt: null });
+  if (rows.length === 0) rows.push({ id: nextId++, item: "", amount: "", spentOn: "", receipt: null });
   return { rows, nextId };
 }
 
@@ -5110,12 +5123,11 @@ export function DepartmentAccountsPanel({
     return () => { alive = false; };
   }, []);
   // The spending account: the desk lists what was bought, row by row, each
-  // with its amount and its own receipt, for the treasury to accept or send
-  // back. The rows travel as one notes text so the treasury keeps reading
-  // the account exactly as before.
+  // with its amount, its date and its own receipt, for the treasury to
+  // accept or send back. The rows travel as one notes text so the treasury
+  // keeps reading the account exactly as before.
   const [accountingFor, setAccountingFor] = useState<FundWithdrawal | null>(null);
-  const [accountRows, setAccountRows] = useState<AccountRow[]>([{ id: 1, item: "", amount: "", receipt: null }]);
-  const [accountSpentOn, setAccountSpentOn] = useState("");
+  const [accountRows, setAccountRows] = useState<AccountRow[]>([{ id: 1, item: "", amount: "", spentOn: "", receipt: null }]);
   const [accountSaving, setAccountSaving] = useState(false);
   const accountRowId = useRef(2);
   const [internalSearch, setInternalSearch] = useState("");
@@ -5241,7 +5253,6 @@ export function DepartmentAccountsPanel({
     const parsed = accountNotesToRows(row.accountability?.notes ?? "", 1);
     accountRowId.current = parsed.nextId;
     setAccountRows(parsed.rows);
-    setAccountSpentOn(row.accountability?.spent_on ?? "");
   };
 
   const updateAccountRow = (id: number, patch: Partial<AccountRow>) =>
@@ -5249,7 +5260,7 @@ export function DepartmentAccountsPanel({
 
   const addAccountRow = () => {
     const id = accountRowId.current++;
-    setAccountRows((rows) => [...rows, { id, item: "", amount: "", receipt: null }]);
+    setAccountRows((rows) => [...rows, { id, item: "", amount: "", spentOn: "", receipt: null }]);
   };
 
   const removeAccountRow = (id: number) =>
@@ -5260,9 +5271,13 @@ export function DepartmentAccountsPanel({
     row,
     item: row.item.trim(),
     amount: parseAccountAmount(row.amount),
-    touched: row.item.trim() !== "" || row.amount.trim() !== "" || row.receipt !== null,
+    spentOn: row.spentOn,
+    touched: row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null,
   }));
   const accountTotal = accountParsedRows.reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
+  const accountIncomplete = accountParsedRows.some(
+    (entry) => entry.touched && (entry.item === "" || entry.amount === null || entry.spentOn === "")
+  );
 
   const submitAccountability = async (event: FormEvent) => {
     event.preventDefault();
@@ -5272,8 +5287,8 @@ export function DepartmentAccountsPanel({
       showAlert("Nothing to file", "Add at least one item with its amount.", "error");
       return;
     }
-    if (filled.some((entry) => entry.item === "" || entry.amount === null)) {
-      showAlert("Check the rows", "Every row needs both an item and a valid amount.", "error");
+    if (filled.some((entry) => entry.item === "" || entry.amount === null || entry.spentOn === "")) {
+      showAlert("Check the rows", "Every row needs an item, a valid amount and the date it was bought.", "error");
       return;
     }
     const total = filled.reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
@@ -5288,8 +5303,12 @@ export function DepartmentAccountsPanel({
     setAccountSaving(true);
     try {
       const body = new FormData();
-      body.append("notes", filled.map((entry) => `${entry.item} — ${(entry.amount ?? 0).toFixed(2)}`).join("\n"));
-      if (accountSpentOn) body.append("spent_on", accountSpentOn);
+      body.append(
+        "notes",
+        filled.map((entry) => `${entry.item} — ${(entry.amount ?? 0).toFixed(2)} · ${dayFirst(entry.spentOn)}`).join("\n")
+      );
+      const spentDates = filled.map((entry) => entry.spentOn).sort();
+      body.append("spent_on", spentDates[spentDates.length - 1]);
       for (const entry of filled) if (entry.row.receipt) body.append("receipts", entry.row.receipt);
       const res = await fetch(`${API_URL}/api/members/department-withdrawals/${accountingFor.id}/accountability/`, {
         method: "POST",
@@ -5301,7 +5320,7 @@ export function DepartmentAccountsPanel({
       showAlert("Account filed", "The treasury will read how the money was spent.", "success");
       setAccountingFor(null);
       accountRowId.current = 2;
-      setAccountRows([{ id: 1, item: "", amount: "", receipt: null }]);
+      setAccountRows([{ id: 1, item: "", amount: "", spentOn: "", receipt: null }]);
       load();
       if (onChanged) onChanged();
     } catch (error) {
@@ -5856,6 +5875,24 @@ export function DepartmentAccountsPanel({
                           className="w-24 shrink-0 rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
                         />
                         <input
+                          id={`account-date-${row.id}`}
+                          type="date"
+                          value={row.spentOn}
+                          onChange={(e) => updateAccountRow(row.id, { spentOn: e.target.value })}
+                          aria-label={`Date ${row.item.trim() || "this item"} was bought`}
+                          className="sr-only"
+                        />
+                        <label
+                          htmlFor={`account-date-${row.id}`}
+                          title={row.spentOn ? `Bought ${dayFirst(row.spentOn)} — tap to change` : "When was this bought?"}
+                          className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold transition hover:bg-sand ${
+                            row.spentOn ? "text-bark" : "text-moss hover:text-ember"
+                          }`}
+                        >
+                          <CalendarDays className="h-4 w-4" />
+                          {row.spentOn ? dayFirst(row.spentOn) : null}
+                        </label>
+                        <input
                           id={`account-receipt-${row.id}`}
                           type="file"
                           accept=".pdf,.png,.jpg,.jpeg,.webp"
@@ -5915,15 +5952,7 @@ export function DepartmentAccountsPanel({
                       : ` · KES ${(accountGiven - accountTotal).toLocaleString("en-KE", { minimumFractionDigits: 2 })} left`}
                   </p>
                 </div>
-                <label className="block text-sm font-medium text-bark">
-                  Date spent
-                  <input
-                    type="date"
-                    value={accountSpentOn}
-                    onChange={(e) => setAccountSpentOn(e.target.value)}
-                    className="mt-1 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  />
-                </label>
+
                 <div className="flex justify-end gap-2 border-t border-sand-line pt-3">
                   <button
                     type="button"
@@ -5934,7 +5963,7 @@ export function DepartmentAccountsPanel({
                   </button>
                   <button
                     type="submit"
-                    disabled={accountSaving || accountTotal <= 0 || accountTotal > accountGiven}
+                    disabled={accountSaving || accountTotal <= 0 || accountTotal > accountGiven || accountIncomplete}
                     className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-ember-deep disabled:opacity-50"
                   >
                     {accountSaving ? "Filing…" : accountingFor.accountability ? "Update account" : "File account"}
