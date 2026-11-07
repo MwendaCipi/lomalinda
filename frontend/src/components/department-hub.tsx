@@ -5079,6 +5079,8 @@ export function DepartmentAccountsPanel({
   const [accountingFor, setAccountingFor] = useState<FundWithdrawal | null>(null);
   const [accountRows, setAccountRows] = useState<AccountRow[]>([{ id: 1, item: "", amount: "", spentOn: "", receipt: null }]);
   const [accountSaving, setAccountSaving] = useState(false);
+  // A confirmed item removal files itself straight away; the X waits while it does.
+  const [accountDeleting, setAccountDeleting] = useState(false);
   const accountRowId = useRef(2);
   const [internalSearch, setInternalSearch] = useState("");
   const [internalTypeFilter, setInternalTypeFilter] = useState<"all" | "contributions" | "withdrawals">("all");
@@ -5213,17 +5215,110 @@ export function DepartmentAccountsPanel({
     setAccountRows((rows) => [...rows, { id, item: "", amount: "", spentOn: "", receipt: null }]);
   };
 
-  // Every row can go, even the last one — dropping the final row leaves a
-  // fresh empty row behind, so the list is never stuck with a line the desk
-  // cannot clear.
-  const removeAccountRow = (id: number) =>
-    setAccountRows((rows) => {
-      if (rows.length === 1) {
-        const fresh = accountRowId.current++;
-        return [{ id: fresh, item: "", amount: "", spentOn: "", receipt: null }];
+  // Dropping the final row leaves a fresh empty row behind, so the list is
+  // never stuck with a line the desk cannot clear.
+  const dropAccountRow = (id: number, rows: AccountRow[]) => {
+    if (rows.length === 1) {
+      const fresh = accountRowId.current++;
+      return [{ id: fresh, item: "", amount: "", spentOn: "", receipt: null }];
+    }
+    return rows.filter((row) => row.id !== id);
+  };
+
+  /* A row with something on it asks first. On a filed account the confirmed
+     removal is filed straight away, so the treasury never reads a line the
+     desk deleted; on a fresh account it simply comes off the form. A blank
+     row carries nothing worth confirming, so it goes at once. */
+  const removeAccountRow = (id: number) => {
+    const row = accountRows.find((entry) => entry.id === id);
+    if (!row || accountSaving || accountDeleting) return;
+    const touched =
+      row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null;
+    if (!touched) {
+      setAccountRows((rows) => dropAccountRow(id, rows));
+      return;
+    }
+    const filed = accountingFor?.accountability != null && accountingFor.accountability.status !== "accepted";
+    if (filed) {
+      const kept = accountRows.some(
+        (entry) =>
+          entry.id !== id &&
+          (entry.item.trim() !== "" || entry.amount.trim() !== "" || entry.spentOn !== "" || entry.receipt !== null)
+      );
+      if (!kept) {
+        showAlert(
+          "One item must stay",
+          "The filed account needs at least one item. Change this row instead of removing it.",
+          "info"
+        );
+        return;
       }
-      return rows.filter((row) => row.id !== id);
+    }
+    const name = row.item.trim() ? `“${row.item.trim()}”` : "This row";
+    showAlert(
+      "Remove this item?",
+      filed ? `${name} will come off the filed account straight away.` : `${name} will come off this account.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "Remove it", cancelButtonText: "Keep it", confirmButtonColor: brand.ember }
+    ).then((result) => {
+      if (!result.isConfirmed || !accountingFor) return;
+      const next = dropAccountRow(id, accountRows);
+      setAccountRows(next);
+      if (filed) void removeFiledAccountRow(next);
     });
+  };
+
+  /* Filing a deletion: the confirmed removal rewrites the filed account on
+     the server, and the desk stays on the form with what the server just
+     stored. When the remaining rows cannot be filed as they stand, the row
+     still comes off the form and Update account files the fix. */
+  const removeFiledAccountRow = async (next: AccountRow[]) => {
+    if (!accountingFor) return;
+    const parsed = next.map((row) => ({
+      receipt: row.receipt,
+      item: row.item.trim(),
+      amount: parseAccountAmount(row.amount),
+      spentOn: row.spentOn,
+      touched: row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null,
+    }));
+    const filled = parsed.filter((entry) => entry.touched);
+    if (filled.some((entry) => entry.item === "" || entry.amount === null || entry.spentOn === "")) {
+      showAlert(
+        "Removed from the form",
+        "Fill every remaining row, then press Update account so the filed account changes too.",
+        "info"
+      );
+      return;
+    }
+    const total = filled.reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
+    if (total > accountGiven) {
+      showAlert(
+        "Removed from the form",
+        "The remaining rows are over the amount released. Fix them, then press Update account.",
+        "info"
+      );
+      return;
+    }
+    setAccountDeleting(true);
+    try {
+      const saved = await postAccountEntries(
+        filled.map((entry) => ({ item: entry.item, amount: entry.amount ?? 0, spentOn: entry.spentOn, receipt: entry.receipt }))
+      );
+      setAccountRows((rows) => rows.map((row) => ({ ...row, receipt: null })));
+      setAccountingFor((current) => (current ? { ...current, accountability: saved ?? current.accountability } : current));
+      showAlert("Item removed", "The filed account no longer lists it.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+      load();
+      if (onChanged) onChanged();
+    } catch (error) {
+      showAlert("Could not remove the item", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setAccountDeleting(false);
+    }
+  };
 
   const accountGiven = Number(accountingFor?.amount ?? 0);
   const accountParsedRows = accountRows.map((row) => ({
@@ -5237,6 +5332,34 @@ export function DepartmentAccountsPanel({
   const accountIncomplete = accountParsedRows.some(
     (entry) => entry.touched && (entry.item === "" || entry.amount === null || entry.spentOn === "")
   );
+
+  /* The rows as the server files them: one “item — amount · date” line
+     each, the latest bought date as the account's date, and any receipts
+     the desk attached since the last filing. Filed receipts stay on the
+     server when none are attached, so a deletion never strips them. */
+  const accountEntriesFormData = (entries: { item: string; amount: number; spentOn: string; receipt: File | null }[]) => {
+    const body = new FormData();
+    body.append(
+      "notes",
+      entries.map((entry) => `${entry.item} — ${entry.amount.toFixed(2)} · ${dayFirst(entry.spentOn)}`).join("\n")
+    );
+    const spentDates = entries.map((entry) => entry.spentOn).sort();
+    body.append("spent_on", spentDates[spentDates.length - 1]);
+    for (const entry of entries) if (entry.receipt) body.append("receipts", entry.receipt);
+    return body;
+  };
+
+  const postAccountEntries = async (entries: { item: string; amount: number; spentOn: string; receipt: File | null }[]) => {
+    if (!accountingFor) throw new Error("No withdrawal is open.");
+    const res = await fetch(`${API_URL}/api/members/department-withdrawals/${accountingFor.id}/accountability/`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: accountEntriesFormData(entries),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Could not file the account.");
+    return data.accountability;
+  };
 
   const submitAccountability = async (event: FormEvent) => {
     event.preventDefault();
@@ -5261,21 +5384,9 @@ export function DepartmentAccountsPanel({
     }
     setAccountSaving(true);
     try {
-      const body = new FormData();
-      body.append(
-        "notes",
-        filled.map((entry) => `${entry.item} — ${(entry.amount ?? 0).toFixed(2)} · ${dayFirst(entry.spentOn)}`).join("\n")
+      await postAccountEntries(
+        filled.map((entry) => ({ item: entry.item, amount: entry.amount ?? 0, spentOn: entry.spentOn, receipt: entry.row.receipt }))
       );
-      const spentDates = filled.map((entry) => entry.spentOn).sort();
-      body.append("spent_on", spentDates[spentDates.length - 1]);
-      for (const entry of filled) if (entry.row.receipt) body.append("receipts", entry.row.receipt);
-      const res = await fetch(`${API_URL}/api/members/department-withdrawals/${accountingFor.id}/accountability/`, {
-        method: "POST",
-        headers: authHeaders(),
-        body,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Could not file the account.");
       showAlert("Account filed", "The treasury will read how the money was spent.", "success");
       setAccountingFor(null);
       accountRowId.current = 2;
@@ -5761,7 +5872,7 @@ export function DepartmentAccountsPanel({
             role="dialog"
             aria-modal="true"
             aria-label="Account for the spending"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
+            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
           >
             <div className="flex items-start justify-between border-b border-sand-line pb-3">
               <div>
@@ -5814,14 +5925,15 @@ export function DepartmentAccountsPanel({
                   <span className="block text-sm font-medium text-bark">What the money bought *</span>
                   <div className="mt-1 space-y-2">
                     {accountRows.map((row) => (
-                      <div key={row.id} className="flex items-center gap-2">
+                      <div key={row.id} className="relative rounded-xl border border-sand-line bg-white p-2.5 pr-10">
                         <input
                           value={row.item}
                           onChange={(e) => updateAccountRow(row.id, { item: e.target.value })}
                           placeholder="Item, e.g. 20 kg sugar"
                           aria-label="Item bought"
-                          className="min-w-0 flex-1 rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                          className="block w-full rounded-lg border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
                         />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                         <input
                           type="number"
                           min="0"
@@ -5831,7 +5943,7 @@ export function DepartmentAccountsPanel({
                           onChange={(e) => updateAccountRow(row.id, { amount: e.target.value })}
                           placeholder="0.00"
                           aria-label="Amount in KES"
-                          className="w-24 shrink-0 rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                          className="w-28 rounded-lg border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
                         />
                         <input
                           id={`account-date-${row.id}`}
@@ -5841,16 +5953,37 @@ export function DepartmentAccountsPanel({
                           aria-label={`Date ${row.item.trim() || "this item"} was bought`}
                           className="sr-only"
                         />
-                        <label
-                          htmlFor={`account-date-${row.id}`}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // A label never opens the picker's calendar on a
+                            // hidden date field, so the button asks for it out
+                            // loud instead — and falls back to focusing the
+                            // field where the browser has no picker to show.
+                            const input = document.getElementById(`account-date-${row.id}`) as
+                              | (HTMLInputElement & { showPicker?: () => void })
+                              | null;
+                            if (!input) return;
+                            if (typeof input.showPicker === "function") {
+                              try {
+                                input.showPicker();
+                                return;
+                              } catch {
+                                input.focus();
+                                return;
+                              }
+                            }
+                            input.focus();
+                            input.click();
+                          }}
                           title={row.spentOn ? `Bought ${dayFirst(row.spentOn)} — tap to change` : "When was this bought?"}
-                          className={`flex shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold transition hover:bg-sand ${
-                            row.spentOn ? "text-bark" : "text-moss hover:text-ember"
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition hover:border-ember hover:text-ember ${
+                            row.spentOn ? "border-sand-mute text-bark" : "border-dashed border-sand-mute text-moss"
                           }`}
                         >
                           <CalendarDays className="h-4 w-4" />
-                          {row.spentOn ? dayFirst(row.spentOn) : null}
-                        </label>
+                          {row.spentOn ? dayFirst(row.spentOn) : "Date"}
+                        </button>
                         <input
                           id={`account-receipt-${row.id}`}
                           type="file"
@@ -5883,13 +6016,16 @@ export function DepartmentAccountsPanel({
                             <span className="sr-only">Attach a receipt for {row.item.trim() || "this item"}</span>
                           </label>
                         )}
+                        </div>
                         <button
                           type="button"
                           onClick={() => removeAccountRow(row.id)}
+                          disabled={accountSaving || accountDeleting}
                           aria-label={`Remove ${row.item.trim() || "this row"}`}
-                          className="shrink-0 rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
+                          title="Remove this item"
+                          className="absolute right-1.5 top-1.5 rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember disabled:opacity-50"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <X className="h-4 w-4" />
                         </button>
                       </div>
                     ))}
@@ -5920,7 +6056,7 @@ export function DepartmentAccountsPanel({
                   </button>
                   <button
                     type="submit"
-                    disabled={accountSaving || accountTotal <= 0 || accountTotal > accountGiven || accountIncomplete}
+                    disabled={accountSaving || accountDeleting || accountTotal <= 0 || accountTotal > accountGiven || accountIncomplete}
                     className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-ember-deep disabled:opacity-50"
                   >
                     {accountSaving ? "Filing…" : accountingFor.accountability ? "Update account" : "File account"}
