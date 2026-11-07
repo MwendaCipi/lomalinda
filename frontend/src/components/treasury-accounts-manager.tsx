@@ -12,6 +12,7 @@ import { usePageHeader } from "@/components/app-frame";
 import { TREASURY_HEADING } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
 import { dayFirst, firstDayOfMonth, localDate } from "@/lib/dates";
+import { readAccountingLines } from "@/lib/accountability";
 import { RecordList } from "./record-list";
 import { FILTER_SELECT_CLASS, FilterPopover, FilterSet } from "./filter-popover";
 import { ReportComposer, blankDraft, type Draft } from "./report-composer";
@@ -183,6 +184,21 @@ export function WithdrawalRequestsPanel({
   // The treasury's reading of the spending account filed after a release.
   const [accountReply, setAccountReply] = useState("");
   const [accountBusy, setAccountBusy] = useState(false);
+  // The row actions popover, and the request whose spending account the
+  // desk is reading. The marker closes the popover on an outside press,
+  // the way the accounts desk's own row menus close.
+  const [openMenuRequestId, setOpenMenuRequestId] = useState<number | null>(null);
+  const [accountingRow, setAccountingRow] = useState<WithdrawalRequestRow | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Element | null;
+      if (target?.closest?.("[data-action-menu]")) return;
+      setOpenMenuRequestId(null);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
   const rowPad = densityCellPad();
 
   const load = useCallback(() => {
@@ -386,7 +402,7 @@ export function WithdrawalRequestsPanel({
         "success",
       );
       setAccountReply("");
-      setOpenAction(null);
+      setAccountingRow(null);
       load();
     } catch (error) {
       showAlert("Could not save the answer", error instanceof Error ? error.message : "Try again.", "error");
@@ -497,37 +513,76 @@ export function WithdrawalRequestsPanel({
     </>
   );
 
-  /* Every request answers the same two ways — the desk replies to it, and it
-     prints as its own signable sheet — and whatever a status allows is decided
-     inside the reply. The pair is therefore the same on every row; the phone's
-     card only gives them the room a thumb needs. */
+  // One request's reply, from a fresh line each time the desk opens it.
+  const openRespond = (row: WithdrawalRequestRow) => {
+    setOpenAction(row.id);
+    setReleasePhone(row.requested_by_phone ?? "");
+    setAccountReply("");
+  };
+
+  /* Every request answers from one Actions popover — the table and the
+     phone's cards both render it, so the row stays a single button wide.
+     Respond answers the ask itself, Print renders its signable sheet, and
+     Accounting opens the spending account the receiving desk filed, where
+     the treasury reads each item and accepts it or sends it back. */
   const actions = (row: WithdrawalRequestRow, roomy = false) => (
-    <div className={`flex gap-1.5 ${roomy ? "" : "justify-end"}`}>
+    <div className={`relative ${roomy ? "" : "flex justify-end"}`} data-action-menu>
       <button
         type="button"
-        onClick={() => {
-          setOpenAction(row.id);
-          setReleasePhone(row.requested_by_phone ?? "");
-          setAccountReply("");
-        }}
+        onClick={() => setOpenMenuRequestId(openMenuRequestId === row.id ? null : row.id)}
+        aria-expanded={openMenuRequestId === row.id}
+        aria-label={`Actions for the ${row.department} request`}
         className={`rounded-lg border border-sand-mute font-semibold text-moss transition hover:border-ember hover:text-ember ${
           roomy ? "px-3 py-2 text-xs" : "px-2.5 py-1 text-[11px]"
         }`}
       >
-        Respond
+        Actions <span aria-hidden="true">▾</span>
       </button>
-      <button
-        type="button"
-        onClick={() => printRequest(row)}
-        disabled={printingId === row.id}
-        className={`inline-flex items-center justify-center gap-1 rounded-lg border border-sand-mute font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-60 ${
-          roomy ? "px-3 py-2 text-xs" : "px-2.5 py-1 text-[11px]"
-        }`}
-        aria-label={`Print withdrawal request for ${row.department}`}
-      >
-        <Printer className={`h-3 w-3 ${printingId === row.id ? "animate-spin" : ""}`} />
-        <span>{printingId === row.id ? "Preparing…" : "Print"}</span>
-      </button>
+      {openMenuRequestId === row.id && (
+        <div
+          className={`absolute z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-lg ${
+            roomy ? "bottom-full right-0 mb-1.5" : "right-0 top-full mt-1"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setOpenMenuRequestId(null);
+              openRespond(row);
+            }}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+          >
+            <MessageCircle className="h-4 w-4 text-moss" />
+            Respond
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpenMenuRequestId(null);
+              printRequest(row);
+            }}
+            disabled={printingId === row.id}
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand disabled:opacity-60"
+          >
+            <Printer className={`h-4 w-4 text-moss ${printingId === row.id ? "animate-spin" : ""}`} />
+            {printingId === row.id ? "Preparing…" : "Print"}
+          </button>
+          {row.status === "approved" && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuRequestId(null);
+                setAccountReply("");
+                setAccountingRow(row);
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+            >
+              <FileText className="h-4 w-4 text-moss" />
+              Accounting
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -808,101 +863,6 @@ export function WithdrawalRequestsPanel({
                 </div>
               )}
 
-              {target.status === "approved" && (
-                <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold text-bark">Accountability</p>
-                    {target.accountability ? (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                          target.accountability.status === "accepted"
-                            ? "bg-green-50 text-green-800"
-                            : target.accountability.status === "returned"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-amber-50 text-amber-800"
-                        }`}
-                      >
-                        {target.accountability.status === "accepted"
-                          ? "Accepted"
-                          : target.accountability.status === "returned"
-                            ? "Returned"
-                            : "Submitted"}
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-bold uppercase text-moss">
-                        Not filed
-                      </span>
-                    )}
-                  </div>
-                  {target.accountability ? (
-                    <>
-                      <p className="mt-1.5 whitespace-pre-wrap text-moss">{target.accountability.notes}</p>
-                      <p className="mt-1 text-[11px] text-moss-faint">
-                        {target.accountability.submitted_by ? `Filed by ${target.accountability.submitted_by}` : ""}
-                        {target.accountability.spent_on ? ` · spent ${dayFirst(target.accountability.spent_on)}` : ""}
-                      </p>
-                      {target.accountability.receipts.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {target.accountability.receipts.map((receipt) => (
-                            <button
-                              key={receipt.id}
-                              type="button"
-                              onClick={() => void openAccountReceipt(receipt)}
-                              className="rounded-md border border-sand-mute bg-white px-1.5 py-0.5 text-[10px] font-semibold text-moss transition hover:border-ember hover:text-ember"
-                            >
-                              {receipt.filename}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {target.accountability.status === "returned" && target.accountability.reply && (
-                        <p className="mt-1.5 text-[11px] font-semibold text-red-600">
-                          Sent back: “{target.accountability.reply}”
-                        </p>
-                      )}
-                      {target.accountability.status === "accepted" && target.accountability.reviewed_by && (
-                        <p className="mt-1.5 text-[11px] text-moss-faint">
-                          Accepted by {target.accountability.reviewed_by}.
-                        </p>
-                      )}
-                      {workspace === "treasury" && target.accountability.status === "submitted" && (
-                        <div className="mt-2 space-y-2 border-t border-sand-line pt-2">
-                          <textarea
-                            rows={2}
-                            maxLength={255}
-                            value={accountReply}
-                            onChange={(e) => setAccountReply(e.target.value)}
-                            placeholder="A note for the desk (required when sending it back)…"
-                            className="block w-full resize-y rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-                          />
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void reviewAccountability(target, "returned")}
-                              disabled={accountBusy || !accountReply.trim()}
-                              className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
-                            >
-                              Send back
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void reviewAccountability(target, "accepted")}
-                              disabled={accountBusy}
-                              className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                            >
-                              {accountBusy ? "Saving…" : "Accept account"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="mt-1 text-[11px] italic text-moss-faint">
-                      Waiting on {target.department} to file how the money was spent.
-                    </p>
-                  )}
-                </div>
-              )}
 
               {(inFlight || isReversed) && (
                 <textarea
@@ -1033,6 +993,169 @@ export function WithdrawalRequestsPanel({
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* The spending account as the receiving desk filed it: each item with
+          its amount and its date, the filed receipts, and — for the treasury,
+          on a submitted account — the accept or send-back answer. Other
+          signatories read the same account but cannot answer it; the server
+          only takes the treasury's word, and an accepted account is closed:
+          the desk's form stays shut and the record cannot be edited. */}
+      {accountingRow && (() => {
+        const account = accountingRow.accountability;
+        const lines = account ? readAccountingLines(account.notes) : [];
+        const total = lines.reduce((sum, line) => sum + (line.amount ?? 0), 0);
+        const released = Number(accountingRow.amount);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Spending account for ${accountingRow.department}`}
+              className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-bark">Spending account</h3>
+                  <p className="mt-0.5 text-xs text-moss">
+                    {accountingRow.department} · {accountingRow.account_name} ·{" "}
+                    KES {released.toLocaleString("en-KE", { minimumFractionDigits: 2 })} released
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountingRow(null);
+                    setAccountReply("");
+                  }}
+                  aria-label="Close"
+                  className="rounded-lg p-1 text-moss transition hover:bg-sand hover:text-bark"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {!account ? (
+                <p className="mt-3 text-xs italic text-moss">
+                  Waiting on {accountingRow.department} to file how the money was spent.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-moss">
+                      Filed{account.submitted_by ? ` by ${account.submitted_by}` : ""}
+                      {account.spent_on ? ` · spent ${dayFirst(account.spent_on)}` : ""}
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        account.status === "accepted"
+                          ? "bg-green-50 text-green-800"
+                          : account.status === "returned"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-amber-50 text-amber-800"
+                      }`}
+                    >
+                      {account.status === "accepted" ? "Accepted" : account.status === "returned" ? "Returned" : "Submitted"}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 overflow-hidden rounded-xl border border-sand-line">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-sand text-[10px] uppercase tracking-wider text-moss">
+                          <th className="px-3 py-2 font-semibold">Item</th>
+                          <th className="whitespace-nowrap px-3 py-2 font-semibold">Date</th>
+                          <th className="whitespace-nowrap px-3 py-2 text-right font-semibold">Amount (KES)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-sand-soft bg-white">
+                        {lines.map((line, index) => (
+                          <tr key={index}>
+                            <td className="px-3 py-2 font-medium text-bark">{line.item || "—"}</td>
+                            <td className="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-moss">{line.date || "—"}</td>
+                            <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-bark">
+                              {line.amount !== null
+                                ? line.amount.toLocaleString("en-KE", { minimumFractionDigits: 2 })
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className={`mt-2 text-xs font-semibold ${total > released ? "text-red-700" : "text-moss"}`}>
+                    Total KES {total.toLocaleString("en-KE", { minimumFractionDigits: 2 })} of KES{" "}
+                    {released.toLocaleString("en-KE", { minimumFractionDigits: 2 })} released
+                    {total > released
+                      ? " — over the amount released"
+                      : ` · KES ${(released - total).toLocaleString("en-KE", { minimumFractionDigits: 2 })} unspent`}
+                  </p>
+
+                  {account.receipts.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {account.receipts.map((receipt) => (
+                        <button
+                          key={receipt.id}
+                          type="button"
+                          onClick={() => void openAccountReceipt(receipt)}
+                          className="rounded-md border border-sand-mute bg-white px-2 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember"
+                        >
+                          {receipt.filename}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {account.status === "returned" && account.reply && (
+                    <p className="mt-2 text-[11px] font-semibold text-red-600">
+                      Sent back: “{account.reply}”
+                    </p>
+                  )}
+                  {account.status === "accepted" && account.reviewed_by && (
+                    <p className="mt-2 text-[11px] text-moss-faint">
+                      Accepted by {account.reviewed_by} — the record is closed and the desk can no longer edit it.
+                    </p>
+                  )}
+
+                  {account.status === "submitted" &&
+                    (workspace === "treasury" ? (
+                      <div className="mt-3 space-y-2 border-t border-sand-line pt-3">
+                        <textarea
+                          rows={2}
+                          maxLength={255}
+                          value={accountReply}
+                          onChange={(e) => setAccountReply(e.target.value)}
+                          placeholder="A note for the desk (required when sending it back)…"
+                          className="block w-full resize-y rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void reviewAccountability(accountingRow, "returned")}
+                            disabled={accountBusy || !accountReply.trim()}
+                            className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                          >
+                            Send back for corrections
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void reviewAccountability(accountingRow, "accepted")}
+                            disabled={accountBusy}
+                            className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                          >
+                            {accountBusy ? "Saving…" : "Accept account"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 border-t border-sand-line pt-3 text-[11px] italic text-moss-faint">
+                        Only the treasury can accept or send back this account.
+                      </p>
+                    ))}
+                </>
+              )}
             </div>
           </div>
         );
