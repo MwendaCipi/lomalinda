@@ -1,7 +1,10 @@
 import { dayFirst } from "@/lib/dates";
 
-/** One line of a spending account: what was bought, for how much, when, and its receipt. */
-export type AccountRow = { id: number; item: string; amount: string; spentOn: string; receipt: File | null };
+/** One line of a spending account: what was bought, for how much, when, its
+    receipt, and the exact filed line it came from (null for rows the desk
+    added and has not filed yet — only a row with a source has a database
+    line a deletion can remove). */
+export type AccountRow = { id: number; item: string; amount: string; spentOn: string; receipt: File | null; source: string | null };
 
 /**
  * A row amount counts only when it is a plain positive number with at most
@@ -46,6 +49,7 @@ export function accountNotesToRows(notes: string, startId: number): { rows: Acco
       amount: match ? match[2].replace(/,/g, "") : "",
       spentOn: match?.[3] ? (dayFirstToIso(match[3]) ?? "") : "",
       receipt: null as File | null,
+      source: line,
     };
   });
   return { rows, nextId };

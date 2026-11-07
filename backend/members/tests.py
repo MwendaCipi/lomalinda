@@ -18543,6 +18543,78 @@ class WithdrawalAccountabilityTests(APITestCase):
     def test_another_desk_cannot_file_on_this_money(self):
         self.assertEqual(self._file(user=self.other).status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_the_desk_removes_one_filed_line_from_the_database(self):
+        filed = self._file(notes='Sugar — 1500.00 · 12/05/2026\nSoap — 200.00 · 13/05/2026', receipt=False)
+        self.assertEqual(filed.status_code, status.HTTP_201_CREATED, filed.content)
+        self.assertEqual(len(filed.data['accountability']['receipts']), 0)
+
+        self.client.force_authenticate(self.leader)
+        removed = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'remove_line', 'line': 'Sugar — 1500.00 · 12/05/2026'},
+            format='json',
+        )
+        self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.content)
+        self.assertEqual(removed.data['accountability']['notes'], 'Soap — 200.00 · 13/05/2026')
+        self.assertEqual(str(removed.data['accountability']['spent_on']), '2026-05-13')
+        self.assertEqual(removed.data['accountability']['status'], 'submitted')
+
+        # The treasury reads the same shortened account.
+        self.client.force_authenticate(self.treasurer)
+        reading = self.client.get(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+        )
+        self.assertEqual(reading.status_code, status.HTTP_200_OK)
+        self.assertEqual(reading.data['accountability']['notes'], 'Soap — 200.00 · 13/05/2026')
+
+        # A line that is not there cannot be removed again.
+        self.client.force_authenticate(self.leader)
+        gone = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'remove_line', 'line': 'Sugar — 1500.00 · 12/05/2026'},
+            format='json',
+        )
+        self.assertEqual(gone.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_removing_the_last_line_withdraws_the_whole_account(self):
+        filed = self._file(notes='Sugar — 1500.00 · 12/05/2026', receipt=False)
+        self.assertEqual(filed.status_code, status.HTTP_201_CREATED, filed.content)
+
+        self.client.force_authenticate(self.leader)
+        removed = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'remove_line', 'line': 'Sugar — 1500.00 · 12/05/2026'},
+            format='json',
+        )
+        self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.content)
+        self.assertIsNone(removed.data['accountability'])
+
+        reading = self.client.get(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+        )
+        self.assertEqual(reading.status_code, status.HTTP_200_OK)
+        self.assertIsNone(reading.data['accountability'])
+
+        # And the desk may file afresh on the same withdrawal.
+        again = self._file(notes='Soap — 200.00 · 13/05/2026', receipt=False)
+        self.assertEqual(again.status_code, status.HTTP_201_CREATED, again.content)
+
+    def test_an_accepted_account_refuses_line_removal(self):
+        self._file(notes='Sugar — 1500.00 · 12/05/2026', receipt=False)
+        self.client.force_authenticate(self.treasurer)
+        self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'review', 'decision': 'accepted'},
+            format='json',
+        )
+        self.client.force_authenticate(self.leader)
+        refused = self.client.post(
+            f'/api/members/department-withdrawals/{self.released.id}/accountability/',
+            {'action': 'remove_line', 'line': 'Sugar — 1500.00 · 12/05/2026'},
+            format='json',
+        )
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class WithdrawalPaybillReleaseTests(APITestCase):
     """The treasurer releases an elder-approved request from the paybill.

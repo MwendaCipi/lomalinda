@@ -5225,89 +5225,70 @@ export function DepartmentAccountsPanel({
   const addAccountRow = () => {
     const id = accountRowId.current++;
     accountListGrew.current = true;
-    setAccountRows((rows) => [...rows, { id, item: "", amount: "", spentOn: "", receipt: null }]);
+    setAccountRows((rows) => [...rows, { id, item: "", amount: "", spentOn: "", receipt: null, source: null }]);
   };
 
   /* Every row can go, even the last one. A row with something on it asks
-     first. On a filed account the confirmed removal is filed straight away,
-     so the treasury never reads a line the desk deleted; on a fresh account
-     it simply comes off the form. A blank row carries nothing worth
-     confirming, so it goes at once. */
+     first; a blank row carries nothing worth confirming, so it goes at
+     once. A row that came from a filed account is removed in the database
+     first and only then comes off the form — whatever state the other rows
+     are in never blocks it — while a row the desk added but never filed
+     simply comes off the form. */
   const removeAccountRow = (id: number) => {
     const row = accountRows.find((entry) => entry.id === id);
-    if (!row || accountSaving || accountDeleting) return;
+    if (!row || !accountingFor || accountSaving || accountDeleting) return;
     const touched =
       row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null;
-    if (!touched) {
+    const filed = accountingFor.accountability != null && accountingFor.accountability.status !== "accepted";
+    if (!touched || !(filed && row.source)) {
       setAccountRows((rows) => rows.filter((entry) => entry.id !== id));
       return;
     }
-    const filed = accountingFor?.accountability != null && accountingFor.accountability.status !== "accepted";
+    const keptTouched = accountRows.some(
+      (entry) =>
+        entry.id !== id &&
+        (entry.item.trim() !== "" || entry.amount.trim() !== "" || entry.spentOn !== "" || entry.receipt !== null)
+    );
     const name = row.item.trim() ? `“${row.item.trim()}”` : "This row";
     showAlert(
       "Remove this item?",
-      filed ? `${name} will come off the filed account straight away.` : `${name} will come off this account.`,
+      !keptTouched
+        ? `${name} is the last item — the filed account will be withdrawn and you can file afresh.`
+        : `${name} will come off the filed account straight away.`,
       "question",
       { showCancelButton: true, confirmButtonText: "Remove it", cancelButtonText: "Keep it", confirmButtonColor: brand.ember }
     ).then((result) => {
-      if (!result.isConfirmed || !accountingFor) return;
-      const next = accountRows.filter((entry) => entry.id !== id);
-      setAccountRows(next);
-      if (filed) void removeFiledAccountRow(next);
+      if (!result.isConfirmed) return;
+      void removeFiledAccountRow(row);
     });
   };
 
-  /* Filing a deletion: the confirmed removal rewrites the filed account on
-     the server, and the desk stays on the form with what the server just
-     stored. When the remaining rows cannot be filed as they stand, the row
-     still comes off the form and Update account files the fix. */
-  const removeFiledAccountRow = async (next: AccountRow[]) => {
-    if (!accountingFor) return;
-    const parsed = next.map((row) => ({
-      receipt: row.receipt,
-      item: row.item.trim(),
-      amount: parseAccountAmount(row.amount),
-      spentOn: row.spentOn,
-      touched: row.item.trim() !== "" || row.amount.trim() !== "" || row.spentOn !== "" || row.receipt !== null,
-    }));
-    const filled = parsed.filter((entry) => entry.touched);
-    if (filled.length === 0) {
-      showAlert(
-        "Removed from the form",
-        "Add the replacement item(s), then press Update account so the filed account changes too.",
-        "info"
-      );
-      return;
-    }
-    if (filled.some((entry) => entry.item === "" || entry.amount === null || entry.spentOn === "")) {
-      showAlert(
-        "Removed from the form",
-        "Fill every remaining row, then press Update account so the filed account changes too.",
-        "info"
-      );
-      return;
-    }
-    const total = filled.reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
-    if (total > accountGiven) {
-      showAlert(
-        "Removed from the form",
-        "The remaining rows are over the amount released. Fix them, then press Update account.",
-        "info"
-      );
-      return;
-    }
+  /* Removing a filed line in the database: the row stays on the form until
+     the server confirms, so a failed removal never pretends to have
+     happened. Taking the last line withdraws the whole account. */
+  const removeFiledAccountRow = async (row: AccountRow) => {
+    if (!accountingFor || !row.source) return;
+    const withdrawalId = accountingFor.id;
     setAccountDeleting(true);
     try {
-      const saved = await postAccountEntries(
-        filled.map((entry) => ({ item: entry.item, amount: entry.amount ?? 0, spentOn: entry.spentOn, receipt: entry.receipt }))
-      );
-      setAccountRows((rows) => rows.map((row) => ({ ...row, receipt: null })));
-      setAccountingFor((current) => (current ? { ...current, accountability: saved ?? current.accountability } : current));
-      showAlert("Item removed", "The filed account no longer lists it.", "success", {
-        toast: true,
-        timer: 4000,
-        showConfirmButton: false,
+      const res = await fetch(`${API_URL}/api/members/department-withdrawals/${withdrawalId}/accountability/`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove_line", line: row.source }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not remove the item.");
+      setAccountRows((rows) => rows.filter((entry) => entry.id !== row.id));
+      setAccountingFor((current) => (current ? { ...current, accountability: data.accountability ?? null } : current));
+      if (data.accountability) {
+        showAlert("Item removed", "The filed account no longer lists it.", "success", {
+          toast: true,
+          timer: 4000,
+          showConfirmButton: false,
+        });
+      } else {
+        showAlert("Account withdrawn", "The filed account is withdrawn. File afresh when the spending is recorded.", "success");
+      }
       load();
       if (onChanged) onChanged();
     } catch (error) {

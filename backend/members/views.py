@@ -16178,6 +16178,27 @@ def _withdrawal_payout_payload(row):
     }
 
 
+#: The calendar date tailing a filed line — “Sugar — 1500.00 · 12/05/2026” —
+#: so the account's date can be recomputed from the lines that are left.
+_ACCOUNTABILITY_LINE_DATE = re.compile(r'(\d{1,2})/(\d{1,2})/(\d{4})\s*$')
+
+
+def _latest_accountability_date(lines):
+    """The latest calendar date tailing any filed line, or None."""
+    latest = None
+    for entry in lines:
+        match = _ACCOUNTABILITY_LINE_DATE.search(entry or '')
+        if not match:
+            continue
+        try:
+            found = date(int(match.group(3)), int(match.group(2)), int(match.group(1)))
+        except ValueError:
+            continue
+        if latest is None or found > latest:
+            latest = found
+    return latest
+
+
 def _accountability_upload_error(upload):
     """Why this upload cannot be filed, or None when it can."""
     extension = os.path.splitext(upload.name or '')[1].lower()
@@ -16198,6 +16219,10 @@ class WithdrawalAccountabilityView(APIView):
            be corrected and resubmitted; an accepted one is closed.
            ``action=review`` is the treasury's answer — ``decision`` is
            ``accepted`` or ``returned``, and a return must carry a reason.
+           ``action=remove_line`` takes one filed ``line`` off the stored
+           account in the database, whatever state the rest of the form is
+           in; taking the last line withdraws the account so it can be
+           filed afresh. Only an accepted account refuses.
     """
 
     permission_classes = [IsAuthenticated]
@@ -16264,6 +16289,58 @@ class WithdrawalAccountabilityView(APIView):
             accountability.reviewed_at = timezone.now()
             accountability.reply = reply
             accountability.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'reply', 'updated_at'])
+            return Response({'accountability': _accountability_payload(row)})
+
+        if action == 'remove_line':
+            if row.status != 'approved':
+                return Response({'detail': 'Only money released from the fund can be accounted for.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not (
+                row.requested_by_id == request.user.id
+                or can_manage_department(request.user, row.department.code)
+                or is_treasurer_or_admin(request.user)
+            ):
+                return Response({'detail': "Only the desk that received the money can change its account."}, status=status.HTTP_403_FORBIDDEN)
+            accountability = getattr(row, 'accountability', None)
+            if accountability is None:
+                return Response({'detail': 'This withdrawal has no accountability filed yet.'}, status=status.HTTP_400_BAD_REQUEST)
+            if accountability.status == 'accepted':
+                return Response({'detail': 'The treasury has already accepted this account.'}, status=status.HTTP_400_BAD_REQUEST)
+            line = str(request.data.get('line') or '').strip()
+            if not line:
+                return Response({'detail': 'Name the item to remove.'}, status=status.HTTP_400_BAD_REQUEST)
+            lines = (accountability.notes or '').split('\n')
+            position = next(
+                (index for index, entry in enumerate(lines) if entry.strip() == line),
+                None,
+            )
+            if position is None:
+                return Response(
+                    {'detail': 'That item is no longer on the filed account. File the form with Update account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            del lines[position]
+            with transaction.atomic():
+                if not any(entry.strip() for entry in lines):
+                    # The last item went with it: the filed account is
+                    # withdrawn and the desk may file afresh.
+                    accountability.delete()
+                    return Response({'accountability': None})
+                accountability.notes = '\n'.join(lines)
+                accountability.spent_on = _latest_accountability_date(lines)
+                accountability.status = 'submitted'
+                accountability.submitted_by = request.user
+                accountability.submitted_at = timezone.now()
+                accountability.reviewed_by = None
+                accountability.reviewed_at = None
+                accountability.reply = ''
+                accountability.save(update_fields=[
+                    'notes', 'spent_on', 'status', 'submitted_by', 'submitted_at',
+                    'reviewed_by', 'reviewed_at', 'reply', 'updated_at',
+                ])
+            # The row was read with its old accountability prefetched; the
+            # response must describe what was just stored, not that snapshot.
+            row._prefetched_objects_cache = {}
+            accountability._prefetched_objects_cache = {}
             return Response({'accountability': _accountability_payload(row)})
 
         if action != 'submit':
