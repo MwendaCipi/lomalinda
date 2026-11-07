@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   // back stack. Bump the query whenever the manifest changes — and only then:
   // a new manifest URL makes Chrome re-mint the WebAPK, and its own icon
   // shows for a moment while it does.
-  manifest: "/manifest.json?v=8-crest-512",
+  manifest: "/manifest.json?v=9-crest-centered",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
