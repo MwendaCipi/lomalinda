@@ -5978,7 +5978,7 @@ export function DepartmentAccountsPanel({
                             input.click();
                           }}
                           title={row.spentOn ? `Bought ${dayFirst(row.spentOn)} — tap to change` : "When was this bought?"}
-                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition hover:border-ember hover:text-ember ${
+                          className={`inline-flex min-w-0 flex-1 items-center justify-between gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-semibold transition hover:border-ember hover:text-ember ${
                             row.spentOn ? "border-sand-mute text-bark" : "border-dashed border-sand-mute text-moss"
                           }`}
                         >
@@ -5996,8 +5996,8 @@ export function DepartmentAccountsPanel({
                           }}
                         />
                         {row.receipt ? (
-                          <span className="flex max-w-28 items-center gap-1 rounded-lg bg-sand px-1.5 py-1 text-[11px] font-semibold text-bark">
-                            <span className="truncate">{row.receipt.name}</span>
+                          <span className="flex min-w-0 flex-1 items-center gap-1 rounded-lg bg-sand px-2 py-2 text-[11px] font-semibold text-bark">
+                            <span className="min-w-0 flex-1 truncate text-left">{row.receipt.name}</span>
                             <button
                               type="button"
                               onClick={() => updateAccountRow(row.id, { receipt: null })}
@@ -6011,10 +6011,11 @@ export function DepartmentAccountsPanel({
                           <label
                             htmlFor={`account-receipt-${row.id}`}
                             title="Attach a receipt for this item"
-                            className="shrink-0 cursor-pointer rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
+                            className="inline-flex min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-sand-mute px-3 py-2 text-xs font-semibold text-moss transition hover:border-ember hover:text-ember"
                           >
                             <Paperclip className="h-4 w-4" />
-                            <span className="sr-only">Attach a receipt for {row.item.trim() || "this item"}</span>
+                            Attach receipt
+                            <span className="sr-only"> for {row.item.trim() || "this item"}</span>
                           </label>
                         )}
                         </div>
