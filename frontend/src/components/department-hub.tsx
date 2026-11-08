@@ -60,8 +60,10 @@ import {
   Send,
   Share2,
   ListMusic,
+  Pause,
   Sparkles,
   Sun,
+  Target,
   Trash2,
   UserCog,
   UserMinus,
@@ -89,7 +91,7 @@ import {
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
 import { meetingDay, meetingHours, type WeeklyMeeting } from "@/lib/gathering";
-import { dayFirst, dayFirstTime } from "@/lib/dates";
+import { dayFirst, dayFirstTime, localDate } from "@/lib/dates";
 import { accountNotesToRows, parseAccountAmount, type AccountRow } from "@/lib/accountability";
 import { AnnouncementsFeed } from "@/components/announcements-feed";
 
@@ -5027,6 +5029,7 @@ export function DepartmentAccountsPanel({
   search = "",
   typeFilter = "all",
   showInlineControls = false,
+  showDriveAction = true,
   className = "flex min-h-0 flex-1 flex-col border border-sand-line bg-white h-full",
   footer,
 }: {
@@ -5037,6 +5040,11 @@ export function DepartmentAccountsPanel({
   /** Category filter: all, contributions, or withdrawals. */
   typeFilter?: "all" | "contributions" | "withdrawals";
   showInlineControls?: boolean;
+  /**
+   * Whether the footer offers "Start fund drive". A desk that reads its drives
+   * as a page of their own turns it off, so the ledger keeps to the ledger.
+   */
+  showDriveAction?: boolean;
   className?: string;
   footer?: React.ReactNode;
 }) {
@@ -5829,7 +5837,7 @@ export function DepartmentAccountsPanel({
 
               {/* Right — request button */}
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                {canStartDrive && startableDriveAccount && (
+                {showDriveAction && canStartDrive && startableDriveAccount && (
                   <button
                     type="button"
                     onClick={openDriveForm}
@@ -6214,6 +6222,303 @@ export function DepartmentAccountsPanel({
 }
 
 
+/** The two views of an Accounts page: the fund's ledger, and its fund drives. */
+type AccountsView = "ledger" | "drives";
+
+/** One drive on a desk's Accounts page, as the desk reads it. */
+type DeskFundDrive = {
+  id: number;
+  name: string;
+  title: string;
+  description?: string;
+  account_name?: string;
+  target_amount: number | string;
+  total_raised: number | string;
+  percentage_raised: number;
+  donor_count: number;
+  start_date: string;
+  end_date?: string | null;
+  is_active: boolean;
+  approval_status?: "pending" | "approved" | "rejected";
+  source_account_name?: string;
+};
+
+/**
+ * How a drive reads on the desk that raised it.
+ *
+ * Its own end date ends it: a drive whose day has gone reads as ended whether
+ * or not the sweep has stamped the flag yet, so the card never asks a reader
+ * to press End on something the church has already closed.
+ */
+function deskDriveStatus(drive: DeskFundDrive): { label: string; tone: string } {
+  if (drive.approval_status === "pending") {
+    return { label: "Awaiting the treasury", tone: "border-amber-200 bg-amber-50 text-amber-800" };
+  }
+  if (drive.approval_status === "rejected") {
+    return { label: "Not approved", tone: "border-red-200 bg-red-50 text-red-700" };
+  }
+  const closedByDate = Boolean(drive.end_date) && String(drive.end_date) < localDate();
+  if (!drive.is_active || closedByDate) {
+    return { label: "Ended", tone: "border-sand-mute bg-sand text-moss" };
+  }
+  return { label: "Active", tone: "border-green-200 bg-green-50 text-green-800" };
+}
+
+/**
+ * The desk's fund drives — the second view of its Accounts page.
+ *
+ * A drive is the desk's own campaign to raise money into one of its funds:
+ * the leadership starts it, watches what it has raised against its goal, and
+ * ends it when the push is over. A drive started from this desk is a *request*:
+ * the treasury approves it before it appears in Fund Drives and takes gifts,
+ * and the desk is told the answer — the same courtesy a withdrawal ask gets.
+ * The desk never approves its own drive and never touches the money itself;
+ * the ledger beside this view is where the gifts land.
+ */
+export function DepartmentFundDrivesPanel({
+  department,
+  onChanged,
+}: {
+  department: { code: string; label: string };
+  onChanged?: () => void;
+}) {
+  const [drives, setDrives] = useState<DeskFundDrive[]>([]);
+  const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
+  const [canStart, setCanStart] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [endingId, setEndingId] = useState<number | null>(null);
+  const [showDriveForm, setShowDriveForm] = useState(false);
+  const [driveAccount, setDriveAccount] = useState<DepartmentAccountInfo | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    // Two readings make this page: the desk's fund (which accounts a drive can
+    // run on, and whether this reader may start one) and the drives themselves
+    // — the pending asks included, so a leader sees what the treasury holds.
+    Promise.all([
+      fetch(`${API_URL}/api/members/departments/${department.code}/account/`, { headers: authHeaders() })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null),
+      fetch(`${API_URL}/api/members/campaigns/?department=${encodeURIComponent(department.code)}`, {
+        headers: authHeaders(),
+      })
+        .then((res) => (res.ok ? res.json() : []))
+        .catch(() => []),
+    ])
+      .then(([fund, list]) => {
+        setAccounts(Array.isArray(fund?.accounts) ? fund.accounts : []);
+        setCanStart(Boolean(fund?.can_start_fund_drive));
+        setDrives(Array.isArray(list) ? list : []);
+      })
+      .finally(() => setLoading(false));
+  }, [department.code]);
+
+  useEffect(() => {
+    void Promise.resolve().then(load);
+  }, [load]);
+
+  // Local Church Budget is the church's own budget, not a ministry's drive
+  // target — the treasury refuses it at the door, so the desk never offers it.
+  const startableAccount = useMemo(
+    () => accounts.find((acc) => acc.is_primary && !acc.is_lcb) ?? accounts.find((acc) => !acc.is_lcb) ?? null,
+    [accounts],
+  );
+
+  // What the desk is running leads; the asks the treasury has not answered
+  // follow; the drives that are over sit last, where they can be read without
+  // crowding the live ones.
+  const orderedDrives = useMemo(() => {
+    const rank = (drive: DeskFundDrive) =>
+      drive.approval_status === "pending" ? 1 : drive.is_active ? 0 : 2;
+    return [...drives].sort((a, b) => rank(a) - rank(b));
+  }, [drives]);
+
+  const openStart = () => {
+    if (!startableAccount) return;
+    setDriveAccount(startableAccount);
+    setShowDriveForm(true);
+  };
+
+  const endDrive = async (drive: DeskFundDrive) => {
+    const name = drive.title || drive.name;
+    const result = await showAlert(
+      "End fund drive",
+      `Close “${name}”? It stops appearing in Fund Drives and stops taking gifts; what it raised stays in ${drive.source_account_name || "the desk's fund"}.`,
+      "question",
+      { showCancelButton: true, confirmButtonText: "End it", cancelButtonText: "Keep it open", confirmButtonColor: brand.ember }
+    );
+    if (!result.isConfirmed) return;
+    setEndingId(drive.id);
+    try {
+      // The desk names itself on the address: ending is the one edit a desk
+      // may make to a drive, and the server checks that against the account
+      // the drive runs on.
+      const res = await fetch(
+        `${API_URL}/api/members/campaigns/${drive.id}/?department=${encodeURIComponent(department.code)}`,
+        {
+          method: "PATCH",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: false }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "The drive could not be ended.");
+      showAlert("Fund drive ended", `“${name}” is closed.`, "success", {
+        toast: true,
+        timer: 4500,
+        showConfirmButton: false,
+      });
+      load();
+      if (onChanged) onChanged();
+    } catch (error) {
+      showAlert("Could not end the drive", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setEndingId(null);
+    }
+  };
+
+  return (
+    <div className="custom-hover-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto rounded-2xl border border-sand-line bg-white shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-sand-line px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-1.5 text-sm font-bold text-bark">
+            <Target className="h-4 w-4 text-ember" aria-hidden="true" />
+            {department.label}&apos;s fund drives
+          </h3>
+          <p className="mt-0.5 text-xs leading-5 text-moss">
+            Start a drive for one of the desk&apos;s funds — the treasurer approves it before it
+            takes gifts — then watch how far it has come, and end it when the push is over.
+          </p>
+        </div>
+        {canStart && startableAccount && (
+          <button
+            type="button"
+            onClick={openStart}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-sage px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep"
+          >
+            <Megaphone className="h-4 w-4" aria-hidden="true" />
+            <span className="sm:hidden">Start drive</span>
+            <span className="hidden sm:inline">Start fund drive</span>
+          </button>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 px-4 py-4 sm:px-5">
+        {loading ? (
+          <p className="py-10 text-center text-xs text-moss">Loading the desk&apos;s fund drives…</p>
+        ) : orderedDrives.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-sand-line px-5 py-12 text-center">
+            <Target className="mx-auto h-8 w-8 text-moss" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold text-bark">No fund drives yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-moss">
+              {canStart
+                ? "Start one and the treasury will review it — once approved it appears in Fund Drives and members can give to it."
+                : "The desk's leadership starts the drives. Their progress is shown here as they run."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {orderedDrives.map((drive) => {
+              const status = deskDriveStatus(drive);
+              const raised = Number(drive.total_raised || 0);
+              const target = Number(drive.target_amount || 0);
+              const percent = Math.max(0, Math.min(100, Number(drive.percentage_raised || 0)));
+              const name = drive.title || drive.name;
+              return (
+                <article key={drive.id} className="rounded-2xl border border-sand-line bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-bark">{name}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-moss">
+                        <span className="font-mono text-ember">{drive.account_name || drive.source_account_name}</span>
+                        {drive.source_account_name ? ` · ${drive.source_account_name}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.tone}`}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
+
+                  {drive.description && (
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-moss">{drive.description}</p>
+                  )}
+
+                  <div className="mt-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
+                      <span className="font-bold text-bark">
+                        KES {raised.toLocaleString("en-KE", { minimumFractionDigits: 0 })}
+                      </span>
+                      <span className="text-moss">
+                        of KES {target.toLocaleString("en-KE", { minimumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-sand">
+                      <div className="h-full rounded-full bg-sage" style={{ width: `${percent}%` }} />
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-moss">
+                      {percent}% raised · {drive.donor_count} {drive.donor_count === 1 ? "giver" : "givers"} ·
+                      opened {dayFirst(drive.start_date)}
+                      {drive.end_date ? ` · closes ${dayFirst(drive.end_date)}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-sand-line pt-3">
+                    <a
+                      href={`/drives/${drive.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
+                    >
+                      View drive
+                    </a>
+                    {drive.approval_status === "approved" &&
+                      drive.is_active &&
+                      !(drive.end_date && String(drive.end_date) < localDate()) && (
+                      <button
+                        type="button"
+                        onClick={() => void endDrive(drive)}
+                        disabled={endingId === drive.id}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute px-3 py-1.5 text-[11px] font-semibold text-moss transition hover:border-red-300 hover:text-red-700 disabled:opacity-60"
+                      >
+                        <Pause className="h-3 w-3" aria-hidden="true" />
+                        {endingId === drive.id ? "Ending…" : "End drive"}
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showDriveForm && driveAccount && (
+        <CampaignManagement
+          mode="admin"
+          formOnly
+          openCreate
+          allowCreateRequest
+          approvalRequired
+          presetAccount={driveAccount.name}
+          presetAccountId={driveAccount.id}
+          presetAccountLabel={driveAccount.description || driveAccount.name}
+          sourceDepartment={department.code}
+          onCreated={() => {
+            setShowDriveForm(false);
+            setDriveAccount(null);
+            load();
+            if (onChanged) onChanged();
+          }}
+          onClosed={() => {
+            setShowDriveForm(false);
+            setDriveAccount(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 /**
  * The views a department desk reads: the strip's keys, and what a deep link
  * may name. The elders' three (baptismal class, daily word, announcements)
@@ -6529,6 +6834,11 @@ function DepartmentDetail({
     ((subTab === "daily-word" || subTab === "announcements") && !canOpenOfficeViews) ||
     (subTab === "sharing" && !canShareFeed);
   const [accountsFilter, setAccountsFilter] = useState<"all" | "contributions" | "withdrawals">("all");
+  // Which half of the Accounts page is open: the fund's ledger, or the drives
+  // the desk runs to raise into it. It is this page's own toggle — the desk's
+  // strip above already names Accounts — so it stays here rather than in the
+  // address bar, and every desk that reads Accounts gets the same two views.
+  const [accountsView, setAccountsView] = useState<AccountsView>("ledger");
   // The members view holds the roll *and* the asks to join it, so the desk
   // reads one list and narrows it here rather than opening a second view.
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
@@ -6847,7 +7157,7 @@ function DepartmentDetail({
           className={inputCls}
         />
       );
-    } else if (subTab === "accounts") {
+    } else if (subTab === "accounts" && accountsView === "ledger") {
       setHeaderRightAction(
         <div className="flex w-full items-center gap-1.5 sm:w-auto">
           <input
@@ -6947,6 +7257,7 @@ function DepartmentDetail({
     groupsSearch,
     accountsSearch,
     accountsFilter,
+    accountsView,
     meetingsSearch,
     hostedRotaFilters?.filters,
     department.label,
@@ -8746,21 +9057,49 @@ function DepartmentDetail({
         </div>
       )}
 
-      {/* The Accounts view: the fund ledger and the money the desk asks for,
-          full width. The paper the desk writes has a page of its own beside
-          this one (the Letters view below), so the ledger is just the ledger
-          again. */}
+      {/* The Accounts view — two pages of the desk's money on one card. The
+          ledger is what the fund holds and every line that built it; Fund
+          Drives is the desk's own campaigns to raise into it, started here
+          (a request to the treasury when the treasurer is not the one
+          starting it), watched here, and ended here. The strip is this
+          page's own, not the desk's: the desk's strip above already names
+          Accounts, and this answers which half of it is open. */}
       {subTab === "accounts" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <DepartmentAccountsPanel
-            department={department}
-            onChanged={onChanged}
-            search={accountsSearch}
-            typeFilter={accountsFilter}
-            // The same panel the console pages draw whole, here given the
-            // whole view.
-            className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <SubNav
+            label="Accounts views"
+            value={accountsView}
+            onChange={(key) => setAccountsView(key as AccountsView)}
+            items={[
+              {
+                key: "ledger",
+                label: "Ledger",
+                help: "The fund's balance and every movement on it.",
+              },
+              {
+                key: "drives",
+                label: "Fund Drives",
+                short: "Drives",
+                help: "The drives this desk has started, how far each has come, and ending them.",
+              },
+            ]}
           />
+          {accountsView === "ledger" ? (
+            <DepartmentAccountsPanel
+              department={department}
+              onChanged={onChanged}
+              search={accountsSearch}
+              typeFilter={accountsFilter}
+              // Starting a drive is the Fund Drives view's own door beside
+              // this one, so the ledger keeps to the ledger.
+              showDriveAction={false}
+              // The same panel the console pages draw whole, here given the
+              // whole view.
+              className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
+            />
+          ) : (
+            <DepartmentFundDrivesPanel department={department} onChanged={onChanged} />
+          )}
         </div>
       )}
       {/* The Letters view: the desk's own paper. The register lists what has

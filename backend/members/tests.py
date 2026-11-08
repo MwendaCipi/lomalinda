@@ -3875,6 +3875,45 @@ class WithdrawalRequestsPdfTests(APITestCase):
         self.assertIn(b'two hundred', text)
         self.assertNotIn(b'Tent hire', text)
 
+    def test_a_filed_account_prints_as_its_own_table(self):
+        """A request that the receiving desk has accounted for carries the
+        account on its own sheet: what the money bought, line by line, what
+        was released against it, and the receipts filed with it. A request
+        with no account prints exactly as it always has."""
+        from .pdf_generator import generate_withdrawal_request_pdf
+
+        row = {
+            'id': 9,
+            'department': 'Music', 'department_code': 'music',
+            'account_name': 'Music Ministry', 'account_balance': '425.00',
+            'amount': '75.00', 'reason': 'Tent hire for the camporee',
+            'status': 'approved', 'requested_by': 'Marta Member',
+            'created_at': date(2026, 11, 1),
+            'accountability': {
+                'status': 'submitted',
+                'notes': 'Tent hire — 5000.00 · 01/11/2026\nTransport — 1200.00 · 02/11/2026',
+                'spent_on': '2026-11-02',
+                'submitted_by': 'Marta Member',
+                'submitted_at': '2026-11-02T10:00:00Z',
+                'reviewed_by': None, 'reviewed_at': None, 'reply': '',
+                'receipts': [{'id': 1, 'filename': 'tent.pdf', 'caption': '', 'url': '/x/'}],
+            },
+        }
+        text = self._pdf_text(generate_withdrawal_request_pdf('SDA Church Test', row))
+        self.assertIn(b'Accountability', text)
+        self.assertIn(b'Bought', text)
+        self.assertIn(b'Transport', text)
+        self.assertIn(b'Total accounted', text)
+        self.assertIn(b'tent.pdf', text)
+
+        # Nothing filed: no table, and the sheet is the one it always was.
+        plain = generate_withdrawal_request_pdf(
+            'SDA Church Test', {**row, 'accountability': None},
+        )
+        plain_text = self._pdf_text(plain)
+        self.assertNotIn(b'Total accounted', plain_text)
+        self.assertIn(b'Amount in words', plain_text)
+
     def test_one_request_print_keeps_the_desk_permissions(self):
         self.client.force_authenticate(self.elder)
         self.assertEqual(
@@ -4201,6 +4240,106 @@ class FundDriveApprovalTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(FundraisingCampaign.objects.filter(id=drive.id).exists())
 
+
+
+class FundDriveAutoEndTests(APITestCase):
+    """A drive names the day it closes, and that day ends it.
+
+    The sweep retires what its end date has passed — once in the daily cron,
+    and once from the drives API so a stale flag never outlives the first
+    reader. The closing day itself stays live, and a drive with no end date
+    runs until a hand ends it.
+    """
+
+    def setUp(self):
+        music = Department.objects.get(code='music')
+        account = TreasuryAccount.objects.create(
+            name='MusicDriveFund', description='Music Ministry',
+            balance=Decimal('0.00'), department=music,
+        )
+        self.leader = User.objects.create_user(
+            'fd.auto.leader', 'fd.auto.leader@example.com', 'StrongPass#2026',
+            first_name='Lena', last_name='Leader',
+        )
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        self.treasurer = User.objects.create_user(
+            'fd.auto.treasurer', 'fd.auto.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tess', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        today = timezone.localdate()
+        self.ending = FundraisingCampaign.objects.create(
+            name='Tent Drive', title='Tent Drive', target_amount=Decimal('100.00'),
+            end_date=today - timedelta(days=1), source_account=account,
+            created_by=self.leader,
+        )
+        self.closing_today = FundraisingCampaign.objects.create(
+            name='Choir Drive', title='Choir Drive', target_amount=Decimal('100.00'),
+            end_date=today, source_account=account,
+        )
+        self.open_ended = FundraisingCampaign.objects.create(
+            name='Building Drive', title='Building Drive', target_amount=Decimal('100.00'),
+            end_date=None, source_account=account,
+        )
+
+    def test_the_sweep_ends_the_drives_whose_day_has_gone(self):
+        from .fund_drives import close_ended_fund_drives
+
+        self.assertEqual(close_ended_fund_drives(), 1)
+        self.ending.refresh_from_db()
+        self.closing_today.refresh_from_db()
+        self.open_ended.refresh_from_db()
+        self.assertFalse(self.ending.is_active)
+        # Its end date is today: the drive is open all of today.
+        self.assertTrue(self.closing_today.is_active)
+        self.assertTrue(self.open_ended.is_active)
+
+        # A second run is a no-op, so the cron and the API may both sweep.
+        self.assertEqual(close_ended_fund_drives(), 0)
+
+    def test_the_end_of_a_drive_tells_its_creator_and_the_treasury(self):
+        """Nobody pressed End, so both desks are told: the bell, the letter and
+        the phone, each opening the desk that can act on the closing."""
+        from .fund_drives import close_ended_fund_drives
+
+        self.assertEqual(close_ended_fund_drives(), 1)
+
+        bells = ChurchNotification.objects.filter(title__contains='Tent Drive')
+        self.assertEqual(
+            set(bells.values_list('user__username', flat=True)),
+            {'fd.auto.leader', 'fd.auto.treasurer'},
+        )
+        links = dict(bells.values_list('user__username', 'link'))
+        self.assertEqual(links['fd.auto.leader'], '/support/campaigns')
+        self.assertEqual(links['fd.auto.treasurer'], '/administration/fund-drives')
+        self.assertIn("'Tent Drive' ended on its own", bells.first().message)
+
+        # One letter per mailbox, carrying the same sentence.
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(all('Tent Drive' in letter.subject for letter in mail.outbox))
+
+        # The second sweep — the cron after a page load, or the reverse —
+        # changes nothing and says nothing again.
+        self.assertEqual(close_ended_fund_drives(), 0)
+        self.assertEqual(ChurchNotification.objects.filter(title__contains='Tent Drive').count(), 2)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_the_command_runs_the_sweep(self):
+        from django.core.management import call_command
+
+        call_command('close_ended_fund_drives', verbosity=0)
+        self.ending.refresh_from_db()
+        self.assertFalse(self.ending.is_active)
+
+    def test_the_public_list_hides_a_drive_whose_day_has_gone(self):
+        """Even before the sweep has run: a signed-out reader is offered the
+        drives still open, by flag and by date."""
+        response = self.client.get('/api/members/campaigns/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row['name'] for row in response.data]
+        self.assertNotIn('Tent Drive', names)
+        self.assertIn('Choir Drive', names)
+        self.assertIn('Building Drive', names)
 
 
 class InvitationAPITests(APITestCase):

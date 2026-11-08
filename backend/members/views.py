@@ -8011,13 +8011,35 @@ class FundraisingCampaignListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        # The drives' own days end them, not a hand: sweep the ones whose end
+        # date has gone by before answering, so no desk reads a drive as live
+        # a day after the day it named. The daily cron does the same work; this
+        # keeps the answer right for whoever opens the page first.
+        if user.is_authenticated:
+            from .fund_drives import close_ended_fund_drives
+
+            close_ended_fund_drives()
+        # A ministry or department desk reads the drives its own funds run —
+        # the pending asks it has sent the treasury among them — by naming
+        # itself in `?department=`. Naming a desk one does not lead answers the
+        # member's view below rather than the desk's.
+        department = str(self.request.query_params.get('department') or '').strip()
+        if department and user.is_authenticated and can_manage_department(user, department):
+            return FundraisingCampaign.objects.filter(
+                source_account__in=department_accounts(user, department)
+            )
         if user.is_authenticated and is_treasurer_or_admin(user):
             return FundraisingCampaign.objects.all()
         if user.is_authenticated and is_finance_manager(user):
             return FundraisingCampaign.objects.filter(
                 Q(approval_status='approved', is_active=True) | Q(created_by=user)
             )
-        return FundraisingCampaign.objects.filter(is_active=True, approval_status='approved')
+        # A signed-out reader gets the drives still open — by flag and by date,
+        # since the sweep above is a signed-in reader's errand and a public
+        # page may be the first thing to arrive after a drive's last day.
+        return FundraisingCampaign.objects.filter(
+            is_active=True, approval_status='approved',
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=timezone.localdate()))
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -8283,6 +8305,21 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        # The drive's own day ends it, whoever opens the page: the same sweep
+        # the list runs, so a single drive read straight from a link answers
+        # as ended once its end date has gone.
+        if user.is_authenticated:
+            from .fund_drives import close_ended_fund_drives
+
+            close_ended_fund_drives()
+        # The desk that raised a drive reaches it by naming itself, so its
+        # leadership can monitor an ask the treasury has not answered yet —
+        # a pending drive is in nobody's public list.
+        department = str(self.request.query_params.get('department') or '').strip()
+        if department and user.is_authenticated and can_manage_department(user, department):
+            return FundraisingCampaign.objects.filter(
+                source_account__in=department_accounts(user, department)
+            )
         if user.is_authenticated and is_treasurer_or_admin(user):
             return FundraisingCampaign.objects.all()
         if user.is_authenticated:
@@ -8295,10 +8332,20 @@ class FundraisingCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [AllowAny()] if self.request.method == 'GET' else [IsAuthenticated()]
 
     def perform_update(self, serializer):
+        previous = self.get_object()
         if not is_treasurer_or_admin(self.request.user):
             from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('Only church treasurers or administrators can edit fund drives.')
-        previous = self.get_object()
+            # A desk's leadership may end the drive its own fund runs — and
+            # nothing else. The drive's shape, its goal and the treasury's
+            # approval stay with the treasury; closing it is the one word the
+            # desk that raised it has.
+            department = str(self.request.query_params.get('department') or '').strip()
+            if (
+                not department
+                or not can_manage_department(self.request.user, department)
+                or set(serializer.validated_data) - {'is_active'}
+            ):
+                raise PermissionDenied('Only church treasurers or administrators can edit fund drives.')
         # A linked drive's reference is its account's own reference: an edit
         # that retypes the ref would put a second wording on the M-Pesa prompt
         # that the account never answers to, so the account's ref wins.

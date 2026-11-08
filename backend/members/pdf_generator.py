@@ -2372,6 +2372,34 @@ def amount_in_words(amount) -> str:
     return words
 
 
+def accountability_items(notes):
+    """The lines of a filed account, read back as the rows the desk wrote.
+
+    The receiving desk files its spending as one line per purchase —
+    “item — amount · date” — which is what the treasury's desk reads on
+    screen. A line that does not follow that shape (an older free-text
+    account, say) is kept whole as its item rather than being dropped.
+    """
+    items = []
+    for raw in (notes or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        bought_on = ""
+        if " · " in line:
+            line, bought_on = line.rsplit(" · ", 1)
+        item = line
+        amount = None
+        if " — " in line:
+            item, amount_text = line.rsplit(" — ", 1)
+            try:
+                amount = Decimal(str(amount_text).replace(",", "").strip())
+            except Exception:
+                amount = None
+        items.append((item.strip(), amount, bought_on.strip()))
+    return items
+
+
 def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
     """One department withdrawal request as a sheet that can be signed.
 
@@ -2488,6 +2516,89 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
         f"Amount in words: <b>{escape(amount_in_words(amount))}</b> only.",
         st["cell"],
     ))
+
+    # The account of the spending, when the receiving desk has filed one: what
+    # the released money bought, line by line, with the receipts it was given.
+    # A request that has not been accounted for prints exactly as before — the
+    # sheet is the same one the desk has always carried for the signature.
+    accountability = row.get("accountability") or None
+    account_rows = accountability_items((accountability or {}).get("notes")) if accountability else []
+    if accountability and account_rows:
+        account_status = {
+            "submitted": "Submitted — awaiting the treasury",
+            "accepted": "Accepted by the treasury",
+            "returned": "Returned for correction",
+        }.get(accountability.get("status"), str(accountability.get("status") or ""))
+        filed_bits = []
+        if accountability.get("submitted_by"):
+            filed_bits.append(f"Filed by {accountability['submitted_by']}")
+        if accountability.get("submitted_at"):
+            filed_bits.append(fmt_date(accountability["submitted_at"]))
+        if account_status:
+            filed_bits.append(account_status)
+
+        story.append(Spacer(1, 16))
+        story.append(Paragraph("Accountability", st["h2"]))
+        story.append(Spacer(1, 4))
+        if filed_bits:
+            story.append(Paragraph(
+                " · ".join(escape(str(bit)) for bit in filed_bits), st["meta"],
+            ))
+            story.append(Spacer(1, 6))
+
+        accounted = Decimal("0")
+        account_data = [[
+            Paragraph("Item", st["header"]),
+            Paragraph("Bought", st["header"]),
+            Paragraph("Amount (KES)", st["header_right"]),
+        ]]
+        for item, line_amount, bought_on in account_rows:
+            if line_amount is not None:
+                accounted += line_amount
+            account_data.append([
+                Paragraph(escape(item or "—"), st["cell"]),
+                Paragraph(escape(bought_on or "—"), st["cell"]),
+                Paragraph(format_money(line_amount) if line_amount is not None else "—", st["cell_right_bold"]),
+            ])
+        account_data.append([
+            Paragraph("Total accounted", st["cell_bold"]),
+            "",
+            Paragraph(format_money(accounted), st["cell_right_bold"]),
+        ])
+        account_table = Table(
+            account_data,
+            colWidths=[8.6 * cm, 4.4 * cm, 5.0 * cm],
+            repeatRows=1,
+        )
+        account_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#26352f")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dfdbd1")),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#c9c5bb")),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#eef2ed")),
+        ]))
+        story.append(account_table)
+        story.append(Spacer(1, 5))
+        story.append(Paragraph(
+            f"Released <b>KES {format_money(amount)}</b> · Accounted <b>KES {format_money(accounted)}</b>"
+            + (f" · Unaccounted <b>KES {format_money(max(Decimal('0'), amount - accounted))}</b>"
+               if amount > accounted else ""),
+            st["cell"],
+        ))
+        receipts = accountability.get("receipts") or []
+        if receipts:
+            story.append(Paragraph(
+                "Receipts: " + escape(", ".join(str(receipt.get("filename") or "receipt") for receipt in receipts)),
+                st["meta"],
+            ))
+        if accountability.get("reply"):
+            story.append(Paragraph(
+                f"Treasury’s reply: “{escape(str(accountability['reply']))}”", st["cell"],
+            ))
 
     story.append(Spacer(1, 16))
     story.append(Paragraph("Signatures", st["h2"]))

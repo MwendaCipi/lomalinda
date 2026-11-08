@@ -140,6 +140,16 @@ SCHEDULED_CRON="*/5 * * * * cd ${PROJECT_DIR}/backend && venv/bin/python manage.
 crontab -l 2>/dev/null | grep -F 'send_scheduled_announcements' > /dev/null \
   || fail "the scheduled-announcement cron entry could not be installed."
 
+echo "⏰ Ensuring the fund-drive closing sweep is installed..."
+# A drive names the day it closes; this ends every drive whose day has gone,
+# just after midnight in the church's own time, so no desk has to remember to
+# press End. Five past midnight leaves the closing day itself intact. Same
+# idempotent shape as the lines above: rewritten, never duplicated.
+FUND_DRIVES_CRON="5 0 * * * TZ=Africa/Nairobi cd ${PROJECT_DIR}/backend && venv/bin/python manage.py close_ended_fund_drives >> /var/log/loma_linda_fund_drives.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'close_ended_fund_drives' || true; echo "$FUND_DRIVES_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'close_ended_fund_drives' > /dev/null \
+  || fail "the fund-drive closing cron entry could not be installed."
+
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"
 
