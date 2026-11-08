@@ -528,7 +528,7 @@ export function WithdrawalRequestsPanel({
      Respond answers the ask itself, Print renders its signable sheet, and
      Accounting opens the spending account the receiving desk filed, where
      the treasury reads each item and accepts it or sends it back. */
-  const actions = (row: WithdrawalRequestRow, roomy = false) => (
+  const actions = (row: WithdrawalRequestRow, roomy = true) => (
     <div className={`relative ${roomy ? "" : "flex justify-end"}`} data-action-menu>
       <button
         type="button"

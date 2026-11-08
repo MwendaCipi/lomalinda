@@ -1254,7 +1254,7 @@ export default function TreasuryPage() {
       period?.is_open ? "Period open" : "Period closed",
       period?.is_open
         ? "The books now run from the last close."
-        : `The books close at ${when}. The next report opens the day after, and the from date follows it.`,
+        : `The books close at ${when}. The next report opens the day after.`,
       "success",
       { toast: true, timer: 6000, showConfirmButton: false }
     );

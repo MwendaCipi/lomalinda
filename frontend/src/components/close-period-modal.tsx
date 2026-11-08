@@ -86,7 +86,7 @@ export function startingDay(iso: string): string {
  *
  * Closing names the day the books stop: a close lands at that day's last
  * minute, so the whole sabbath it names counts with its period. The next
- * report opens there, and the from date follows it. Editing a close moves
+ * report opens there, Editing a close moves
  * that same day — the day a gift landed on decides the period it belongs to.
  */
 export function ClosePeriodModal({
@@ -171,7 +171,7 @@ export function ClosePeriodModal({
             <p className="mt-1 text-xs leading-5 text-moss">
               {mode === "edit"
                 ? "Move the day this period ended, so a gift cut off at the wrong side of it lands in the period it belongs to."
-                : "Pick the day the books stop. The period ends that night, the next report opens there, and the from date follows it."}
+                : "Pick the day the books stop. The period ends that night, the next report opens there."}
             </p>
           </div>
           <button
