@@ -214,6 +214,9 @@ export function WithdrawalRequestsPanel({
   // desk is reading. The marker closes the popover on an outside press,
   // the way the accounts desk's own row menus close.
   const [openMenuRequestId, setOpenMenuRequestId] = useState<number | null>(null);
+  // A row's menu opens toward the roomier side: the first request sits against
+  // the treasury strip, so a menu that always opened upward slid under it.
+  const [requestMenuOpensUp, setRequestMenuOpensUp] = useState(false);
   const [accountingRow, setAccountingRow] = useState<WithdrawalRequestRow | null>(null);
 
   useEffect(() => {
@@ -655,7 +658,17 @@ export function WithdrawalRequestsPanel({
     <div className={`relative ${roomy ? "" : "flex justify-end"}`} data-action-menu>
       <button
         type="button"
-        onClick={() => setOpenMenuRequestId(openMenuRequestId === row.id ? null : row.id)}
+        onClick={(event) => {
+          if (openMenuRequestId === row.id) {
+            setOpenMenuRequestId(null);
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          const roomBelow = window.innerHeight - rect.bottom;
+          const roomAbove = rect.top;
+          setRequestMenuOpensUp(roomBelow < 240 && roomAbove > roomBelow);
+          setOpenMenuRequestId(row.id);
+        }}
         aria-expanded={openMenuRequestId === row.id}
         aria-label={`Actions for the ${row.department} request`}
         className={`rounded-lg border border-sand-mute font-semibold text-moss transition hover:border-ember hover:text-ember ${
@@ -667,7 +680,7 @@ export function WithdrawalRequestsPanel({
       {openMenuRequestId === row.id && (
         <div
           className={`absolute z-30 w-44 rounded-xl border border-sand-line bg-white p-1.5 shadow-lg ${
-            roomy ? "bottom-full right-0 mb-1.5" : "right-0 top-full mt-1"
+            requestMenuOpensUp ? "bottom-full right-0 mb-1.5" : "right-0 top-full mt-1"
           }`}
         >
           {approvalActionFor(row) && (
