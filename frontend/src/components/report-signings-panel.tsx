@@ -18,7 +18,7 @@ const authHeaders = (): Record<string, string> => {
 type SignatureRequest = {
   id: number;
   signing_id: number;
-  kind: "givings_summary" | "givings_individual" | "requests";
+  kind: "givings_summary" | "givings_individual" | "requests" | "withdrawal_request";
   kind_label: string;
   title: string;
   period_start: string | null;

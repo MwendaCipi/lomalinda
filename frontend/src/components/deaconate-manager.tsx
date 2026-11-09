@@ -1480,10 +1480,10 @@ export function DeaconateManager({
     }
   };
 
-  // The way out of a panel, on a phone: the console's own arrow where these
-  // are pages of the console, and the caller's destination where the desk was
-  // opened somewhere else — the Ministry map, whose own heading carries no way
-  // out once a panel sits under it.
+  // The way out of a panel, at every width: the console's own arrow where
+  // these are pages of the console, and the caller's destination where the
+  // desk was opened somewhere else — the Ministry map, whose own heading
+  // carries no way out once a panel sits under it.
   const backArrow = embedded ? (
     onBack ? <BackToOverviewArrow onClick={onBack} label="Back to the ministry map" /> : null
   ) : (

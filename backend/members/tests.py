@@ -3914,6 +3914,43 @@ class WithdrawalRequestsPdfTests(APITestCase):
         self.assertNotIn(b'Total accounted', plain_text)
         self.assertIn(b'Amount in words', plain_text)
 
+    def test_the_sheet_carries_the_churchs_own_seal(self):
+        """Every print of a request leaves the treasury stamped: the seal is
+        drawn into the paper itself, so a copy carried to the bank and a copy
+        filed at the office both read as the church's own record. A letter
+        carries it once both officers have signed it, and not before."""
+        from .pdf_generator import generate_department_letter_pdf, generate_withdrawal_request_pdf
+
+        row = {
+            'id': 9, 'department': 'Music', 'account_name': 'Music Ministry',
+            'account_balance': '425.00', 'amount': '75.00',
+            'reason': 'Tent hire for the camporee', 'status': 'approved',
+            'requested_by': 'Marta Member', 'created_at': date(2026, 11, 1),
+        }
+        request_text = self._pdf_text(generate_withdrawal_request_pdf('SDA Church Test', row))
+        # The seal's heart is one drawn string; nothing else on a withdrawal
+        # paper prints the church's name in capitals like this.
+        self.assertIn(b'SDA CHURCH', request_text)
+        self.assertIn(b'LOMA LINDA', request_text)
+
+        record = {
+            'letter_date': '08/11/2026', 'recipient_name': 'The Pastor',
+            'recipient_address': 'P.O Box 40', 'recipient_town': 'Nkubu',
+            'title': 'Request for chairs', 'content': 'Greetings in the Lord.',
+            'created_at': date(2026, 11, 8),
+        }
+        signed = generate_department_letter_pdf(
+            record, 'SDA Church Test',
+            pastor_sig={'name': 'David', 'office': 'Church Pastor'},
+            clerk_sig={'name': 'Mary', 'office': 'Church Clerk'},
+        )
+        self.assertIn(b'SDA CHURCH', self._pdf_text(signed))
+
+        # A letter still waiting on one of the pens is not yet the church's
+        # instrument, so it prints without the seal.
+        unsigned = generate_department_letter_pdf(record, 'SDA Church Test')
+        self.assertNotIn(b'SDA CHURCH', self._pdf_text(unsigned))
+
     def test_one_request_print_keeps_the_desk_permissions(self):
         self.client.force_authenticate(self.elder)
         self.assertEqual(
@@ -21584,3 +21621,132 @@ class DepartmentLetterShareTests(DepartmentLetterFlowTests):
         self.assertEqual(back.recipient_response, 'turned_down')
         self.assertEqual(back.recipient_comment, 'The hall is booked that Sabbath.')
         self.assertIsNotNone(back.responded_at)
+
+
+class WithdrawalRequestSigningTests(APITestCase):
+    """One approved withdrawal sent for its own signatures.
+
+    The treasury's wide report has its own send; this is the row-level ask,
+    tied to the one request so the offices sign the payment in front of them
+    rather than a list.
+    """
+
+    SEND_URL = '/api/members/reports/signings/'
+
+    def setUp(self):
+        from .models import DepartmentWithdrawalRequest
+
+        self.treasurer = User.objects.create_user(
+            'wrs.treasurer', 'wrs.treasurer@example.com', 'StrongPass#2026',
+            first_name='Tessa', last_name='Treasurer',
+        )
+        MemberProfile.objects.create(user=self.treasurer, role='treasurer', roles='treasurer,member')
+        self.elder = User.objects.create_user(
+            'wrs.elder', 'wrs.elder@example.com', 'StrongPass#2026',
+            first_name='Eli', last_name='Elder',
+        )
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.pastor = User.objects.create_user(
+            'wrs.pastor', 'wrs.pastor@example.com', 'StrongPass#2026',
+            first_name='Pat', last_name='Pastor',
+        )
+        MemberProfile.objects.create(user=self.pastor, role='pastor', roles='pastor,member')
+        self.member = User.objects.create_user(
+            'wrs.member', 'wrs.member@example.com', 'StrongPass#2026',
+            first_name='Marta', last_name='Member',
+        )
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+
+        music = Department.objects.get(code='music')
+        account = TreasuryAccount.objects.create(
+            name='MusicFund', description='Music Ministry',
+            balance=Decimal('500.00'), department=music,
+        )
+        self.approved = DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('75.00'),
+            reason='Tent hire for the camporee', requested_by=self.member,
+            status='approved',
+        )
+        self.pending = DepartmentWithdrawalRequest.objects.create(
+            department=music, account=account, amount=Decimal('200.00'),
+            reason='Sound system repair', requested_by=self.member,
+        )
+
+    def _send(self, row=None):
+        self.client.force_authenticate(self.treasurer)
+        return self.client.post(
+            self.SEND_URL,
+            {'kind': 'withdrawal_request', 'withdrawal_request_id': (row or self.approved).id},
+            format='json',
+        )
+
+    def test_an_approved_request_raises_its_own_signature_ask(self):
+        from .models import ReportSigning
+
+        response = self._send()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+
+        signing = ReportSigning.objects.get(pk=response.data['signing']['id'])
+        self.assertEqual(signing.kind, 'withdrawal_request')
+        self.assertEqual(signing.withdrawal_request_id, self.approved.id)
+        self.assertEqual(
+            signing.title,
+            f'Withdrawal request #{self.approved.id} — {self.approved.department.name}',
+        )
+        self.assertEqual(signing.period_start, timezone.localdate(self.approved.created_at))
+        self.assertEqual(signing.period_end, timezone.localdate(self.approved.created_at))
+        self.assertIn('75.00', signing.details)
+        self.assertIn('Tent hire for the camporee', signing.details)
+        self.assertIn('Music Ministry', signing.details)
+        self.assertEqual(signing.signatures.count(), 3)
+        self.assertEqual(
+            set(signing.signatures.values_list('office', flat=True)),
+            {'treasury', 'eldership', 'pastorate'},
+        )
+
+    def test_only_an_approved_request_can_be_sent(self):
+        response = self._send(self.pending)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('approved', response.data['detail'].lower())
+
+    def test_a_live_ask_is_not_sent_twice(self):
+        first = self._send()
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.content)
+
+        again = self._send()
+        self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(again.data['signing']['id'], first.data['signing']['id'])
+
+    def test_a_rejected_ask_may_be_sent_again(self):
+        from .models import ReportSigning, ReportSignature
+
+        first = self._send()
+        signing_id = first.data['signing']['id']
+        ReportSignature.objects.filter(signing_id=signing_id).update(status='rejected')
+        self.assertEqual(ReportSigning.objects.get(pk=signing_id).status, 'rejected')
+
+        again = self._send()
+        self.assertEqual(again.status_code, status.HTTP_201_CREATED, again.content)
+        self.assertNotEqual(again.data['signing']['id'], signing_id)
+
+    def test_a_member_may_not_send_a_request(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.SEND_URL,
+            {'withdrawal_request_id': self.approved.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_the_queue_row_reports_where_the_signature_stands(self):
+        self.client.force_authenticate(self.treasurer)
+        before = self.client.get('/api/members/department-withdrawals/review/')
+        row = next(item for item in before.data['requests'] if item['id'] == self.approved.id)
+        self.assertIsNone(row['signature_request'])
+
+        self.assertEqual(self._send().status_code, status.HTTP_201_CREATED)
+
+        after = self.client.get('/api/members/department-withdrawals/review/')
+        row = next(item for item in after.data['requests'] if item['id'] == self.approved.id)
+        self.assertIsNotNone(row['signature_request'])
+        self.assertEqual(row['signature_request']['status'], 'pending')

@@ -7433,6 +7433,11 @@ REPORT_SIGNING_OFFICES = {
         ('eldership', 'Eldership', 'Elder'),
         ('pastorate', 'Pastorate', 'Pastor'),
     ),
+    'withdrawal_request': (
+        ('treasury', 'Treasury Office', 'Treasurer'),
+        ('eldership', 'Eldership', 'Elder'),
+        ('pastorate', 'Pastorate', 'Pastor'),
+    ),
 }
 
 #: The role a member must hold to answer for an office on a report.
@@ -7462,6 +7467,7 @@ def _report_signing_row(row, user=None):
         'signing_id': signing.id,
         'kind': signing.kind,
         'kind_label': signing.get_kind_display(),
+        'withdrawal_request_id': signing.withdrawal_request_id,
         'title': signing.title,
         'period_start': signing.period_start.isoformat() if signing.period_start else None,
         'period_end': signing.period_end.isoformat() if signing.period_end else None,
@@ -7487,6 +7493,7 @@ def _report_signing_payload(signing, user=None):
     return {
         'id': signing.id,
         'kind': signing.kind,
+        'withdrawal_request_id': signing.withdrawal_request_id,
         'title': signing.title,
         'period_start': signing.period_start.isoformat() if signing.period_start else None,
         'period_end': signing.period_end.isoformat() if signing.period_end else None,
@@ -7555,39 +7562,96 @@ class ReportSigningsView(APIView):
     def post(self, request):
         if not is_treasurer_or_admin(request.user):
             raise PermissionDenied('Only church treasurers or administrators can send a report for signing.')
-        kind = str(request.data.get('kind') or '')
-        offices = REPORT_SIGNING_OFFICES.get(kind)
-        if not offices:
-            return Response({'detail': 'Name a report kind that can be signed.'}, status=status.HTTP_400_BAD_REQUEST)
-        title = str(request.data.get('title') or '').strip()[:200]
-        if not title:
-            return Response({'detail': 'Give the report a title.'}, status=status.HTTP_400_BAD_REQUEST)
-        start = parse_date(str(request.data.get('period_start') or ''))
-        end = parse_date(str(request.data.get('period_end') or ''))
 
-        # One live ask per report: sending again while the offices are still
-        # holding it would only multiply the same signature.
-        previous = (
-            ReportSigning.objects.filter(kind=kind, period_start=start, period_end=end)
-            .order_by('-created_at')
-            .first()
-        )
-        if previous and previous.status in ('pending', 'signed'):
-            return Response(
-                {
-                    'detail': 'This report has already been sent for signing.',
-                    'signing': _report_signing_payload(previous, request.user),
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+        withdrawal_request = None
+        withdrawal_request_id = str(request.data.get('withdrawal_request_id') or '').strip()
+        if withdrawal_request_id:
+            try:
+                withdrawal_pk = int(withdrawal_request_id)
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': 'That withdrawal request is not a number.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            withdrawal_request = (
+                DepartmentWithdrawalRequest.objects
+                .select_related('department', 'account')
+                .filter(pk=withdrawal_pk)
+                .first()
             )
+            if withdrawal_request is None:
+                return Response(
+                    {'detail': 'That withdrawal request does not exist.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if withdrawal_request.status != 'approved':
+                return Response(
+                    {'detail': 'Only an approved withdrawal request can be sent for signature.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            kind = 'withdrawal_request'
+            offices = REPORT_SIGNING_OFFICES[kind]
+            title = (
+                f'Withdrawal request #{withdrawal_request.id} — '
+                f'{withdrawal_request.department.name}'
+            )[:200]
+            start = end = timezone.localdate(withdrawal_request.created_at)
+            details = (
+                f'KES {withdrawal_request.amount:,.2f} · {withdrawal_request.reason} · '
+                f'{withdrawal_request.account.description or withdrawal_request.account.name}'
+            )[:255]
+            # One live ask per request: a rejected ask may be raised again, but
+            # a paper the offices are still holding (or have signed) is not
+            # sent twice.
+            previous = (
+                ReportSigning.objects.filter(withdrawal_request=withdrawal_request)
+                .order_by('-created_at')
+                .first()
+            )
+            if previous and previous.status in ('pending', 'signed'):
+                return Response(
+                    {
+                        'detail': 'This request has already been sent for signing.',
+                        'signing': _report_signing_payload(previous, request.user),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            kind = str(request.data.get('kind') or '')
+            offices = REPORT_SIGNING_OFFICES.get(kind)
+            if not offices:
+                return Response({'detail': 'Name a report kind that can be signed.'}, status=status.HTTP_400_BAD_REQUEST)
+            title = str(request.data.get('title') or '').strip()[:200]
+            if not title:
+                return Response({'detail': 'Give the report a title.'}, status=status.HTTP_400_BAD_REQUEST)
+            start = parse_date(str(request.data.get('period_start') or ''))
+            end = parse_date(str(request.data.get('period_end') or ''))
+
+            # One live ask per report: sending again while the offices are still
+            # holding it would only multiply the same signature.
+            previous = (
+                ReportSigning.objects.filter(kind=kind, period_start=start, period_end=end)
+                .order_by('-created_at')
+                .first()
+            )
+            if previous and previous.status in ('pending', 'signed'):
+                return Response(
+                    {
+                        'detail': 'This report has already been sent for signing.',
+                        'signing': _report_signing_payload(previous, request.user),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            details = str(request.data.get('details') or '').strip()[:255]
 
         signing = ReportSigning.objects.create(
             kind=kind,
             title=title,
             period_start=start,
             period_end=end,
-            details=str(request.data.get('details') or '').strip()[:255],
+            details=details,
             requested_by=request.user,
+            withdrawal_request=withdrawal_request,
         )
         for code, _label, office_title in offices:
             ReportSignature.objects.create(signing=signing, office=code, office_title=office_title)
@@ -16197,6 +16261,18 @@ def _notify_withdrawal_audience(audience, subject, body, link, sms_text=None):
         pass
 
 
+def _withdrawal_signature_payload(signing):
+    """The latest signature ask on one withdrawal, for its queue row."""
+    if signing is None:
+        return None
+    return {
+        'id': signing.id,
+        'title': signing.title,
+        'status': signing.status,
+        'created_at': signing.created_at,
+    }
+
+
 def _withdrawal_review_row(row):
     """One withdrawal request as the review queue shows it — and as its
     printed report shows it, so the screen and the paper cannot drift apart."""
@@ -16590,14 +16666,27 @@ class DepartmentWithdrawalReviewView(APIView):
     def get(self, request):
         if not is_treasurer_or_admin(request.user) and not is_elder_or_admin(request.user) and not is_pastor_or_admin(request.user):
             return Response({'detail': 'Only pastors, elders, or treasurers can review withdrawal requests.'}, status=status.HTTP_403_FORBIDDEN)
-        rows = DepartmentWithdrawalRequest.objects.select_related(
+        rows = list(DepartmentWithdrawalRequest.objects.select_related(
             'department', 'account', 'requested_by', 'requested_by__member_profile',
             'treasurer_approved_by', 'pastor_approved_by', 'elder_approved_by', 'decided_by',
             'payout__initiated_by',
-        ).order_by('-created_at')
+        ).order_by('-created_at'))
+        # One read for the whole queue: the latest signature ask on each
+        # request, so the row can say whether the paper is already out.
+        latest_signings = {}
+        signings = (
+            ReportSigning.objects.filter(withdrawal_request_id__in=[row.id for row in rows])
+            .prefetch_related('signatures')
+            .order_by('withdrawal_request_id', '-created_at')
+        )
+        for signing in signings:
+            latest_signings.setdefault(signing.withdrawal_request_id, signing)
         data = []
         for row in rows:
             item = _withdrawal_review_row(row)
+            item['signature_request'] = _withdrawal_signature_payload(
+                latest_signings.get(row.id)
+            )
             # Per-viewer, so the queue can tell the truth about the release:
             # whoever cleared this one as the elder or pastor may not also be the
             # treasurer who pays it, and the desk says so before the button

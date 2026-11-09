@@ -98,6 +98,13 @@ type WithdrawalRequestRow = {
     reply: string;
     receipts: { id: number; filename: string; caption: string; url: string }[];
   } | null;
+  /** The latest signature ask raised for this one request, if any. */
+  signature_request?: {
+    id: number;
+    title: string;
+    status: "pending" | "signed" | "rejected";
+    created_at: string;
+  } | null;
 };
 
 /**
@@ -109,6 +116,9 @@ type WithdrawalRequestRow = {
  * or any other role reading the same queue from a different workspace.
  */
 export type WithdrawalWorkspace = "pastorate" | "eldership" | "treasury";
+
+/** The one approval this desk's workspace can give a request. */
+type WithdrawalApprovalAction = "pastor_approve" | "elder_approve" | "release";
 
 /**
  * The departments' withdrawal queue — showing every request across every
@@ -170,11 +180,21 @@ export function WithdrawalRequestsPanel({
   // authority the server did not recognise sat in front of an empty page.
   const [error, setError] = useState("");
   const [openAction, setOpenAction] = useState<number | null>(null);
+  const [respondMode, setRespondMode] = useState<"approve" | "decline">("approve");
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [printingId, setPrintingId] = useState<number | null>(null);
   const [sendingForSignature, setSendingForSignature] = useState(false);
+  const [sendingRequestForSignatureId, setSendingRequestForSignatureId] = useState<number | null>(null);
+  // The print sheet's own filters. It opens on the desk's current filters
+  // and then prints exactly what the modal says, not what the table behind
+  // it happens to show after the desk moves on.
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printStatus, setPrintStatus] = useState<"all" | "pending" | "approved" | "rejected">(statusFilter);
+  const [printSearch, setPrintSearch] = useState(search);
+  const [printFrom, setPrintFrom] = useState(fromDate);
+  const [printTo, setPrintTo] = useState(toDate);
   // The number this release pays. It starts from the requester's saved
   // number and stays editable, so the desk can pay a corrected or
   // alternative line without changing the member's profile.
@@ -305,16 +325,27 @@ export function WithdrawalRequestsPanel({
     );
   };
 
+  // The print sheet opens on the desk's current filters. Once it is open,
+  // its own controls decide what the paper carries.
+  const openPrintModal = () => {
+    setPrintStatus(statusFilter);
+    setPrintSearch(search);
+    setPrintFrom(fromDate);
+    setPrintTo(toDate);
+    setShowPrintModal(true);
+  };
+
   // The wide report prints from the backend now: the same rows under the same
   // filters arrive as a real PDF. It carries no signature slots — a signed
   // copy belongs to one request, which each row's own Print produces.
   const printReport = () => {
+    if (printing) return;
     const params = new URLSearchParams();
-    if (statusFilter !== "all") params.set("status", statusFilter);
-    if (search.trim()) params.set("search", search.trim());
-    // The printed report reads the same window the screen shows.
-    if (fromDate) params.set("from_date", fromDate);
-    if (toDate) params.set("to_date", toDate);
+    if (printStatus !== "all") params.set("status", printStatus);
+    if (printSearch.trim()) params.set("search", printSearch.trim());
+    if (printFrom) params.set("from_date", printFrom);
+    if (printTo) params.set("to_date", printTo);
+    setShowPrintModal(false);
     setPrinting(true);
     openPdfTab(`${API_URL}/api/members/department-withdrawals/pdf/?${params.toString()}`, {
       headers: fundAuthHeaders(),
@@ -328,14 +359,14 @@ export function WithdrawalRequestsPanel({
   // treasury keeps the first pen; an elder and the pastor add theirs from the
   // Requests desk, and the report is signed only when all three have.
   const sendReportForSignature = async () => {
-    if (sendingForSignature) return;
+    if (sendingForSignature || printRows.length === 0) return;
     setSendingForSignature(true);
     try {
-      const period = fromDate || toDate ? `${fromDate || "Start"} to ${toDate || "Today"}` : "All dates";
+      const period = printFrom || printTo ? `${printFrom || "Start"} to ${printTo || "Today"}` : "All dates";
       const details = [
-        statusFilter === "all" ? "All statuses" : statusFilter.replace(/_/g, " "),
-        search.trim() ? `Search: ${search.trim()}` : "",
-        `${filteredRows.length} ${filteredRows.length === 1 ? "request" : "requests"}`,
+        printStatus === "all" ? "All statuses" : printStatus.replace(/_/g, " "),
+        printSearch.trim() ? `Search: ${printSearch.trim()}` : "",
+        `${printRows.length} ${printRows.length === 1 ? "request" : "requests"}`,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -346,13 +377,14 @@ export function WithdrawalRequestsPanel({
         body: JSON.stringify({
           kind: "requests",
           title: `Withdrawal requests report — ${period}`,
-          period_start: fromDate || null,
-          period_end: toDate || null,
+          period_start: printFrom || null,
+          period_end: printTo || null,
           details,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "The report could not be sent for signature.");
+      setShowPrintModal(false);
       showAlert(
         "Sent for signature",
         "The treasurer, an elder and the pastor can sign it from Requests.",
@@ -366,6 +398,40 @@ export function WithdrawalRequestsPanel({
       );
     } finally {
       setSendingForSignature(false);
+    }
+  };
+
+  // One approved request sent round the three offices for its own signature
+  // ask. The paper stays tied to the request, so a signatory reads the
+  // department, amount and purpose before putting a pen on it.
+  const sendRequestForSignature = async (row: WithdrawalRequestRow) => {
+    if (sendingRequestForSignatureId !== null) return;
+    setSendingRequestForSignatureId(row.id);
+    try {
+      const res = await fetch(`${API_URL}/api/members/reports/signings/`, {
+        method: "POST",
+        headers: { ...fundAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "withdrawal_request",
+          withdrawal_request_id: row.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "The request could not be sent for signature.");
+      showAlert(
+        "Sent for signature",
+        `The treasurer, an elder and the pastor can sign request #${row.id} from Requests.`,
+        "success",
+      );
+      await load();
+    } catch (error) {
+      showAlert(
+        "Could not send for signature",
+        error instanceof Error ? error.message : "Try again.",
+        "error",
+      );
+    } finally {
+      setSendingRequestForSignatureId(null);
     }
   };
 
@@ -428,23 +494,28 @@ export function WithdrawalRequestsPanel({
     }
   };
 
-  const filteredRows = rows.filter((row) => {
-    if (statusFilter === "pending") {
+  const rowsForFilters = (filters: {
+    status: "all" | "pending" | "approved" | "rejected";
+    search: string;
+    from: string;
+    to: string;
+  }) => rows.filter((row) => {
+    if (filters.status === "pending") {
       if (!["pending", "pastor_approved", "elder_approved", "releasing"].includes(row.status)) return false;
-    } else if (statusFilter === "approved") {
+    } else if (filters.status === "approved") {
       if (row.status !== "approved") return false;
-    } else if (statusFilter === "rejected") {
+    } else if (filters.status === "rejected") {
       if (row.status !== "declined") return false;
     }
     // The date window: a request stands in it by the day it was asked,
     // in the church's timezone — the same day the table prints on the row.
-    if (fromDate || toDate) {
+    if (filters.from || filters.to) {
       const askedOn = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(row.created_at));
-      if (fromDate && askedOn < fromDate) return false;
-      if (toDate && askedOn > toDate) return false;
+      if (filters.from && askedOn < filters.from) return false;
+      if (filters.to && askedOn > filters.to) return false;
     }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    if (filters.search.trim()) {
+      const q = filters.search.trim().toLowerCase();
       const match =
         row.department.toLowerCase().includes(q) ||
         row.account_name.toLowerCase().includes(q) ||
@@ -459,6 +530,18 @@ export function WithdrawalRequestsPanel({
       if (!match) return false;
     }
     return true;
+  });
+  const filteredRows = rowsForFilters({
+    status: statusFilter,
+    search,
+    from: fromDate,
+    to: toDate,
+  });
+  const printRows = rowsForFilters({
+    status: printStatus,
+    search: printSearch,
+    from: printFrom,
+    to: printTo,
   });
 
   // The church writes money the same way everywhere on this desk.
@@ -516,18 +599,49 @@ export function WithdrawalRequestsPanel({
     </>
   );
 
-  // One request's reply, from a fresh line each time the desk opens it.
-  const openRespond = (row: WithdrawalRequestRow) => {
+  // One request's reply, from a fresh line each time the desk opens it. The
+  // mode decides which single answer the modal offers: Approve or Decline.
+  const openRespond = (row: WithdrawalRequestRow, mode: "approve" | "decline") => {
+    setRespondMode(mode);
     setOpenAction(row.id);
+    setReply("");
     setReleasePhone(row.requested_by_phone ?? "");
     setAccountReply("");
   };
 
+  // Whose pen is next on this row. The modal offers one approval, never the
+  // whole chain, so a pastor cannot accidentally press the treasurer's step.
+  const approvalActionFor = (row: WithdrawalRequestRow): WithdrawalApprovalAction | null => {
+    if (row.status === "pending" && workspace === "pastorate") return "pastor_approve";
+    if (row.status === "pastor_approved" && workspace === "eldership") return "elder_approve";
+    if (row.status === "elder_approved" && workspace === "treasury") return "release";
+    if (row.status === "reversed" && workspace === "treasury") return "release";
+    return null;
+  };
+
+  const reverseWithdrawal = (row: WithdrawalRequestRow) => {
+    showAlert(
+      "Reverse withdrawal?",
+      `This will credit KES ${Number(row.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${row.account_name} and remove the corresponding expense record.`,
+      "warning",
+      {
+        showCancelButton: true,
+        confirmButtonText: "Yes, reverse it",
+        cancelButtonText: "Cancel",
+      },
+    ).then((result) => {
+      if (result.isConfirmed) {
+        setOpenAction(null);
+        act(row.id, "reverse");
+      }
+    });
+  };
+
   /* Every request answers from one Actions popover — the table and the
      phone's cards both render it, so the row stays a single button wide.
-     Respond answers the ask itself, Print renders its signable sheet, and
-     Accounting opens the spending account the receiving desk filed, where
-     the treasury reads each item and accepts it or sends it back. */
+     Approve and Decline each open the same modal on their own answer; Print
+     renders the request's signable sheet, and Accounting opens the spending
+     account the receiving desk filed. */
   const actions = (row: WithdrawalRequestRow, roomy = true) => (
     <div className={`relative ${roomy ? "" : "flex justify-end"}`} data-action-menu>
       <button
@@ -547,17 +661,47 @@ export function WithdrawalRequestsPanel({
             roomy ? "bottom-full right-0 mb-1.5" : "right-0 top-full mt-1"
           }`}
         >
-          <button
-            type="button"
-            onClick={() => {
-              setOpenMenuRequestId(null);
-              openRespond(row);
-            }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
-          >
-            <MessageCircle className="h-4 w-4 text-moss" />
-            Respond
-          </button>
+          {approvalActionFor(row) && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuRequestId(null);
+                openRespond(row, "approve");
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+            >
+              <Check className="h-4 w-4 text-sage" />
+              Approve request
+            </button>
+          )}
+          {["pending", "pastor_approved", "elder_approved"].includes(row.status) && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuRequestId(null);
+                openRespond(row, "decline");
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand"
+            >
+              <X className="h-4 w-4 text-ember" />
+              Decline request
+            </button>
+          )}
+          {row.status === "approved" && workspace === "treasury" && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuRequestId(null);
+                reverseWithdrawal(row);
+              }}
+              disabled={!canApproveTreasury}
+              title={!canApproveTreasury ? "Assistant treasurers cannot reverse withdrawals." : undefined}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand disabled:opacity-60"
+            >
+              <RefreshCw className="h-4 w-4 text-moss" />
+              Reverse withdrawal
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -570,6 +714,43 @@ export function WithdrawalRequestsPanel({
             <Printer className={`h-4 w-4 text-moss ${printingId === row.id ? "animate-spin" : ""}`} />
             {printingId === row.id ? "Preparing…" : "Print"}
           </button>
+          {row.status === "approved" && workspace === "treasury" && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpenMenuRequestId(null);
+                void sendRequestForSignature(row);
+              }}
+              disabled={
+                sendingRequestForSignatureId !== null ||
+                row.signature_request?.status === "pending" ||
+                row.signature_request?.status === "signed"
+              }
+              title={
+                row.signature_request?.status === "signed"
+                  ? "Every office has signed this request."
+                  : row.signature_request?.status === "pending"
+                    ? "The offices are still holding this request."
+                    : undefined
+              }
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand disabled:opacity-60"
+            >
+              <Send
+                className={`h-4 w-4 text-moss ${
+                  sendingRequestForSignatureId === row.id ? "animate-pulse" : ""
+                }`}
+              />
+              {row.signature_request?.status === "signed"
+                ? "Signed"
+                : row.signature_request?.status === "pending"
+                  ? "Awaiting signatures"
+                  : row.signature_request?.status === "rejected"
+                    ? "Send again"
+                    : sendingRequestForSignatureId === row.id
+                      ? "Sending…"
+                      : "Send for signature"}
+            </button>
+          )}
           {row.status === "approved" && (
             <button
               type="button"
@@ -738,14 +919,45 @@ export function WithdrawalRequestsPanel({
         // API enforces the same rule; this keeps the button honest.
         const reversedCovered = Number(target.account_balance) >= Number(target.amount);
         const releaseNumber = releasePhone.trim();
+        const approvalAction = approvalActionFor(target);
+        const approveIsRelease = approvalAction === "release";
+        const approveBlocked =
+          !approvalAction ||
+          (approveIsRelease && (
+            !canApproveTreasury ||
+            selfCleared ||
+            (isReversed && !reversedCovered) ||
+            !releaseNumber ||
+            Number(target.amount) % 1 !== 0
+          ));
+        const approveBlockedReason = !approvalAction
+          ? "This request is not waiting on your desk's approval."
+          : approveIsRelease && !canApproveTreasury
+            ? "Assistant treasurers cannot release withdrawals."
+            : approveIsRelease && selfCleared
+              ? "You gave this request an earlier clearance. A different treasurer must approve the release."
+              : approveIsRelease && isReversed && !reversedCovered
+                ? `${target.account_name} does not hold enough for this request.`
+                : approveIsRelease && !releaseNumber
+                  ? "Enter the M-Pesa number the money should be paid to."
+                  : approveIsRelease && Number(target.amount) % 1 !== 0
+                    ? "M-Pesa payouts are whole shillings."
+                    : undefined;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-sand-line">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h4 className="text-sm font-bold text-bark">Respond to request</h4>
+                  <h4 className="text-sm font-bold text-bark">
+                    {respondMode === "approve" ? "Approve request" : "Decline request"}
+                  </h4>
                   <p className="mt-0.5 text-xs text-moss">
                     {target.department} · {target.account_name}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-moss-faint">
+                    {respondMode === "approve"
+                      ? "Review the request, then approve it."
+                      : "Give the department a reason before declining it."}
                   </p>
                 </div>
                 <button
@@ -771,19 +983,21 @@ export function WithdrawalRequestsPanel({
                 </div>
                 <p className="text-moss">{target.reason}</p>
                 <p className="text-[11px] text-moss-faint">
-                  {awaitingPastor
-                    ? "Waiting on the pastor's blessing before an elder can act."
-                    : awaitingElder
-                      ? "Blessed by the pastor. An elder approves it next."
-                      : awaitingRelease
-                        ? "Approved by the pastor and an elder. Release it from the paybill to the requester's phone, or decline it."
-                        : isReleasing
-                          ? "The paybill is paying the requester. The expense is written when M-Pesa confirms."
-                          : canReverse
-                          ? `${target.decided_by ? `Treasurer-approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
-                          : isReversed
-                            ? "Reversed. The fund was credited back. It can be released again while the account covers it."
-                            : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
+                  {respondMode === "decline"
+                    ? "Declining sends this request back to the department with your reason. No money moves."
+                    : awaitingPastor
+                      ? "Waiting on the pastor's blessing before an elder can act."
+                      : awaitingElder
+                        ? "Blessed by the pastor. An elder approves it next."
+                        : awaitingRelease
+                          ? "Approved by the pastor and an elder. Release it from the paybill to the requester's phone, or decline it."
+                          : isReleasing
+                            ? "The paybill is paying the requester. The expense is written when M-Pesa confirms."
+                            : canReverse
+                            ? `${target.decided_by ? `Treasurer-approved by ${target.decided_by}.` : "Approved by the treasury."} Reversing credits the fund back and removes the expense.`
+                            : isReversed
+                              ? "Reversed. The fund was credited back. It can be released again while the account covers it."
+                              : `Decided by ${target.decided_by ?? "the office"}${target.reply ? `: "${target.reply}"` : ""}.`}
                 </p>
                 {target.payout && (
                   <p className="mt-1 text-[11px] text-moss-faint">
@@ -813,7 +1027,7 @@ export function WithdrawalRequestsPanel({
                 )}
               </div>
 
-              {workspace === "treasury" && (awaitingRelease || (isReversed && reversedCovered)) && (
+              {respondMode === "approve" && approveIsRelease && (
                 <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3">
                   <label
                     htmlFor="withdrawal-release-phone"
@@ -839,42 +1053,61 @@ export function WithdrawalRequestsPanel({
               )}
 
 
-              {(inFlight || isReversed) && (
-                <textarea
-                  rows={3}
-                  maxLength={255}
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  placeholder="A short reply the department can read…"
-                  className="mt-3 block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  autoFocus
-                />
+              {(respondMode === "decline" || inFlight || isReversed) && (
+                <div className="mt-3">
+                  {respondMode === "decline" && (
+                    <label
+                      htmlFor="withdrawal-decline-reason"
+                      className="block text-[11px] font-bold uppercase tracking-wide text-moss"
+                    >
+                      Reason for declining
+                    </label>
+                  )}
+                  <textarea
+                    id={respondMode === "decline" ? "withdrawal-decline-reason" : undefined}
+                    rows={3}
+                    maxLength={255}
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    placeholder={
+                      respondMode === "decline"
+                        ? "Why is this request being declined? The department reads this."
+                        : "A short reply the department can read…"
+                    }
+                    className={`block w-full resize-y rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember ${
+                      respondMode === "decline" ? "mt-1.5" : ""
+                    }`}
+                    autoFocus
+                  />
+                </div>
               )}
 
               <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-sand-line pt-3">
-                {awaitingPastor && workspace === "pastorate" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenAction(null);
+                    setReply("");
+                    setAccountReply("");
+                  }}
+                  className="rounded-xl border border-sand-mute bg-sand px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-sand-line"
+                >
+                  Cancel
+                </button>
+
+                {respondMode === "approve" ? (
                   <button
                     type="button"
-                    onClick={() => act(target.id, "pastor_approve")}
-                    disabled={busy}
-                    className="rounded-xl border border-sand-mute bg-sand px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-sand-mute disabled:opacity-60"
+                    onClick={() => {
+                      if (approvalAction) act(target.id, approvalAction, reply, releasePhone);
+                    }}
+                    disabled={busy || approveBlocked}
+                    title={approveBlockedReason}
+                    className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                   >
-                    {busy ? "Saving…" : "Pastor Approve"}
+                    {busy ? "Saving…" : "Approve"}
                   </button>
-                )}
-
-                {awaitingElder && workspace === "eldership" && (
-                  <button
-                    type="button"
-                    onClick={() => act(target.id, "elder_approve")}
-                    disabled={busy}
-                    className="rounded-xl border border-mist-select bg-mist-select/30 px-3.5 py-1.5 text-xs font-semibold text-bark transition hover:bg-mist-select/60 disabled:opacity-60"
-                  >
-                    {busy ? "Saving…" : "Elder Approve"}
-                  </button>
-                )}
-
-                {inFlight && (
+                ) : (
                   <button
                     type="button"
                     onClick={() => act(target.id, "decline", reply)}
@@ -882,84 +1115,13 @@ export function WithdrawalRequestsPanel({
                     title={
                       workspace === "treasury" && !canApproveTreasury
                         ? "Assistant treasurers cannot decline withdrawal requests."
-                        : undefined
-                    }
-                    className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
-                  >
-                    Decline request
-                  </button>
-                )}
-
-
-                {awaitingRelease && workspace === "treasury" && (
-                  <button
-                    type="button"
-                    onClick={() => act(target.id, "release", reply, releasePhone)}
-                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0 || !canApproveTreasury}
-                    title={
-                      !canApproveTreasury
-                        ? "Assistant treasurers cannot release withdrawals."
-                        : selfCleared
-                        ? "You gave this request an earlier clearance. A different treasurer must release the money."
-                        : !releaseNumber
-                          ? "Enter the M-Pesa number the money should be paid to."
-                          : Number(target.amount) % 1 !== 0
-                            ? "M-Pesa payouts are whole shillings."
-                            : `Send ${money(target.amount)} from the paybill to ${releaseNumber}.`
+                        : !reply.trim()
+                          ? "Say why the request is being declined."
+                          : undefined
                     }
                     className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
                   >
-                    {busy ? "Sending…" : "Release funds"}
-                  </button>
-                )}
-
-                {isReversed && reversedCovered && workspace === "treasury" && (
-                  <button
-                    type="button"
-                    onClick={() => act(target.id, "release", reply, releasePhone)}
-                    disabled={busy || selfCleared || !releaseNumber || Number(target.amount) % 1 !== 0 || !canApproveTreasury}
-                    title={
-                      !canApproveTreasury
-                        ? "Assistant treasurers cannot release withdrawals."
-                        : selfCleared
-                        ? "You cleared this request earlier. A different treasurer must release it again."
-                        : !releaseNumber
-                          ? "Enter the M-Pesa number the money should be paid to."
-                          : Number(target.amount) % 1 !== 0
-                            ? "M-Pesa payouts are whole shillings."
-                            : `Send ${money(target.amount)} from the paybill to ${releaseNumber}.`
-                    }
-                    className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-ember-deep disabled:opacity-60"
-                  >
-                    {busy ? "Sending…" : "Release again"}
-                  </button>
-                )}
-
-                {canReverse && workspace === "treasury" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      showAlert(
-                        "Reverse withdrawal?",
-                        `This will credit KES ${Number(target.amount).toLocaleString("en-KE", { minimumFractionDigits: 2 })} back to ${target.account_name} and remove the corresponding expense record.`,
-                        "warning",
-                        {
-                          showCancelButton: true,
-                          confirmButtonText: "Yes, reverse it",
-                          cancelButtonText: "Cancel",
-                        }
-                      ).then((result) => {
-                        if (result.isConfirmed) {
-                          setOpenAction(null);
-                          act(target.id, "reverse");
-                        }
-                      });
-                    }}
-                    disabled={busy || !canApproveTreasury}
-                    title={!canApproveTreasury ? "Assistant treasurers cannot reverse withdrawals." : undefined}
-                    className="rounded-xl border border-sand-mute px-3.5 py-1.5 text-xs font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-60"
-                  >
-                    Reverse withdrawal
+                    {busy ? "Saving…" : "Decline"}
                   </button>
                 )}
               </div>
@@ -1146,29 +1308,130 @@ export function WithdrawalRequestsPanel({
         <div className="flex flex-wrap items-center gap-1.5 sm:justify-self-center">
           <button
             type="button"
-            onClick={printReport}
+            onClick={openPrintModal}
             disabled={printing}
             className="inline-flex items-center justify-center gap-1.5 self-start rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember shadow-xs disabled:opacity-60 sm:self-auto"
-            aria-label="Print withdrawal requests report"
+            aria-label="Choose filters and print withdrawal requests"
           >
             <Printer className={`h-3.5 w-3.5 ${printing ? "animate-spin" : ""}`} />
             <span>{printing ? "Preparing…" : "Print Requests"}</span>
           </button>
-          {workspace === "treasury" && (
-            <button
-              type="button"
-              onClick={() => void sendReportForSignature()}
-              disabled={sendingForSignature}
-              className="inline-flex items-center justify-center gap-1.5 self-start rounded-xl bg-bark px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60 sm:self-auto"
-              aria-label="Send withdrawal requests report for signature"
-            >
-              <Send className={`h-3.5 w-3.5 ${sendingForSignature ? "animate-pulse" : ""}`} />
-              <span>{sendingForSignature ? "Sending…" : "Send for signature"}</span>
-            </button>
-          )}
         </div>
         <span className="hidden sm:block" aria-hidden="true" />
       </div>
+
+      {/* The print sheet: choose the status, the window and the search the
+          paper carries, then print it or send that same report round the
+          offices. The table behind the modal is left as the desk had it. */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose the withdrawal request filters"
+            className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-5 pb-3 pt-5">
+              <div>
+                <h3 className="text-base font-bold text-bark">Withdrawal requests report</h3>
+                <p className="mt-0.5 text-[11px] text-moss">
+                  Choose what the paper carries. It prints exactly these rows.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                aria-label="Close"
+                className="text-moss transition hover:text-bark"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-3">
+              <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
+                <label htmlFor="withdrawal-print-status" className="block text-[11px] font-semibold uppercase tracking-wide text-moss">
+                  Status
+                </label>
+                <select
+                  id="withdrawal-print-status"
+                  value={printStatus}
+                  onChange={(event) => setPrintStatus(event.target.value as typeof printStatus)}
+                  className="mt-1.5 block w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
+                >
+                  <option value="all">All requests</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-moss">
+                  From
+                  <DateField
+                    value={printFrom}
+                    onChange={setPrintFrom}
+                    label="Requests from date"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-moss">
+                  To
+                  <DateField
+                    value={printTo}
+                    onChange={setPrintTo}
+                    label="Requests to date"
+                  />
+                </label>
+              </div>
+
+              <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
+                <label htmlFor="withdrawal-print-search" className="block text-[11px] font-semibold uppercase tracking-wide text-moss">
+                  Search
+                </label>
+                <input
+                  id="withdrawal-print-search"
+                  type="search"
+                  value={printSearch}
+                  onChange={(event) => setPrintSearch(event.target.value)}
+                  placeholder="Department, account, purpose or requester…"
+                  className="mt-1.5 block w-full rounded-xl border border-sand-line bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
+                />
+              </div>
+
+              <p className="text-[11px] text-moss">
+                {printRows.length} {printRows.length === 1 ? "request matches" : "requests match"} these filters.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 flex-col gap-2 border-t border-sand-line bg-sand-linen/40 px-5 py-3">
+              {printRows.length === 0 && (
+                <p className="text-center text-[11px] text-moss">No requests match these filters.</p>
+              )}
+              {workspace === "treasury" && (
+                <button
+                  type="button"
+                  onClick={() => void sendReportForSignature()}
+                  disabled={sendingForSignature || printing || printRows.length === 0}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90 disabled:opacity-60"
+                >
+                  <Send className={`h-3.5 w-3.5 ${sendingForSignature ? "animate-pulse" : ""}`} aria-hidden="true" />
+                  {sendingForSignature ? "Sending…" : "Send for signature"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={printReport}
+                disabled={printing || sendingForSignature || printRows.length === 0}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60"
+              >
+                <Printer className={`h-3.5 w-3.5 ${printing ? "animate-spin" : ""}`} aria-hidden="true" />
+                {printing ? "Preparing…" : "Print requests"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1244,7 +1507,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
             }
           }}
           aria-label="Back"
-          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
         >
           <MoveLeft className="h-5 w-5" aria-hidden="true" />
         </button>

@@ -1966,6 +1966,7 @@ class ReportSigning(models.Model):
         ('givings_summary', 'Summary report'),
         ('givings_individual', 'Individual givings report'),
         ('requests', 'Withdrawal requests report'),
+        ('withdrawal_request', 'Withdrawal request'),
     ]
 
     kind = models.CharField(max_length=32, choices=KIND_CHOICES)
@@ -1981,6 +1982,13 @@ class ReportSigning(models.Model):
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name='report_signings_requested',
+    )
+    #: The one withdrawal request this ask belongs to, when it is not a report.
+    #: A request-level signature travels with its own sheet, so the office
+    #: signing it knows exactly which payment it is clearing.
+    withdrawal_request = models.ForeignKey(
+        'DepartmentWithdrawalRequest', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='signature_requests',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

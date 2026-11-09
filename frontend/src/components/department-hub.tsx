@@ -7640,7 +7640,7 @@ function DepartmentDetail({
           type="button"
           onClick={() => onBackRef.current?.()}
           aria-label="Back"
-          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
         >
           <MoveLeft className="h-5 w-5" aria-hidden="true" />
         </button>
@@ -10164,7 +10164,7 @@ export function DepartmentHub({
           type="button"
           onClick={() => onBackRef.current?.()}
           aria-label="Back"
-          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark lg:hidden"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
         >
           <MoveLeft className="h-5 w-5" aria-hidden="true" />
         </button>

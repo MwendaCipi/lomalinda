@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   Baby,
@@ -156,6 +157,7 @@ export function CampaignManagement({
   onClosed?: () => void;
 }) {
   const isAdminMode = mode === "admin";
+  const router = useRouter();
   const { setHeaderRightAction } = usePageHeader();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,15 +275,17 @@ export function CampaignManagement({
       carries, shared with the phone's card so its popover offers the
       same choices. The caller owns the box the menu sits in, since the
       table anchors it to its row and the card anchors it to itself. */
-  const driveMenuBody = (c: Campaign) => (
+  const driveMenuBody = (c: Campaign, showViewCard = true) => (
     <>
-      <Link
-        href={`/drives/${c.id}`}
-        onClick={closeActionsMenu}
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
-      >
-        <CreditCard size={13} className="inline" aria-hidden="true" /> View Card
-      </Link>
+      {showViewCard && (
+        <Link
+          href={`/drives/${c.id}`}
+          onClick={closeActionsMenu}
+          className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand hover:text-ember transition-colors"
+        >
+          <CreditCard size={13} className="inline" aria-hidden="true" /> View Card
+        </Link>
+      )}
 
       {isAdminMode && canEdit && (
         <>
@@ -1807,12 +1811,28 @@ export function CampaignManagement({
                   bodyClassName="divide-y divide-sand-line text-xs"
                   cardsClassName="grid gap-4"
                   renderRow={(c) => (
-                          <tr key={c.id} className="transition hover:bg-sand-plate">
+                          <tr
+                            key={c.id}
+                            tabIndex={0}
+                            aria-label={`Open ${c.title || c.name}`}
+                            onClick={(event) => {
+                              if ((event.target as HTMLElement).closest("[data-drive-actions]")) return;
+                              router.push(`/drives/${c.id}`);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.target !== event.currentTarget) return;
+                              if (event.key !== "Enter" && event.key !== " ") return;
+                              event.preventDefault();
+                              router.push(`/drives/${c.id}`);
+                            }}
+                            className="cursor-pointer transition hover:bg-sand-plate focus:outline-none focus-visible:bg-sand-plate"
+                          >
                             <td className={`px-5 ${rowDrive} align-middle`}>
                               <div className="flex items-center gap-3">
                                 {isAdminMode && canEdit && !c.is_active && (
                                   <input
                                     type="checkbox"
+                                    onClick={(e) => e.stopPropagation()}
                                     checked={selectedEndedIds.includes(c.id)}
                                     onChange={(e) => {
                                       e.stopPropagation();
@@ -1827,6 +1847,7 @@ export function CampaignManagement({
                                 )}
                                 <Link
                                   href={`/drives/${c.id}`}
+                                  onClick={(e) => e.stopPropagation()}
                                   className="group block min-w-0"
                                 >
                                   <div className="font-bold text-bark group-hover:text-ember transition-colors text-sm truncate">
@@ -1896,7 +1917,7 @@ export function CampaignManagement({
                               </span>
                             </td>
                             <td className={`px-5 ${rowDrive} align-middle text-right whitespace-nowrap relative`}>
-                              <div className="relative inline-block text-left">
+                              <div className="relative inline-block text-left" data-drive-actions>
                                 <button
                                   type="button"
                                   onClick={(e) => toggleActionsMenu(c.id, e)}
@@ -1922,7 +1943,7 @@ export function CampaignManagement({
                                           : { right: actionsMenuPos.right, top: actionsMenuPos.top }
                                       }
                                     >
-                                      {driveMenuBody(c)}
+                                      {driveMenuBody(c, false)}
                                     </div>
                                   </>
                                 )}

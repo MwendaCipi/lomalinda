@@ -782,8 +782,7 @@ export function MeetingsManager({ initialKindFilter = "all" }: MeetingsManagerPr
     <div className="space-y-6">
       {/* Filter Tabs & Search Bar — the strip above names this desk, so the
           page opens straight on its records. The way back to the overview
-          rides at the start of this row: phones only, where the sidebar and
-          its permanent navigation are out of sight. */}
+          rides at the start of this row at every width. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <BackToOverviewArrow />
