@@ -144,11 +144,12 @@ def _b2c_settings():
 
 
 def _b2c_consumer_credentials():
-    """B2C can live on its own Daraja app, separate from C2B/STK.
+    """Use the Daraja app's consumer credentials for B2C payouts.
 
-    Safaricom allows one of B2C or C2B per app, so a production integration
-    can need a second consumer key/secret just for payouts. When no B2C pair
-    is configured, fall back to the shared collection credentials.
+    Production has one live app per shortcode, and Safaricom adds B2C to
+    that app rather than issuing a second one. The MPESA_B2C_* pair stays
+    as an escape hatch for an environment that genuinely runs a separate
+    B2C app; otherwise this uses the shared collection credentials.
     """
     key = environ.get('MPESA_B2C_CONSUMER_KEY')
     secret = environ.get('MPESA_B2C_CONSUMER_SECRET')
@@ -160,6 +161,22 @@ def _b2c_consumer_credentials():
             )
         return key, secret
     return _setting('MPESA_CONSUMER_KEY'), _setting('MPESA_CONSUMER_SECRET')
+
+
+def _b2c_text(value, default):
+    """Keep B2C remarks free of words Safaricom's gateway blocks.
+
+    The production gateway rejects a request with 400 "Threat Detected"
+    when these words appear in Remarks or Occasion, including inside a
+    longer word ("mapping" contains "ping"). Callers pass controlled
+    text today, but the sanitising belongs here so a future remark cannot
+    take the payout endpoint down with it.
+    """
+    text = str(value or '')
+    for word in ('ping', 'select', 'update', 'insert', 'delete', 'alter', 'database', 'exec', 'shutdown'):
+        text = re.sub(word, ' ', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return (text or default)[:100]
 
 
 def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
@@ -191,13 +208,14 @@ def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
         'Amount': int(amount),
         'PartyA': settings_map['MPESA_B2C_SHORTCODE'],
         'PartyB': phone_number,
-        'Remarks': remarks[:100],
+        'Remarks': _b2c_text(remarks, 'Payout'),
         'QueueTimeOutURL': settings_map['MPESA_B2C_RESULT_URL'],
         'ResultURL': settings_map['MPESA_B2C_RESULT_URL'],
-        'Occasion': occasion[:100],
+        'Occasion': _b2c_text(occasion, 'Payout'),
     }
-    # The Daraja B2C product publishes the v1 proxy for this shortcode.
-    b2c_url = environ.get('MPESA_B2C_URL') or f'{base_url}/mpesa/b2c/v1/paymentrequest'
+    # Daraja's current B2C production API is v3. The v1 proxy answers
+    # 401.002.01 "no apiproduct match found" for this app.
+    b2c_url = environ.get('MPESA_B2C_URL') or f'{base_url}/mpesa/b2c/v3/paymentrequest'
     response = requests.post(
         b2c_url,
         json=payload,
