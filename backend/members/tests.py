@@ -11040,6 +11040,45 @@ class FundDriveDonorPrivacyTests(APITestCase):
         self.assertEqual(len(response.data['donors']), 1)
         self.assertEqual(response.data['donors'][0]['amount'], 500.0)
 
+    def test_a_gift_named_by_the_account_description_reaches_the_donors(self):
+        """A giver may key the account by its description rather than its
+        short reference; the drive's donor list must still find that gift."""
+        from .models import TreasuryAccount, TreasuryAccountTransaction
+
+        account = TreasuryAccount.objects.create(
+            name='LCB-TEST', description='Local Church Budget', balance=Decimal('0.00'),
+        )
+        drive = FundraisingCampaign.objects.create(
+            name='LOCAL CHURCH BUDGET (2)', title='LOCAL CHURCH BUDGET',
+            account_name=account.name, source_account=account,
+            target_amount=Decimal('50000.00'),
+        )
+        giver = User.objects.create_user(
+            'privacy.cyprian', 'privacy.cyprian@example.com', 'ChurchPass#2026',
+        )
+        MemberProfile.objects.create(user=giver, role='member', roles='member')
+        Contribution.objects.create(
+            member=giver, donor_name='cyprian', amount=Decimal('500.00'),
+            giving_type='financial', purpose='Local church budget',
+            status='completed', payment_method='mpesa',
+        )
+        TreasuryAccountTransaction.objects.create(
+            account=account, transaction_type='credit', amount=Decimal('500.00'),
+            description='cyprian — M-Pesa (Local Church Budget)',
+        )
+        treasurer = User.objects.create_user(
+            'privacy.lcb.treasurer', 'privacy.lcb.treasurer@example.com', 'ChurchPass#2026',
+        )
+        MemberProfile.objects.create(user=treasurer, role='treasurer', roles='treasurer')
+        self.client.force_authenticate(treasurer)
+
+        response = self.client.get(f'/api/members/campaigns/{drive.id}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['total_raised'], 500.0)
+        self.assertEqual(response.data['donor_count'], 1)
+        self.assertEqual(response.data['donors'][0]['name'], 'cyprian')
+        self.assertEqual(response.data['donors'][0]['amount'], 500.0)
+
     def test_the_nameless_feed_is_public_and_carries_no_names(self):
         """Recent gifts show to anyone — the count, ministry and day, never who."""
         drive = self._drive_with_gift()

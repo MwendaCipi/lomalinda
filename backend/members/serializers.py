@@ -1835,11 +1835,26 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
     # -- Drive-page breakdown helpers -------------------------------------
 
     def _purpose_query(self, obj):
-        """The Q filter naming this drive on a contribution's purpose line."""
+        """The Q filter naming this drive on a contribution's purpose line.
+
+        A giver may key the gift with the drive's name, its M-Pesa reference,
+        or the treasury account's own description. All of them name the same
+        fund, so the donor counters must read them all — and case-insensitively,
+        because the ledgers carry both 'Local Church Budget' and 'Local church
+        budget'.
+        """
         from django.db.models import Q
-        query = Q(purpose=obj.name)
-        if obj.account_name:
-            query |= Q(purpose=obj.account_name)
+
+        account = self._linked_treasury_account(obj)
+        wordings = [obj.name, obj.account_name, obj.title]
+        if account is not None:
+            wordings.extend([account.name, account.description])
+
+        query = Q(purpose__in=[])
+        for wording in wordings:
+            wording = (wording or '').strip()
+            if wording:
+                query |= Q(purpose__iexact=wording)
         return query
 
     def _drive_mpesa(self, obj):
@@ -2061,7 +2076,7 @@ class FundraisingCampaignSerializer(serializers.ModelSerializer):
             if not name and gift.member_id:
                 name = f"{gift.member.first_name} {gift.member.last_name}".strip() or gift.member.username
             add(name, gift.amount)
-        for row in CashContribution.objects.filter(self._purpose_query(obj)):
+        for row in self._drive_cash(obj):
             add(row.donor_name, row.amount)
         ranked = sorted(donors.values(), key=lambda d: -d['amount'])
         for entry in ranked:
