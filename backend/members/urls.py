@@ -91,6 +91,9 @@ urlpatterns = [
     path('payments/c2b/validation/', MpesaC2BValidationView.as_view(), name='c2b-validation'),
     path('payments/c2b/confirmation/', MpesaC2BConfirmationView.as_view(), name='c2b-confirmation'),
     path('payments/mpesa/b2c/result/', MpesaB2CResultView.as_view(), name='mpesa-b2c-result'),
+    # Safaricom's B2C gateway rejects a ResultURL containing "mpesa" with
+    # "Bad Request - Threat Detected"; the registered spelling drops it.
+    path('payments/payout/result/', MpesaB2CResultView.as_view(), name='b2c-payout-result'),
     path('payments/mpesa/pull/', MpesaPullTransactionsView.as_view(), name='mpesa-pull'),
     path('treasury/unassigned/', TreasuryUnassignedView.as_view(), name='treasury-unassigned'),
     path('treasury/unassigned/<int:pk>/', UnassignedPaymentView.as_view(), name='treasury-unassigned-detail'),
