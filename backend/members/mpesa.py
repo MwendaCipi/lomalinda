@@ -143,6 +143,25 @@ def _b2c_settings():
     return required
 
 
+def _b2c_consumer_credentials():
+    """B2C can live on its own Daraja app, separate from C2B/STK.
+
+    Safaricom allows one of B2C or C2B per app, so a production integration
+    can need a second consumer key/secret just for payouts. When no B2C pair
+    is configured, fall back to the shared collection credentials.
+    """
+    key = environ.get('MPESA_B2C_CONSUMER_KEY')
+    secret = environ.get('MPESA_B2C_CONSUMER_SECRET')
+    if key or secret:
+        if not key or not secret:
+            raise MpesaConfigurationError(
+                'M-Pesa B2C is not configured: set both MPESA_B2C_CONSUMER_KEY '
+                'and MPESA_B2C_CONSUMER_SECRET.'
+            )
+        return key, secret
+    return _setting('MPESA_CONSUMER_KEY'), _setting('MPESA_CONSUMER_SECRET')
+
+
 def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
     """Send one B2C payout to Safaricom.
 
@@ -154,10 +173,11 @@ def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
     """
     settings_map = _b2c_settings()
     base_url = environ.get('MPESA_BASE_URL', 'https://sandbox.safaricom.co.ke')
+    b2c_key, b2c_secret = _b2c_consumer_credentials()
 
     token_response = requests.get(
         f'{base_url}/oauth/v1/generate?grant_type=client_credentials',
-        auth=(_setting('MPESA_CONSUMER_KEY'), _setting('MPESA_CONSUMER_SECRET')),
+        auth=(b2c_key, b2c_secret),
         timeout=15,
     )
     token_response.raise_for_status()
@@ -176,8 +196,10 @@ def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
         'ResultURL': settings_map['MPESA_B2C_RESULT_URL'],
         'Occasion': occasion[:100],
     }
+    # The Daraja B2C product publishes the v1 proxy for this shortcode.
+    b2c_url = environ.get('MPESA_B2C_URL') or f'{base_url}/mpesa/b2c/v1/paymentrequest'
     response = requests.post(
-        f'{base_url}/mpesa/b2c/v3/paymentrequest',
+        b2c_url,
         json=payload,
         headers={'Authorization': f'Bearer {access_token}'},
         timeout=15,
