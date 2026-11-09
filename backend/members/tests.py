@@ -3914,11 +3914,9 @@ class WithdrawalRequestsPdfTests(APITestCase):
         self.assertNotIn(b'Total accounted', plain_text)
         self.assertIn(b'Amount in words', plain_text)
 
-    def test_the_sheet_carries_the_churchs_own_seal(self):
-        """Every print of a request leaves the treasury stamped: the seal is
-        drawn into the paper itself, so a copy carried to the bank and a copy
-        filed at the office both read as the church's own record. A letter
-        carries it once both officers have signed it, and not before."""
+    def test_the_sheet_does_not_carry_a_seal_for_now(self):
+        """The church seal is parked until it is designed again: neither a
+        withdrawal sheet nor a fully signed letter should print it."""
         from .pdf_generator import generate_department_letter_pdf, generate_withdrawal_request_pdf
 
         row = {
@@ -3928,10 +3926,7 @@ class WithdrawalRequestsPdfTests(APITestCase):
             'requested_by': 'Marta Member', 'created_at': date(2026, 11, 1),
         }
         request_text = self._pdf_text(generate_withdrawal_request_pdf('SDA Church Test', row))
-        # The seal's heart is one drawn string; nothing else on a withdrawal
-        # paper prints the church's name in capitals like this.
-        self.assertIn(b'SDA CHURCH', request_text)
-        self.assertIn(b'LOMA LINDA', request_text)
+        self.assertNotIn(b'SDA CHURCH', request_text)
 
         record = {
             'letter_date': '08/11/2026', 'recipient_name': 'The Pastor',
@@ -3944,10 +3939,8 @@ class WithdrawalRequestsPdfTests(APITestCase):
             pastor_sig={'name': 'David', 'office': 'Church Pastor'},
             clerk_sig={'name': 'Mary', 'office': 'Church Clerk'},
         )
-        self.assertIn(b'SDA CHURCH', self._pdf_text(signed))
+        self.assertNotIn(b'SDA CHURCH', self._pdf_text(signed))
 
-        # A letter still waiting on one of the pens is not yet the church's
-        # instrument, so it prints without the seal.
         unsigned = generate_department_letter_pdf(record, 'SDA Church Test')
         self.assertNotIn(b'SDA CHURCH', self._pdf_text(unsigned))
 

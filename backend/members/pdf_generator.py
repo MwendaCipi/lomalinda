@@ -1,6 +1,5 @@
 import functools
 import io
-import math
 import re
 from decimal import Decimal
 from datetime import datetime
@@ -133,154 +132,6 @@ def _draw_logo(c, center_x, top_y, height, line_2=_LOCKUP_LINE_2):
     c.drawString(text_x, baseline_1, _LOCKUP_LINE_1)
     c.drawString(text_x, baseline_1 - line_advance, line_2)
     c.restoreState()
-
-
-# The church's seal: the mark that tells a reader a paper left this office
-# as an official record. Drawn as vectors rather than kept as a scanned
-# rubber stamp — a photocopy and a fresh print then read alike, at any size,
-# and there is no image to go missing under the media root. The ink is the
-# stationery's own blue, so the seal reads as a stamp rather than as one more
-# copy of the logo, and it prints cleanly in grayscale.
-_STAMP_INK = colors.HexColor("#1D4E6B")
-_STAMP_PAPER = colors.HexColor("#F3F7F9")
-
-
-def _stamp_arc_text(c, text, cx, cy, radius, size, top=True, spread=None):
-    """Set `text` along a circle — upright round the top, readable at the foot.
-
-    Each character is drawn in its own rotated frame at the same distance
-    from the centre, so the line follows the ring rather than a chord. The
-    type is shrunk to fit `spread` degrees of arc when that would run past the
-    ring; the letters keep a little air, as a cut seal has.
-    """
-    if not text:
-        return
-    font = "Helvetica-Bold"
-    air = 1.14
-    widths = [c.stringWidth(ch, font, size) * air for ch in text]
-    total = sum(widths)
-    if spread is not None and total > 0:
-        wanted = math.radians(spread) * radius
-        if total > wanted:
-            size *= wanted / total
-            widths = [c.stringWidth(ch, font, size) * air for ch in text]
-            total = sum(widths)
-    step = total / radius  # radians of arc the whole line takes
-
-    c.saveState()
-    c.setFont(font, size)
-    c.setFillColor(_STAMP_INK)
-    if top:
-        angle = math.pi / 2 + step / 2
-        for ch, width in zip(text, widths):
-            angle -= (width / radius) / 2
-            c.saveState()
-            c.translate(cx, cy)
-            c.rotate(math.degrees(angle) - 90)
-            c.drawCentredString(0, radius, ch)
-            c.restoreState()
-            angle -= (width / radius) / 2
-    else:
-        angle = -math.pi / 2 - step / 2
-        for ch, width in zip(text, widths):
-            angle += (width / radius) / 2
-            c.saveState()
-            c.translate(cx, cy)
-            c.rotate(math.degrees(angle) + 90)
-            c.drawCentredString(0, -radius, ch)
-            c.restoreState()
-            angle += (width / radius) / 2
-    c.restoreState()
-
-
-def _draw_church_stamp(c, cx, cy, diameter):
-    """Draw the church's seal: two rings, its names, and its own mark.
-
-    Round the top the field that seats the church, round the foot the words
-    that make the mark a stamp, and at the heart the church's name and its
-    town between two rules. Everything is laid out from `diameter`, so the
-    same seal reads correctly on a signature sheet and on a small page.
-    """
-    radius = diameter / 2.0
-    inner = radius - max(1.3 * mm, radius * 0.07)
-    # The two arcs ride inside the ring without reaching the sides, where they
-    # would meet the heart of the seal; the type is sized from the radius, so
-    # the same layout holds at any diameter.
-    arc_radius = inner - max(2.2 * mm, radius * 0.16)
-    line = max(0.4, radius * 0.02)
-
-    c.saveState()
-    c.setFillColor(_STAMP_PAPER)
-    c.circle(cx, cy, radius, stroke=0, fill=1)
-    c.setStrokeColor(_STAMP_INK)
-    outer = max(0.9, radius * 0.05)
-    c.setLineWidth(outer)
-    c.circle(cx, cy, radius - outer / 2, stroke=1, fill=0)
-    c.setLineWidth(line)
-    c.circle(cx, cy, inner, stroke=1, fill=0)
-
-    # The field's name round the top and the stamp's own words round the
-    # foot: the two lines a reader sees first on a real seal.
-    _stamp_arc_text(
-        c, "SEVENTH-DAY ADVENTIST CHURCH", cx, cy, arc_radius,
-        radius * 0.095, spread=190,
-    )
-    _stamp_arc_text(
-        c, "OFFICIAL CHURCH STAMP", cx, cy, arc_radius,
-        radius * 0.088, top=False, spread=150,
-    )
-
-    # The church at the heart, between its rules. Both lines are sized to sit
-    # well inside the ring, never touching the arcs above and below them.
-    c.setFillColor(_STAMP_INK)
-    c.setFont("Times-Bold", radius * 0.235)
-    c.drawCentredString(cx, cy + radius * 0.03, _LOCKUP_LINE_1.upper())
-    c.setFont("Helvetica-Bold", radius * 0.10)
-    c.drawCentredString(cx, cy - radius * 0.15, "LOMA LINDA \u00b7 MERU")
-    c.setStrokeColor(_STAMP_INK)
-    c.setLineWidth(line)
-    rule = radius * 0.42
-    c.line(cx - rule, cy + radius * 0.33, cx + rule, cy + radius * 0.33)
-    c.line(cx - rule, cy - radius * 0.25, cx + rule, cy - radius * 0.25)
-    # Two small bosses at the sides, where a cut seal carries its stars.
-    c.setFillColor(_STAMP_INK)
-    c.circle(cx - inner * 0.62, cy, max(0.3, radius * 0.022), stroke=0, fill=1)
-    c.circle(cx + inner * 0.62, cy, max(0.3, radius * 0.022), stroke=0, fill=1)
-    c.restoreState()
-
-
-class ChurchStampFlowable(Flowable):
-    """The church's seal at the foot of an official paper, right-aligned.
-
-    A paper is the church's record once it carries the stamp, so the stamp is
-    part of the document rather than an errand left to a rubber one: every
-    print of the same paper wears the same seal, in the same place. The small
-    caption names it for a reader who has not seen the church's seal before;
-    pass ``caption=''`` for a naked mark.
-    """
-
-    def __init__(self, diameter=2.8 * cm, caption=""):
-        super().__init__()
-        self.diameter = diameter
-        self.caption = caption
-        self.width = diameter
-        self.height = diameter + (0.5 * cm if caption else 0)
-
-    def wrap(self, availWidth, availHeight):
-        self.width = availWidth
-        return availWidth, self.height
-
-    def draw(self):
-        c = self.canv
-        left = self.width - self.diameter
-        base = 0.5 * cm if self.caption else 0
-        _draw_church_stamp(c, left + self.diameter / 2, base + self.diameter / 2, self.diameter)
-        if self.caption:
-            c.saveState()
-            c.setFillColor(colors.HexColor("#617068"))
-            c.setFont("Helvetica", 6.5)
-            c.drawCentredString(left + self.diameter / 2, 0.12 * cm, self.caption.upper())
-            c.restoreState()
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -2750,24 +2601,7 @@ def generate_withdrawal_request_pdf(church_name, row, signatures=None) -> bytes:
             ))
 
     story.append(Spacer(1, 16))
-    # The seal rides beside the signature heading rather than beneath the
-    # boxes: the sheet leaves the treasury stamped — a copy carried to the
-    # bank and a copy filed at the office both read as the church's own
-    # paper — without adding a page to a request that fits on one.
-    stamp = ChurchStampFlowable()
-    sig_heading = Table(
-        [[Paragraph("Signatures", st["h2"]), stamp]],
-        colWidths=[15.0 * cm, 3.0 * cm],
-    )
-    sig_heading.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-    ]))
-    story.append(sig_heading)
+    story.append(Paragraph("Signatures", st["h2"]))
     story.append(SignatureSlotsFlowable(signatures=signatures))
 
     doc.build(story, canvasmaker=NumberedCanvas)
@@ -3017,13 +2851,9 @@ def generate_department_letter_pdf(
                 col.append(Paragraph(escape(phone), addr_style))
             return col
         
-        # The seal shares the pens' own row: fully signed, the letter is the
-        # church's instrument, and the stamp sits beside the signatures the
-        # way it would on the paper copy — never alone on a page of its own.
-        stamp = ChurchStampFlowable(diameter=2.6 * cm)
         pen_row = Table(
-            [[pen_column(clerk_sig), pen_column(pastor_sig), stamp]],
-            colWidths=[body_w * 0.33, body_w * 0.32, body_w * 0.35],
+            [[pen_column(clerk_sig), pen_column(pastor_sig)]],
+            colWidths=[body_w * 0.5, body_w * 0.5],
             hAlign="LEFT",
         )
         pen_row.setStyle(TableStyle([
