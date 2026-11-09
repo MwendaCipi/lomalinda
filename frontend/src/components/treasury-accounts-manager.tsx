@@ -120,6 +120,10 @@ export type WithdrawalWorkspace = "pastorate" | "eldership" | "treasury";
 /** The one approval this desk's workspace can give a request. */
 type WithdrawalApprovalAction = "pastor_approve" | "elder_approve" | "release";
 
+/** How the treasury pays a request it is releasing. Paybill sends the B2C
+ *  payout; the other methods record a payment already made that way. */
+type WithdrawalReleaseMethod = "paybill" | "cash" | "bank_transfer" | "cheque" | "mpesa";
+
 /**
  * The departments' withdrawal queue — showing every request across every
  * department in a structured, actionable table.
@@ -199,6 +203,10 @@ export function WithdrawalRequestsPanel({
   // number and stays editable, so the desk can pay a corrected or
   // alternative line without changing the member's profile.
   const [releasePhone, setReleasePhone] = useState("");
+  // How a treasury approval is paid. The paybill path sends the B2C payout;
+  // the other choices record money already paid by that method, which keeps
+  // the treasury moving while B2C is unavailable.
+  const [releaseMethod, setReleaseMethod] = useState<WithdrawalReleaseMethod>("cash");
   // The treasury's reading of the spending account filed after a release.
   const [accountReply, setAccountReply] = useState("");
   const [accountBusy, setAccountBusy] = useState(false);
@@ -606,6 +614,7 @@ export function WithdrawalRequestsPanel({
     setOpenAction(row.id);
     setReply("");
     setReleasePhone(row.requested_by_phone ?? "");
+    setReleaseMethod("cash");
     setAccountReply("");
   };
 
@@ -921,16 +930,20 @@ export function WithdrawalRequestsPanel({
         const releaseNumber = releasePhone.trim();
         const approvalAction = approvalActionFor(target);
         const approveIsRelease = approvalAction === "release";
+        const releaseViaPaybill = approveIsRelease && releaseMethod === "paybill";
+        // A manual method uses the existing approve path: it debits the fund
+        // and writes the expense immediately, without asking M-Pesa to move
+        // money. Paybill keeps the B2C release path.
+        const approveAction = approveIsRelease && !releaseViaPaybill ? "approve" : approvalAction;
         const approveBlocked =
-          !approvalAction ||
+          !approveAction ||
           (approveIsRelease && (
             !canApproveTreasury ||
             selfCleared ||
             (isReversed && !reversedCovered) ||
-            !releaseNumber ||
-            Number(target.amount) % 1 !== 0
+            (releaseViaPaybill && (!releaseNumber || Number(target.amount) % 1 !== 0))
           ));
-        const approveBlockedReason = !approvalAction
+        const approveBlockedReason = !approveAction
           ? "This request is not waiting on your desk's approval."
           : approveIsRelease && !canApproveTreasury
             ? "Assistant treasurers cannot release withdrawals."
@@ -938,9 +951,9 @@ export function WithdrawalRequestsPanel({
               ? "You gave this request an earlier clearance. A different treasurer must approve the release."
               : approveIsRelease && isReversed && !reversedCovered
                 ? `${target.account_name} does not hold enough for this request.`
-                : approveIsRelease && !releaseNumber
+                : releaseViaPaybill && !releaseNumber
                   ? "Enter the M-Pesa number the money should be paid to."
-                  : approveIsRelease && Number(target.amount) % 1 !== 0
+                  : releaseViaPaybill && Number(target.amount) % 1 !== 0
                     ? "M-Pesa payouts are whole shillings."
                     : undefined;
         return (
@@ -990,7 +1003,9 @@ export function WithdrawalRequestsPanel({
                       : awaitingElder
                         ? "Blessed by the pastor. An elder approves it next."
                         : awaitingRelease
-                          ? "Approved by the pastor and an elder. Release it from the paybill to the requester's phone, or decline it."
+                          ? approvalAction === "release" && releaseMethod !== "paybill"
+                            ? "Approved by the pastor and an elder. Record how the money was paid, then approve it."
+                            : "Approved by the pastor and an elder. Release it from the paybill to the requester's phone, or decline it."
                           : isReleasing
                             ? "The paybill is paying the requester. The expense is written when M-Pesa confirms."
                             : canReverse
@@ -1030,25 +1045,60 @@ export function WithdrawalRequestsPanel({
               {respondMode === "approve" && approveIsRelease && (
                 <div className="mt-3 rounded-xl border border-sand-line bg-sand-plate p-3">
                   <label
-                    htmlFor="withdrawal-release-phone"
+                    htmlFor="withdrawal-release-method"
                     className="block text-[11px] font-bold uppercase tracking-wide text-moss"
                   >
-                    M-Pesa number
+                    Release method
                   </label>
-                  <input
-                    id="withdrawal-release-phone"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    value={releasePhone}
-                    onChange={(event) => setReleasePhone(event.target.value)}
-                    placeholder="07XX XXX XXX"
-                    maxLength={20}
+                  <select
+                    id="withdrawal-release-method"
+                    value={releaseMethod}
+                    onChange={(event) => setReleaseMethod(event.target.value as WithdrawalReleaseMethod)}
                     className="mt-1.5 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
-                  />
-                  <p className="mt-1.5 text-[11px] text-moss-faint">
-                    Starts with the number the requester saved. Change it if the money should land on a different line.
-                  </p>
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank transfer</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="mpesa">M-Pesa (already paid)</option>
+                    <option value="paybill">Release from paybill (M-Pesa B2C)</option>
+                  </select>
+
+                  {releaseMethod === "paybill" ? (
+                    <>
+                      <label
+                        htmlFor="withdrawal-release-phone"
+                        className="mt-3 block text-[11px] font-bold uppercase tracking-wide text-moss"
+                      >
+                        M-Pesa number
+                      </label>
+                      <input
+                        id="withdrawal-release-phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={releasePhone}
+                        onChange={(event) => setReleasePhone(event.target.value)}
+                        placeholder="07XX XXX XXX"
+                        maxLength={20}
+                        className="mt-1.5 block w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-sm outline-none focus:border-ember"
+                      />
+                      <p className="mt-1.5 text-[11px] text-moss-faint">
+                        Starts with the number the requester saved. Change it if the money should land on a different line.
+                      </p>
+                      <p className="mt-1.5 text-[11px] text-moss-faint">
+                        This sends a B2C payout from the paybill. Paybill payouts are whole shillings.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1.5 text-[11px] text-moss-faint">
+                      Records the withdrawal as paid by{" "}
+                      {releaseMethod === "bank_transfer"
+                        ? "bank transfer"
+                        : releaseMethod === "mpesa"
+                          ? "M-Pesa"
+                          : releaseMethod}. The fund is debited now and an expense record is written.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1099,7 +1149,7 @@ export function WithdrawalRequestsPanel({
                   <button
                     type="button"
                     onClick={() => {
-                      if (approvalAction) act(target.id, approvalAction, reply, releasePhone);
+                      if (approveAction) act(target.id, approveAction, reply, releasePhone, releaseMethod);
                     }}
                     disabled={busy || approveBlocked}
                     title={approveBlockedReason}
