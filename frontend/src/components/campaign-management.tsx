@@ -18,6 +18,7 @@ import {
   Plus,
   Receipt,
   RefreshCw,
+  Share2,
   Trash2,
   User,
   Users,
@@ -82,6 +83,7 @@ interface Campaign {
   source_account_description?: string;
   approval_status?: "pending" | "approved" | "rejected";
   review_note?: string;
+  donors?: { name: string; amount: number; gifts: number }[];
 }
 
 interface ChurchUser {
@@ -358,6 +360,17 @@ export function CampaignManagement({
           className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-bark hover:bg-sand transition-colors"
         >
           <Link2 size={13} className="inline" aria-hidden="true" /> Copy Giving Link
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            closeActionsMenu();
+            void handleShareProgress(c);
+          }}
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-sage hover:bg-sand transition-colors"
+        >
+          <Share2 size={13} className="inline" aria-hidden="true" /> Share Progress
         </button>
 
         <button
@@ -864,6 +877,29 @@ export function CampaignManagement({
       );
     } catch {
       showAlert("Copy the link", url, "info");
+    }
+  }
+
+  /** Share the drive's total and, for a desk allowed to see them, its donors. */
+  async function handleShareProgress(campaign: Campaign) {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/members/campaigns/${campaign.id}/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Could not load the drive's progress.");
+      const detail = (await res.json()) as Campaign;
+      const donors = detail.donors ?? [];
+      const donorCount = Number(detail.donor_count || 0);
+      const remaining = Math.max(0, Number(detail.target_amount) - Number(detail.total_raised));
+      const contributorBlock = donors.length > 0
+        ? `\n*Contributors*\n${donors.map((d, i) => `${i + 1}. ${d.name} — KES ${Number(d.amount).toLocaleString()}`).join("\n")}`
+        : `\n${donorCount} donor${donorCount === 1 ? "" : "s"} so far.`;
+      const text = `*SDA Church Loma Linda Fund Drive*\n*${detail.title || detail.name}* progress\n\nRaised: KES ${Number(detail.total_raised).toLocaleString()} of KES ${Number(detail.target_amount).toLocaleString()} (${detail.percentage_raised}%)\n${remaining > 0 ? `Still needed: KES ${remaining.toLocaleString()}\n` : "Goal reached!\n"}${contributorBlock}\n\nHelp us keep going:\n${window.location.origin}/drives/${detail.id}`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      showAlert("Share Progress Failed", err instanceof Error ? err.message : "Could not open WhatsApp.", "error");
     }
   }
 
