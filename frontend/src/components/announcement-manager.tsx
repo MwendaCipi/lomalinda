@@ -2,14 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { showAlert } from "@/lib/alerts";
-import { ArrowUpRight, Download, Megaphone, Search, Send, Sparkles, X } from "lucide-react";
-import { brand } from "@/lib/brand";
-import { usePageHeader } from "@/components/app-frame";
-import { localDate, dayFirst, dayFirstTime } from "@/lib/dates";
-import { eventLabel } from "@/lib/announcement-dates";
-import { AnnouncementAttachment } from "@/components/announcement-attachment";
+import { Send, Sparkles, X } from "lucide-react";
+import { localDate, dayFirst } from "@/lib/dates";
 import { CARD_OPTION_CHOICES, GIVING_OPTION_CODES } from "@/lib/announcement-options";
-import { RecordList } from "./record-list";
 
 /**
  * The "Post to" vocabulary: where a post travels, as one flat list — who it
@@ -82,7 +77,8 @@ export type Announcement = {
   // The buttons this post's card carries — codes from CARD_OPTION_CHOICES.
   // Empty means a plain notice with nothing to press.
   options?: string[];
-  // Scheduling: when the post goes live, and whether the notice repeats.
+  // When the post goes live. Repeats is the meeting's own rhythm, kept
+  // beside its hours rather than here.
   publish_at?: string | null;
   repeat?: "none" | "daily" | "weekly" | "monthly";
   // The giving buttons a post saved before the picker existed carries.
@@ -103,37 +99,60 @@ const REPEAT_CHOICES = [
   { value: "monthly", label: "Every month" },
 ] as const;
 
-/** A date-only string from the API, rendered without shifting a day. */
-function dayLabel(iso?: string | null): string {
-  return dayFirst(iso, "—");
-}  /** Which reach values are single-choice; the rest are congregation groups. */
+/** A day typed day-first — dd/mm/yyyy, the way the church writes dates.
+ *
+ *  The browser's own date picker reads month-first in some locales, which is
+ *  how the 3rd of November becomes the 11th of March. This field takes the
+ *  day first, keeps the wire value ISO, and shows the day-first reading back
+ *  once the officer leaves it.
+ */
+function parseDayFirst(text: string): string | null {
+  const digits = text.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const day = Number(digits.slice(0, 2));
+  const month = Number(digits.slice(2, 4));
+  const year = Number(digits.slice(4));
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function DayField({
+  value,
+  onChange,
+  required = false,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  required?: boolean;
+}) {
+  // What is being typed, while it is being typed: the field shows the
+  // officer's own digits rather than snapping back at every keystroke, and
+  // settles on the day-first reading when they leave it.
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      required={required}
+      value={draft ?? (value ? dayFirst(value) : "")}
+      placeholder="dd/mm/yyyy"
+      onChange={(event) => {
+        const text = event.target.value;
+        setDraft(text);
+        const iso = parseDayFirst(text);
+        if (iso) onChange(iso);
+        else if (!text.trim()) onChange("");
+      }}
+      onBlur={() => setDraft(null)}
+      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+    />
+  );
+}
+
+  /** Which reach values are single-choice; the rest are congregation groups. */
   const REACH_VALUES = new Set(["all", "members_only", "public_website"]);
 
-  /** The hour a post is still waiting for, or null once that hour has come. */
-function scheduledFor(item: Announcement): Date | null {
-  if (!item.publish_at) return null;
-  const at = new Date(item.publish_at);
-  return !Number.isNaN(at.getTime()) && at.getTime() > Date.now() ? at : null;
-}
-
-  /** The office's words for where this post sits: waiting for its hour, or
-      where it sits in the feed once that hour has come. */
-function windowLabel(item: Announcement): string {
-  const today = localDate();
-  // A hour still to come is the whole reason a post is missing from every
-  // feed, so it answers first — ahead of the window and the rhythm, which
-  // only start to matter once the post is live.
-  const waiting = scheduledFor(item);
-  if (waiting) return `Goes live ${dayFirstTime(waiting)}`;
-  // A notice told to repeat stands on its own rhythm, so the window it was
-  // written in does not retire it — and the board must not tell the officer
-  // it has ended while the feed still carries it.
-  if (item.repeat && item.repeat !== "none") return "Repeats until removed";
-  if (item.starts_at && item.starts_at > today) return `Starts ${dayLabel(item.starts_at)}`;
-  if (item.expires_at && item.expires_at < today) return `Ended ${dayLabel(item.expires_at)}`;
-  if (!item.expires_at) return "Shows until removed";
-  return `Shows until ${dayLabel(item.expires_at)}`;
-}
 
 /** DRF reports field errors as `{field: [message]}`; surface the first one. */
 function firstErrorMessage(data: unknown): string | null {
@@ -154,187 +173,6 @@ function firstErrorMessage(data: unknown): string | null {
   return null;
 }
 
-function channelsLabel(sharing?: string): string {
-  if (!sharing) return "—";
-  return sharing
-    .split(",")
-    .map((part) => {
-      const value = part.trim().toLowerCase();
-      return value === "site"
-        ? "Site"
-        : value === "sms"
-          ? "SMS"
-          : value === "email"
-            ? "Email"
-            : value === "phone"
-              ? "Phone"
-              : value === "all"
-                ? "Site, Email, SMS, Phone"
-                : part.trim();
-    })
-    .filter(Boolean)
-    .join(", ");
-}
-
-/** Live tally for a closed-response opinion poll.
- *
- * Every member's pick is stored verbatim as `response_choice`, so the tally
- * groups responses by exactly the options the officer offered. Each option
- * gets a row with a share bar and its count; the leader is highlighted. An
- * option with no picks still appears — its empty bar tells the officer the
- * question was seen and declined, not forgotten.
- */
-function PollTally({ item }: { item: Announcement }) {
-  const options = (item.response_options || "").split("\n").map((line) => line.trim()).filter(Boolean);
-  const picks = (item.responses ?? []).filter((r) => r.response_choice);
-  if (item.announcement_type !== "opinion" || item.response_mode !== "closed" || options.length === 0) return null;
-  const total = picks.length;
-  const counts = new Map<string, number>();
-  picks.forEach((r) => counts.set(r.response_choice as string, (counts.get(r.response_choice as string) ?? 0) + 1));
-  // The leading option follows the order the officer declared: a tie is
-  // broken by whoever was listed first, so the highlight is stable.
-  const best = total > 0 ? Math.max(...counts.values()) : 0;
-  const leader = total > 0 ? (options.find((option) => (counts.get(option) ?? 0) === best) ?? null) : null;
-  return (
-    <div className="mt-1 rounded-xl border border-sand-soft bg-sand p-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-moss">
-        {total === 0 ? "No responses yet" : `${total} response${total === 1 ? "" : "s"}`}
-      </p>
-      <div className="mt-1.5 space-y-1.5">
-        {options.map((option) => {
-          const count = counts.get(option) ?? 0;
-          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-          const isLeader = total > 0 && option === leader;
-          return (
-            <div key={option}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className={`min-w-0 truncate text-[11px] ${isLeader ? "font-bold text-moss-dark" : "text-moss-mid"}`}>{option}</span>
-                <span className={`shrink-0 text-[10px] ${isLeader ? "font-bold text-moss-dark" : "text-moss"}`}>{count} · {pct}%</span>
-              </div>
-              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-sand-line">
-                <div className={`h-full rounded-full ${isLeader ? "bg-sage" : "bg-ember/60"}`} style={{ width: `${pct}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/** One pledge, as the office's list reads it. */
-type PledgeRow = {
-  id: number;
-  member_name: string;
-  member_email: string;
-  amount: number | null;
-  due_date: string | null;
-  redeemed: boolean;
-  redeemed_via: string;
-};
-
-function pledgeDay(iso: string | null) {
-  if (!iso) return "no date promised";
-  return dayFirst(iso);
-}
-
-/**
- * The pledges a giving announcement drew, for the officer who has to close
- * them.
- *
- * Most pledges close themselves — the member gives, and the church's own
- * records match the gift to the promise — so this list is about the ones that
- * do not: a cash gift recorded without a name, or a promise the office knows
- * came in. Each row can be marked given, and reopened if that was a mistake;
- * the member can do the same from their own side.
- */
-function PledgePanel({ item }: { item: Announcement }) {
-  const isGiving = item.announcement_type === "promotion";
-  const [rows, setRows] = useState<PledgeRow[]>([]);
-  const [totals, setTotals] = useState({ outstanding: 0, pledged: 0 });
-  const [busyId, setBusyId] = useState<number | null>(null);
-
-  const loadPledges = useCallback(() => {
-    if (!isGiving) return;
-    const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/announcements/${item.id}/pledges/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setRows(Array.isArray(data.pledges) ? data.pledges : []);
-        setTotals({ outstanding: data.outstanding ?? 0, pledged: data.pledged_total ?? 0 });
-      })
-      .catch(() => {});
-  }, [item.id, isGiving]);
-
-  useEffect(() => { loadPledges(); }, [loadPledges]);
-
-  if (!isGiving) return null;
-
-  const markPledge = async (pledge: PledgeRow) => {
-    setBusyId(pledge.id);
-    try {
-      const token = localStorage.getItem("access_token");
-      const response = await fetch(`${API_URL}/api/members/pledges/${pledge.id}/redeem/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ redeemed: !pledge.redeemed }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || "Could not update the pledge.");
-      }
-      loadPledges();
-    } catch (error) {
-      showAlert("Could not update", error instanceof Error ? error.message : "Could not update the pledge.", "error");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="mt-1 rounded-xl border border-sand-soft bg-sand p-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-moss">
-        {totals.outstanding === 0
-          ? `All ${rows.length} pledge${rows.length === 1 ? "" : "s"} honoured`
-          : `${totals.outstanding} of ${rows.length} pledge${rows.length === 1 ? "" : "s"} still owed · KES ${totals.pledged.toLocaleString()}`}
-      </p>
-      <div className="mt-1.5 space-y-1.5">
-        {rows.map((pledge) => (
-          <div key={pledge.id} className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className={`truncate text-[11px] ${pledge.redeemed ? "text-moss" : "font-semibold text-bark"}`}>
-                {pledge.member_name}
-                {pledge.amount ? ` · KES ${pledge.amount.toLocaleString()}` : ""}
-              </p>
-              <p className="truncate text-[10px] text-moss">
-                {pledge.redeemed
-                  ? `Given${pledge.redeemed_via === "giving" ? ": matched to their giving" : pledge.redeemed_via === "member" ? ": ticked off by them" : ": marked here"}`
-                  : `promised by ${pledgeDay(pledge.due_date)}`}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => markPledge(pledge)}
-              disabled={busyId === pledge.id}
-              className={`shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition disabled:opacity-50 ${
-                pledge.redeemed
-                  ? "border-sand-mute bg-white text-moss hover:border-ember"
-                  : "border-sage bg-sage text-white hover:bg-sage-soft"
-              }`}
-            >
-              {pledge.redeemed ? "Reopen" : "Mark given"}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function AnnouncementManager({
   presetAudience,
@@ -343,65 +181,16 @@ export function AnnouncementManager({
       host modal supplies both. */
   composerOnly = false,
   onDone,
-  /** Rides as a card of another page (the elders' area views on Ministry):
-      the host supplies the heading, so the console's own — the phone's
-      "Announcements Management" title and its back-to-overview arrow —
-      stands down. */
-  embedded = false,
-  /** The board's search rides the shell's heading row instead of a band of
-      the board's own — the console's Sharing page and the eldership desk's
-      Sharing view ask for it, so a phone meets the search at the top of the
-      page, the way every other desk's search rides the band, rather than
-      below the sheet's chrome. */
-  hostSearch = false,
   /** Thought mode: render only the Share a Thought modal, open from the
-      start — the desk's Sharing panel opens the word/thought composer
-      without the whole board behind it. Closing it (cancelled or saved)
-      hands control back to the host through `onDone`. */
+      start — the desk's Sharing panel opens the word/thought composer with
+      nothing behind it. Closing it (cancelled or saved) hands control back
+      to the host through `onDone`. */
   thoughtOnly = false,
   /** An announcement the host's feed asked to edit: the compose modal opens
       loaded from that row, so a post edited from the feed changes only
       itself. Null means a fresh post. */
   editItem = null,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; embedded?: boolean; hostSearch?: boolean; thoughtOnly?: boolean; editItem?: Announcement | null } = {}) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
-  // The board's own search — title and the words of the post, narrowing the
-  // cards above the list rather than a page refetch. The heading names the
-  // board above it, so a reader landing on Sharing finds a way through the
-  // posts without scrolling every card.
-  const [boardSearch, setBoardSearch] = useState("");
-  // The search, hosted: when a surface above (the console page, the hub's
-  // Sharing view) asks for it, the control rides the shell's heading row and
-  // the board draws no band of its own.
-  const { setHeaderRightAction } = usePageHeader();
-  useEffect(() => {
-    if (!hostSearch || composerOnly) return;
-    setHeaderRightAction(
-      <div className="flex w-full items-center sm:w-auto">
-        <div className="relative w-full">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" aria-hidden="true" />
-          <input
-            type="search"
-            value={boardSearch}
-            onChange={(event) => setBoardSearch(event.target.value)}
-            placeholder="Search announcements..."
-            aria-label="Search announcements"
-            className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none transition focus:border-ember sm:w-64"
-          />
-        </div>
-      </div>,
-    );
-    return () => setHeaderRightAction(null);
-  }, [hostSearch, composerOnly, boardSearch, setHeaderRightAction]);
-  const visibleAnnouncements = (() => {
-    const needle = boardSearch.trim().toLowerCase();
-    if (!needle) return announcements;
-    return announcements.filter((item) =>
-      `${item.title} ${item.text} ${item.attachment_name ?? ""}`.toLowerCase().includes(needle),
-    );
-  })();
-  const [showCreateModal, setShowCreateModal] = useState(composerOnly);
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null } = {}) {
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -458,16 +247,6 @@ export function AnnouncementManager({
   useEffect(() => {
     if (thoughtOnly && !showThoughtModal) onDone?.();
   }, [thoughtOnly, showThoughtModal, onDone]);
-
-  // A post brought from the host's feed opens the composer loaded from that
-  // row: one press on the feed's Edit lands the office in the form, not on
-  // the board the edits came from.
-  useEffect(() => {
-    if (editItem) handleEdit(editItem);
-    // The shape of the row never changes identity-wise while mounted; only
-    // a new row from the host should reopen the form.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editItem]);
 
   const handleSaveThought = async () => {
     const text = thoughtDraft.trim();
@@ -527,8 +306,8 @@ export function AnnouncementManager({
     // The event's clock: blank for an all-day event, where the day says it.
     event_time_from: "",
     event_time_to: "",
-    // Scheduling: the day and hour the post goes live, and whether the notice
-    // repeats once it is. All blank means it is posted the moment it is saved.
+    // When the post goes live, if it is scheduled at all. All blank means it
+    // is posted the moment it is saved, which is what Post now says.
     publish_on: "",
     publish_time: "",
     repeat: "none" as "none" | "daily" | "weekly" | "monthly",
@@ -553,125 +332,6 @@ export function AnnouncementManager({
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const actionsDropdownRef = useRef<HTMLDivElement>(null);
 
-  /** What the closed "User actions" combo reads — the card's buttons, named
-   *  in the officer's own tick order, or the plain-notice answer. */
-  const actionsLabel = (() => {
-    const chosen = CARD_OPTION_CHOICES.filter((option) => form.options.includes(option.value)).map(
-      (option) => option.label,
-    );
-    return chosen.length === 0 ? "No actions" : chosen.join(", ");
-  })();
-
-  /** What the closed "Post to" combo reads, e.g. "Members only + 2 groups". */
-  const postToLabel = (() => {
-    const reach = REACH_LABELS[form.visibility] ?? "Members only";
-    const count = form.audience.length;
-    return count === 0 ? reach : `${reach} + ${count} ${count === 1 ? "group" : "groups"}`;
-  })();
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (sharingDropdownRef.current && !sharingDropdownRef.current.contains(e.target as Node)) {
-        setShowSharingDropdown(false);
-      }
-      if (postToDropdownRef.current && !postToDropdownRef.current.contains(e.target as Node)) {
-        setShowPostToDropdown(false);
-      }
-      if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target as Node)) {
-        setShowActionsDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  function fetchAnnouncements(options?: { silent?: boolean }) {
-    if (!options?.silent) setLoadingList(true);
-    const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/announcements/?include_expired=true&include_unpublished=true&include_scheduled=true`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: Announcement[]) => setAnnouncements(Array.isArray(data) ? data : []))
-      .catch(() => setAnnouncements([]))
-      .finally(() => {
-        if (!options?.silent) setLoadingList(false);
-      });
-  }
-
-  useEffect(() => {
-    const timer = window.setTimeout(fetchAnnouncements, 0);
-    // Live tallies: silent refetch every 30s — no spinner flicker — so poll
-    // counts on the cards move as members answer.
-    const poll = window.setInterval(() => fetchAnnouncements({ silent: true }), 30000);
-    return () => {
-      window.clearTimeout(timer);
-      window.clearInterval(poll);
-    };
-  }, []);
-
-  useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/treasury/accounts/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setAccounts(Array.isArray(data) ? data : []))
-      .catch(() => setAccounts([]));
-  }, []);
-
-  async function handleDelete(id: number, title: string) {
-    const answer = await showAlert(
-      "Delete this announcement?",
-      `"${title}" will be taken down for everyone. This cannot be undone.`,
-      "warning",
-      {
-        showCancelButton: true,
-        confirmButtonText: "Delete",
-        cancelButtonText: "Cancel",
-        confirmButtonColor: brand.alert,
-      },
-    );
-    if (!answer.isConfirmed) return;
-    try {
-      const response = await fetch(`${API_URL}/api/members/announcements/${id}/`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-        },
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail ?? "Failed to delete announcement.");
-      }
-      showAlert("Announcement Deleted", `Announcement "${title}" was successfully deleted.`, "success");
-      fetchAnnouncements();
-    } catch (error) {
-      const errorText = error instanceof Error ? error.message : "Failed to delete announcement.";
-      showAlert("Delete Error", errorText, "error");
-    }
-  }
-
-  async function handleExportAnswers(item: Announcement) {
-    try {
-      const token = localStorage.getItem("access_token");
-      const res = await fetch(`${API_URL}/api/members/announcements/${item.id}/answers.csv`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error();
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Poll_Answers_${item.id}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      showAlert("Export Failed", "We could not export the answers for this post.", "error");
-    }
-  }
 
   function handleEdit(item: Announcement) {
     setEditingId(item.id);
@@ -707,8 +367,67 @@ export function AnnouncementManager({
         : "",
       repeat: item.repeat ?? "none",
     });
-    setShowCreateModal(true);
   }
+
+  // A post brought from the host's feed opens the composer loaded from that
+  // row: one press on a post's Edit lands the office in the form itself.
+  useEffect(() => {
+    if (!editItem) return;
+    // The host's row rides a microtask: the composer's state writes then land
+    // outside this effect's own synchronous body, which the React compiler
+    // forbids, and a new row still reopens the form.
+    const item = editItem;
+    void Promise.resolve().then(() => handleEdit(item));
+    // The shape of the row never changes identity-wise while mounted; only
+    // a new row from the host should reopen the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editItem]);
+
+  /** What the closed "User actions" combo reads — the card's buttons, named
+   *  in the officer's own tick order, or the plain-notice answer. */
+  const actionsLabel = (() => {
+    const chosen = CARD_OPTION_CHOICES.filter((option) => form.options.includes(option.value)).map(
+      (option) => option.label,
+    );
+    return chosen.length === 0 ? "No actions" : chosen.join(", ");
+  })();
+
+  /** What the closed "Post to" combo reads, e.g. "Members only + 2 groups". */
+  const postToLabel = (() => {
+    const reach = REACH_LABELS[form.visibility] ?? "Members only";
+    const count = form.audience.length;
+    return count === 0 ? reach : `${reach} + ${count} ${count === 1 ? "group" : "groups"}`;
+  })();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (sharingDropdownRef.current && !sharingDropdownRef.current.contains(e.target as Node)) {
+        setShowSharingDropdown(false);
+      }
+      if (postToDropdownRef.current && !postToDropdownRef.current.contains(e.target as Node)) {
+        setShowPostToDropdown(false);
+      }
+      if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target as Node)) {
+        setShowActionsDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    fetch(`${API_URL}/api/members/treasury/accounts/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setAccounts(Array.isArray(data) ? data : []))
+      .catch(() => setAccounts([]));
+  }, []);
+
+
+
 
   function resetAndCloseModal() {
     setForm({
@@ -737,7 +456,6 @@ export function AnnouncementManager({
       onDone?.();
       return;
     }
-    setShowCreateModal(false);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -843,7 +561,6 @@ export function AnnouncementManager({
       const successText = editingId ? "Announcement updated." : "Announcement posted successfully.";
       showAlert(editingId ? "Announcement Updated" : "Announcement Posted", successText, "success");
       resetAndCloseModal();
-      fetchAnnouncements();
     } catch (error) {
       const errorText = error instanceof Error ? error.message : "Unable to save the announcement.";
       setMessage(errorText);
@@ -1077,38 +794,43 @@ export function AnnouncementManager({
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-bark">
                   Event start *
-                  <input
-                    type="date"
+                  <DayField
                     required
                     value={form.event_date_from}
-                    onChange={(e) => {
+                    onChange={(iso) => {
                       // Picking the start also sets the end to it — most
                       // events are one day, and the officer widens the end
                       // only when the event truly spans days. It also keeps
                       // end >= start no matter how the start moves.
-                      setForm({ ...form, event_date_from: e.target.value, event_date_to: e.target.value });
+                      setForm({ ...form, event_date_from: iso, event_date_to: iso });
                     }}
-                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
                   />
                 </label>
 
                 <label className="block text-xs font-semibold text-bark">
                   Event end
-                  <input
-                    type="date"
-                    min={form.event_date_from || undefined}
+                  <DayField
                     value={form.event_date_to}
-                    onChange={(e) => setForm({ ...form, event_date_to: e.target.value })}
-                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                    onChange={(iso) =>
+                      setForm({
+                        ...form,
+                        event_date_to:
+                          iso && form.event_date_from && iso < form.event_date_from
+                            ? form.event_date_from
+                            : iso,
+                      })
+                    }
                   />
                 </label>
               </div>
 
-              {/* The hour, beside the days it falls on. Both are optional:
-                  an all-day event leaves them empty and reads on its dates
-                  alone. The start is not copied into the end — a service that
-                  begins at 09:00 does not finish at 09:00. */}
-              <div className="md:col-span-2 grid grid-cols-2 gap-3">
+              {/* The hour, beside the days it falls on, and the rhythm the
+                  notice keeps. The times are optional: an all-day event leaves
+                  them empty and reads on its dates alone. The start is not
+                  copied into the end — a service that begins at 09:00 does not
+                  finish at 09:00. Repeats rides this row because it is the
+                  meeting's own rhythm, not a part of when the post goes out. */}
+              <div className="md:col-span-2 grid gap-3 sm:grid-cols-3">
                 <label className="block text-xs font-semibold text-bark">
                   Start time
                   <input
@@ -1129,64 +851,105 @@ export function AnnouncementManager({
                   />
                 </label>
 
-                <p className="md:col-span-2 text-[10px] font-normal text-moss">
-                  Optional — blank means an all-day event. A start time alone reads “from 09:00”.
-                </p>
-              </div>
+                <label className="block text-xs font-semibold text-bark">
+                  Repeats
+                  <select
+                    value={form.repeat}
+                    onChange={(e) => setForm({ ...form, repeat: e.target.value as typeof form.repeat })}
+                    className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                  >
+                    {REPEAT_CHOICES.map((choice) => (
+                      <option key={choice.value} value={choice.value}>{choice.label}</option>
+                    ))}
+                  </select>
+                </label>
 
-              {/* Scheduling: the day and hour the post goes live, and whether
-                  the notice repeats once it is. Blank means it goes out the
-                  moment it is saved, which is what the board has always done;
-                  a day and hour keep it out of the feed — and out of every
-                  inbox and phone — until that moment arrives. */}
+                <p className="sm:col-span-3 text-[10px] font-normal text-moss">
+                  Times are optional — blank means an all-day event. A start time alone reads “from 09:00”.
+                  Repeats keeps the notice on the board on its own rhythm once it is live.
+                </p>
+              </div>              {/* When the post goes out: now, or at a day and hour the office
+                  picks. Post now is the default — the board's oldest habit —
+                  and the scheduling fields appear only when Schedule is
+                  chosen, so a post going out at once is never asked for a day
+                  it does not have. */}
               <div className="md:col-span-2 rounded-xl border border-sand-line bg-sand-linen/40 p-3">
-                <span className="block text-xs font-semibold text-bark">Schedule</span>
-                <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
-                  <label className="block text-[11px] font-semibold text-moss">
-                    Day
-                    <input
-                      type="date"
-                      min={localDate()}
-                      value={form.publish_on}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          publish_on: e.target.value,
-                          // A day with no hour is a morning post: the hour
-                          // input is filled rather than left to read as
-                          // midnight, which nobody schedules on purpose.
-                          publish_time: e.target.value && !form.publish_time ? "08:00" : form.publish_time,
-                        })
-                      }
-                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
-                    />
-                  </label>
-                  <label className="block text-[11px] font-semibold text-moss">
-                    Time
-                    <input
-                      type="time"
-                      value={form.publish_time}
-                      onChange={(e) => setForm({ ...form, publish_time: e.target.value })}
-                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
-                    />
-                  </label>
-                  <label className="block text-[11px] font-semibold text-moss">
-                    Repeats
-                    <select
-                      value={form.repeat}
-                      onChange={(e) => setForm({ ...form, repeat: e.target.value as typeof form.repeat })}
-                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
-                    >
-                      {REPEAT_CHOICES.map((choice) => (
-                        <option key={choice.value} value={choice.value}>{choice.label}</option>
-                      ))}
-                    </select>
-                  </label>
+                <span className="block text-xs font-semibold text-bark">When it goes out</span>
+                <div role="radiogroup" aria-label="When the announcement goes out" className="mt-1.5 flex flex-wrap gap-2">
+                  {[
+                    { value: "now", label: "Post now", hint: "The moment you save it" },
+                    { value: "schedule", label: "Schedule", hint: "A day and hour you choose" },
+                  ].map((option) => {
+                    const selected = option.value === "schedule" ? Boolean(form.publish_on) : !form.publish_on;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            // A day with no hour is a morning post: the hour is
+                            // filled rather than left to read as midnight,
+                            // which nobody schedules on purpose. The day opens
+                            // on tomorrow, the soonest hour that is still ahead.
+                            publish_on:
+                              option.value === "schedule"
+                                ? form.publish_on || localDate(new Date(Date.now() + 24 * 60 * 60 * 1000))
+                                : "",
+                            publish_time: option.value === "schedule" ? form.publish_time || "08:00" : "",
+                          })
+                        }
+                        className={`flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                          selected ? "border-ember bg-white text-bark" : "border-sand-mute bg-white/60 text-moss hover:border-ember"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                            selected ? "border-ember" : "border-sand-mute"
+                          }`}
+                        >
+                          {selected && <span className="h-2 w-2 rounded-full bg-ember" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-semibold">{option.label}</span>
+                          <span className="block text-[10px] font-normal text-moss">{option.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+                {form.publish_on && (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label className="block text-[11px] font-semibold text-moss">
+                      Day
+                      <DayField
+                        value={form.publish_on}
+                        onChange={(iso) =>
+                          setForm({
+                            ...form,
+                            publish_on: iso,
+                            publish_time: iso && !form.publish_time ? "08:00" : form.publish_time,
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="block text-[11px] font-semibold text-moss">
+                      Time
+                      <input
+                        type="time"
+                        value={form.publish_time}
+                        onChange={(e) => setForm({ ...form, publish_time: e.target.value })}
+                        className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-2 text-xs text-bark outline-none focus:border-ember"
+                      />
+                    </label>
+                  </div>
+                )}
                 <p className="mt-1.5 text-[10px] font-normal text-moss">
                   {form.publish_on
                     ? `Goes out on ${dayFirst(form.publish_on)}${form.publish_time ? ` at ${form.publish_time}` : ""} — nothing reaches the congregation before then.`
-                    : "Blank means the post is published the moment you save it."}
+                    : "The post is published the moment you save it."}
                 </p>
               </div>
 
@@ -1284,68 +1047,6 @@ export function AnnouncementManager({
     );
   }
 
-  /** The compose dialog: overlay + card in manager mode; called via renderComposerForm(true) when embedded. */
-  function renderComposerForm(inline = false) {
-    // Three parts, the way the request modals are built: a header and a footer
-    // that hold still, and the fields scrolling between them — so a post
-    // longer than the screen still has its Post button in the same place.
-    const card = (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-announcement-title"
-        className={inline ? "w-full" : "flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-sand-line"}
-      >
-        {/* The frame is the fund-drive modal's, line for line: the same header
-            with its name and a line saying what the form asks for, the same
-            body padding, and a plain footer over the same border — so posting a
-            notice and opening a drive read as two desks of one office rather
-            than two designs. */}
-        <div className={`flex shrink-0 items-center justify-between border-b border-sand-line ${inline ? "pb-4" : "px-6 pb-4 pt-6 sm:px-8 sm:pt-8"}`}>
-          <div>
-            <h2 id="create-announcement-title" className="text-xl font-bold text-bark">
-              {editingId ? "Edit Announcement" : "Post Announcement"}
-            </h2>
-            <p className="mt-1 text-xs text-moss">
-              {editingId
-                ? "Update the post's wording, who it reaches, the buttons it carries and when it goes out."
-                : "Write the notice, choose who it reaches and what members can press on it, then post it now or schedule it."}
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={resetAndCloseModal}
-            className="rounded-full p-2 text-xl leading-none text-moss transition hover:bg-sand hover:text-bark"
-            aria-label="Close modal"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
-        <div className={inline ? "mt-6" : "min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-6 sm:px-8"}>
-          {renderComposerFields()}
-        </div>
-        <div className={`flex shrink-0 items-center justify-end border-t border-sand-line ${inline ? "pt-4" : "px-6 pb-4 pt-3 sm:px-8"}`}>
-          {renderComposerActions()}
-        </div>
-      </div>
-    );
-    if (inline) return card;
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-        onClick={(e) => {
-          if (e.target === e.currentTarget && !submitting) resetAndCloseModal();
-        }}
-      >
-        {card}
-      </div>
-    );
-  }
-
-  function renderComposerOverlay() {
-    return renderComposerForm(false);
-  }
 
   function renderThoughtModal() {
     return (
@@ -1454,252 +1155,8 @@ export function AnnouncementManager({
     );
   }
 
-  return (
-    <section
-      className={`flex h-full min-h-0 w-full flex-col gap-3 bg-white p-0 ${
-        embedded ? "" : "border-b border-sand-line"
-      }`}
-    >
-      {/* No heading of its own, and no way back to the console: the shell's
-          band names the page, and the desk this board sits under owns the
-          way out — a private back arrow to the console's overview read as if
-          Administration were the only road to it, when the console opens from
-          the account menu. */}
-
-      {/* Announcements — ledger-style table container */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-sand-line bg-white">
-        {/* The board's own search, pinned at the top like every desk's search:
-            the heading above names the place, this narrows its posts. Held
-            when a surface above hosts it in the shell's heading row. */}
-        {!hostSearch && (
-        <div className="shrink-0 border-b border-sand-line bg-white px-4 py-2.5 sm:px-6">
-          <div className="relative max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-moss" aria-hidden="true" />
-            <input
-              type="search"
-              value={boardSearch}
-              onChange={(event) => setBoardSearch(event.target.value)}
-              placeholder="Search announcements..."
-              aria-label="Search announcements"
-              className="w-full rounded-full border border-sand-mute bg-white py-1.5 pl-9 pr-3 text-xs outline-none transition focus:border-ember"
-            />
-          </div>
-        </div>
-        )}
-        {todayThought && (
-          <div className="shrink-0 border-b border-sand-line bg-sand-linen/60 px-4 py-3 sm:px-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div className="flex items-start gap-2.5">
-                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-ember" aria-hidden="true" />
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-bark">
-                    <span>Thought of the Day</span>
-                    {todayThought.author_name && (
-                      <span className="font-normal text-moss text-[11px]">— {todayThought.author_name}</span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-moss-dark line-clamp-2 sm:line-clamp-1">
-                    {todayThought.text}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setThoughtDraft(todayThought.text);
-                  setShowThoughtModal(true);
-                }}
-                className="shrink-0 self-end sm:self-center rounded-lg border border-sand-line bg-white px-2.5 py-1 text-xs font-semibold text-bark hover:border-ember transition"
-              >
-                Edit thought
-              </button>
-            </div>
-          </div>
-        )}
-        {/* The announcement board is cards at every width — a bulletin reads as
-            a bulletin, not as a ledger row. */}
-        <RecordList
-          rows={visibleAnnouncements}
-          loading={loadingList}
-          rowKey={(item) => item.id}
-          cardsOnly
-          loadingLabel="Loading announcements..."
-          cardsClassName="custom-table-scrollbar grid min-h-0 flex-1 content-start gap-4 overflow-y-auto overscroll-contain p-4 sm:grid-cols-2 xl:grid-cols-3"
-          cardsStateClassName="col-span-full py-12 text-center text-sm text-moss"
-          cardsEmpty={
-            boardSearch.trim() ? (
-              <>
-                <Search size={32} className="text-moss-faint" aria-hidden="true" />
-                <p className="mt-3 text-sm font-semibold text-bark">No announcements match that search.</p>
-                <p className="mt-1 text-xs text-moss">Try another word, or clear the search to read the whole board.</p>
-              </>
-            ) : (
-              <>
-                <Megaphone size={36} className="text-moss-faint" aria-hidden="true" />
-                <p className="mt-3 text-sm font-semibold text-bark">No announcements available.</p>
-                <p className="mt-1 text-xs text-moss">Tap &quot;Add Announcement&quot; below to post your first announcement.</p>
-              </>
-            )
-          }
-          renderCard={(item) => (
-            <article
-              key={item.id}
-              className="flex min-h-56 flex-col gap-4 rounded-2xl border border-sand-line bg-white p-5 text-xs shadow-sm md:p-6"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h4 className="text-sm font-bold text-bark">{item.title}</h4>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(item)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-sand hover:text-ember"
-                    title="Edit Announcement"
-                    aria-label="Edit Announcement"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(item.id, item.title)}
-                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                    title="Delete Announcement"
-                    aria-label="Delete Announcement"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              {/* A post waiting for its hour is absent from the feed, the
-                  dashboard and the public page, and the board is where an
-                  officer asks why. Say so plainly, on the card, before the
-                  body they wrote — not as one more chip in the row. */}
-              {scheduledFor(item) && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-relaxed text-amber-800">
-                  Not in the feed yet — it goes live on {dayFirstTime(item.publish_at)}, when members and the public start seeing it.
-                </p>
-              )}
-              <p className="text-[11px] leading-relaxed text-moss-mid">{item.text}</p>
-              <AnnouncementAttachment
-                attachment={item.attachment}
-                name={item.attachment_name}
-                size={item.attachment_size}
-                compact
-                className="mt-1"
-              />
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-mist-select px-2 py-0.5 text-[10px] font-bold text-moss-dark capitalize">
-                  {item.visibility}
-                </span>
-                <span className="rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-bold text-ember">
-                  Via {channelsLabel(item.sharing_option)}
-                </span>
-                {item.repeat && item.repeat !== "none" && (
-                  <span className="rounded-full bg-sand-veil px-2 py-0.5 text-[10px] font-bold text-bark">
-                    Repeats {item.repeat}
-                  </span>
-                )}
-                {item.announcement_type && item.announcement_type !== "awareness" && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    {item.announcement_type === "web_conference"
-                      ? "Web conference"
-                      : item.announcement_type === "opinion"
-                        ? "Opinion poll"
-                        : item.announcement_type === "job_vacancy"
-                          ? "Job vacancy"
-                          : "Promotion / Contribution"}
-                  </span>
-                )}
-                {item.action_type && item.action_type !== "none" && item.action_type !== "respond" && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 capitalize">
-                    {item.action_type.replaceAll("_", " ")}
-                  </span>
-                )}
-                {item.support_account && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    Support: {item.support_account}
-                  </span>
-                )}
-              </div>
-              {eventLabel(item) && (
-                <p className="text-[10px] font-semibold text-ember">Event: {eventLabel(item)}</p>
-              )}
-              <PollTally item={item} />
-              <PledgePanel item={item} />
-              {item.href && (
-                <p className="text-[10px]">
-                  <a href={item.href} target="_blank" rel="noopener noreferrer" className="font-semibold text-ember underline underline-offset-2">
-                    Open link <ArrowUpRight size={10} className="inline" aria-hidden="true" />
-                  </a>
-                </p>
-              )}
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-sand-soft pt-2 text-[10px] text-moss">
-                <span className="flex items-center gap-2">
-                  Posted {dayLabel(item.created_at.slice(0, 10))}
-                  {item.announcement_type === "opinion" && (
-                    <button
-                      type="button"
-                      onClick={() => handleExportAnswers(item)}
-                      className="rounded-lg border border-sand-mute bg-white px-2 py-0.5 text-[10px] font-semibold text-bark transition hover:border-ember hover:bg-sand"
-                      title="Download the answers as CSV, respondent names included"
-                    >
-                      <Download size={10} className="inline" aria-hidden="true" /> Export answers
-                    </button>
-                  )}
-                </span>
-                <span className="font-semibold text-moss-dark">{windowLabel(item)}</span>
-              </div>
-            </article>
-          )}
-          />
-
-        {/* Sticky Footer — the desk's own count and its two writes. It steps
-            aside with the rest of the chrome while the board is read. */}
-        <div className="page-actions">
-        <div className="shrink-0 border-t-2 border-sand-mute bg-sand font-bold text-bark">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-            <span className="text-xs text-moss sm:text-sm">
-              Showing <strong className="text-bark">{visibleAnnouncements.length}</strong> announcement{visibleAnnouncements.length === 1 ? "" : "s"}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setThoughtDraft(todayThought?.text ?? "");
-                  setShowThoughtModal(true);
-                }}
-                className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-line bg-white px-3 text-xs font-semibold text-bark shadow-sm transition hover:border-ember hover:bg-sand-linen sm:px-3.5"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-ember" aria-hidden="true" />
-                <span>Share a Thought</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMessage("");
-                  setShowCreateModal(true);
-                }}
-                className="h-9 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark sm:px-3.5"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Add Announcement</span>
-              </button>
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
-
-      {/* Add Announcement Modal */}
-      {showCreateModal && renderComposerOverlay()}
-
-      {/* Share a Thought Modal (Daily Word) */}
-      {showThoughtModal && renderThoughtModal()}
-    </section>
-  );
+  // The board is gone: the desk's Sharing feed is the announcements
+  // surface, and this component now supplies only the composer and the
+  // thought modal its hosts open.
+  return null;
 }

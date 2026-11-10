@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Armchair, BarChart3, Briefcase, Calendar, ChevronRight, ClipboardList, Crown, FileText, HandHelping, Heart, Images, Landmark, Mail, Megaphone, Package, Scale, Settings, ShieldCheck, Sparkles, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
-import { AnnouncementManager } from "@/components/announcement-manager";
 import { EmailsDesk } from "@/components/emails-desk";
 import { ChurchSettingsManager } from "@/components/church-settings-manager";
 import { RoleRightsManager } from "@/components/role-rights-manager";
@@ -39,18 +38,8 @@ const ELDERSHIP_HEADING = {
  * The desk pages the rail's strips carry as toggles behind a named desk:
  * what each page calls itself. The names follow the strip's labels, so
  * heading and toggle can never disagree; the blurbs come from the registry.
- * Sharing is the one renamed page: the console's query name is
- * "announcements", but the page the desk's strip opens reads "Sharing".
  */
 const deskTabHeadings: Record<string, { label: string; description?: string }> = {
-  announcements: {
-    // The eldership's Sharing page names the desk, not the page. Sharing is
-    // the desk's first chip, so a band reading "Sharing" over the strip that
-    // already says which view is open left the desk unnamed there while every
-    // other view of it says where the reader is.
-    label: ELDERSHIP_HEADING.label,
-    description: "Publish announcements and share a daily thought with the church.",
-  },
   requests: {
     label: "Requests",
     description: "The asks the church has received.",
@@ -371,7 +360,7 @@ function AdministrationContent() {
         : searchTab
     : defaultTab;
 
-  const tableContainedTabs = ["users", "clerk-users", "clerk-letters", "leaders", "leadership", "accounts", "expenditures", "budget", "refunds", "announcements", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
+  const tableContainedTabs = ["users", "clerk-users", "clerk-letters", "leaders", "leadership", "accounts", "expenditures", "budget", "refunds", "requests", "clerk-requests", "correspondence", "meetings", "board", "business", "deaconate-rota", "deaconate-moments", "deaconate-members", "deaconate-calendar", "deaconate-funding", "eldership-moments", "eldership-funding", "clerkship-funding", "inventory", "settings", "join-requests", "emails"];
 
   /**
    * Meetings — church board and business meetings are consolidated into a single
@@ -401,23 +390,22 @@ function AdministrationContent() {
     // Whoever lands on the console proper opens on its **first** toggle —
     // User Management — so the desk never opens on a page further down the
     // strip than where it begins. The two branches that name another desk's
-    // own page (the eldership's announcements, the treasury's accounts) stay
-    // as they are: those desks draw their own strip, and its first toggle is
-    // theirs to choose.
+    // own page (the treasury's accounts) stays as it is: that desk draws its
+    // own strip, and its first toggle is its to choose.
     const fallback = opensTreasuryLedger
       ? "treasury"
       : onDesk
         ? isClerk
           ? "users"
           : isElder
-            ? "announcements"
+            ? "leaders"
             : isFinance
               ? "accounts"
               : "users"
         : (isClerk || isAdmin)
           ? "users"
           : isElder
-            ? "announcements"
+            ? "leaders"
           : isDedicatedTreasurer
             ? "treasury"
             : "users";
@@ -499,7 +487,6 @@ function AdministrationContent() {
   // their search and filters riding the row under the name — the same order
   // the desk's own views keep: name, controls, strip beneath.
   const deskTailTab =
-    activeTab === "announcements" ||
     activeTab === "requests" ||
     activeTab === "eldership-moments" ||
     activeTab === "clerk-requests";
@@ -707,7 +694,6 @@ function AdministrationContent() {
           description: "The church's leadership, announcements, accounts and the requests members send.",
           cards: [
             { icon: <Crown size={20} aria-hidden="true" />, label: "Church Leadership", description: "The church's offices, ministries and departments, with each leader and assistant.", href: "/administration?tab=leaders" },
-            { icon: <Sparkles size={20} aria-hidden="true" />, label: "Sharing", description: "Publish announcements and share daily thoughts with the church.", href: "/administration?tab=announcements" },
             { icon: <HandHelping size={20} aria-hidden="true" />, label: "Received Requests", description: "Review join, prayer, visitation, dedication, and support requests.", href: "/administration?tab=requests", badge: pendingRequests.total },
             { icon: <Images size={20} aria-hidden="true" />, label: "Moments", description: "Document a moment — pictures and video links of the church's days.", href: "/administration?tab=eldership-moments" },
             { icon: <Wallet size={20} aria-hidden="true" />, label: "Requests", description: "Funding requests and the church's treasury accounts.", href: "/administration?tab=eldership-funding" },
@@ -815,7 +801,7 @@ function AdministrationContent() {
             )}
 
             {/* Church Clerk Approval Notice */}
-            {["users", "clerk-users", "leaders", "meetings", "board", "business", "announcements", "requests", "transfers", "clerkship-funding", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
+            {["users", "clerk-users", "leaders", "meetings", "board", "business", "requests", "transfers", "clerkship-funding", "settings"].includes(activeTab) && isClerk && !isElder && !isAdmin && (
               <div className="mb-4 rounded-xl border border-gold-sand bg-sand-mist p-3.5 text-xs font-medium text-ember-soft shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">Church Clerk Access:</span>
@@ -834,7 +820,7 @@ function AdministrationContent() {
                 <div className="mx-auto max-w-xl p-10 text-center">
                   <h1 className="text-2xl font-semibold text-bark">Administration access required</h1>
                   <p className="mt-3 text-sm text-moss">The church register, its roles and its settings are kept by the administrators and the clerk. Your desks — announcements, requests, meetings and the treasury — open from the Eldership section.</p>
-                  <Link href="/administration?tab=announcements" className="mt-6 inline-block text-sm font-semibold text-ember">Back to Eldership</Link>
+                  <Link href="/my-areas?area=eldership&view=sharing" className="mt-6 inline-block text-sm font-semibold text-ember">Back to Eldership</Link>
                 </div>
               </div>
             )}
@@ -884,13 +870,6 @@ function AdministrationContent() {
                     }
                   />
                 </div>
-              </div>
-            )}
-
-            {/* Announcements Manager */}
-            {activeTab === "announcements" && (isClerk || isElder || isAdmin) && (
-              <div className="h-full min-h-0">
-                <AnnouncementManager />
               </div>
             )}
 

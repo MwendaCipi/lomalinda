@@ -829,7 +829,10 @@ export const eldershipViews: {
     label: "Sharing",
     short: "Sharing",
     icon: Sparkles,
-    href: "/administration?tab=announcements",
+    // The desk's own Sharing feed is the announcements surface: the console's
+    // separate board is gone, so an officer who cannot open the desk's views
+    // is sent to the feed rather than a page that no longer exists.
+    href: "/my-areas?area=eldership&view=sharing",
     description: "Publish announcements and share a daily thought with the church.",
   },
   // The baptismal class is no longer a page of this desk: it is one of Sabbath
