@@ -109,9 +109,22 @@ function dayLabel(iso?: string | null): string {
 }  /** Which reach values are single-choice; the rest are congregation groups. */
   const REACH_VALUES = new Set(["all", "members_only", "public_website"]);
 
-  /** The office's words for where this post sits in its display window. */
+  /** The hour a post is still waiting for, or null once that hour has come. */
+function scheduledFor(item: Announcement): Date | null {
+  if (!item.publish_at) return null;
+  const at = new Date(item.publish_at);
+  return !Number.isNaN(at.getTime()) && at.getTime() > Date.now() ? at : null;
+}
+
+  /** The office's words for where this post sits: waiting for its hour, or
+      where it sits in the feed once that hour has come. */
 function windowLabel(item: Announcement): string {
   const today = localDate();
+  // A hour still to come is the whole reason a post is missing from every
+  // feed, so it answers first — ahead of the window and the rhythm, which
+  // only start to matter once the post is live.
+  const waiting = scheduledFor(item);
+  if (waiting) return `Goes live ${dayFirstTime(waiting)}`;
   // A notice told to repeat stands on its own rhythm, so the window it was
   // written in does not retire it — and the board must not tell the officer
   // it has ended while the feed still carries it.
@@ -1560,6 +1573,15 @@ export function AnnouncementManager({
                   </button>
                 </div>
               </div>
+              {/* A post waiting for its hour is absent from the feed, the
+                  dashboard and the public page, and the board is where an
+                  officer asks why. Say so plainly, on the card, before the
+                  body they wrote — not as one more chip in the row. */}
+              {scheduledFor(item) && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-relaxed text-amber-800">
+                  Not in the feed yet — it goes live on {dayFirstTime(item.publish_at)}, when members and the public start seeing it.
+                </p>
+              )}
               <p className="text-[11px] leading-relaxed text-moss-mid">{item.text}</p>
               <AnnouncementAttachment
                 attachment={item.attachment}
@@ -1575,11 +1597,6 @@ export function AnnouncementManager({
                 <span className="rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-bold text-ember">
                   Via {channelsLabel(item.sharing_option)}
                 </span>
-                {item.publish_at && new Date(item.publish_at).getTime() > Date.now() && (
-                  <span className="rounded-full bg-sand-veil px-2 py-0.5 text-[10px] font-bold text-bark">
-                    Scheduled for {dayFirstTime(item.publish_at)}
-                  </span>
-                )}
                 {item.repeat && item.repeat !== "none" && (
                   <span className="rounded-full bg-sand-veil px-2 py-0.5 text-[10px] font-bold text-bark">
                     Repeats {item.repeat}
