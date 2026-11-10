@@ -53,10 +53,14 @@ const MARKETING_PAGES = [
   "/terms",
   "/ministries",
   "/give",
-  "/campaigns",
-  "/drives",
-  "/fund-drives",
 ];
+// A fund drive (`/drives/<id>`, and the older `/campaigns` and `/fund-drives`
+// addresses that forward to it) is deliberately not on this list. The app
+// opens drives from its own shelf, its announcement cards and its desks, so a
+// signed-in member stays inside the shell with the rail they were using; the
+// same URL read by a visitor keeps the marketing header, because MarketingNav
+// shows for anyone without a token. Keeping it out of this list is what makes
+// both readings of the one shared link possible.
 
 export function isMarketingPage(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
