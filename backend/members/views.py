@@ -50,7 +50,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
 from .models import ReportSigning, ReportSignature
 from .mpesa import MpesaConfigurationError, initiate_b2c_payout, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -6077,6 +6077,9 @@ class MpesaCallbackView(APIView):
             # The money is in; the account it names moves too. One credit per
             # payment, split the way the giver split it.
             credit_contribution_lines(contribution)
+            # A registration prompt was bought on the promise of a seat: the
+            # seat is written here, where the money is known to have arrived.
+            confirm_event_enrollment(context, contribution)
         else:
             # The prompt was cancelled, timed out or otherwise failed — no
             # money moved, but keep a terminal record so the attempt is
@@ -15085,6 +15088,39 @@ def _slot_conflict_response(conflicts, all_day_arrival=False):
     }
 
 
+def confirm_event_enrollment(context, contribution):
+    """Seat the person whose registration payment just landed.
+
+    The event and the member rode the signed callback token from the
+    announcement's Enroll now / Register now button, so the seat is written
+    only once Safaricom confirms the money — a cancelled prompt enrols nobody.
+    """
+    if not isinstance(context, dict):
+        return
+    event_id = context.get('enrollment_event_id')
+    if not event_id:
+        return
+    event = DepartmentEvent.objects.filter(pk=event_id).first()
+    if event is None:
+        return
+    member = User.objects.filter(pk=context.get('enrollment_member_id')).first()
+    name = (context.get('donor_name') or '').strip()
+    if not name and member is not None:
+        name = member.get_full_name()
+    enrollment = None
+    if member is not None:
+        enrollment = EventEnrollment.objects.filter(event=event, member=member).first()
+    if enrollment is None:
+        enrollment = EventEnrollment(event=event, member=member)
+    enrollment.name = name or enrollment.name
+    enrollment.phone_number = contribution.phone_number or enrollment.phone_number
+    enrollment.amount = contribution.amount
+    enrollment.status = 'paid'
+    enrollment.source = 'payment'
+    enrollment.contribution = contribution
+    enrollment.save()
+
+
 class DepartmentEventsView(APIView):
     """A department's calendar: the stored events behind the ministry pages."""
 
@@ -15117,6 +15153,12 @@ class DepartmentEventsView(APIView):
                 'lead': event.lead,
                 'notes': event.notes,
                 'unit': event.unit,
+                # A registration event carries its fee, the day its register
+                # closes, and how many people it has already seated, so the
+                # desk sees the register from the calendar row itself.
+                'fee_amount': str(event.fee_amount or 0),
+                'registration_deadline': event.registration_deadline,
+                'enrollments': event.enrollments.count(),
             }
             for event in events
         ], 'unit': unit, 'units': target.unit_names, 'church_name': church_settings.church_name,
@@ -15291,6 +15333,133 @@ class DepartmentEventsView(APIView):
         if not deleted:
             return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'detail': 'Event removed from the calendar.'})
+
+
+class DepartmentEventEnrollView(APIView):
+    """A member's seat on a registration event, bought with an M-Pesa prompt.
+
+    The event is the announcement's own calendar row; the fee is the event's,
+    never the browser's, and the seat is written by the callback once the
+    money arrives. A register past its last day takes no new names.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, department, event_id):
+        event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()
+        if event is None:
+            return Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if not event.fee_amount or event.fee_amount <= 0:
+            return Response({'detail': 'This event has no registration fee.'}, status=status.HTTP_400_BAD_REQUEST)
+        if event.registration_deadline and event.registration_deadline < timezone.localdate():
+            return Response({'detail': 'Registration for this event has closed.'}, status=status.HTTP_400_BAD_REQUEST)
+        if EventEnrollment.objects.filter(event=event, member=request.user).exists():
+            return Response({'detail': 'You are already enrolled for this event.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            phone_number = normalize_mpesa_phone(str(request.data.get('phone_number') or ''))
+        except ValueError as error:
+            return Response({'phone_number': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        donor_name = (request.data.get('donor_name') or request.user.get_full_name() or '').strip()
+        purpose = f'{event.title} registration'[:120]
+        context = {
+            'amount': str(event.fee_amount),
+            'purpose': purpose,
+            'phone_number': phone_number,
+            'donor_name': donor_name,
+            'enrollment_event_id': event.id,
+            'enrollment_member_id': request.user.id,
+        }
+        try:
+            initiate_stk_push_for_context(
+                phone_number=phone_number,
+                amount=str(event.fee_amount),
+                purpose=purpose,
+                context_token=pack_callback_context(context),
+            )
+        except MpesaConfigurationError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Registration prompt failed for event %s', event.id)
+            return Response({'detail': 'The M-Pesa prompt could not be sent. Try again.'}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({
+            'message': 'Check your phone for the M-Pesa prompt; the seat is yours once it is paid.',
+            'event': event.id,
+        })
+
+
+class DepartmentEventEnrollmentsView(APIView):
+    """The register of a registration event, read and added to by the desk.
+
+    A paid row arrives by itself from the callback; this is how the leader
+    seats somebody by hand — a gift paid at the door, or a guest with no
+    account — and reads who is already on the register.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _event(self, request, department, event_id):
+        if not (
+            can_manage_department(request.user, department)
+            or can_schedule_across_departments(request.user)
+        ):
+            return None, Response(
+                {'detail': 'Only this desk\u2019s leaders or church officers can keep its register.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        event = DepartmentEvent.objects.filter(department=department, pk=event_id).first()
+        if event is None:
+            return None, Response({'detail': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return event, None
+
+    def get(self, request, department, event_id):
+        event, error = self._event(request, department, event_id)
+        if error is not None:
+            return error
+        rows = list(event.enrollments.select_related('member').all())
+        return Response({
+            'event': event.id,
+            'title': event.title,
+            'fee_amount': str(event.fee_amount),
+            'registration_deadline': event.registration_deadline,
+            'count': len(rows),
+            'paid_count': sum(1 for row in rows if row.status == 'paid'),
+            'enrollments': [
+                {
+                    'id': row.id,
+                    'member_id': row.member_id,
+                    'name': row.name or (row.member.get_full_name() if row.member else ''),
+                    'phone_number': row.phone_number,
+                    'amount': str(row.amount),
+                    'status': row.status,
+                    'source': row.source,
+                    'created_at': row.created_at,
+                }
+                for row in rows
+            ],
+        })
+
+    def post(self, request, department, event_id):
+        event, error = self._event(request, department, event_id)
+        if error is not None:
+            return error
+        member_id = request.data.get('member_id')
+        member = User.objects.filter(pk=member_id, is_active=True).first() if member_id else None
+        name = (request.data.get('name') or '').strip()
+        if member is None and not name:
+            return Response({'name': 'Name the person enrolling, or pick a member.'}, status=status.HTTP_400_BAD_REQUEST)
+        if member is not None and EventEnrollment.objects.filter(event=event, member=member).exists():
+            return Response({'detail': 'That member is already on the register.'}, status=status.HTTP_400_BAD_REQUEST)
+        enrollment = EventEnrollment.objects.create(
+            event=event,
+            member=member,
+            name=name or (member.get_full_name() if member else ''),
+            phone_number=(request.data.get('phone_number') or '').strip(),
+            amount=0,
+            status='waived',
+            source='manual',
+            created_by=request.user,
+        )
+        return Response({'detail': 'Enrolled on the register.', 'id': enrollment.id}, status=status.HTTP_201_CREATED)
 
 
 class DepartmentEventProgramView(APIView):

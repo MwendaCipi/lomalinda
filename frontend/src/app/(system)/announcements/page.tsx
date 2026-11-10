@@ -8,6 +8,7 @@ import { AnnouncementInlineComments } from "@/components/announcement-comment-mo
 import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { EventEnrollModal } from "@/components/event-enroll-modal";
 import { eventLabel } from "@/lib/announcement-dates";
 import { cardButtons } from "@/lib/announcement-options";
 import { dayFirst } from "@/lib/dates";
@@ -54,6 +55,11 @@ type FeedItem = {
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   support_account?: string | null;
   support_account_display?: string | null;
+  /** An Enroll now / Register now post is also a department event. */
+  enroll_department?: string | null;
+  enroll_fee?: string | number | null;
+  enroll_deadline?: string | null;
+  enrollment_event?: number | null;
   is_popup?: boolean;
   expires_at?: string | null;
   created_at: string;
@@ -85,6 +91,8 @@ export default function AnnouncementsPage() {
   // never loses their place to give.
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindFor, setInKindFor] = useState<FeedItem | null>(null);
+  // The post whose Enroll now / Register now button opened its register.
+  const [enrollFor, setEnrollFor] = useState<FeedItem | null>(null);
   const [pledgeDone, setPledgeDone] = useState<number[]>([]);
 
   // Comments on announcements appear inline beneath the card.
@@ -435,7 +443,26 @@ export default function AnnouncementsPage() {
                                   </button>
                                 );
                               }
-                              if (code === "join_meeting" || code === "enroll" || code === "register") {
+                              if (code === "enroll" || code === "register") {
+                                // The seat is on the event the post created: the
+                                // button opens the fee form, never a link out.
+                                if (!item.enrollment_event || !item.enroll_department) return null;
+                                const closed =
+                                  Boolean(item.enroll_deadline) &&
+                                  String(item.enroll_deadline) < new Date().toISOString().slice(0, 10);
+                                return (
+                                  <button
+                                    key={code}
+                                    type="button"
+                                    disabled={closed}
+                                    onClick={() => setEnrollFor(item)}
+                                    className="rounded-full border border-sand-mute bg-white px-4 py-1.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember disabled:opacity-45"
+                                  >
+                                    {closed ? "Registration closed" : code === "enroll" ? "Enroll now" : "Register now"}
+                                  </button>
+                                );
+                              }
+                              if (code === "join_meeting") {
                                 if (!item.href) return null;
                                 const label =
                                   code === "join_meeting" ? "Join meeting" : code === "enroll" ? "Enroll now" : "Register now";
@@ -527,6 +554,20 @@ export default function AnnouncementsPage() {
         onClose={() => setInKindFor(null)}
         defaultPurpose={inKindFor?.support_account_display || inKindFor?.fund_drive?.title || undefined}
         announcementTitle={inKindFor?.title}
+      />
+      <EventEnrollModal
+        target={
+          enrollFor && enrollFor.enrollment_event && enrollFor.enroll_department
+            ? {
+                event: enrollFor.enrollment_event,
+                department: enrollFor.enroll_department,
+                title: enrollFor.title,
+                fee: enrollFor.enroll_fee ?? 0,
+                deadline: enrollFor.enroll_deadline ?? null,
+              }
+            : null
+        }
+        onClose={() => setEnrollFor(null)}
       />
 
     </main>

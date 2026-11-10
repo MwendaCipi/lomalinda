@@ -5,6 +5,7 @@ import { showAlert } from "@/lib/alerts";
 import { Send, Sparkles, X } from "lucide-react";
 import { localDate, dayFirst } from "@/lib/dates";
 import { CARD_OPTION_CHOICES, GIVING_OPTION_CODES } from "@/lib/announcement-options";
+import { useAllDepartments } from "@/hooks/use-departments";
 
 /**
  * The "Post to" vocabulary: where a post travels, as one flat list — who it
@@ -74,6 +75,12 @@ export type Announcement = {
   response_options?: string;
   responses?: { id: number; action_type: string; response_text?: string; response_choice?: string; respondent_name?: string; created_at: string }[];
   support_account?: string | null;
+  // An Enroll now / Register now post is also a department event: the desk
+  // whose calendar holds it, what a seat costs, and when registration closes.
+  enroll_department?: string | null;
+  enroll_fee?: string | number | null;
+  enroll_deadline?: string | null;
+  enrollment_event?: number | null;
   // The buttons this post's card carries — codes from CARD_OPTION_CHOICES.
   // Empty means a plain notice with nothing to press.
   options?: string[];
@@ -303,6 +310,11 @@ export function AnnouncementManager({
     // The account a call for money or goods supports. The form asks for it
     // only when one of those buttons is ticked, the API insists on it there.
     support_account: "",
+    // A post that enrols or registers people is also an event: the desk whose
+    // calendar holds it, what a seat costs, and the day its register closes.
+    enroll_department: "",
+    enroll_fee: "",
+    enroll_deadline: "",
     // Site and email are the ordinary pair: the post shows on the site and
     // lands in inboxes. SMS is added for the occasions it is wanted.
     sharing_option: "site,email",
@@ -321,6 +333,8 @@ export function AnnouncementManager({
   // The treasury accounts a "Request support" post may name, offered as the
   // wording members read on the giving form.
   const [accounts, setAccounts] = useState<{ id: number; name: string; description?: string }[]>([]);
+  // The desks an Enroll now / Register now post may file its event under.
+  const departments = useAllDepartments();
   const [attachment, setAttachment] = useState<File | null>(null);
   // Editing shows the post's existing flyer; "Remove" clears it server-side
   // via the remove_attachment flag.
@@ -329,6 +343,10 @@ export function AnnouncementManager({
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSharingDropdown, setShowSharingDropdown] = useState(false);
+  // The composer's foot panel (Cancel / Post) hides as the fields scroll —
+  // the whole panel, card and shadow included, so it stops sitting over the
+  // words being written. It returns on a scroll back up or at the top.
+  const [composerActionsHidden, setComposerActionsHidden] = useState(false);
   const sharingDropdownRef = useRef<HTMLDivElement>(null);
   const [showPostToDropdown, setShowPostToDropdown] = useState(false);
   const postToDropdownRef = useRef<HTMLDivElement>(null);
@@ -351,6 +369,37 @@ export function AnnouncementManager({
     });
   }, []);
 
+  useEffect(() => {
+    // The host's body is the scroller in the desk's compose modal, so the
+    // listener watches every scroller under the document rather than one
+    // element it does not own.
+    if (!composerOnly) return;
+    let lastTarget: EventTarget | null = null;
+    let lastY = 0;
+    const onScroll = (event: Event) => {
+      const element = event.target instanceof HTMLElement ? event.target : null;
+      const y =
+        element && element !== document.documentElement && element !== document.body
+          ? element.scrollTop
+          : window.scrollY;
+      if (event.target !== lastTarget) {
+        lastTarget = event.target;
+        lastY = y;
+        return;
+      }
+      const moved = y - lastY;
+      lastY = y;
+      if (y <= 16) {
+        setComposerActionsHidden(false);
+        return;
+      }
+      if (Math.abs(moved) < 8) return;
+      setComposerActionsHidden(moved > 0);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+  }, [composerOnly]);
+
 
   function handleEdit(item: Announcement) {
     setEditingId(item.id);
@@ -372,6 +421,9 @@ export function AnnouncementManager({
       audience: postTo.ministries,
       options: [...(item.options ?? [])],
       support_account: item.support_account ?? "",
+      enroll_department: item.enroll_department ?? "",
+      enroll_fee: item.enroll_fee != null ? String(item.enroll_fee) : "",
+      enroll_deadline: item.enroll_deadline ?? "",
       sharing_option: item.sharing_option || "site,email",
       href: item.href ?? "",
       event_date_from: item.event_date_from ?? "",
@@ -455,6 +507,9 @@ export function AnnouncementManager({
       audience: (presetAudience ?? []) as string[],
       options: [],
       support_account: "",
+      enroll_department: "",
+      enroll_fee: "",
+      enroll_deadline: "",
       sharing_option: "site,email",
       href: "",
       event_date_from: "",
@@ -513,6 +568,29 @@ export function AnnouncementManager({
       showAlert("Account Missing", err, "error");
       return;
     }
+    // Enrolling or registering people makes the post an event: the calendar
+    // that holds it, what a seat costs, and the day the register closes. The
+    // API insists on all three, so the form asks before the round trip.
+    if (form.options.some((code) => code === "enroll" || code === "register")) {
+      if (!form.enroll_department) {
+        const err = "Choose the department or ministry whose calendar holds this event.";
+        setMessage(err);
+        showAlert("Department Missing", err, "error");
+        return;
+      }
+      if (!form.enroll_fee || Number(form.enroll_fee) <= 0) {
+        const err = "Set the amount a member pays to be enrolled.";
+        setMessage(err);
+        showAlert("Amount Missing", err, "error");
+        return;
+      }
+      if (!form.enroll_deadline) {
+        const err = "Set the day registration closes.";
+        setMessage(err);
+        showAlert("Deadline Missing", err, "error");
+        return;
+      }
+    }
     // A scheduled post must fall in the future — the API refuses an hour that
     // has already passed, and the form says so before the round trip.
     const publishAt = form.publish_on
@@ -538,6 +616,14 @@ export function AnnouncementManager({
         // further down; String()-ing an array here would post one
         // comma-joined code the API reads as a single invalid choice.
         if (key === "options" || key === "publish_on" || key === "publish_time") return;
+        // The enrolment fields belong to an Enroll now / Register now post
+        // only; a plain notice leaves them off the wire entirely.
+        if (
+          (key === "enroll_department" || key === "enroll_fee" || key === "enroll_deadline") &&
+          !form.options.some((code) => code === "enroll" || code === "register")
+        ) {
+          return;
+        }
         // Optional fields are omitted when blank so the row keeps a real null
         // (an empty string would fail date parsing server-side). The drive
         // goal rides along only when written — the API mints a drive for a
@@ -818,6 +904,55 @@ export function AnnouncementManager({
                     kind asks for goods — tick both when the call takes either.
                   </span>
                 </label>
+              )}
+
+              {/* A post that enrols or registers people is also an event on
+                  a desk's calendar: members pay the fee through the card's
+                  button, and the desk seats them — by that payment, or by
+                  hand on the day. */}
+              {form.options.some((code) => code === "enroll" || code === "register") && (
+                <>
+                  <label className="block text-xs font-semibold text-bark md:col-span-2">
+                    Department / ministry *
+                    <select
+                      value={form.enroll_department}
+                      onChange={(e) => setForm({ ...form, enroll_department: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                    >
+                      <option value="">-- Select the desk that runs it --</option>
+                      {departments.map((row) => (
+                        <option key={row.code} value={row.code}>
+                          {row.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-1 block text-[10px] font-normal text-moss">
+                      The event lands on this desk&apos;s calendar, and its leader can seat people there.
+                    </span>
+                  </label>
+                  <div className="md:col-span-2 grid gap-3 sm:grid-cols-2">
+                    <label className="block text-xs font-semibold text-bark">
+                      Registration fee (KES) *
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={form.enroll_fee}
+                        onChange={(e) => setForm({ ...form, enroll_fee: e.target.value })}
+                        placeholder="e.g. 500"
+                        className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-bark">
+                      Register closes *
+                      <DayField
+                        required
+                        value={form.enroll_deadline}
+                        onChange={(iso) => setForm({ ...form, enroll_deadline: iso })}
+                      />
+                    </label>
+                  </div>
+                </>
               )}
 
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
@@ -1198,8 +1333,14 @@ export function AnnouncementManager({
         {renderComposerFields()}
         {/* The buttons ride the bottom of the host's scrolling body: a post is
             a long form, and a Cancel or Post that scrolled out of reach left
-            the officer scrolling to the end just to leave. */}
-        <div className="sticky bottom-0 z-10 mt-4 rounded-xl border border-sand-line bg-white px-3 py-3 shadow-lg">
+            the officer scrolling to the end just to leave. Reading the form
+            downward slides the whole panel — card, border and shadow too —
+            out of the way, so it never sits over the words being written. */}
+        <div
+          className={`sticky bottom-0 z-10 mt-4 rounded-xl border border-sand-line bg-white px-3 py-3 shadow-lg transition-all duration-300 ease-out ${
+            composerActionsHidden ? "translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
+          }`}
+        >
           {renderComposerActions()}
         </div>
       </>

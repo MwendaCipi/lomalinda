@@ -949,6 +949,14 @@ class DepartmentEvent(models.Model):
     mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_PHYSICAL)
     location = models.CharField(max_length=160, blank=True)
     meeting_link = models.URLField(max_length=500, blank=True)
+    # A registration event is the calendar row an announcement's Enroll now /
+    # Register now button acts on: the fee a member pays, the day the register
+    # closes, and the post that put the event here. The desk's calendar and the
+    # announcement's button therefore read the same row, and the desk can seat
+    # people by hand beside those who paid.
+    fee_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text='What a member pays to be enrolled; zero for an event with no fee')
+    registration_deadline = models.DateField(null=True, blank=True, help_text='The last day a member may register for this event')
+    announcement = models.OneToOneField('members.Announcement', on_delete=models.SET_NULL, null=True, blank=True, related_name='enrollment_event', help_text='The announcement whose Enroll now / Register now button created this event')
     program_file = models.FileField(upload_to='dept_event_programs/', null=True, blank=True)
     # The programme typed at the desk rather than uploaded as a file: one
     # session of the order of service per entry — the hours it runs, what it
@@ -971,6 +979,42 @@ class DepartmentEvent(models.Model):
 
     def __str__(self):
         return f"{self.department} — {self.title} ({self.event_date})"
+
+
+class EventEnrollment(models.Model):
+    """One person on a registration event's roll.
+
+    A paid enrolment is written by Safaricom's callback — the money is what
+    buys the seat — and a manual one by the desk that runs the event, so the
+    leader can seat somebody who paid at the door, or a guest with no account.
+    """
+
+    STATUS_CHOICES = [('pending', 'Pending'), ('paid', 'Paid'), ('waived', 'Enrolled by the desk')]
+    SOURCE_CHOICES = [('payment', 'Payment'), ('manual', 'Manual')]
+
+    event = models.ForeignKey(DepartmentEvent, on_delete=models.CASCADE, related_name='enrollments')
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='event_enrollments')
+    name = models.CharField(max_length=160, blank=True, help_text='The person enrolled; blank when their account names them')
+    phone_number = models.CharField(max_length=20, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='payment')
+    contribution = models.ForeignKey('members.Contribution', on_delete=models.SET_NULL, null=True, blank=True, related_name='event_enrollments')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='event_enrollments_made')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('created_at',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=['event', 'member'],
+                condition=models.Q(member__isnull=False),
+                name='one_enrollment_per_member_event',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name or self.member} — {self.event.title}"
 
 
 class EnrollmentRequest(models.Model):
@@ -1228,6 +1272,14 @@ class Announcement(models.Model):
         ('register', 'Register now'),
     ]
     card_options = models.JSONField(default=list, blank=True, help_text="Buttons this post's card carries, in the officer's own pick; empty means a plain notice")
+    # A post that enrols or registers people is also an event: the department
+    # whose calendar holds it, what a seat costs, and the day the register
+    # closes. Saving the post writes the DepartmentEvent that its button acts
+    # on (see AnnouncementSerializer._sync_enrollment_event), so the calendar
+    # and the announcement never disagree.
+    enroll_department = models.CharField(max_length=100, blank=True, default='', help_text='Department whose calendar holds the event this post enrols people into')
+    enroll_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text='What a member pays to be enrolled; blank when the post asks for no fee')
+    enroll_deadline = models.DateField(null=True, blank=True, help_text='The last day a member may register')
     # Scheduling: a post written now and published later. ``publish_at`` is the
     # moment it goes live — on the site, and out by email, SMS and push — and
     # until it arrives the feed does not show it and no message has gone out.

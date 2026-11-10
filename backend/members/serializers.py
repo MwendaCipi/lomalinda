@@ -617,6 +617,15 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         source='card_options',
     )
 
+    # The calendar row an Enroll now / Register now button acts on. The
+    # composer writes it with the post; the feed reads its id back so the
+    # button knows whether it has an event to register for.
+    enrollment_event = serializers.SerializerMethodField()
+
+    def get_enrollment_event(self, obj):
+        event = getattr(obj, 'enrollment_event', None)
+        return event.id if event else None
+
     @staticmethod
     def legacy_options(obj):
         """The buttons an older post's card already carries.
@@ -755,6 +764,34 @@ class AnnouncementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 'A post that asks for money or goods needs the treasury account it supports.'
             )
+        # A post that enrols or registers people is also an event: the desk
+        # whose calendar holds it, what a seat costs, and when the register
+        # closes. Without all three the button would have nothing to act on.
+        wants_enrollment = 'enroll' in chosen or 'register' in chosen
+        if wants_enrollment:
+            dept = attrs.get('enroll_department') if 'enroll_department' in attrs else (instance.enroll_department if instance else '')
+            dept = (dept or '').strip()
+            if not dept:
+                raise serializers.ValidationError(
+                    'A post that enrols or registers people needs the department whose calendar holds the event.'
+                )
+            if not Department.objects.filter(code=dept, is_active=True).exists():
+                raise serializers.ValidationError('That is not one of the church\u2019s departments.')
+            fee = attrs.get('enroll_fee') if 'enroll_fee' in attrs else (instance.enroll_fee if instance else None)
+            if fee is None or fee <= 0:
+                raise serializers.ValidationError(
+                    'A post that enrols or registers people needs the amount a member pays.'
+                )
+            deadline = attrs.get('enroll_deadline') if 'enroll_deadline' in attrs else (instance.enroll_deadline if instance else None)
+            if not deadline:
+                raise serializers.ValidationError(
+                    'A post that enrols or registers people needs the day its register closes.'
+                )
+            start = attrs.get('event_date_from', instance.event_date_from if instance else None)
+            if not start:
+                raise serializers.ValidationError(
+                    'A post that enrols or registers people needs the event date the register is for.'
+                )
         # A scheduled post must fall in the future: a row written for an hour
         # already past is a post the feed would show the moment it is saved,
         # which is not what the officer asked for.
@@ -786,9 +823,60 @@ class AnnouncementSerializer(serializers.ModelSerializer):
                 attrs['response_options'] = '\n'.join(lines)
         return attrs
 
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        self._sync_enrollment_event(instance)
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        self._sync_enrollment_event(instance)
+        return instance
+
+    @staticmethod
+    def _sync_enrollment_event(instance):
+        """Keep the post's calendar row in step with the post itself.
+
+        A post that carries Enroll now or Register now owns a department
+        event: its title, its days and its hours are the announcement's, and
+        the fee and the register's last day ride with it. Unticking both
+        buttons takes the event away again — unless somebody has already been
+        enrolled, in which case the desk keeps the calendar row and only the
+        post's claim to it is dropped.
+        """
+        from django.utils import timezone as django_timezone
+
+        from .models import DepartmentEvent
+
+        codes = instance.card_options or []
+        wants = 'enroll' in codes or 'register' in codes
+        event = DepartmentEvent.objects.filter(announcement=instance).first()
+        if not wants:
+            if event is not None:
+                if event.enrollments.exists():
+                    event.announcement = None
+                    event.save(update_fields=['announcement'])
+                else:
+                    event.delete()
+            return
+        if not instance.enroll_department:
+            return
+        if event is None:
+            event = DepartmentEvent(announcement=instance)
+        event.department = instance.enroll_department
+        event.title = (instance.title or 'Registration')[:160]
+        event.event_date = instance.event_date_from or django_timezone.localdate()
+        event.end_date = instance.event_date_to
+        event.event_time = instance.event_time_from
+        event.end_time = instance.event_time_to
+        event.fee_amount = instance.enroll_fee or 0
+        event.registration_deadline = instance.enroll_deadline
+        event.notes = (instance.text or '')[:2000]
+        event.save()
+
     class Meta:
         model = Announcement
-        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'giving_actions', 'options', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'publish_at', 'repeat', 'scheduled_broadcast_at', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
+        fields = ('id', 'title', 'text', 'detail', 'href', 'visibility', 'audience', 'announcement_type', 'action_type', 'support_account', 'support_account_display', 'giving_actions', 'options', 'enroll_department', 'enroll_fee', 'enroll_deadline', 'enrollment_event', 'response_mode', 'response_options', 'attachment', 'attachment_name', 'attachment_size', 'sharing_option', 'is_popup', 'action_prompt', 'campaign', 'campaign_id', 'promotion_target', 'kind', 'fund_drive', 'published', 'publish_at', 'repeat', 'scheduled_broadcast_at', 'starts_at', 'expires_at', 'event_date_from', 'event_date_to', 'event_time_from', 'event_time_to', 'created_at', 'responses', 'responses_count')
         read_only_fields = ('id', 'created_at', 'campaign_id', 'scheduled_broadcast_at')
 
 

@@ -19,6 +19,7 @@ import { AnnouncementInlineComments } from "@/components/announcement-comment-mo
 import { GiveNowModal } from "@/components/give-now-modal";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { EventEnrollModal } from "@/components/event-enroll-modal";
 import { eventLabel } from "@/lib/announcement-dates";
 import { cardButtons } from "@/lib/announcement-options";
 import { dayFirst, dayFirstTime } from "@/lib/dates";
@@ -65,6 +66,11 @@ type FeedItem = {
   action_type?: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
   support_account?: string | null;
   support_account_display?: string | null;
+  /** An Enroll now / Register now post is also a department event. */
+  enroll_department?: string | null;
+  enroll_fee?: string | number | null;
+  enroll_deadline?: string | null;
+  enrollment_event?: number | null;
   is_popup?: boolean;
   expires_at?: string | null;
   created_at: string;
@@ -143,6 +149,8 @@ export function AnnouncementsFeed({
   // never loses their place to give.
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindFor, setInKindFor] = useState<FeedItem | null>(null);
+  // The post whose Enroll now / Register now button opened its register.
+  const [enrollFor, setEnrollFor] = useState<FeedItem | null>(null);
   const [pledgeDone, setPledgeDone] = useState<number[]>([]);
 
   // Comments on announcements appear inline beneath the card.
@@ -319,10 +327,13 @@ export function AnnouncementsFeed({
             // The buttons the officer chose for this post, in the
             // card's reading order.
             const feedActions = chosenActions(item);
-            const actionGrid =
-              feedActions.length >= 4 ? "grid-cols-2 sm:grid-cols-4" :
-              feedActions.length === 3 ? "grid-cols-3" :
-              feedActions.length === 2 ? "grid-cols-2" : "grid-cols-1";
+            // One button keeps its own width and sits at the row's right-hand
+            // end, the way a lone action reads on a card; two or more share
+            // the row as a grid.
+            const actionsClass =
+              feedActions.length === 1
+                ? "flex justify-end"
+                : `grid gap-2 ${feedActions.length >= 4 ? "grid-cols-2 sm:grid-cols-4" : feedActions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`;
             // The area a post is addressed to, by name: the first of
             // this account's areas whose audience code the post carries.
             const itemBadge = (item.audience ?? [])
@@ -498,7 +509,7 @@ export function AnnouncementsFeed({
                     opens. */}
                 {feedActions.length > 0 && (
                   <div className="mt-3 border-t border-sand-line pt-3">
-                    <div className={`grid gap-2 ${actionGrid}`}>
+                    <div className={actionsClass}>
                       {feedActions.map((code) => {
                         if (code === "give_now") {
                           return (
@@ -536,10 +547,28 @@ export function AnnouncementsFeed({
                             </button>
                           );
                         }
-                        if (code === "join_meeting" || code === "enroll" || code === "register") {
+                        if (code === "enroll" || code === "register") {
+                          // Enrolling is a seat on the event the post created,
+                          // not a link out: the member pays the fee on the card.
+                          if (!item.enrollment_event || !item.enroll_department) return null;
+                          const closed =
+                            Boolean(item.enroll_deadline) &&
+                            String(item.enroll_deadline) < new Date().toISOString().slice(0, 10);
+                          return (
+                            <button
+                              key={code}
+                              type="button"
+                              disabled={closed}
+                              onClick={() => setEnrollFor(item)}
+                              className="inline-flex items-center justify-center gap-1 rounded-full border border-sand-mute bg-white px-3 py-2 text-xs font-bold text-bark transition hover:border-ember hover:text-ember disabled:opacity-45"
+                            >
+                              {closed ? "Registration closed" : code === "enroll" ? "Enroll now" : "Register now"}
+                            </button>
+                          );
+                        }
+                        if (code === "join_meeting") {
                           if (!item.href) return null;
-                          const label =
-                            code === "join_meeting" ? "Join meeting" : code === "enroll" ? "Enroll now" : "Register now";
+                          const label = "Join meeting";
                           return (
                             <a
                               key={code}
@@ -619,6 +648,20 @@ export function AnnouncementsFeed({
         onClose={() => setInKindFor(null)}
         defaultPurpose={inKindFor?.support_account_display || inKindFor?.fund_drive?.title || undefined}
         announcementTitle={inKindFor?.title}
+      />
+      <EventEnrollModal
+        target={
+          enrollFor && enrollFor.enrollment_event && enrollFor.enroll_department
+            ? {
+                event: enrollFor.enrollment_event,
+                department: enrollFor.enroll_department,
+                title: enrollFor.title,
+                fee: enrollFor.enroll_fee ?? 0,
+                deadline: enrollFor.enroll_deadline ?? null,
+              }
+            : null
+        }
+        onClose={() => setEnrollFor(null)}
       />
     </>
   );
