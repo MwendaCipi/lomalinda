@@ -380,13 +380,17 @@ export function PopupAnnouncementModal() {
             {!isOpinion && (
               <>
                 <p className="text-xs font-semibold uppercase tracking-wider text-ember">
-                  {isContributionAction && `User Action: ${actionLabel} Contribution`}
+                  {isContributionAction && popupActions.length > 0 && `User Action: ${actionLabel} Contribution`}
                   {actionType === "respond" && "User Action: Response"}
-                  {actionType === "none" && "No Action Required"}
+                  {(actionType === "none" || (isContributionAction && popupActions.length === 0)) &&
+                    "No Action Required"}
                 </p>
                 <p className="mt-1 text-xs text-moss">
+                  {/* The words promise only what the officer ticked: a giving
+                      post given no buttons asks for nothing, so it offers the
+                      dismiss the popup always carries. */}
                   {current.action_prompt ||
-                    (isContributionAction
+                    (isContributionAction && popupActions.length > 0
                       ? "Pledge an amount, give in kind, or give money, or dismiss this announcement."
                       : actionType === "respond"
                       ? "You may enter your response, or dismiss this announcement."

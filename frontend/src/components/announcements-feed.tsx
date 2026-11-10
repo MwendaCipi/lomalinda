@@ -395,9 +395,6 @@ export function AnnouncementsFeed({
                     </a>
                   )}
 
-                  {/* A card with nothing to give still carries the one
-                      Comment button at its foot — expanding the thread inline. */}
-
                   {/* An Opinion post asks the congregation a question;
                       the answer arrives in the shape the officer chose
                       — free text, or a pick among the posted options. */}
