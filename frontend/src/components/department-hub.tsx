@@ -6588,10 +6588,9 @@ function DepartmentDetail({
   department,
   onChanged,
   // Every desk opens on the first page its strip holds: the chip first in
-  // line is the page showing, on a phone as on a desk. The strip's first
-  // item is the Event Calendar on every desk, so that is where its walk
-  // begins — no desk opens further down its own strip.
-  initialTab = "calendar",
+  // line is the page showing, on a phone as on a desk. An unset view means
+  // exactly that; a named one — a deep link — rides through.
+  initialTab,
   onBack,
   embedded = false,
 }: {
@@ -6821,13 +6820,25 @@ function DepartmentDetail({
   // so a call for either opens the desk's own first view. That is Sharing for
   // the pastoral office, whose notices the desk publishes; a reader who may not
   // publish lands on the treasury's asks instead.
-  const [subTab, setSubTab] = useState<DeptSubTab>(
-    isPastorate && (initialTab === "calendar" || initialTab === "pulpit-team")
+  // The desk's own first chip, for the reader looking at it: Sharing on the
+  // eldership (whose strip is its own list) and on the pastor's pastorate,
+  // the church's asks on the pastorate for a reader who may not publish, and
+  // the Event Calendar everywhere else — every other desk's strip leads with
+  // it.
+  const opensOn: DeptSubTab = isEldership
+    ? (eldershipViews[0].key as DeptSubTab)
+    : isPastorate
       ? isPastor
         ? "sharing"
-        : "treasury-approvals"
-      : initialTab
-  );
+        : "spiritual"
+      : "calendar";
+  // The pastorate keeps no calendar: a link naming one asks for no view in
+  // particular, so the desk falls back to its own first chip.
+  const askedView =
+    isPastorate && (initialTab === "calendar" || initialTab === "pulpit-team")
+      ? undefined
+      : initialTab;
+  const [subTab, setSubTab] = useState<DeptSubTab>(askedView ?? opensOn);
   // A deep link may name a view the reader is not entitled to; the strip
   // withholds it, and the desk says why rather than showing an empty panel.
   const officeViewBlocked =
@@ -10049,9 +10060,9 @@ function ContactLeaderModal({
 
 export function DepartmentHub({
   initialDept = null,
-  // Every desk names a calendar in its strip, so the desk opens on it, not
-  // on the roll: a deep link's view still rides through when one is named.
-  initialTab = "calendar",
+  // Which view to land on: left unset, the desk opens on the first chip of
+  // its own strip; a deep link's view rides through when one is named.
+  initialTab,
   onBack,
   embedded = false,
   directoryHeading = MINISTRIES_AND_DEPARTMENTS_HEADING,
@@ -10080,7 +10091,7 @@ export function DepartmentHub({
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
   const hubSearchParams = useSearchParams();
   const urlTab = (hubSearchParams?.get("view") || hubSearchParams?.get("subtab")) as DeptSubTab | null;
-  const [detailTab, setDetailTab] = useState<DeptSubTab>(urlTab || initialTab);
+  const [detailTab, setDetailTab] = useState<DeptSubTab | undefined>(urlTab ?? initialTab);
   // Which department's budget modal is open.
   const [budgetDept, setBudgetDept] = useState<DepartmentRow | null>(null);
   // Which department's leadership modal is open.

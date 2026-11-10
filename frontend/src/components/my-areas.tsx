@@ -264,7 +264,10 @@ export function MyAreas() {
     // the entry that holds it (the history layer's job, not this page's):
     // one entry per area is what keeps Back one tap per place.
     (code: string) =>
-      router.push(code === "treasury" ? "/administration/treasury" : `/my-areas?area=${code}&view=members`),
+      // No view is named: the desk opens on the first chip of its own strip,
+      // whatever that page is on that desk — the calendar, or Sharing on the
+      // eldership — rather than on a page chosen for every area alike.
+      router.push(code === "treasury" ? "/administration/treasury" : `/my-areas?area=${code}`),
     [router]
   );
   // …and a `?area=treasury` already in the address bar goes to the desk
