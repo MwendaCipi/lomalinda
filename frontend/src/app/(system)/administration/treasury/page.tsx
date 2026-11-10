@@ -113,6 +113,17 @@ const isMpesaGiving = (g: IndividualGiving) => g.source === "digital" && /^m-?pe
 /** One rule of the report's order: a column, and the way it runs. */
 type ReportOrderRule = { field: "account" | "date" | "amount" | "name"; direction: "asc" | "desc" };
 
+/** The sections the givings paper can be cut into, after its order is set. */
+type ReportGroupBy = "" | "account" | "month" | "mode" | "giver";
+
+const reportGroupOptions: { value: ReportGroupBy; label: string }[] = [
+  { value: "", label: "One sheet" },
+  { value: "account", label: "Account" },
+  { value: "month", label: "Month" },
+  { value: "mode", label: "Mode of giving" },
+  { value: "giver", label: "Giver" },
+];
+
 /** The ways money reaches the church, as the report's mode filter names them. */
 const reportModeOptions = [
   { value: "mpesa", label: "M-Pesa" },
@@ -464,11 +475,14 @@ export default function TreasuryPage() {
   const [reportDepartments, setReportDepartments] = useState<string[]>([]);
   const [reportModes, setReportModes] = useState<string[]>([]);
   // The order the paper prints in: one column at a time — account, date,
-  // amount or giver. Sectioned sorts (by month, by account) will arrive as
-  // their own control; until then this stays a single rule.
+  // amount or giver — then the sections it is cut into, if any.
   const [reportOrderRules, setReportOrderRules] = useState<ReportOrderRule[]>([
     { field: "account", direction: "asc" },
   ]);
+  // The picker's second cut: the givings paper can be sectioned by account,
+  // month, mode or giver after its rows are ordered. The summary keeps its
+  // fixed NEKF shape, so this only shows for the individual report.
+  const [reportGroupBy, setReportGroupBy] = useState<ReportGroupBy>("");
   const [reportMembers, setReportMembers] = useState<{ id: number; name: string }[]>([]);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [reportDepartmentOptions, setReportDepartmentOptions] = useState<{ code: string; label: string }[]>([]);
@@ -1493,6 +1507,11 @@ export default function TreasuryPage() {
         params.append("order", rule.direction);
       }
     }
+    // The givings paper is cut into sections after its order is set; the
+    // summary's fixed shape never asks for one.
+    if (mode === "individual" && reportGroupBy) {
+      params.append("group_by", reportGroupBy);
+    }
     for (const member of reportMembers) {
       params.append("member_ids", String(member.id));
     }
@@ -1542,6 +1561,7 @@ export default function TreasuryPage() {
     setReportModes([]);
     setReportMembers([]);
     setReportOrderRules([{ field: "account", direction: "asc" }]);
+    setReportGroupBy("");
     setOpenReportCombo(null);
     setShowReportModal(true);
     if (reportDepartmentOptions.length === 0) {
@@ -1632,10 +1652,14 @@ export default function TreasuryPage() {
       const modeNames = reportModes.map(
         (code) => reportModeOptions.find((option) => option.value === code)?.label ?? code,
       );
+      const groupName = reportGroupOptions.find((option) => option.value === reportGroupBy)?.label;
       const details = [
         accountNames.length ? `Accounts: ${accountNames.join(", ")}` : "All accounts",
         departmentNames.length ? `Departments: ${departmentNames.join(", ")}` : "",
         modeNames.length ? `Modes: ${modeNames.join(", ")}` : "",
+        reportMode === "individual" && reportGroupBy && groupName
+          ? `Grouped by: ${groupName}`
+          : "",
         reportMembers.length ? `Individuals: ${reportMembers.map((member) => member.name).join(", ")}` : "",
       ]
         .filter(Boolean)
@@ -3160,9 +3184,8 @@ export default function TreasuryPage() {
                 onClear={() => setReportModes([])}
               />
 
-              {/* One column at a time: the paper prints in this order, and a
-                  sectioned sort (by month, by account) will arrive as its own
-                  control rather than another row here. */}
+              {/* One column at a time: the paper prints in this order, then
+                  the sections it is cut into (see Group by, below). */}
               <div className="space-y-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
                   Order by
@@ -3211,6 +3234,29 @@ export default function TreasuryPage() {
                   );
                 })()}
               </div>
+
+              {/* A second cut, after the order: each section carries its own
+                  heading and subtotal, and the paper still closes on the
+                  period's grand total. The summary has a fixed shape. */}
+              {reportMode === "individual" && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
+                    Group by
+                  </span>
+                  <select
+                    value={reportGroupBy}
+                    aria-label="Group the report by"
+                    onChange={(event) => setReportGroupBy(event.target.value as ReportGroupBy)}
+                    className="w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                  >
+                    {reportGroupOptions.map((option) => (
+                      <option key={option.value || "none"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
                 <div className="flex items-center justify-between gap-2">

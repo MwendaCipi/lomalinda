@@ -103,9 +103,9 @@ export const churchSchema = {
         {
           "@type": "OpeningHoursSpecification",
           dayOfWeek: "Saturday",
-          opens: "08:30",
-          closes: "17:00",
-          description: "Sabbath School and Divine Service",
+          opens: "06:00",
+          closes: "18:00",
+          description: "Church open to visitors",
         },
         {
           "@type": "OpeningHoursSpecification",

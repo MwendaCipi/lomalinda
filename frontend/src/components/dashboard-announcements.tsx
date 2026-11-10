@@ -134,36 +134,111 @@ export function DashboardAnnouncements() {
   const isOpinion = current?.announcement_type === "opinion";
   const linkHref = linkCode && current?.href ? current.href : null;
 
-  const hasImage = current && isImageAttachment(current.attachment);
 
-  // Whether the body is really cut off, measured on the line-clamped
-  // paragraph itself. Counting characters got this wrong both ways — a wide
-  // notice of 200 characters clamped with no ask to read on, a narrow one of
-  // 240 showed "See more" over text that ended before the third line — so the
-  // card now asks the element: a box whose content is taller than the box is
-  // a box with an ellipsis in it.
+  // Where the body has to stop, and that it stops after a whole word.
+  // Clamping the paragraph in CSS cut the fourth line wherever the box
+  // ended, so the last word could arrive half-written under the pinned "See
+  // more". The text is now measured off-screen against the same width and
+  // trimmed back to the last word that still leaves room for the ask, so the
+  // card reads a sentence that ends rather than one that was chopped.
   const bodyRef = useRef<HTMLParagraphElement>(null);
-  const [bodyClamped, setBodyClamped] = useState(false);
+  const [bodyFit, setBodyFit] = useState<{ source: string; text: string; clipped: boolean } | null>(null);
+  const bodyText = current?.text ?? "";
+  const hasImage = Boolean(current && isImageAttachment(current.attachment));
+
   useEffect(() => {
     const node = bodyRef.current;
-    if (!node) {
-      setBodyClamped(false);
+    if (!node || !bodyText) {
+      setBodyFit(null);
       return;
     }
-    const measure = () => setBodyClamped(node.scrollHeight - node.clientHeight > 1);
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const paragraph = bodyRef.current;
+        if (!paragraph || !paragraph.clientWidth) return;
+        const lineHeight = parseFloat(window.getComputedStyle(paragraph).lineHeight) || 24;
+        // Four lines, the height the rail reserves for the body.
+        const maxHeight = lineHeight * 4 + 1;
+        const words = bodyText.split(/\s+/).filter(Boolean);
+
+        // A probe wearing the paragraph's own classes, lifted out of the
+        // clamp so it can grow to the full text and be counted.
+        const probe = document.createElement("p");
+        probe.className = paragraph.className;
+        Object.assign(probe.style, {
+          position: "absolute",
+          visibility: "hidden",
+          pointerEvents: "none",
+          width: `${paragraph.clientWidth}px`,
+          height: "auto",
+          maxHeight: "none",
+          overflow: "visible",
+          display: "block",
+        });
+        probe.style.webkitLineClamp = "unset";
+        document.body.appendChild(probe);
+
+        /** Does this many whole words plus the ask fit in the four lines? */
+        const fits = (count: number, withAsk: boolean) => {
+          probe.textContent = words.slice(0, count).join(" ");
+          if (withAsk) {
+            const suffix = document.createElement("span");
+            suffix.textContent = " … See more";
+            suffix.style.fontWeight = "600";
+            probe.appendChild(suffix);
+          }
+          return probe.scrollHeight <= maxHeight;
+        };
+
+        let result: { text: string; clipped: boolean };
+        // A slide carrying an image asks to read on whatever its length, so
+        // the ask itself has to fit before the text counts as whole.
+        if (fits(words.length, hasImage)) {
+          result = { text: bodyText, clipped: false };
+        } else {
+          let low = 0;
+          let high = words.length;
+          while (low < high) {
+            const middle = Math.ceil((low + high) / 2);
+            if (fits(middle, true)) low = middle;
+            else high = middle - 1;
+          }
+          result = { text: words.slice(0, low).join(" "), clipped: true };
+        }
+        probe.remove();
+        setBodyFit((previous) =>
+          previous && previous.source === bodyText && previous.text === result.text && previous.clipped === result.clipped
+            ? previous
+            : { source: bodyText, ...result }
+        );
+      });
+    };
     measure();
     // The card is measured again when the slide turns, the width changes or
     // the web font lands late and the lines re-wrap.
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    return () => observer.disconnect();
-  }, [current?.id, current?.text]);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [bodyText, current?.id, hasImage]);
+
+  // A measurement belongs to the notice it measured: while the next slide is
+  // being measured the card shows that slide's own opening words, never the
+  // tail of the one before.
+  const measured = bodyFit && bodyFit.source === bodyText ? bodyFit : null;
+  const bodyShown = bodyText ? measured?.text ?? bodyText : "";
+  const bodyClipped = Boolean(bodyText && measured?.clipped);
 
   /** The ask to open the full feed, on whichever kind of notice the slide is:
-      the body is cut with an ellipsis, or the card carries an image a visitor
-      can enlarge but cannot see in full here. Every type asks on those same
-      terms — a giving call can run past three lines too. */
-  const showSeeMore = Boolean(current && (bodyClamped || hasImage));
+      the body was cut after its last whole word, or the card carries an image
+      a visitor can enlarge but cannot see in full here. Every type asks on
+      those same terms — a giving call can run past four lines too. */
+  const showSeeMore = Boolean(current && (bodyClipped || hasImage));
 
   /** The pledge modal's view of the slide the member is looking at. */
   const pledgeTargetFor = (announcement: Announcement): PledgeTarget => ({
@@ -265,36 +340,30 @@ export function DashboardAnnouncements() {
           <h2 className="line-clamp-1 text-lg font-bold leading-snug text-bark sm:text-xl">
             {current ? current.title : gathering ? gatheringLabel(gathering, now) : "Our week together"}
           </h2>
-          {/* A notice that runs past the four lines is cut with an ellipsis on
-              its last line, and See more rides that same line — pinned over
-              the cut — so the ask to read on is read with the sentence it
-              ends, not as a button standing apart. A slide cut for its image
-              rather than its length takes See more after the text instead:
-              there is no ellipsis to own a line. */}
+          {/* A notice that runs past the four lines is trimmed back to its
+              last whole word, and See more follows that word in the same
+              sentence — never pinned over half a word. A slide carrying an
+              image asks to read on whatever its length, with no ellipsis to
+              own the line. */}
           <div className="relative">
-            <p ref={bodyRef} className="mt-0.5 line-clamp-4 min-h-[6rem] text-sm leading-6 text-moss-mid">
-              {current
-                ? current.text
-                : gathering
-                  ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || churchWhere(settings) || "Church grounds"}`
-                  : "The week's meetings are still being set up."}
-              {current && showSeeMore && !bodyClamped && (
-                <Link
-                  href={`/announcements?id=${current.id}`}
-                  className="pointer-events-auto ml-1 whitespace-nowrap font-semibold text-ember"
-                >
-                  See more
-                </Link>
+            <p ref={bodyRef} className="mt-0.5 min-h-[6rem] overflow-hidden text-sm leading-6 text-moss-mid">
+              {current ? bodyShown : gathering
+                ? `${gathering.time} · ${gathering.online ? "Online" : gathering.place || churchWhere(settings) || "Church grounds"}`
+                : "The week's meetings are still being set up."}
+              {/* The ask follows the last whole word, in the sentence it
+                  ends, and wraps with it rather than sitting over the text. */}
+              {current && showSeeMore && (
+                <>
+                  {" "}
+                  <Link
+                    href={`/announcements?id=${current.id}`}
+                    className="pointer-events-auto whitespace-nowrap font-semibold text-ember"
+                  >
+                    <span aria-hidden="true">{bodyClipped ? "… " : ""}</span>See more
+                  </Link>
+                </>
               )}
             </p>
-            {current && showSeeMore && bodyClamped && (
-              <Link
-                href={`/announcements?id=${current.id}`}
-                className="pointer-events-auto absolute bottom-0 right-0 bg-white pl-1 text-sm font-semibold leading-6 text-ember"
-              >
-                <span aria-hidden="true">&hellip; </span>See more
-              </Link>
-            )}
           </div>
           <p className="line-clamp-1 min-h-[1.125rem] text-xs leading-[1.125rem] text-moss">
             {current?.detail || ""}

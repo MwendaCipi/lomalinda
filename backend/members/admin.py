@@ -453,6 +453,7 @@ class WeeklyMeetingAdmin(admin.ModelAdmin):
 class ChurchSettingsAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Church location', {'fields': ('church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude')}),
+        ('Public opening hours', {'fields': ('saturday_open_time', 'saturday_close_time', 'friday_open_time', 'friday_close_time')}),
         ('M-Pesa payment details', {'fields': ('mpesa_paybill_number', 'mpesa_account_number', 'mpesa_account_name', 'mpesa_phone_number')}),
     )
 

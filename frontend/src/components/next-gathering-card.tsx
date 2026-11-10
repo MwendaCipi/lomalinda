@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { nextMeeting, gatheringLabel, gatheringCountdown, platformLabel, type WeeklyMeeting } from "@/lib/gathering";
 import { dayFirst, weekdayOf } from "@/lib/dates";
+import { AnnouncementCommentModal } from "@/components/announcement-comment-modal";
+import { cardButtons } from "@/lib/announcement-options";
 import { churchMapHref, churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -13,8 +15,10 @@ type Announcement = {
   title: string;
   text: string;
   detail?: string;
-  href?: string;
+  href?: string | null;
   action_type: "none" | "tithe" | "combined_offering" | "13th_sabbath" | "camp_expenses" | "camp_goal" | "local_church_budget" | "respond";
+  /** The buttons this post's card carries, as the officer ticked them. */
+  options?: string[];
   /** The giving buttons this post carries; empty = the default trio. */
   giving_actions?: string[];
   action_prompt?: string;
@@ -27,15 +31,16 @@ type Announcement = {
  * Announcements used to replace the hero, which made the church's standing
  * welcome vanish whenever something was published. Instead of a second card
  * they now rotate through this one, so the column stays a single card and the
- * clarion call never moves. While a programme is actually happening the card
- * holds on the gathering so its live link is never rotated away.
+ * clarion call never moves. Announcements lead the rotation so a visitor sees
+ * the church's latest notice without waiting; while a programme is actually
+ * happening the card holds on the gathering so its live link is never rotated
+ * away.
  *
- * A giving announcement's slide carries the giving actions themselves —
- * Pledge, In-kind and Give Money, always in one row, left to right — instead
- * of a form-and-done flow; the Fellowship feed is where a member answers an
- * opinion question or reads the full text. Pledge opens the church's own
- * pledge form here; In-kind and Give Money lead to the public giving page,
- * which carries the goods form and the money form for a visitor.
+ * A post's slide carries the actions its officer ticked — Pledge, In-kind and
+ * Give Money, a comment thread, or the link a meeting, class or form offers —
+ * instead of a form-and-done flow. Pledge opens the church's own pledge form
+ * here; In-kind and Give Money lead to the public giving page, which carries
+ * the goods form and the money form for a visitor.
  */
 export function NextGatheringCard() {
   const settings = useChurchSettings();
@@ -52,6 +57,7 @@ export function NextGatheringCard() {
   const [statusMessage, setStatusMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pledgeOpen, setPledgeOpen] = useState(false);
+  const [commentFor, setCommentFor] = useState<Announcement | null>(null);
 
   useEffect(() => {
     // The week itself; the church's own record — its name, address and map pin
@@ -81,10 +87,18 @@ export function NextGatheringCard() {
   // The hour the gathering begins, for the join button's countdown.
   const countdown = gathering ? gatheringCountdown(gathering, now) : null;
 
-  // Slide 0 is always the gathering; the announcements follow it.
-  const slideCount = 1 + announcements.length;
+  // Announcements lead the rotation, so the public website shows the latest
+  // notice first. While a programme is actually happening, the gathering keeps
+  // the first slide so its live link is never rotated away.
+  const gatheringLeads = Boolean(gathering?.active);
+  const slides = gatheringLeads
+    ? [{ kind: "gathering" as const }, ...announcements.map((item) => ({ kind: "announcement" as const, item }))]
+    : [...announcements.map((item) => ({ kind: "announcement" as const, item })), { kind: "gathering" as const }];
+  const slideCount = slides.length;
   const index = Math.min(slide, slideCount - 1);
-  const current = index > 0 ? announcements[index - 1] : undefined;
+  const currentSlide = slides[index];
+  const current = currentSlide?.kind === "announcement" ? currentSlide.item : undefined;
+  const currentAnnouncementNumber = current ? announcements.indexOf(current) + 1 : 0;
   const canRotate = slideCount > 1 && !gathering?.active;
 
   useEffect(() => {
@@ -98,14 +112,21 @@ export function NextGatheringCard() {
   // at; with neither, the location card sends a visitor to the calendar.
   const mapsUrl = churchMapHref(settings);
   const actionType = current?.action_type || "none";
-  const isContributionAction = actionType !== "none" && actionType !== "respond";
   // The row the visitor reads: only the buttons the officer chose for the
-  // post. An old post predating the choice keeps the familiar trio.
-  const cardActions = current && current.giving_actions?.length
-    ? current.giving_actions.filter((code) => code !== "comment")
-    : ["give_now", "pledge", "in_kind"];
-  const cardOrder = ["pledge", "in_kind", "give_now"];
+  // post. New posts carry that list in `options`; an older giving post keeps
+  // the familiar trio.
+  const chosenActions = current ? cardButtons(current.options) : [];
+  const cardActions = current && chosenActions.length > 0
+    ? chosenActions
+    : current && actionType !== "none" && actionType !== "respond"
+      ? ["give_now", "pledge", "in_kind"]
+      : [];
+  const cardOrder = ["pledge", "in_kind", "give_now", "comment", "join_meeting", "enroll", "register"];
   if (cardActions.length !== 1) cardActions.sort((a, b) => cardOrder.indexOf(a) - cardOrder.indexOf(b));
+  const actionGrid = cardActions.length >= 4 ? "grid-cols-2 sm:grid-cols-3" :
+    cardActions.length === 3 ? "grid-cols-3" :
+    cardActions.length === 2 ? "grid-cols-2" : "grid-cols-1";
+  const hasGivingAction = cardActions.some((code) => code === "give_now" || code === "pledge" || code === "in_kind");
 
   // A new slide starts with its pledge field closed.
   useEffect(() => {
@@ -113,6 +134,7 @@ export function NextGatheringCard() {
     setPledgeAmount("");
     setStatusMessage("");
     setSuccessMessage("");
+    setCommentFor(null);
   }, [current?.id]);
 
   async function handlePledgeSubmit(event: FormEvent) {
@@ -174,7 +196,7 @@ export function NextGatheringCard() {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-ember">
-          {current ? `Announcement ${index} of ${announcements.length}` : gathering?.active ? "Now happening" : "Next gathering"}
+          {current ? `Announcement ${currentAnnouncementNumber} of ${announcements.length}` : gathering?.active ? "Now happening" : "Next gathering"}
         </p>
 
         {slideCount > 1 && (
@@ -188,12 +210,12 @@ export function NextGatheringCard() {
               &larr;
             </button>
             <div className="flex items-center gap-1.5 px-1">
-              {Array.from({ length: slideCount }).map((_, dot) => (
+              {slides.map((entry, dot) => (
                 <button
                   key={dot}
                   type="button"
                   onClick={() => setSlide(dot)}
-                  aria-label={dot === 0 ? "Next gathering" : `Announcement ${dot}`}
+                  aria-label={entry.kind === "announcement" ? `Announcement ${announcements.indexOf(entry.item) + 1}` : "Next gathering"}
                   className={`h-2 rounded-full transition-all ${dot === index ? "w-5 bg-ember" : "w-2 bg-sage-line"}`}
                 />
               ))}
@@ -240,12 +262,12 @@ export function NextGatheringCard() {
           <div className="border-t border-sage-line pt-6">
             <div className="rounded-xl bg-white/70 p-3 text-center text-sm font-semibold text-moss-dark">{successMessage}</div>
           </div>
-        ) : current && isContributionAction ? (
+        ) : current && cardActions.length > 0 ? (
           <div className="border-t border-sage-line pt-6">
-            {/* The giving actions, one row: only the buttons the officer
-                chose for this post, left to right — deliberate giving first,
-                then goods, then money. */}
-            <div className={`grid gap-2 sm:gap-3 ${cardActions.length === 3 ? "grid-cols-3" : cardActions.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+            {/* The actions the officer ticked for this post, in the card's
+                reading order — deliberate giving first, then goods, then
+                money, then the ways to answer or attend. */}
+            <div className={`grid gap-2 sm:gap-3 ${actionGrid}`}>
               {cardActions.map((code) => {
                 if (code === "pledge") {
                   return pledgeOpen ? (
@@ -275,6 +297,34 @@ export function NextGatheringCard() {
                     </Link>
                   );
                 }
+                if (code === "comment") {
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => { setCommentFor(current); setIsInteracting(true); }}
+                      className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
+                    >
+                      Comment
+                    </button>
+                  );
+                }
+                if (code === "join_meeting" || code === "enroll" || code === "register") {
+                  if (!current.href) return null;
+                  const label =
+                    code === "join_meeting" ? "Join meeting" : code === "enroll" ? "Enroll now" : "Register now";
+                  return (
+                    <Link
+                      key={code}
+                      href={current.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-sage-pale bg-white px-2 py-2.5 text-center text-xs font-bold text-bark transition hover:border-ember hover:text-ember sm:text-sm"
+                    >
+                      {label}
+                    </Link>
+                  );
+                }
                 return (
                   <Link
                     key={code}
@@ -286,7 +336,9 @@ export function NextGatheringCard() {
                 );
               })}
             </div>
-            <p className="mt-2 text-center text-xs text-moss">towards {current.title}</p>
+            {hasGivingAction && (
+              <p className="mt-2 text-center text-xs text-moss">towards {current.title}</p>
+            )}
 
             {pledgeOpen && (
               <form onSubmit={handlePledgeSubmit} className="mt-3 space-y-3">
@@ -361,6 +413,12 @@ export function NextGatheringCard() {
           </div>
         ) : null}
       </div>
+
+      <AnnouncementCommentModal
+        open={Boolean(commentFor)}
+        onClose={() => { setCommentFor(null); setIsInteracting(false); }}
+        announcement={commentFor ? { id: commentFor.id, title: commentFor.title } : null}
+      />
     </div>
   );
 }

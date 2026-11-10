@@ -42,7 +42,7 @@ const LINK_PATTERNS: RegExp[] = [
 /**
  * The point a Google Maps link names, or null when it names none.
  *
- * A percent-encoded query (`?q=-0.0463%2C37.6562`) is decoded first, because
+ * A percent-encoded query (`?q=0.0463%2C37.6562`) is decoded first, because
  * that is how a link copied from the Maps app arrives. Short links —
  * `maps.app.goo.gl/…` — carry their point behind a redirect and have none to
  * read; the caller resolves those differently (see the map picker).

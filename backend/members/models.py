@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
 from django.conf import settings
 from django.db import models
@@ -1300,6 +1300,61 @@ class Announcement(models.Model):
         windows = [d for d in (event_end, self.expires_at) if d is not None]
         return min(windows) if windows else None
 
+    def advanced(self, day, anchor_day=None):
+        """One step on from ``day``, in this notice's own rhythm.
+
+        A weekly notice stands on the same weekday, a monthly one on the same
+        day of the month — brought back a day or two where the month is short,
+        so the 31st repeats on the 30th rather than slipping into the next
+        month. ``anchor_day`` is the day the officer first wrote, kept across
+        the steps so a short month never drags the notice earlier for good.
+        """
+        import calendar
+        from datetime import date, timedelta
+
+        if self.repeat == 'daily':
+            return day + timedelta(days=1)
+        if self.repeat == 'weekly':
+            return day + timedelta(days=7)
+        year, month = (day.year + 1, 1) if day.month == 12 else (day.year, day.month + 1)
+        return date(year, month, min(anchor_day or day.day, calendar.monthrange(year, month)[1]))
+
+    def roll_repeat(self, today=None):
+        """Bring a repeating notice up to its next occurrence.
+
+        ``repeat`` promises that the notice stands every day, week or month,
+        and the event date is the occurrence the officer wrote it for. Once
+        that day has gone, the next one is the day the notice means — so the
+        feed keeps it instead of letting the board quietly lose a notice that
+        was meant to stand. The event's own length rides along: a two-day
+        programme repeats as two days.
+
+        Returns True when the dates moved, so a caller saves only a notice
+        that actually changed.
+        """
+        from datetime import timedelta
+        from django.utils import timezone as tz
+
+        if self.repeat not in ('daily', 'weekly', 'monthly') or self.event_date_from is None:
+            return False
+        today = today or tz.localdate()
+        start = self.event_date_from
+        end = self.event_date_to or start
+        span = (end - start).days
+        anchor_day = start.day
+        moved = False
+        # A notice written months ago steps through its own rhythm until it
+        # reaches the occurrence that is still to come.
+        while end < today:
+            start = self.advanced(start, anchor_day)
+            end = start + timedelta(days=span)
+            moved = True
+        if not moved:
+            return False
+        self.event_date_from = start
+        self.event_date_to = None if self.event_date_to is None else end
+        return True
+
 
 class AnnouncementResponse(models.Model):
     ACTION_TYPE_CHOICES = Announcement.ACTION_CHOICES
@@ -2225,6 +2280,14 @@ class ChurchSettings(models.Model):
     address = models.CharField(max_length=255, blank=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    # The hours the building is open to a visitor, kept apart from the
+    # meetings that happen inside them. The public site publishes these in
+    # its visit section and search-engine record; Google's own listing hours
+    # are managed in Google Business Profile, not here.
+    saturday_open_time = models.TimeField(default=time(6, 0), help_text='When the church opens to visitors on Saturday')
+    saturday_close_time = models.TimeField(default=time(18, 0), help_text='When the church closes to visitors on Saturday')
+    friday_open_time = models.TimeField(default=time(17, 30), help_text='When the church opens for Friday vespers')
+    friday_close_time = models.TimeField(default=time(18, 30), help_text='When Friday vespers ends')
     # The church's weekly gatherings are records now, not strings here — see
     # WeeklyMeeting. What a settings page cannot hold: where a meeting is,
     # whether it is online, and the link to join it.

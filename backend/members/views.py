@@ -2584,6 +2584,42 @@ def dispatch_announcement_broadcast(announcement, request=None, schema_name=None
                 ).start()
 
 
+def _save_repeat_roll(announcement):
+    """Save an advanced repeat, dropping the flyer on a weekly meeting.
+
+    The meeting's day, time and link are what stand every week; the flyer was
+    for the first occurrence. Once a weekly notice rolls to its next week the
+    old image is removed from storage and from the row.
+    """
+    update_fields = ['event_date_from', 'event_date_to']
+    if announcement.repeat == 'weekly' and announcement.attachment:
+        announcement.attachment.delete(save=False)
+        announcement.attachment = None
+        update_fields.append('attachment')
+    announcement.save(update_fields=update_fields)
+
+
+def roll_repeating_announcements(today=None):
+    """A notice set to repeat stands past its own day.
+
+    The feed retires a post the day after its event, which is right for a
+    notice that happens once and wrong for one the officer told to repeat:
+    a weekly notice written three weeks ago is still this week's notice. Its
+    next occurrence is brought forward before the feed is read, so every door
+    — the members' board, the public page, the popup, the manager's own list —
+    sees the same current dates and nobody has to remember to move it.
+    """
+    from django.utils import timezone
+
+    today = today or timezone.localdate()
+    for announcement in Announcement.objects.filter(
+        repeat__in=('daily', 'weekly', 'monthly'),
+        event_date_from__isnull=False,
+    ):
+        if announcement.roll_repeat(today):
+            _save_repeat_roll(announcement)
+
+
 class AnnouncementView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
 
@@ -2594,7 +2630,11 @@ class AnnouncementView(generics.ListCreateAPIView):
         from django.db.models import Q
         from django.utils import timezone
         today = timezone.now().date()
-        
+        # A repeating notice is due its next occurrence before anything is
+        # filtered: otherwise the event clock below would retire a notice that
+        # was meant to stand.
+        roll_repeating_announcements(today)
+
         is_admin = can_manage_announcements(self.request.user)
 
         if is_admin and self.request.query_params.get('include_unpublished') == 'true':
@@ -2618,7 +2658,11 @@ class AnnouncementView(generics.ListCreateAPIView):
                 Q(event_date_from__isnull=True, event_date_to__isnull=True)
                 & (Q(expires_at__isnull=True) | Q(expires_at__gte=today))
             )
-            queryset = queryset.filter(dated_alive | undated_alive)
+            # A notice told to repeat stands: its own rhythm has just brought
+            # it forward, and one written with no day at all is a notice that
+            # simply stands until the office removes it.
+            stands = Q(repeat__in=('daily', 'weekly', 'monthly'))
+            queryset = queryset.filter(dated_alive | undated_alive | stands)
         if self.request.query_params.get('include_scheduled') != 'true':
             # An event dated in the future is not hidden — it takes its place in
             # the feed by when it ends (see list()) — but a legacy start date
@@ -2739,6 +2783,15 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
         if can_manage_announcements(self.request.user):
             return Announcement.objects.all()
         return Announcement.objects.filter(published=True)
+
+    def get_object(self):
+        # One notice read on its own keeps the same promise as the board: a
+        # repeating post opens on its next occurrence, not on the day it was
+        # first written.
+        announcement = super().get_object()
+        if announcement.roll_repeat():
+            _save_repeat_roll(announcement)
+        return announcement
 
     def perform_update(self, serializer):
         if not can_manage_announcements(self.request.user):
@@ -10860,6 +10913,13 @@ class TreasuryPdfView(APIView):
             ]
         purpose_title = purpose_param or ', '.join(scope_names)
 
+        # The individual report can be sectioned by a second dimension after
+        # its rows are ordered. The summary keeps its fixed NEKF shape, so a
+        # group request only applies to the detailed givings paper.
+        group_by = request.query_params.get("group_by", "").strip().lower()
+        if group_by not in {"account", "month", "mode", "giver"}:
+            group_by = ""
+
         digital_filter = Q(status__iexact="completed", giving_type="financial") & (
             Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
             Q(paid_at__isnull=True, created_at__date__gte=start_date, created_at__date__lte=end_date)
@@ -11061,6 +11121,33 @@ class TreasuryPdfView(APIView):
         purpose_rows = _apply_order(purpose_rows, order_rules, purpose_side=True)
         individual_rows = _apply_order(individual_rows, order_rules, purpose_side=False)
 
+        grouped_rows = []
+        if is_individual and group_by:
+            buckets = {}
+            for row in individual_rows:
+                if group_by == "month":
+                    key = str(row.get("date", ""))[:7]
+                    try:
+                        label = datetime.strptime(f"{key}-01", "%Y-%m-%d").strftime("%B %Y")
+                    except ValueError:
+                        label = key or "Unknown month"
+                elif group_by == "account":
+                    label = str(row.get("purpose_name") or "Unassigned")
+                    key = label.casefold()
+                elif group_by == "mode":
+                    label = str(row.get("payment_method") or "cash").replace("_", " ").title()
+                    key = label.casefold()
+                else:
+                    label = str(row.get("member_name") or "Anonymous")
+                    key = label.casefold()
+                bucket = buckets.setdefault(
+                    key,
+                    {"label": label, "rows": [], "total": Decimal("0")},
+                )
+                bucket["rows"].append(row)
+                bucket["total"] += Decimal(str(row.get("amount", 0) or 0))
+            grouped_rows = [buckets[key] for key in sorted(buckets)]
+
         church_setting = ChurchSettings.objects.first()
         church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
         district = church_setting.district if church_setting else ""
@@ -11077,6 +11164,8 @@ class TreasuryPdfView(APIView):
             totals=column_totals,
             is_individual=is_individual,
             individual_rows=individual_rows,
+            group_by=group_by if is_individual else "",
+            grouped_rows=grouped_rows,
             saturdays=saturdays,
             weekly_data=weekly_data,
             district=district,

@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
-import { FileImage, Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
+import { Clock, FileImage, Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
 import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 
@@ -16,6 +16,10 @@ export function ChurchSettingsManager() {
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+  const [saturdayOpenTime, setSaturdayOpenTime] = useState("06:00");
+  const [saturdayCloseTime, setSaturdayCloseTime] = useState("18:00");
+  const [fridayOpenTime, setFridayOpenTime] = useState("17:30");
+  const [fridayCloseTime, setFridayCloseTime] = useState("18:30");
   const [clarionCallHeading, setClarionCallHeading] = useState("A place to belong.\nA faith to share.\nA hope that transforms lives.");
   const [clarionCallSubtext, setClarionCallSubtext] = useState("Join SDA Church Loma Linda as we study God's Word, support one another, and reach out to our community with faith and compassion.");
   const [defaultReceiptMessage, setDefaultReceiptMessage] = useState("Dear {name},\n\nYour contribution of {amount} towards {account} has been received. Thank you, and may God bless you abundantly");
@@ -94,6 +98,10 @@ export function ChurchSettingsManager() {
           setAddress(data.address || "");
           if (data.latitude) setLatitude(Number(data.latitude));
           if (data.longitude) setLongitude(Number(data.longitude));
+          if (data.saturday_open_time) setSaturdayOpenTime(data.saturday_open_time);
+          if (data.saturday_close_time) setSaturdayCloseTime(data.saturday_close_time);
+          if (data.friday_open_time) setFridayOpenTime(data.friday_open_time);
+          if (data.friday_close_time) setFridayCloseTime(data.friday_close_time);
           if (data.clarion_call_heading) setClarionCallHeading(data.clarion_call_heading);
           if (data.clarion_call_subtext) setClarionCallSubtext(data.clarion_call_subtext);
           if (data.default_receipt_message) setDefaultReceiptMessage(data.default_receipt_message);
@@ -176,6 +184,10 @@ export function ChurchSettingsManager() {
         address,
         latitude,
         longitude,
+        saturday_open_time: saturdayOpenTime,
+        saturday_close_time: saturdayCloseTime,
+        friday_open_time: fridayOpenTime,
+        friday_close_time: fridayCloseTime,
         clarion_call_heading: clarionCallHeading,
         clarion_call_subtext: clarionCallSubtext,
         default_receipt_message: defaultReceiptMessage,
@@ -826,6 +838,75 @@ export function ChurchSettingsManager() {
                 setLongitude(null);
               }}
             />
+          </div>
+        </div>
+
+        {/* Public hours are the building's, not the meetings' — a visitor
+            reads them before setting off, and Google's own listing is a
+            separate record the church keeps in Google Business Profile. */}
+        <div className="rounded-2xl border border-sand-line bg-sand p-5">
+          <h3 className="text-base font-bold text-bark flex items-center gap-2">
+            <Clock size={16} aria-hidden="true" /> Public Opening Hours
+          </h3>
+          <p className="mt-1 text-xs text-moss">
+            The hours shown in the public website&apos;s visit section. Google Maps and Google Search
+            hours are managed separately in Google Business Profile, so update them there too.
+          </p>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-sand-line bg-white p-4">
+              <p className="text-xs font-bold text-bark">Saturday</p>
+              <p className="mt-0.5 text-[11px] text-moss">Church open to visitors</p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="text-xs font-semibold text-bark">
+                  Opens
+                  <input
+                    type="time"
+                    required
+                    value={saturdayOpenTime}
+                    onChange={(e) => setSaturdayOpenTime(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-3 py-2 text-sm font-normal outline-none focus:border-ember"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-bark">
+                  Closes
+                  <input
+                    type="time"
+                    required
+                    value={saturdayCloseTime}
+                    onChange={(e) => setSaturdayCloseTime(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-3 py-2 text-sm font-normal outline-none focus:border-ember"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-sand-line bg-white p-4">
+              <p className="text-xs font-bold text-bark">Friday</p>
+              <p className="mt-0.5 text-[11px] text-moss">Vespers</p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="text-xs font-semibold text-bark">
+                  Opens
+                  <input
+                    type="time"
+                    required
+                    value={fridayOpenTime}
+                    onChange={(e) => setFridayOpenTime(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-3 py-2 text-sm font-normal outline-none focus:border-ember"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-bark">
+                  Closes
+                  <input
+                    type="time"
+                    required
+                    value={fridayCloseTime}
+                    onChange={(e) => setFridayCloseTime(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-3 py-2 text-sm font-normal outline-none focus:border-ember"
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 

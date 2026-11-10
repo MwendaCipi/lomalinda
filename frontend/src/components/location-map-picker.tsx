@@ -37,7 +37,7 @@ function ChangeView({ center }: { center: [number, number] }) {
 }
 
 /** Meru, Kenya — where the map opens before anything is pinned. */
-const DEFAULT_POSITION: [number, number] = [-0.0463, 37.6562];
+const DEFAULT_POSITION: [number, number] = [0.0463, 37.6562];
 
 /**
  * Where something is, chosen the way people actually know it.

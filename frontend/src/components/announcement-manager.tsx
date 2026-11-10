@@ -112,6 +112,10 @@ function dayLabel(iso?: string | null): string {
   /** The office's words for where this post sits in its display window. */
 function windowLabel(item: Announcement): string {
   const today = localDate();
+  // A notice told to repeat stands on its own rhythm, so the window it was
+  // written in does not retire it — and the board must not tell the officer
+  // it has ended while the feed still carries it.
+  if (item.repeat && item.repeat !== "none") return "Repeats until removed";
   if (item.starts_at && item.starts_at > today) return `Starts ${dayLabel(item.starts_at)}`;
   if (item.expires_at && item.expires_at < today) return `Ended ${dayLabel(item.expires_at)}`;
   if (!item.expires_at) return "Shows until removed";
@@ -906,23 +910,6 @@ export function AnnouncementManager({
                 </div>
               </div>
 
-              {/* A meeting to join needs its link; a call for money or goods
-                  needs the account it supports. Everything else is optional. */}
-              {form.options.includes("join_meeting") && (
-                <label className="block text-xs font-semibold text-bark md:col-span-2">
-                  Meeting link *
-                  <input
-                    type="url"
-                    required
-                    value={form.href}
-                    onChange={(e) => setForm({ ...form, href: e.target.value })}
-                    placeholder="Zoom, Meet or Teams link"
-                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                  />
-                </label>
-              )}
-
-
               <label className="block text-xs font-semibold text-bark">
                 Share Announcement Via *<span className="font-normal text-moss"> (select one or more)</span>
                 <div className="mt-1 relative" ref={sharingDropdownRef}>
@@ -1033,6 +1020,22 @@ export function AnnouncementManager({
                   notice.
                 </span>
               </div>
+
+              {/* A meeting to join needs its link; a call for money or goods
+                  needs the account it supports. Everything else is optional. */}
+              {form.options.includes("join_meeting") && (
+                <label className="block text-xs font-semibold text-bark md:col-span-2">
+                  Meeting link *
+                  <input
+                    type="url"
+                    required
+                    value={form.href}
+                    onChange={(e) => setForm({ ...form, href: e.target.value })}
+                    placeholder="Zoom, Meet or Teams link"
+                    className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                  />
+                </label>
+              )}
 
               {/* A call for money or goods names the account it supports —
                   the wording members read on the giving form. */}

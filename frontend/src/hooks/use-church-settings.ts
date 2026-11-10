@@ -17,6 +17,10 @@ export type ChurchSettings = {
   address?: string;
   latitude?: string | null;
   longitude?: string | null;
+  saturday_open_time?: string;
+  saturday_close_time?: string;
+  friday_open_time?: string;
+  friday_close_time?: string;
 };
 
 /** The church's record, or null until it answers (and if it never does). */
@@ -78,6 +82,47 @@ export function churchWhere(settings: ChurchSettings | null): string | null {
   const address = settings?.address?.trim();
   if (address) return address;
   return settings?.church_name?.trim() || null;
+}
+
+export type ChurchOpeningHours = {
+  day: string;
+  note: string;
+  hours: string;
+};
+
+/** "06:00" as a clock face: "6:00 AM". */
+function clockFace(value: string | null | undefined): string | null {
+  const [rawHour, rawMinute] = (value ?? "").split(":");
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const face = hour % 12 === 0 ? 12 : hour % 12;
+  return `${face}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+/** The hours a visitor can call, in the church's own week order. */
+export function churchOpeningHours(settings: ChurchSettings | null): ChurchOpeningHours[] {
+  const rows = [
+    {
+      day: "Saturday",
+      note: "",
+      opens: settings?.saturday_open_time || "06:00",
+      closes: settings?.saturday_close_time || "18:00",
+    },
+    {
+      day: "Friday",
+      note: "Vespers",
+      opens: settings?.friday_open_time || "17:30",
+      closes: settings?.friday_close_time || "18:30",
+    },
+  ];
+
+  return rows.flatMap(({ day, note, opens, closes }) => {
+    const open = clockFace(opens);
+    const close = clockFace(closes);
+    return open && close ? [{ day, note, hours: `${open} – ${close}` }] : [];
+  });
 }
 
 /**

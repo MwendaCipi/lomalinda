@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import csv
 from decimal import Decimal
 from io import StringIO
@@ -3107,6 +3107,96 @@ class PdfGenerationAPITests(APITestCase):
         text = _pdf_text(response.content)
         self.assertIn('MODE222', text)
         self.assertNotIn('MODE111', text)
+
+    def _grouped_report_text(self, **params):
+        query = '&'.join(f'{key}={value}' for key, value in params.items())
+        response = self.client.get(
+            f'/api/members/reports/ledger/pdf/?include_individual=true&{query}'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return _pdf_text(response.content)
+
+    def test_the_givings_report_groups_by_month_with_a_subtotal_per_month(self):
+        # After its order, the givings paper can be cut into sections: each
+        # month's gifts sit under their month, with that month's own total.
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('400.00'), purpose='Tithe',
+            received_on=date(2026, 2, 10), payment_method='cash',
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('300.00'), purpose='Tithe',
+            received_on=date(2026, 1, 5), payment_method='cash',
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('200.00'), purpose='Local Church Budget',
+            received_on=date(2026, 1, 20), payment_method='cash',
+        )
+
+        text = self._grouped_report_text(
+            start_date='2026-01-01', end_date='2026-02-28', group_by='month',
+        )
+
+        # The heading says how the paper was cut…
+        self.assertIn('GROUPEDBYMONTH', text)
+        self.assertNotIn('GROUPEDBYACCOUNT', text)
+        # …the sections run in calendar order, each carrying its count…
+        self.assertIn('January2026', text)
+        self.assertIn('February2026', text)
+        self.assertIn('2records', text)
+        self.assertIn('1record', text)
+        self.assertLess(text.index('January2026'), text.index('February2026'))
+        # …and its own subtotal, under the gifts it adds up.
+        self.assertIn('Subtotal-January2026', text)
+        self.assertIn('500.00', text)
+        self.assertIn('Subtotal-February2026', text)
+        self.assertIn('400.00', text)
+        # The grand total still closes the period.
+        self.assertIn('GRANDTOTAL', text)
+        self.assertIn('900.00', text)
+
+    def test_the_givings_report_groups_by_account_and_keeps_the_order_inside(self):
+        # Grouping re-sections the ordered register: the order the desk chose
+        # still runs inside each account's own block.
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('700.00'), purpose='Tithe',
+            received_on=date(2026, 1, 15), payment_method='cash', receipt_number='GRPT01',
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('100.00'), purpose='Tithe',
+            received_on=date(2026, 1, 5), payment_method='cash', receipt_number='GRPT02',
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('250.00'), purpose='Local Church Budget',
+            received_on=date(2026, 1, 10), payment_method='cash', receipt_number='GRPC01',
+        )
+
+        text = self._grouped_report_text(
+            start_date='2026-01-01', end_date='2026-01-31', group_by='account',
+            order_by='amount', order='desc',
+        )
+
+        self.assertIn('GROUPEDBYACCOUNT', text)
+        self.assertIn('Subtotal-LocalChurchBudget', text)
+        self.assertIn('Subtotal-Tithe', text)
+        self.assertIn('250.00', text)
+        self.assertIn('800.00', text)
+        # Inside Tithe's own block the desk's order still holds: largest first.
+        self.assertLess(text.index('GRPT01'), text.index('GRPT02'))
+        self.assertIn('GRANDTOTAL', text)
+        self.assertIn('1,050.00', text)
+
+    def test_grouping_only_shapes_the_givings_report(self):
+        # The summary's NEKF shape is fixed, and an unknown section name is no
+        # section at all: both print the plain statement.
+        summary = self.client.get(
+            '/api/members/reports/ledger/pdf/?group_by=month&start_date=2026-01-01&end_date=2026-01-31'
+        )
+        self.assertEqual(summary.status_code, status.HTTP_200_OK)
+        self.assertNotIn('GROUPEDBY', _pdf_text(summary.content))
+
+        unknown = self._grouped_report_text(group_by='banana')
+        self.assertNotIn('GROUPEDBY', unknown)
+        self.assertNotIn('Subtotal-', unknown)
 
     def test_the_report_narrows_to_one_giver(self):
         digital_filter = {'status': 'completed', 'giving_type': 'financial', 'paid_at': timezone.now()}
@@ -6901,6 +6991,132 @@ class AnnouncementEventDatesAPITests(APITestCase):
         from .models import Announcement
         return Announcement.objects.create(title=title, text=f'{title} body', visibility='members_only', **dates)
 
+    def test_a_weekly_notice_stands_past_the_week_it_was_written_for(self):
+        """Telling a notice to repeat keeps it on the board: once its event day
+        has gone, the next week takes its place instead of the post quietly
+        falling off the feed."""
+        today = timezone.localdate()
+        written_for = today - timedelta(days=20)
+        self._announcement(
+            'Sabbath school', repeat='weekly',
+            event_date_from=written_for, event_date_to=written_for,
+        )
+
+        response = self.client.get('/api/members/announcements/')
+
+        titles = [row['title'] for row in response.data]
+        self.assertIn('Sabbath school', titles)
+        row = next(r for r in response.data if r['title'] == 'Sabbath school')
+        shown = date.fromisoformat(row['event_date_from'])
+        self.assertGreaterEqual(shown, today)
+        self.assertLess(shown, today + timedelta(days=7))
+        self.assertEqual(row['event_date_to'], row['event_date_from'])
+        self.assertEqual((shown - written_for).days % 7, 0)
+
+        # Reading again does not walk it forward: one occurrence is one step,
+        # and the notice stands there until its own day has gone.
+        again = self.client.get('/api/members/announcements/')
+        self.assertEqual(
+            next(r for r in again.data if r['title'] == 'Sabbath school')['event_date_from'],
+            row['event_date_from'],
+        )
+
+    def test_a_weekly_repeat_keeps_the_meeting_but_drops_the_flyer(self):
+        """A meeting that stands every week keeps its day, hour and link; the
+        flyer belongs to the first occurrence, not every week's re-post."""
+        today = timezone.localdate()
+        written_for = today - timedelta(days=7)
+        notice = self._announcement(
+            'Wednesday prayer', repeat='weekly',
+            event_date_from=written_for, event_date_to=written_for,
+            event_time_from=time(19, 0), event_time_to=time(20, 0),
+            href='https://meet.google.com/abc-defg-hij',
+            attachment=SimpleUploadedFile('prayer-flyer.png', b'flyer-bytes', content_type='image/png'),
+        )
+
+        response = self.client.get('/api/members/announcements/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notice.refresh_from_db()
+        self.assertEqual(notice.event_date_from, today)
+        self.assertEqual(notice.event_date_to, today)
+        self.assertEqual(notice.event_time_from, time(19, 0))
+        self.assertEqual(notice.event_time_to, time(20, 0))
+        self.assertEqual(notice.href, 'https://meet.google.com/abc-defg-hij')
+        self.assertFalse(notice.attachment)
+        row = next(r for r in response.data if r['title'] == 'Wednesday prayer')
+        self.assertIsNone(row['attachment'])
+
+    def test_the_detail_reader_also_drops_a_weekly_flyer(self):
+        """The single-post reader rolls the same way as the public list."""
+        today = timezone.localdate()
+        written_for = today - timedelta(days=7)
+        notice = self._announcement(
+            'Friday prayer', repeat='weekly',
+            event_date_from=written_for, event_date_to=written_for,
+            event_time_from=time(17, 30), event_time_to=time(18, 30),
+            href='https://meet.google.com/xyz-abcd-efg',
+            attachment=SimpleUploadedFile('friday-flyer.png', b'flyer-bytes', content_type='image/png'),
+        )
+
+        response = self.client.get(f'/api/members/announcements/{notice.pk}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notice.refresh_from_db()
+        self.assertEqual(notice.event_date_from, today)
+        self.assertEqual(notice.event_time_from, time(17, 30))
+        self.assertEqual(notice.event_time_to, time(18, 30))
+        self.assertEqual(notice.href, 'https://meet.google.com/xyz-abcd-efg')
+        self.assertFalse(notice.attachment)
+
+    def test_a_notice_that_does_not_repeat_still_retires(self):
+        """Repeating is a promise, not a reprieve: a plain post comes down the
+        day after its event as it always has."""
+        today = timezone.localdate()
+        self._announcement(
+            'Old camp',
+            event_date_from=today - timedelta(days=9),
+            event_date_to=today - timedelta(days=7),
+        )
+
+        titles = [row['title'] for row in self.client.get('/api/members/announcements/').data]
+
+        self.assertNotIn('Old camp', titles)
+
+    def test_a_repeating_notice_outlives_an_old_display_window(self):
+        """Repeat is the post's own clock. The window the retired form used to
+        set does not retire a notice the officer told to repeat, and a weekly
+        notice written with no day at all stands until the office removes it.
+        """
+        today = timezone.localdate()
+        old_window = today - timedelta(days=30)
+        self._announcement('Weekly without a day', repeat='weekly', expires_at=old_window)
+        self._announcement(
+            'Weekly with a day', repeat='weekly',
+            event_date_from=today - timedelta(days=6), expires_at=old_window,
+        )
+
+        titles = [row['title'] for row in self.client.get('/api/members/announcements/').data]
+
+        self.assertIn('Weekly without a day', titles)
+        self.assertIn('Weekly with a day', titles)
+
+    def test_a_monthly_notice_keeps_its_day_across_short_months(self):
+        """A notice written for the 31st repeats on the 31st wherever the month
+        has one, and on the month's last day where it does not — the short
+        month does not drag it earlier for every month after."""
+        from .models import Announcement
+
+        notice = Announcement.objects.create(
+            title='Month end', text='Month end body', visibility='members_only',
+            repeat='monthly',
+            event_date_from=date(2027, 1, 31), event_date_to=date(2027, 1, 31),
+        )
+
+        self.assertTrue(notice.roll_repeat(date(2027, 4, 15)))
+        self.assertEqual(notice.event_date_from, date(2027, 4, 30))
+        self.assertEqual(notice.event_date_to, date(2027, 4, 30))
+
     def test_the_event_that_ends_soonest_leads_the_feed(self):
         today = timezone.localdate()
         self._announcement('General notice')
@@ -10429,6 +10645,53 @@ class ChurchLegalDocumentsTests(APITestCase):
 
         self.assertEqual(cleared.status_code, status.HTTP_200_OK)
         self.assertEqual(ChurchSettings.objects.get().privacy_policy, '')
+
+
+class ChurchPublicOpeningHoursTests(APITestCase):
+    """The church sets the hours a visitor can call, apart from its meetings."""
+
+    URL = '/api/members/church-settings/'
+
+    def setUp(self):
+        self.admin = User.objects.create_user('hours.admin', 'hours.admin@example.com', 'AdminPass#2026')
+        MemberProfile.objects.create(user=self.admin, role='admin', roles='admin')
+        ChurchSettings.objects.create(church_name='SDA Church Loma Linda, Meru')
+
+    def test_the_public_hours_default_to_saturday_six_to_six_and_friday_vespers(self):
+        response = self.client.get(self.URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['saturday_open_time'], '06:00')
+        self.assertEqual(response.data['saturday_close_time'], '18:00')
+        self.assertEqual(response.data['friday_open_time'], '17:30')
+        self.assertEqual(response.data['friday_close_time'], '18:30')
+
+    def test_the_church_changes_the_hours_and_the_public_api_serves_them(self):
+        self.client.force_authenticate(self.admin)
+        saved = self.client.patch(self.URL, {
+            'saturday_open_time': '07:00',
+            'saturday_close_time': '17:00',
+            'friday_open_time': '18:00',
+            'friday_close_time': '19:00',
+        }, format='json')
+
+        self.assertEqual(saved.status_code, status.HTTP_200_OK)
+        self.client.force_authenticate(None)
+        public = self.client.get(self.URL)
+        self.assertEqual(public.data['saturday_open_time'], '07:00')
+        self.assertEqual(public.data['saturday_close_time'], '17:00')
+        self.assertEqual(public.data['friday_open_time'], '18:00')
+        self.assertEqual(public.data['friday_close_time'], '19:00')
+
+    def test_a_window_that_closes_before_it_opens_is_refused(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.patch(self.URL, {
+            'saturday_open_time': '18:00',
+            'saturday_close_time': '06:00',
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('saturday_close_time', response.data)
 
 
 class GivingAccountsFromTreasuryTests(APITestCase):

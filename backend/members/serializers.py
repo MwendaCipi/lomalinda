@@ -1362,6 +1362,13 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
 
     role_rights = serializers.SerializerMethodField()
 
+    # The public opening hours leave as a clock ("18:00"), not with seconds:
+    # the settings form and the visitor-facing site both draw a time input.
+    saturday_open_time = serializers.TimeField(format='%H:%M', required=False)
+    saturday_close_time = serializers.TimeField(format='%H:%M', required=False)
+    friday_open_time = serializers.TimeField(format='%H:%M', required=False)
+    friday_close_time = serializers.TimeField(format='%H:%M', required=False)
+
     def get_role_rights(self, obj):
         """The effective rights per role, defaults included, for the settings UI.
 
@@ -1395,10 +1402,22 @@ class ChurchSettingsSerializer(serializers.ModelSerializer):
             cleaned[role_code] = list(dict.fromkeys(rights))
         return cleaned
 
+    def validate(self, attrs):
+        """A public opening window has to close after it opens."""
+        for day in ('friday', 'saturday'):
+            opens = attrs.get(f'{day}_open_time', getattr(self.instance, f'{day}_open_time', None))
+            closes = attrs.get(f'{day}_close_time', getattr(self.instance, f'{day}_close_time', None))
+            if opens and closes and closes <= opens:
+                raise serializers.ValidationError({
+                    f'{day}_close_time': 'The closing time has to be after the opening time.',
+                })
+        return attrs
+
     class Meta:
         model = ChurchSettings
         fields = (
             'church_name', 'district', 'field', 'conference', 'address', 'latitude', 'longitude',
+            'saturday_open_time', 'saturday_close_time', 'friday_open_time', 'friday_close_time',
             'clarion_call_heading',
             'clarion_call_subtext', 'default_receipt_message', 'split_receipt_message', 'receipt_delivery_method',
             'default_business_meeting_invitation_message',

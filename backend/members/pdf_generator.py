@@ -612,6 +612,8 @@ def generate_treasury_pdf(
     totals,
     is_individual=False,
     individual_rows=None,
+    group_by="",
+    grouped_rows=None,
     saturdays=None,
     weekly_data=None,
     local_account_rows=None,
@@ -684,6 +686,17 @@ def generate_treasury_pdf(
         subtitle_text = "CHURCH GIVINGS REPORT"
         if purpose_title:
             subtitle_text += f" - {purpose_title.upper()}"
+        # A sectioned paper says what its sections are, between the accounts it
+        # speaks for and the days it covers.
+        group_labels = {
+            "account": "Account",
+            "month": "Month",
+            "mode": "Mode of giving",
+            "giver": "Giver",
+        }
+        group_name = group_labels.get(group_by, "") if group_by else ""
+        if group_name:
+            subtitle_text += f" - GROUPED BY {group_name.upper()}"
         subtitle_text += f" FROM {date_compact(start_date)} TO {date_compact(end_date)}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
         # The heading already names the period, so the line under it carries
@@ -698,7 +711,14 @@ def generate_treasury_pdf(
         ind_rows = individual_rows or []
         tot_amount = sum((Decimal(str(g.get("amount", 0))) for g in ind_rows), Decimal("0"))
 
+        # A grouped paper reads its sections, not the flat register: every
+        # bucket already carries the rows in the order the desk chose and its
+        # own total. Without a grouping the register prints as one table.
+        groups = grouped_rows if group_name and grouped_rows else []
+
         summary_text = f"<b>Total Records:</b> {len(ind_rows)} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Total Givings:</b> KES {format_money(tot_amount)}"
+        if groups:
+            summary_text += f" &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Groups:</b> {len(groups)}"
         story.append(Paragraph(summary_text, st["h2"]))
         story.append(Spacer(1, 8))
 
@@ -712,20 +732,59 @@ def generate_treasury_pdf(
             Paragraph(ind_headers[5], st["header_right"]),
         ]]
 
-        for g in ind_rows:
+        def gift_cells(g):
             donor = g.get("member_name") or g.get("collection_name") or "Anonymous"
             mode = (g.get("payment_method") or "cash").upper()
             amt_val = g.get("amount", 0)
-            amt_str = format_money(amt_val)
-
-            ind_data.append([
+            return [
                 Paragraph(str(donor), st["cell_bold"]),
                 Paragraph(str(g.get("date", "")), st["cell"]),
                 Paragraph(str(g.get("purpose_name", "")), st["cell"]),
                 Paragraph(mode, st["cell"]),
                 Paragraph(str(g.get("receipt_number") or g.get("transaction_id") or "—"), st["cell"]),
-                Paragraph(amt_str, st["cell_right"]),
-            ])
+                Paragraph(format_money(amt_val), st["cell_right"]),
+            ]
+
+        # Row roles, so the table's stripes mark its gifts and its bands speak
+        # for their sections: a heading names the section, the subtotal closes
+        # it, and the grand total still closes the paper.
+        data_row_indexes = []
+        band_indexes = []
+        subtotal_indexes = []
+
+        if groups:
+            for group in groups:
+                label = str(group.get("label") or "Ungrouped")
+                rows = group.get("rows") or []
+                count = len(rows)
+                band_indexes.append(len(ind_data))
+                ind_data.append([
+                    Paragraph(
+                        f"<b>{label}</b> ({count} record{'s' if count != 1 else ''})",
+                        st["cell_bold"],
+                    ),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                ])
+                for g in rows:
+                    data_row_indexes.append(len(ind_data))
+                    ind_data.append(gift_cells(g))
+                subtotal_indexes.append(len(ind_data))
+                ind_data.append([
+                    Paragraph(f"<b>Subtotal - {label}</b>", st["cell_bold"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph("", st["cell"]),
+                    Paragraph(format_money(group.get("total", 0)), st["cell_right_bold"]),
+                ])
+        else:
+            for g in ind_rows:
+                data_row_indexes.append(len(ind_data))
+                ind_data.append(gift_cells(g))
 
         ind_data.append([
             Paragraph("<b>GRAND TOTAL</b>", st["cell_bold"]),
@@ -750,9 +809,19 @@ def generate_treasury_pdf(
             ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#26352f")),
             ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f7f4ee")),
         ]
-        for i in range(1, len(ind_data) - 1):
-            if i % 2 == 0:
+        # Stripes count the gifts, not the table's rows, so a band never eats
+        # a stripe and every section reads the same way as an ungrouped page.
+        for position, i in enumerate(data_row_indexes):
+            if position % 2 == 1:
                 ind_style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#faf9f6")))
+        for i in band_indexes:
+            ind_style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#efe9df")))
+            ind_style.append(("SPAN", (0, i), (-1, i)))
+        for i in subtotal_indexes:
+            # The amount keeps its own last column; the label spans the rest.
+            ind_style.append(("SPAN", (0, i), (4, i)))
+            ind_style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#f7f4ee")))
+            ind_style.append(("LINEABOVE", (0, i), (-1, i), 0.75, colors.HexColor("#26352f")))
         ind_table.setStyle(TableStyle(ind_style))
         story.append(ind_table)
         story.append(Spacer(1, 16))

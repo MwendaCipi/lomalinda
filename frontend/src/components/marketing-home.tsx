@@ -10,7 +10,7 @@ import { ChurchMission } from "@/components/church-mission";
 import { ChurchBeliefs } from "@/components/church-beliefs";
 import { WeeklySchedule } from "@/components/weekly-schedule";
 import { footerColumns, footerLinkOf } from "@/config/navigation";
-import { churchName, churchTown, useChurchSettings } from "@/hooks/use-church-settings";
+import { churchName, churchOpeningHours, churchTown, useChurchSettings } from "@/hooks/use-church-settings";
 
 const ChurchLocation = dynamic(() => import("@/components/church-location"), { ssr: false });
 
@@ -56,6 +56,7 @@ export function MarketingHome() {
   const settings = useChurchSettings();
   const address = settings?.address?.trim() || "";
   const town = churchTown(settings);
+  const openingHours = churchOpeningHours(settings);
 
   return (
     <main className="min-h-screen bg-sand text-bark">
@@ -175,6 +176,22 @@ export function MarketingHome() {
                 </li>
               ))}
             </ul>
+            {openingHours.length > 0 && (
+              <div className="mt-7 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">Open to visitors</p>
+                <dl className="mt-3 space-y-2 text-sm">
+                  {openingHours.map((row) => (
+                    <div key={row.day} className="flex items-baseline justify-between gap-6">
+                      <dt className="text-white/75">
+                        {row.day}
+                        {row.note && <span className="text-white/45"> · {row.note}</span>}
+                      </dt>
+                      <dd className="font-semibold text-white">{row.hours}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm font-semibold">
               <a className="text-gold hover:underline" href="mailto:info@sdalomalinda.or.ke">
                 info@sdalomalinda.or.ke
