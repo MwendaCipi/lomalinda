@@ -2521,7 +2521,7 @@ export function UserManagement() {
 
       {/* ── Bottom bar: Print + Add ── */}
       <div className="page-actions">
-      <div className="shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="page-actions-row shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* The count line is a desktop nicety; on phones the buttons need the width. */}
         <p className="hidden text-[11px] text-moss sm:block">
           {invitationFilter === "pending" ? `${filteredPendingRows.length} of ${pendingRows.length} pending invite${pendingRows.length === 1 ? "" : "s"} shown` : `${filteredMembers.length} of ${rosterScoped.length} confirmed records shown`}

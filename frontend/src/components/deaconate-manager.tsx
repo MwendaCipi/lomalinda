@@ -1645,7 +1645,7 @@ export function DeaconateManager({
           </div>
 
           {/* ── Bottom bar: count + primary action, like every other table page ── */}
-          <div className={`shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
+          <div className={`page-actions-row shrink-0 border-t border-sand-line bg-white p-4 sm:px-6 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <p className="hidden text-[11px] text-moss sm:block">
               {filteredInventory.length} of {inventory.length} {inventory.length === 1 ? "item" : "items"} shown
             </p>
@@ -1923,7 +1923,7 @@ export function DeaconateManager({
           </div>
 
           {/* ── Fixed Bottom Bar for Duty Rota ── */}
-          <div className={`shrink-0 border-t border-sand-line bg-white p-3 sm:px-6 sm:py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-20 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
+          <div className={`page-actions-row shrink-0 border-t border-sand-line bg-white p-3 sm:px-6 sm:py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-20 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <p className="hidden text-[11px] text-moss sm:block">
               {filteredRota.length} of {rota.length} {rota.length === 1 ? "duty" : "duties"} scheduled
             </p>

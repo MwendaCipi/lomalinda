@@ -576,6 +576,23 @@ body {
 .page-actions > * {
   min-height: 0;
 }
+
+/* On a desk the foot's actions read centred: the bar's words keep the left
+   end, the row of buttons sits in the middle under the records, and the empty
+   column on the right balances the words. Phones keep their stacked,
+   full-width buttons — this is the wider screen's shape. */
+@media (min-width: 1024px) {
+  .app-shell .page-actions-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.75rem;
+  }
+  .app-shell .page-actions-row > :last-child {
+    grid-column: 2;
+    justify-self: center;
+  }
+}
 .app-shell[data-chrome-away="true"] .page-actions {
   grid-template-rows: 0fr;
   opacity: 0;

@@ -123,7 +123,7 @@ export function CorrespondenceManager() {
         )}
       </div>
       <div className="page-actions">
-      <div className="grid shrink-0 grid-cols-3 gap-2 border-t border-sand-line bg-white p-4 sm:flex sm:justify-end sm:px-6">
+      <div className="grid shrink-0 grid-cols-3 gap-2 border-t border-sand-line bg-white p-4 sm:flex sm:justify-center sm:px-6">
         <button type="button" onClick={openAdd} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-bark px-3 py-2 text-xs font-semibold text-white hover:bg-ember"><Plus size={14} aria-hidden="true" /> Add</button>
         <button type="button" onClick={() => void share()} disabled={items.length === 0} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute px-3 py-2 text-xs font-semibold text-bark hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"><Share2 size={14} aria-hidden="true" /> Share</button>
         <button type="button" onClick={print} disabled={items.length === 0} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sand-mute px-3 py-2 text-xs font-semibold text-bark hover:border-ember disabled:cursor-not-allowed disabled:opacity-45"><Printer size={14} aria-hidden="true" /> Print</button>

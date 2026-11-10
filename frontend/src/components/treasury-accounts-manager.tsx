@@ -2504,7 +2504,7 @@ export function TreasuryAccountsManager({ initialView }: { initialView?: Treasur
         {/* A phone reads this bar as two rows — the words the ledger keeps
            above the buttons that act — and one row on the wider screens,
            as it always read. */}
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
+        <div className="page-actions-row flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 border-t border-sand-line bg-white px-4 py-3 sm:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-moss">
             <span>
               Total liquidity:{" "}
