@@ -21,7 +21,7 @@ import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
 import { eventLabel } from "@/lib/announcement-dates";
 import { cardButtons } from "@/lib/announcement-options";
-import { dayFirst } from "@/lib/dates";
+import { dayFirst, dayFirstTime } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -74,6 +74,8 @@ type FeedItem = {
   /** When a scheduled post goes live, and how the notice repeats. */
   publish_at?: string | null;
   repeat?: "none" | "daily" | "weekly" | "monthly";
+  /** False for a post the office has written but not let out yet. */
+  published?: boolean;
 };
 
 /** The buttons an announcement's card shows — exactly the officer's ticks,
@@ -82,6 +84,24 @@ type FeedItem = {
  *  post that wants one is not quietly given the other as well. */
 function chosenActions(item: FeedItem): string[] {
   return cardButtons(item.options);
+}
+
+/** The hour a post is still waiting for, or null once that hour has come. */
+function waitingFor(item: FeedItem): Date | null {
+  if (!item.publish_at) return null;
+  const at = new Date(item.publish_at);
+  return !Number.isNaN(at.getTime()) && at.getTime() > Date.now() ? at : null;
+}
+
+/** Why the desk sees a post the feed does not, in the desk's own words: it is
+    a draft, it is waiting for its hour, or both. */
+function deskNotice(item: FeedItem): string | null {
+  const draft = item.published === false;
+  const waiting = waitingFor(item);
+  if (draft && waiting) return `Draft — not published yet; goes live ${dayFirstTime(item.publish_at)}`;
+  if (draft) return "Draft — not published yet";
+  if (waiting) return `Not in the feed yet — goes live ${dayFirstTime(item.publish_at)}`;
+  return null;
 }
 
 /** The drive's own giving link, opened straight into the giving modal. */
@@ -95,11 +115,24 @@ export function AnnouncementsFeed({
       Delete, the acts the manager's board rows used to hold. The host
       (the eldership desk's Sharing) supplies where Edit opens. */
   canManage = false,
+  /** The desk reads what is still waiting too: a post scheduled for a later
+      hour is listed here, wearing the hour it goes live, so the office can
+      open it and change the schedule. The fellowship feed — the board
+      members read — never asks for it, so nothing scheduled is shown there
+      before its hour. */
+  includeScheduled = false,
+  /** The desk also reads the drafts it has not let out yet — a post written
+      and set aside, listed so the office can finish it or publish it. The
+      API serves drafts to the office that keeps the board; other surfaces
+      ask without this and never see one. */
+  includeUnpublished = false,
   onEdit,
   onChanged,
 }: {
   embedded?: boolean;
   canManage?: boolean;
+  includeScheduled?: boolean;
+  includeUnpublished?: boolean;
   onEdit?: (item: FeedItem) => void;
   onChanged?: () => void;
 } = {}) {
@@ -181,14 +214,21 @@ export function AnnouncementsFeed({
   const loadFeed = useCallback(() => {
     setLoading(true);
     const token = localStorage.getItem("access_token");
-    fetch(`${API_URL}/api/members/announcements/`, {
+    // The desk's view asks for what is still waiting — the drafts and the
+    // posts held for their hour; every other surface leaves them out, which
+    // is what the API does by default.
+    const params = new URLSearchParams();
+    if (includeScheduled) params.set("include_scheduled", "true");
+    if (includeUnpublished) params.set("include_unpublished", "true");
+    const query = params.toString() ? `?${params.toString()}` : "";
+    fetch(`${API_URL}/api/members/announcements/${query}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then((response) => (response.ok ? response.json() : []))
       .then((data: FeedItem[]) => setItems(Array.isArray(data) ? data : []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [includeScheduled, includeUnpublished]);
 
   // One load: the feed, plus the departments this account belongs to (the
   // names a post's department badge reads).
@@ -331,6 +371,14 @@ export function AnnouncementsFeed({
                       )}
                     </div>
                   </div>
+                  {/* Why the desk sees a post the feed does not — held for
+                      its hour, or not published at all — said on the card,
+                      so the office knows what is waiting to go out. */}
+                  {deskNotice(item) && (
+                    <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                      {deskNotice(item)}
+                    </p>
+                  )}
                   {eventLabel(item) && (
                     <p className="mt-1 text-sm font-semibold text-ember">Event date: {eventLabel(item)}</p>
                   )}

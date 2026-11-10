@@ -9643,6 +9643,8 @@ function DepartmentDetail({
               key={shareFeedKey}
               embedded
               canManage={canShareFeed}
+              includeScheduled
+              includeUnpublished
               onEdit={(item) => {
                 setShareEditItem(item);
                 setShowShareComposer(true);
