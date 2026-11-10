@@ -244,8 +244,8 @@ export default function AnnouncementsPage() {
                   const isDrive = item.kind === "fund_drive" && item.fund_drive;
                   const drive = item.fund_drive;
                   // The buttons the officer chose for this post, in the
-                  // card's reading order — the giving doors first and Comment
-                  // last, so the talk sits at the right-hand end of the row.
+                  // card's reading order — the ways to answer or attend first,
+                  // and the giving asks at the row's right-hand end.
                   const feedActions = chosenActions(item);
                   // The area a post is addressed to, by name: the first of
                   // this account's areas whose audience code the post carries.
@@ -395,8 +395,8 @@ export default function AnnouncementsPage() {
                           was posted to carry. */}
                       {feedActions.length > 0 && (
                         <div className="mt-3 border-t border-sand-line pt-3">
-                          {/* The row gathers at the card's right edge: the
-                              giving doors first, Comment at the end. */}
+                          {/* The row gathers at the card's right edge, with
+                              the giving asks — Give now last — closing it. */}
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             {feedActions.map((code) => {
                               if (code === "give_now") {

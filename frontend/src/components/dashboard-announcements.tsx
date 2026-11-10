@@ -130,7 +130,11 @@ export function DashboardAnnouncements() {
   // way out — the same link the whole card opens, named by its button.
   const buttons = current ? chosenActions(current) : [];
   const linkCode = buttons.find((code) => code === "join_meeting" || code === "enroll" || code === "register");
-  const isGiving = buttons.some((code) => code === "give_now" || code === "pledge" || code === "in_kind");
+  // The giving buttons are the only ones this rail draws — the ways to attend
+  // travel with the card's own link. Counted on their own so a lone Give now
+  // fills its row rather than sharing it with a button that is not there.
+  const givingButtons = buttons.filter((code) => code === "give_now" || code === "pledge" || code === "in_kind");
+  const isGiving = givingButtons.length > 0;
   const isOpinion = current?.announcement_type === "opinion";
   const linkHref = linkCode && current?.href ? current.href : null;
 
@@ -381,11 +385,8 @@ export function DashboardAnnouncements() {
           {isGiving && (
             <div className="flex-1">
               {/* Only the buttons the officer chose for this post. */}
-              <div className={`grid gap-2 ${(() => {
-                const count = current ? chosenActions(current).length : 0;
-                return count >= 4 ? "grid-cols-2 sm:grid-cols-4" : count === 3 ? "grid-cols-3" : count === 2 ? "grid-cols-2" : "grid-cols-1";
-              })()}`}>
-                {(current ? chosenActions(current) : []).map((code) => {
+              <div className={`grid gap-2 ${givingButtons.length === 3 ? "grid-cols-3" : givingButtons.length === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                {givingButtons.map((code) => {
                   if (code === "give_now") {
                     return (
                       <button

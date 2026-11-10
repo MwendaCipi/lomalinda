@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnnouncementAttachment } from "@/components/announcement-attachment";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { cardButtons } from "@/lib/announcement-options";
 import { useAnnouncementCommentsSocket } from "@/lib/chat-socket";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -209,13 +210,10 @@ export function PopupAnnouncementModal() {
 
   const actionType = current.action_type || "none";
   const isContributionAction = actionType !== "none" && actionType !== "respond";
-  // The row the popup carries: only the buttons the officer chose for the
-  // post. An old post that predates the choice keeps the familiar trio.
-  const popupActions = current && current.giving_actions?.length
-    ? current.giving_actions.filter((code) => code !== "comment")
-    : ["give_now", "pledge", "in_kind"];
-  const popupOrder = ["pledge", "in_kind", "give_now"];
-  popupActions.sort((a, b) => popupOrder.indexOf(a) - popupOrder.indexOf(b));
+  // The row the popup carries: only the buttons the officer ticked for the
+  // post, with the giving asks closing the row at its right-hand end. A post
+  // given no buttons carries none — nothing stands in for them.
+  const popupActions = cardButtons(current.giving_actions).filter((code) => code !== "comment");
   const isOpinion = current.announcement_type === "opinion";
   const opinionIsClosed = isOpinion && current.response_mode === "closed";
   const opinionOptions = (current.response_options || "").split("\n").map((line) => line.trim()).filter(Boolean);
@@ -397,7 +395,7 @@ export function PopupAnnouncementModal() {
               </>
             )}
 
-            {isContributionAction && (
+            {isContributionAction && popupActions.length > 0 && (
               <div className="mt-3">
                 {/* The giving actions, one row, left to right: Pledge,
                     In-kind, Give Money. Pledge and In-kind open over this

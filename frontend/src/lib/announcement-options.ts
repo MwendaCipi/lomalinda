@@ -28,10 +28,18 @@ const OPTION_ORDER: string[] = CARD_OPTION_CHOICES.map((option) => option.value)
 /** The codes that ask for money or goods, and so need an account named. */
 export const GIVING_OPTION_CODES = ["give_now", "pledge", "in_kind"];
 
-/** A card's buttons, in the strip's own reading order, without duplicates. */
+/** The giving asks, in the order they close the row: Give now is the last
+ *  button a card carries, so money — or goods, or a pledge — always sits at
+ *  the row's right-hand end whenever the post offers one. */
+const GIVING_LAST = ["pledge", "in_kind", "give_now"];
+
+/** A card's buttons, in the strip's own reading order, without duplicates,
+ *  and with the giving asks kept at the right-hand end. */
 export function cardButtons(options?: string[] | null): string[] {
   const chosen = (options ?? []).filter((code) => OPTION_ORDER.includes(code));
-  return Array.from(new Set(chosen)).sort(
-    (a, b) => OPTION_ORDER.indexOf(a) - OPTION_ORDER.indexOf(b),
-  );
+  const rank = (code: string) => {
+    const giving = GIVING_LAST.indexOf(code);
+    return giving === -1 ? OPTION_ORDER.indexOf(code) : OPTION_ORDER.length + giving;
+  };
+  return Array.from(new Set(chosen)).sort((a, b) => rank(a) - rank(b));
 }

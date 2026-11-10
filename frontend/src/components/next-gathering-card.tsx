@@ -112,17 +112,10 @@ export function NextGatheringCard() {
   // at; with neither, the location card sends a visitor to the calendar.
   const mapsUrl = churchMapHref(settings);
   const actionType = current?.action_type || "none";
-  // The row the visitor reads: only the buttons the officer chose for the
-  // post. New posts carry that list in `options`; an older giving post keeps
-  // the familiar trio.
-  const chosenActions = current ? cardButtons(current.options) : [];
-  const cardActions = current && chosenActions.length > 0
-    ? chosenActions
-    : current && actionType !== "none" && actionType !== "respond"
-      ? ["give_now", "pledge", "in_kind"]
-      : [];
-  const cardOrder = ["pledge", "in_kind", "give_now", "comment", "join_meeting", "enroll", "register"];
-  if (cardActions.length !== 1) cardActions.sort((a, b) => cardOrder.indexOf(a) - cardOrder.indexOf(b));
+  // The row the visitor reads: only the buttons the officer ticked for the
+  // post. Nothing stands in for a post that was given none, and the giving
+  // asks — Pledge, In-kind, Give now — close the row at its right-hand end.
+  const cardActions = current ? cardButtons(current.options) : [];
   const actionGrid = cardActions.length >= 4 ? "grid-cols-2 sm:grid-cols-3" :
     cardActions.length === 3 ? "grid-cols-3" :
     cardActions.length === 2 ? "grid-cols-2" : "grid-cols-1";
@@ -265,8 +258,8 @@ export function NextGatheringCard() {
         ) : current && cardActions.length > 0 ? (
           <div className="border-t border-sage-line pt-6">
             {/* The actions the officer ticked for this post, in the card's
-                reading order — deliberate giving first, then goods, then
-                money, then the ways to answer or attend. */}
+                reading order: the ways to answer or attend, and the giving
+                asked kept at the row's right-hand end. */}
             <div className={`grid gap-2 sm:gap-3 ${actionGrid}`}>
               {cardActions.map((code) => {
                 if (code === "pledge") {
