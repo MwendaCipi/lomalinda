@@ -10919,9 +10919,17 @@ class TreasuryPdfView(APIView):
         # The individual report can be sectioned by a second dimension after
         # its rows are ordered. The summary keeps its fixed NEKF shape, so a
         # group request only applies to the detailed givings paper.
-        group_by = request.query_params.get("group_by", "").strip().lower()
-        if group_by not in {"account", "month", "mode", "giver"}:
-            group_by = ""
+        # The sections can nest, the way a report writer's grouping does: the
+        # first `group_by` is the outer band, the next cuts each band into its
+        # own smaller ones, and so on. Repeats are dropped and the sheet keeps
+        # to three levels, which is as deep as a ledger stays readable.
+        group_bys = []
+        for raw in request.query_params.getlist("group_by"):
+            value = raw.strip().lower()
+            if value in {"account", "month", "mode", "giver"} and value not in group_bys:
+                group_bys.append(value)
+        group_bys = group_bys[:3]
+        group_by = group_bys[0] if group_bys else ""
 
         digital_filter = Q(status__iexact="completed", giving_type="financial") & (
             Q(paid_at__date__gte=start_date, paid_at__date__lte=end_date) |
@@ -11124,32 +11132,51 @@ class TreasuryPdfView(APIView):
         purpose_rows = _apply_order(purpose_rows, order_rules, purpose_side=True)
         individual_rows = _apply_order(individual_rows, order_rules, purpose_side=False)
 
-        grouped_rows = []
-        if is_individual and group_by:
+        def _group_key(row, field):
+            """One row's place in a level: its sort key and the label it reads."""
+            if field == "month":
+                key = str(row.get("date", ""))[:7]
+                try:
+                    label = datetime.strptime(f"{key}-01", "%Y-%m-%d").strftime("%B %Y")
+                except ValueError:
+                    label = key or "Unknown month"
+                return label.casefold(), label
+            if field == "account":
+                label = str(row.get("purpose_name") or "Unassigned")
+            elif field == "mode":
+                label = str(row.get("payment_method") or "cash").replace("_", " ").title()
+            else:
+                label = str(row.get("member_name") or "Anonymous")
+            return label.casefold(), label
+
+        def _build_groups(rows, fields):
+            """The rows cut by the first field, each cut again by the rest.
+
+            A group keeps its own rows (so its subtotal counts everything
+            below it) and, once there is another field to cut by, the bands
+            that cut them — which is what lets a band hold bands.
+            """
+            if not fields:
+                return []
+            field, rest = fields[0], fields[1:]
             buckets = {}
-            for row in individual_rows:
-                if group_by == "month":
-                    key = str(row.get("date", ""))[:7]
-                    try:
-                        label = datetime.strptime(f"{key}-01", "%Y-%m-%d").strftime("%B %Y")
-                    except ValueError:
-                        label = key or "Unknown month"
-                elif group_by == "account":
-                    label = str(row.get("purpose_name") or "Unassigned")
-                    key = label.casefold()
-                elif group_by == "mode":
-                    label = str(row.get("payment_method") or "cash").replace("_", " ").title()
-                    key = label.casefold()
-                else:
-                    label = str(row.get("member_name") or "Anonymous")
-                    key = label.casefold()
+            for row in rows:
+                key, label = _group_key(row, field)
                 bucket = buckets.setdefault(
                     key,
-                    {"label": label, "rows": [], "total": Decimal("0")},
+                    {"label": label, "field": field, "rows": [], "groups": [], "total": Decimal("0")},
                 )
                 bucket["rows"].append(row)
                 bucket["total"] += Decimal(str(row.get("amount", 0) or 0))
-            grouped_rows = [buckets[key] for key in sorted(buckets)]
+            groups = []
+            for key in sorted(buckets):
+                group = buckets[key]
+                if rest:
+                    group["groups"] = _build_groups(group["rows"], rest)
+                groups.append(group)
+            return groups
+
+        grouped_rows = _build_groups(individual_rows, group_bys) if is_individual else []
 
         church_setting = ChurchSettings.objects.first()
         church_name = church_setting.church_name if church_setting else CHURCH_DEFAULT_NAME
@@ -11168,6 +11195,7 @@ class TreasuryPdfView(APIView):
             is_individual=is_individual,
             individual_rows=individual_rows,
             group_by=group_by if is_individual else "",
+            group_bys=group_bys if is_individual else [],
             grouped_rows=grouped_rows,
             saturdays=saturdays,
             weekly_data=weekly_data,

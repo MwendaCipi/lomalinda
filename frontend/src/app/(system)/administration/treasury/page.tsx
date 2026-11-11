@@ -116,6 +116,9 @@ type ReportOrderRule = { field: "account" | "date" | "amount" | "name"; directio
 /** The sections the givings paper can be cut into, after its order is set. */
 type ReportGroupBy = "" | "account" | "month" | "mode" | "giver";
 
+/** One level of sectioning: a section of the paper, or of the section above it. */
+type ReportGroupLevel = Exclude<ReportGroupBy, "">;
+
 const reportGroupOptions: { value: ReportGroupBy; label: string }[] = [
   { value: "", label: "One sheet" },
   { value: "account", label: "Account" },
@@ -475,14 +478,18 @@ export default function TreasuryPage() {
   const [reportDepartments, setReportDepartments] = useState<string[]>([]);
   const [reportModes, setReportModes] = useState<string[]>([]);
   // The order the paper prints in: one column at a time — account, date,
-  // amount or giver — then the sections it is cut into, if any.
+  // amount or giver — then the sections it is cut into, if any. It opens on
+  // the date, newest first, because that is the order a treasurer reads a
+  // period's givings in.
   const [reportOrderRules, setReportOrderRules] = useState<ReportOrderRule[]>([
-    { field: "account", direction: "asc" },
+    { field: "date", direction: "desc" },
   ]);
   // The picker's second cut: the givings paper can be sectioned by account,
-  // month, mode or giver after its rows are ordered. The summary keeps its
-  // fixed NEKF shape, so this only shows for the individual report.
-  const [reportGroupBy, setReportGroupBy] = useState<ReportGroupBy>("");
+  // month, mode or giver after its rows are ordered, and a section can be cut
+  // again — the levels run outer first, the way a report writer nests its
+  // groups. The summary keeps its fixed NEKF shape, so this only shows for the
+  // individual report.
+  const [reportGroupBys, setReportGroupBys] = useState<ReportGroupLevel[]>([]);
   const [reportMembers, setReportMembers] = useState<{ id: number; name: string }[]>([]);
   const [showMemberPicker, setShowMemberPicker] = useState(false);
   const [reportDepartmentOptions, setReportDepartmentOptions] = useState<{ code: string; label: string }[]>([]);
@@ -1496,21 +1503,20 @@ export default function TreasuryPage() {
     for (const mode of reportModes) {
       if (mode) params.append("modes", mode);
     }
-    // The register's own order is the default; any other is asked for by name.
-    const defaultOrder =
-      reportOrderRules.length === 1 &&
-      reportOrderRules[0].field === "account" &&
-      reportOrderRules[0].direction === "asc";
-    if (!defaultOrder) {
-      for (const rule of reportOrderRules) {
-        params.append("order_by", rule.field);
-        params.append("order", rule.direction);
-      }
+    // The order on screen is the order on the paper, always asked for by
+    // name: the sheet's own fallback is the register's account order, so a
+    // picker left on the date would print by account if this stayed quiet.
+    for (const rule of reportOrderRules) {
+      params.append("order_by", rule.field);
+      params.append("order", rule.direction);
     }
     // The givings paper is cut into sections after its order is set; the
-    // summary's fixed shape never asks for one.
-    if (mode === "individual" && reportGroupBy) {
-      params.append("group_by", reportGroupBy);
+    // summary's fixed shape never asks for one. Each level is asked for by
+    // name, outer first, so the bands nest the way the picker shows them.
+    if (mode === "individual") {
+      for (const level of reportGroupBys) {
+        params.append("group_by", level);
+      }
     }
     for (const member of reportMembers) {
       params.append("member_ids", String(member.id));
@@ -1560,8 +1566,8 @@ export default function TreasuryPage() {
     setReportDepartments([]);
     setReportModes([]);
     setReportMembers([]);
-    setReportOrderRules([{ field: "account", direction: "asc" }]);
-    setReportGroupBy("");
+    setReportOrderRules([{ field: "date", direction: "desc" }]);
+    setReportGroupBys([]);
     setOpenReportCombo(null);
     setShowReportModal(true);
     if (reportDepartmentOptions.length === 0) {
@@ -1652,14 +1658,15 @@ export default function TreasuryPage() {
       const modeNames = reportModes.map(
         (code) => reportModeOptions.find((option) => option.value === code)?.label ?? code,
       );
-      const groupName = reportGroupOptions.find((option) => option.value === reportGroupBy)?.label;
+      const groupName = reportGroupBys
+        .map((level) => reportGroupOptions.find((option) => option.value === level)?.label)
+        .filter(Boolean)
+        .join(" then ");
       const details = [
         accountNames.length ? `Accounts: ${accountNames.join(", ")}` : "All accounts",
         departmentNames.length ? `Departments: ${departmentNames.join(", ")}` : "",
         modeNames.length ? `Modes: ${modeNames.join(", ")}` : "",
-        reportMode === "individual" && reportGroupBy && groupName
-          ? `Grouped by: ${groupName}`
-          : "",
+        reportMode === "individual" && groupName ? `Grouped by: ${groupName}` : "",
         reportMembers.length ? `Individuals: ${reportMembers.map((member) => member.name).join(", ")}` : "",
       ]
         .filter(Boolean)
@@ -3191,7 +3198,7 @@ export default function TreasuryPage() {
                   Order by
                 </span>
                 {(() => {
-                  const rule = reportOrderRules[0] ?? { field: "account", direction: "asc" };
+                  const rule = reportOrderRules[0] ?? { field: "date", direction: "desc" };
                   const setRule = (patch: Partial<ReportOrderRule>) =>
                     setReportOrderRules([{ ...rule, ...patch }]);
                   return (
@@ -3237,24 +3244,99 @@ export default function TreasuryPage() {
 
               {/* A second cut, after the order: each section carries its own
                   heading and subtotal, and the paper still closes on the
-                  period's grand total. The summary has a fixed shape. */}
+                  period's grand total. A section can be cut again, the way a
+                  report writer nests groups — the outer level named first,
+                  each further one cutting the section above it — so a band
+                  can hold bands. The summary has a fixed shape. */}
               {reportMode === "individual" && (
                 <div className="space-y-2">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
                     Group by
                   </span>
-                  <select
-                    value={reportGroupBy}
-                    aria-label="Group the report by"
-                    onChange={(event) => setReportGroupBy(event.target.value as ReportGroupBy)}
-                    className="w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
-                  >
-                    {reportGroupOptions.map((option) => (
-                      <option key={option.value || "none"} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  {reportGroupBys.length === 0 ? (
+                    <select
+                      value=""
+                      aria-label="Group the report by"
+                      onChange={(event) =>
+                        setReportGroupBys(
+                          event.target.value ? [event.target.value as ReportGroupLevel] : [],
+                        )
+                      }
+                      className="w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                    >
+                      {reportGroupOptions.map((option) => (
+                        <option key={option.value || "none"} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      {reportGroupBys.map((level, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="w-10 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-moss">
+                            {index === 0 ? "First" : "Then"}
+                          </span>
+                          <select
+                            value={level}
+                            aria-label={
+                              index === 0
+                                ? "Group the report by"
+                                : `Then group the report by (level ${index + 1})`
+                            }
+                            onChange={(event) =>
+                              setReportGroupBys((current) =>
+                                current.map((entry, at) =>
+                                  at === index ? (event.target.value as ReportGroupLevel) : entry,
+                                ),
+                              )
+                            }
+                            className="min-w-0 flex-1 rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs text-bark focus:border-ember focus:outline-none"
+                          >
+                            {reportGroupOptions
+                              .filter(
+                                (option) =>
+                                  option.value &&
+                                  (option.value === level ||
+                                    !reportGroupBys.includes(option.value as ReportGroupLevel)),
+                              )
+                              .map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReportGroupBys((current) => current.filter((_, at) => at !== index))
+                            }
+                            aria-label={`Remove grouping level ${index + 1}`}
+                            className="shrink-0 rounded-lg p-1.5 text-moss transition hover:bg-sand hover:text-ember"
+                          >
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      ))}
+                      {reportGroupBys.length < 3 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReportGroupBys((current) => {
+                              const next = reportGroupOptions.find(
+                                (option) =>
+                                  option.value && !current.includes(option.value as ReportGroupLevel),
+                              )?.value as ReportGroupLevel | undefined;
+                              return next ? [...current, next] : current;
+                            })
+                          }
+                          className="inline-flex items-center gap-1 rounded-xl border border-dashed border-sand-mute px-2.5 py-1.5 text-[11px] font-semibold text-moss transition hover:bg-sand hover:text-bark"
+                        >
+                          <span aria-hidden="true">+</span> Add another level
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -3304,41 +3386,57 @@ export default function TreasuryPage() {
                 )}
               </div>
             </div>
-            {/* One column of answers: the X at the top already closes, so no
-                Cancel — Send, Download and Preview stack full-width. */}
-            <div className="flex shrink-0 flex-col items-stretch gap-2 border-t border-sand-line bg-sand-linen/40 px-5 py-3">
+            {/* One row of answers: the X at the top already closes, so no
+                Cancel — Send, Download and Preview stand side by side, each
+                taking an equal share of the width, with their wording cut
+                short on a phone so all three fit one line rather than
+                stacking into a column of full-width bars. */}
+            <div className="flex shrink-0 flex-col gap-2 border-t border-sand-line bg-sand-linen/40 px-4 py-3 sm:px-5">
               {reportSelectedPurposes.length === 0 && (
                 <p className="text-center text-[11px] text-moss">Pick at least one account.</p>
               )}
-              <button
-                type="button"
-                onClick={() => void sendGivingReportForSignature()}
-                disabled={sendingSignature || preparing !== null || reportSelectedPurposes.length === 0}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-bark px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90 disabled:opacity-60"
-              >
-                {sendingSignature ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Send className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {sendingSignature ? "Sending…" : "Send for signature"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void downloadGivingReport()}
-                disabled={preparing !== null || reportSelectedPurposes.length === 0}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark shadow-sm transition hover:bg-sand disabled:opacity-60"
-              >
-                <Download className="h-3.5 w-3.5 text-ember" aria-hidden="true" /> Download report
-              </button>
-              <button
-                type="button"
-                onClick={previewGivingReport}
-                disabled={preparing !== null || reportSelectedPurposes.length === 0}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-ember px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60"
-              >
-                <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Preview report
-              </button>
+              <div className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  onClick={() => void sendGivingReportForSignature()}
+                  disabled={sendingSignature || preparing !== null || reportSelectedPurposes.length === 0}
+                  className="inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-bark px-2 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-bark/90 disabled:opacity-60 sm:px-3.5"
+                >
+                  {sendingSignature ? (
+                    <Loader2 className="hidden h-3.5 w-3.5 shrink-0 animate-spin sm:block" aria-hidden="true" />
+                  ) : (
+                    <Send className="hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden="true" />
+                  )}
+                  {sendingSignature ? (
+                    "Sending…"
+                  ) : (
+                    <>
+                      <span className="sm:hidden">Send</span>
+                      <span className="hidden sm:inline">Send for signature</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadGivingReport()}
+                  disabled={preparing !== null || reportSelectedPurposes.length === 0}
+                  className="inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-sand-mute bg-white px-2 py-2 text-xs font-semibold text-bark shadow-sm transition hover:bg-sand disabled:opacity-60 sm:px-3.5"
+                >
+                  <Download className="hidden h-3.5 w-3.5 shrink-0 text-ember sm:block" aria-hidden="true" />
+                  <span className="sm:hidden">Download</span>
+                  <span className="hidden sm:inline">Download report</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={previewGivingReport}
+                  disabled={preparing !== null || reportSelectedPurposes.length === 0}
+                  className="inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-ember px-2 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-dark disabled:opacity-60 sm:px-3.5"
+                >
+                  <Printer className="hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden="true" />
+                  <span className="sm:hidden">Preview</span>
+                  <span className="hidden sm:inline">Preview report</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

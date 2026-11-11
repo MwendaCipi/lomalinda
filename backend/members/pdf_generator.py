@@ -613,6 +613,7 @@ def generate_treasury_pdf(
     is_individual=False,
     individual_rows=None,
     group_by="",
+    group_bys=None,
     grouped_rows=None,
     saturdays=None,
     weekly_data=None,
@@ -694,9 +695,12 @@ def generate_treasury_pdf(
             "mode": "Mode of giving",
             "giver": "Giver",
         }
-        group_name = group_labels.get(group_by, "") if group_by else ""
+        # The levels, outer first: a sheet cut twice says so, in the order the
+        # bands it prints stand in.
+        levels = [level for level in (group_bys or ([group_by] if group_by else [])) if level in group_labels]
+        group_name = group_labels.get(levels[0], "") if levels else ""
         if group_name:
-            subtitle_text += f" - GROUPED BY {group_name.upper()}"
+            subtitle_text += " - GROUPED BY " + " THEN ".join(group_labels[level].upper() for level in levels)
         subtitle_text += f" FROM {date_compact(start_date)} TO {date_compact(end_date)}"
         story.append(Paragraph(subtitle_text, st["title_big"]))
         # The heading already names the period, so the line under it carries
@@ -752,35 +756,51 @@ def generate_treasury_pdf(
         band_indexes = []
         subtotal_indexes = []
 
-        if groups:
-            for group in groups:
-                label = str(group.get("label") or "Ungrouped")
-                rows = group.get("rows") or []
-                count = len(rows)
-                band_indexes.append(len(ind_data))
-                ind_data.append([
-                    Paragraph(
-                        f"<b>{label}</b> ({count} record{'s' if count != 1 else ''})",
-                        st["cell_bold"],
-                    ),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                ])
+        def append_group(group, depth):
+            """One band, then its own bands inside it, then its subtotal.
+
+            A band cut again prints its heading and steps into those inner
+            bands — indented so the nesting reads at a glance — before it
+            closes on its own subtotal, which counts every gift beneath it.
+            The deepest band holds the gifts themselves.
+            """
+            label = str(group.get("label") or "Ungrouped")
+            rows = group.get("rows") or []
+            children = group.get("groups") or []
+            count = len(rows)
+            pad = "&nbsp;" * (depth * 6)
+            band_indexes.append(len(ind_data))
+            ind_data.append([
+                Paragraph(
+                    f"{pad}<b>{label}</b> ({count} record{'s' if count != 1 else ''})",
+                    st["cell_bold"],
+                ),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+            ])
+            if children:
+                for child in children:
+                    append_group(child, depth + 1)
+            else:
                 for g in rows:
                     data_row_indexes.append(len(ind_data))
                     ind_data.append(gift_cells(g))
-                subtotal_indexes.append(len(ind_data))
-                ind_data.append([
-                    Paragraph(f"<b>Subtotal - {label}</b>", st["cell_bold"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph("", st["cell"]),
-                    Paragraph(format_money(group.get("total", 0)), st["cell_right_bold"]),
-                ])
+            subtotal_indexes.append(len(ind_data))
+            ind_data.append([
+                Paragraph(f"{pad}<b>Subtotal - {label}</b>", st["cell_bold"]),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+                Paragraph("", st["cell"]),
+                Paragraph(format_money(group.get("total", 0)), st["cell_right_bold"]),
+            ])
+
+        if groups:
+            for group in groups:
+                append_group(group, 0)
         else:
             for g in ind_rows:
                 data_row_indexes.append(len(ind_data))
