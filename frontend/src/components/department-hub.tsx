@@ -7792,14 +7792,28 @@ function DepartmentDetail({
       const view = eldershipViews.find((candidate) => candidate.key === key);
       if (!view) return;
       // A view of this desk stays here — the heading, search and strip never
-      // leave — while the console pages walk to the page that holds them.
-      // Sharing is a view of the desk too for the officers who hold it (see
-      // the rendering below), so its press stays in place instead of walking
-      // to the console's board.
-      if (
-        (key === "calendar" || key === "baptismal-class" || key === "letters" || key === "rota" || key === "treasury-approvals" || (key === "sharing" && canOpenOfficeViews)) &&
-        !onConsole
-      ) {
+      // leave — while a page that lives somewhere else (the console's
+      // Requests, Moments or Accounts) walks to the page that holds it.
+      //
+      // Which of the two a chip is comes from its address, not from a list of
+      // keys: a chip naming the area already in the bar is a page of this desk
+      // and *replaces* the entry. Pushing it instead — the same address twice
+      // — put a second entry holding this very screen in the stack, and Back
+      // then walked to that copy: the screen did not change, so Back read as
+      // stuck on eldership however many times it was pressed, and the desk
+      // that was really behind it never came. One entry for the desk keeps
+      // Back one press away from wherever the reader came from.
+      const hereArea =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("area")
+          : null;
+      const targetArea =
+        typeof window !== "undefined"
+          ? new URL(view.href, window.location.origin).searchParams.get("area")
+          : null;
+      const staysInDesk =
+        !onConsole && hereArea !== null && targetArea === hereArea;
+      if (staysInDesk || (key === "sharing" && canOpenOfficeViews && !onConsole)) {
         setSubTab(key as DeptSubTab);
         router.replace(
           key === "sharing" ? "/my-areas?area=eldership&view=sharing" : view.href,
@@ -7830,6 +7844,14 @@ function DepartmentDetail({
     const description =
       DEPARTMENT_DESCRIPTION_OVERRIDES[department.code] ??
       (department.description || DEPARTMENT_BLURBS[department.code]);
+    // An area is named in the address bar (`?area=`) wherever the desk was
+    // opened from, so an opened area always carries a way out of itself: the
+    // host's own step when it passed one, and otherwise the map. Without the
+    // second arm a desk a host forgot to hand a back handler was a room with
+    // no door — the eldership in a stack it had stacked itself.
+    const inAnArea =
+      typeof window !== "undefined" &&
+      Boolean(new URLSearchParams(window.location.search).get("area"));
     setCustomHeader({
       label,
       description,
@@ -7842,13 +7864,22 @@ function DepartmentDetail({
         >
           <MoveLeft className="h-5 w-5" aria-hidden="true" />
         </button>
+      ) : !onConsole && inAnArea ? (
+        <button
+          type="button"
+          onClick={() => router.replace("/my-areas", { scroll: false })}
+          aria-label="Back to the ministry map"
+          className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
+        >
+          <MoveLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
       ) : undefined,
     });
     return () => {
       setCustomHeader(null);
       setHeadingFirst(false);
     };
-  }, [department.code, department.label, department.description, setCustomHeader, setHeadingFirst, onADeaconatePage, consoleTab]);
+  }, [department.code, department.label, department.description, setCustomHeader, setHeadingFirst, onADeaconatePage, consoleTab, onConsole, router]);
 
   useEffect(() => {
     // A desk that is one view of a larger one leaves the strip to it entirely

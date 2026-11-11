@@ -183,6 +183,19 @@ export function trackAppHistory() {
 
   window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
     const target = pathKey(url);
+    // A push of the page already on screen — a rail row for the desk being
+    // read, a chip whose page is the one in view — has nowhere new to go: it
+    // would leave two entries holding the same address, and Back would walk
+    // to that copy, changing nothing on screen, so Back read as broken and the
+    // page that was really behind it stayed out of reach. The address is
+    // written in place instead, and the stack keeps the one entry.
+    if (target === pathKey(null)) {
+      const index = stampedIndex(this.state) ?? currentIndex;
+      const result = replaceState.call(this, stamp(data as HistoryState, index), unused, url);
+      entryPaths.set(index, target);
+      notifyLocation();
+      return result;
+    }
     // A page the member has already walked past is still in the stack below
     // us: the push goes ahead as usual, then the stack folds back to the
     // entry that already holds it — so the history keeps one entry per page
