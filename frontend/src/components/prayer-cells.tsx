@@ -315,7 +315,7 @@ function NamePicker({
         />
       </div>
       {(matches.length > 0 || searching) && query.trim().length >= 2 && (
-        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-sand-line bg-white shadow-sm">
+        <div className="mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-sand-line bg-white shadow-sm">
           {searching && <p className="px-3 py-2 text-[11px] text-moss">Searching…</p>}
           {!searching && matches.length === 0 && <p className="px-3 py-2 text-[11px] text-moss">No member found.</p>}
           {matches.map((match) => (

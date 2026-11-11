@@ -8,6 +8,7 @@ import { announcementCountdown } from "@/lib/announcement-dates";
 import { cardButtons } from "@/lib/announcement-options";
 import { PledgeModal, type PledgeTarget } from "@/components/pledge-modal";
 import { InKindGiftModal } from "@/components/in-kind-gift-modal";
+import { EventEnrollModal, type EventEnrollTarget } from "@/components/event-enroll-modal";
 import { AnnouncementCommentModal } from "@/components/announcement-comment-modal";
 import { churchWhere, useChurchSettings } from "@/hooks/use-church-settings";
 import { isImageAttachment } from "@/components/announcement-attachment";
@@ -45,6 +46,11 @@ type Announcement = {
   /** The post's image, when it carries one — the same shape the announcement
       manager and the full-feed modal use, so one helper reads all three. */
   attachment?: string | null;
+  /** The seat this post sells, when its Enroll now / Register now button has one. */
+  enrollment_event?: number | null;
+  enroll_department?: string | null;
+  enroll_fee?: string | number | null;
+  enroll_deadline?: string | null;
 };
 
 /**
@@ -71,6 +77,8 @@ export function DashboardAnnouncements() {
   // never loses their place to give — the same two forms the feed opens.
   const [pledgeTarget, setPledgeTarget] = useState<PledgeTarget | null>(null);
   const [inKindOpen, setInKindOpen] = useState(false);
+  // The Enroll now / Register now button opens the same seat modal the feed uses.
+  const [enrollTarget, setEnrollTarget] = useState<EventEnrollTarget | null>(null);
   // An opinion card's Give input opens the comment thread; the other slides
   // reach the thread through the full feed.
 
@@ -117,7 +125,7 @@ export function DashboardAnnouncements() {
 
   // A modal over the rail holds the slides still — nothing should turn behind
   // a form the member is filling in.
-  const modalOpen = Boolean(pledgeTarget) || inKindOpen || Boolean(commentFor);
+  const modalOpen = Boolean(pledgeTarget) || inKindOpen || Boolean(commentFor) || Boolean(enrollTarget);
 
   useEffect(() => {
     if (!canRotate || isPaused || isInteracting || modalOpen) return;
@@ -136,7 +144,13 @@ export function DashboardAnnouncements() {
   const givingButtons = buttons.filter((code) => code === "give_now" || code === "pledge" || code === "in_kind");
   const isGiving = givingButtons.length > 0;
   const isOpinion = current?.announcement_type === "opinion";
-  const linkHref = linkCode && current?.href ? current.href : null;
+  const linkHref = linkCode === "join_meeting" && current?.href ? current.href : null;
+  // A registration seat sells on the post's own event, the same as the feed:
+  // it is bought in the modal, not by a link out.
+  const enrollable =
+    (linkCode === "enroll" || linkCode === "register") &&
+    Boolean(current?.enrollment_event && current?.enroll_department);
+  const enrollClosed = Boolean(current?.enroll_deadline) && String(current?.enroll_deadline) < now.toISOString().slice(0, 10);
 
 
   // Where the body has to stop, and that it stops after a whole word.
@@ -439,7 +453,7 @@ export function DashboardAnnouncements() {
               Give input
             </button>
           )}
-          {linkHref && current && (
+          {(linkHref || enrollable) && current && (
             /* A conference reads top to bottom: the hour the meeting begins
                and the way in share one row, read before the tap. */
             <div className="ml-auto flex items-center justify-end gap-2.5 sm:gap-3">
@@ -448,14 +462,34 @@ export function DashboardAnnouncements() {
                   {countdown}
                 </span>
               )}
-              <a
-                href={linkHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
-              >
-                {linkCode === "enroll" ? "Enroll now" : linkCode === "register" ? "Register now" : platformLabel(current.href)}
-              </a>
+              {enrollable ? (
+                <button
+                  type="button"
+                  disabled={enrollClosed}
+                  onClick={() => {
+                    if (!current.enrollment_event || !current.enroll_department) return;
+                    setEnrollTarget({
+                      event: current.enrollment_event,
+                      department: current.enroll_department,
+                      title: current.title,
+                      fee: current.enroll_fee ?? 0,
+                      deadline: current.enroll_deadline ?? null,
+                    });
+                  }}
+                  className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark disabled:opacity-45 sm:px-5"
+                >
+                  {enrollClosed ? "Registration closed" : linkCode === "enroll" ? "Enroll now" : "Register now"}
+                </button>
+              ) : (
+                <a
+                  href={linkHref ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pointer-events-auto inline-flex items-center justify-center whitespace-nowrap rounded-full bg-ember px-4 py-2 text-xs font-bold text-white transition hover:bg-ember-dark sm:px-5"
+                >
+                  {platformLabel(linkHref ?? "")}
+                </a>
+              )}
             </div>
           )}
           {/* The next gathering is online: the same way in the conference
@@ -499,6 +533,7 @@ export function DashboardAnnouncements() {
         defaultPurpose={current?.support_account_display || undefined}
         announcementTitle={current?.title}
       />
+      <EventEnrollModal target={enrollTarget} onClose={() => setEnrollTarget(null)} />
 
       {/* An opinion card's Give input opens this box: the thread above, a
           500-character composer beneath. */}

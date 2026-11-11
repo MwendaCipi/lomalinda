@@ -63,11 +63,17 @@ function stampedIndex(state: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
-/** The most recent entry below us that already holds this page, or -1. */
+/**
+ * The most recent entry above the floor that already holds this page, or -1.
+ *
+ * The floor (index 0) is never a fold target: it is whatever page the app was
+ * opened on, and folding onto it would make Back land there instead of on the
+ * page the member came from.
+ */
 function earlierEntryFor(path: string): number {
   let at = -1;
   entryPaths.forEach((known, index) => {
-    if (index < currentIndex && known === path && index > at) at = index;
+    if (index > 0 && index < currentIndex && known === path && index > at) at = index;
   });
   return at;
 }

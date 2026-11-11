@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { showAlert } from "@/lib/alerts";
 import { Send, Sparkles, X } from "lucide-react";
 import { localDate, dayFirst } from "@/lib/dates";
@@ -203,7 +204,10 @@ export function AnnouncementManager({
       loaded from that row, so a post edited from the feed changes only
       itself. Null means a fresh post. */
   editItem = null,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null } = {}) {
+  /** Communicate mode: the element the composer's Cancel / Post buttons are
+      portalled into — the host's fixed footer, outside its scrolling body. */
+  actionsTarget = null,
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null; actionsTarget?: HTMLElement | null } = {}) {
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -343,10 +347,6 @@ export function AnnouncementManager({
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showSharingDropdown, setShowSharingDropdown] = useState(false);
-  // The composer's foot panel (Cancel / Post) hides as the fields scroll —
-  // the whole panel, card and shadow included, so it stops sitting over the
-  // words being written. It returns on a scroll back up or at the top.
-  const [composerActionsHidden, setComposerActionsHidden] = useState(false);
   const sharingDropdownRef = useRef<HTMLDivElement>(null);
   const [showPostToDropdown, setShowPostToDropdown] = useState(false);
   const postToDropdownRef = useRef<HTMLDivElement>(null);
@@ -368,38 +368,6 @@ export function AnnouncementManager({
       setOpenedAt({ day: localDate(at), minutes: at.getHours() * 60 + at.getMinutes() });
     });
   }, []);
-
-  useEffect(() => {
-    // The host's body is the scroller in the desk's compose modal, so the
-    // listener watches every scroller under the document rather than one
-    // element it does not own.
-    if (!composerOnly) return;
-    let lastTarget: EventTarget | null = null;
-    let lastY = 0;
-    const onScroll = (event: Event) => {
-      const element = event.target instanceof HTMLElement ? event.target : null;
-      const y =
-        element && element !== document.documentElement && element !== document.body
-          ? element.scrollTop
-          : window.scrollY;
-      if (event.target !== lastTarget) {
-        lastTarget = event.target;
-        lastY = y;
-        return;
-      }
-      const moved = y - lastY;
-      lastY = y;
-      if (y <= 16) {
-        setComposerActionsHidden(false);
-        return;
-      }
-      if (Math.abs(moved) < 8) return;
-      setComposerActionsHidden(moved > 0);
-    };
-    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
-    return () => document.removeEventListener("scroll", onScroll, { capture: true });
-  }, [composerOnly]);
-
 
   function handleEdit(item: Announcement) {
     setEditingId(item.id);
@@ -1331,18 +1299,9 @@ export function AnnouncementManager({
     return (
       <>
         {renderComposerFields()}
-        {/* The buttons ride the bottom of the host's scrolling body: a post is
-            a long form, and a Cancel or Post that scrolled out of reach left
-            the officer scrolling to the end just to leave. Reading the form
-            downward slides the whole panel — card, border and shadow too —
-            out of the way, so it never sits over the words being written. */}
-        <div
-          className={`sticky bottom-0 z-10 mt-4 rounded-xl border border-sand-line bg-white px-3 py-3 shadow-lg transition-all duration-300 ease-out ${
-            composerActionsHidden ? "translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
-          }`}
-        >
-          {renderComposerActions()}
-        </div>
+        {/* The buttons sit in the host's fixed footer, outside its scrolling
+            body, so Cancel and Post stay in reach while the fields scroll. */}
+        {actionsTarget && createPortal(renderComposerActions(), actionsTarget)}
       </>
     );
   }

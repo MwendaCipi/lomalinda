@@ -1210,9 +1210,9 @@ export function WithdrawalRequestsPanel({
               role="dialog"
               aria-modal="true"
               aria-label={`Spending account for ${accountingRow.department}`}
-              className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
+              className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
             >
-              <div className="flex items-start justify-between gap-3 border-b border-sand-line pb-3">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sand-line px-6 pb-3 pt-6">
                 <div>
                   <h3 className="text-lg font-bold text-bark">Spending account</h3>
                   <p className="mt-0.5 text-xs text-moss">
@@ -1233,6 +1233,7 @@ export function WithdrawalRequestsPanel({
                 </button>
               </div>
 
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
               {!account ? (
                 <p className="mt-3 text-xs italic text-moss">
                   Waiting on {accountingRow.department} to file how the money was spent.
@@ -1314,42 +1315,44 @@ export function WithdrawalRequestsPanel({
                     </p>
                   )}
 
-                  {account.status === "submitted" &&
-                    (workspace === "treasury" ? (
-                      <div className="mt-3 space-y-2 border-t border-sand-line pt-3">
-                        <textarea
-                          rows={2}
-                          maxLength={255}
-                          value={accountReply}
-                          onChange={(e) => setAccountReply(e.target.value)}
-                          placeholder="A note for the desk (required when sending it back)…"
-                          className="block w-full resize-y rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
-                        />
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void reviewAccountability(accountingRow, "returned")}
-                            disabled={accountBusy || !accountReply.trim()}
-                            className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
-                          >
-                            Send back for corrections
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void reviewAccountability(accountingRow, "accepted")}
-                            disabled={accountBusy}
-                            className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
-                          >
-                            {accountBusy ? "Saving…" : "Accept account"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="mt-3 border-t border-sand-line pt-3 text-[11px] italic text-moss-faint">
-                        Only the treasury can accept or send back this account.
-                      </p>
-                    ))}
+                  {account.status === "submitted" && workspace !== "treasury" && (
+                    <p className="mt-3 border-t border-sand-line pt-3 text-[11px] italic text-moss-faint">
+                      Only the treasury can accept or send back this account.
+                    </p>
+                  )}
                 </>
+              )}
+              </div>
+
+              {account?.status === "submitted" && workspace === "treasury" && (
+                <div className="shrink-0 space-y-2 border-t border-sand-line bg-white px-6 py-3">
+                  <textarea
+                    rows={2}
+                    maxLength={255}
+                    value={accountReply}
+                    onChange={(e) => setAccountReply(e.target.value)}
+                    placeholder="A note for the desk (required when sending it back)…"
+                    className="block w-full resize-y rounded-lg border border-sand-mute bg-white px-2.5 py-1.5 text-xs outline-none focus:border-ember"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void reviewAccountability(accountingRow, "returned")}
+                      disabled={accountBusy || !accountReply.trim()}
+                      className="rounded-lg border border-sand-mute px-2.5 py-1 text-[11px] font-semibold text-moss transition hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      Send back for corrections
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void reviewAccountability(accountingRow, "accepted")}
+                      disabled={accountBusy}
+                      className="rounded-lg bg-bark px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-bark/90 disabled:opacity-60"
+                    >
+                      {accountBusy ? "Saving…" : "Accept account"}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

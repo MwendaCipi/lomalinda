@@ -5028,7 +5028,7 @@ function WeeklyMeetingsPanel({ search }: { search: string }) {
 
       {/* The buttons panel: fixed to the bottom with buttons centered and a small margin below, hides on scroll. */}
       <div
-        className={`flex shrink-0 items-center justify-center gap-2 mb-2 sm:mb-3 transition-all duration-300 ease-out ${
+        className={`flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm mb-2 sm:mb-3 transition-all duration-300 ease-out ${
           buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"
         }`}
       >
@@ -6064,9 +6064,9 @@ export function DepartmentAccountsPanel({
             role="dialog"
             aria-modal="true"
             aria-label="Account for the spending"
-            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl ring-1 ring-sand-line"
+            className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-sand-line"
           >
-            <div className="flex items-start justify-between border-b border-sand-line pb-3">
+            <div className="flex shrink-0 items-start justify-between border-b border-sand-line px-6 pb-3 pt-6">
               <div>
                 <h3 className="text-lg font-bold text-bark">Account for the spending</h3>
                 <p className="mt-0.5 text-xs text-moss">
@@ -6083,6 +6083,7 @@ export function DepartmentAccountsPanel({
               </button>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
             {accountingFor.accountability?.status === "returned" && (
               <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                 The treasury sent this back
@@ -6112,7 +6113,7 @@ export function DepartmentAccountsPanel({
             )}
 
             {accountingFor.accountability?.status !== "accepted" && (
-              <form onSubmit={submitAccountability} className="mt-4 space-y-4">
+              <form id="account-spending-form" onSubmit={submitAccountability} className="mt-4 space-y-4">
                 <div>
                   <span className="block text-sm font-medium text-bark">What the money bought *</span>
                   {/* Past a few rows the old ones scroll up inside the list,
@@ -6248,23 +6249,28 @@ export function DepartmentAccountsPanel({
                   </p>
                 </div>
 
-                <div className="flex justify-end gap-2 border-t border-sand-line pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setAccountingFor(null)}
-                    className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={accountSaving || accountDeleting || accountTotal <= 0 || accountTotal > accountGiven || accountIncomplete}
-                    className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-ember-deep disabled:opacity-50"
-                  >
-                    {accountSaving ? "Filing…" : accountingFor.accountability ? "Update account" : "File account"}
-                  </button>
-                </div>
               </form>
+            )}
+            </div>
+
+            {accountingFor.accountability?.status !== "accepted" && (
+              <div className="flex shrink-0 justify-end gap-2 border-t border-sand-line bg-white px-6 py-3">
+                <button
+                  type="button"
+                  onClick={() => setAccountingFor(null)}
+                  className="rounded-xl border border-sand-mute px-3 py-1.5 text-xs font-semibold text-moss transition hover:text-bark"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="account-spending-form"
+                  disabled={accountSaving || accountDeleting || accountTotal <= 0 || accountTotal > accountGiven || accountIncomplete}
+                  className="rounded-xl bg-ember px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-ember-deep disabled:opacity-50"
+                >
+                  {accountSaving ? "Filing…" : accountingFor.accountability ? "Update account" : "File account"}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -6892,6 +6898,7 @@ function DepartmentDetail({
   // the same compose modal the console posts from, over the desk. The feed
   // remounts on a posted announcement so the desk sees it at once.
   const [showShareComposer, setShowShareComposer] = useState(false);
+  const [shareActionsEl, setShareActionsEl] = useState<HTMLDivElement | null>(null);
   const [shareFeedKey, setShareFeedKey] = useState(0);
   // The feed's Edit opens the same composer loaded from that post, and the
   // panel's word/thought button opens the daily word on its own — the two
@@ -9898,7 +9905,7 @@ function DepartmentDetail({
           </div>
           {/* The buttons panel: fixed to the bottom with buttons centered
               and a small margin below. */}
-          <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
+          <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <button
               type="button"
               onClick={() => {
@@ -10120,10 +10127,10 @@ function DepartmentDetail({
           onClick={() => setShowShareComposer(false)}
         >
           <div
-            className="mx-auto w-full max-w-2xl rounded-2xl bg-white shadow-xl"
+            className="mx-auto flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-sand-line px-4 py-3 sm:px-5">
+            <div className="flex shrink-0 items-center justify-between border-b border-sand-line px-4 py-3 sm:px-5">
               <h3 className="flex items-center gap-2 text-sm font-bold text-bark">
                 <Sparkles className="h-4 w-4 text-ember" aria-hidden="true" /> New Announcement
               </h3>
@@ -10136,10 +10143,11 @@ function DepartmentDetail({
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto p-4 sm:p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
               <AnnouncementManager
                 composerOnly
                 editItem={shareEditItem}
+                actionsTarget={shareActionsEl}
                 onDone={() => {
                   setShowShareComposer(false);
                   setShareEditItem(null);
@@ -10147,6 +10155,7 @@ function DepartmentDetail({
                 }}
               />
             </div>
+            <div ref={setShareActionsEl} className="shrink-0 border-t border-sand-line bg-white px-4 py-3 sm:px-5" />
           </div>
         </div>
       )}

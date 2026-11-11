@@ -508,7 +508,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                   <div className="flex min-h-0 items-center gap-3 overflow-hidden border-b border-sand-line bg-white px-3 sm:px-5">
                     <div className="min-w-0 flex-1">
                       {customToggles ? (
-                        <div className="pt-2">{customToggles}</div>
+                        <div className="pt-0">{customToggles}</div>
                       ) : (
                         <SectionNav
                           label={`${section?.label ?? ""} pages`}

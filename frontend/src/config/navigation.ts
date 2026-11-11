@@ -870,7 +870,7 @@ export const eldershipViews: {
   // own desk. No desk offers another office's step.
   {
     key: "treasury-approvals",
-    label: "Treasury Approvals",
+    label: "Treasury",
     short: "Approvals",
     icon: Wallet,
     href: "/my-areas?area=eldership&view=treasury-approvals",
@@ -1226,12 +1226,12 @@ export const railEntries: RailEntry[] = [
   // office's to change. It counts as the member's own ministry when they sit
   // on the music roll; otherwise it folds in with the other ministries.
   {
-    label: "Music",
+    label: "Music Ministry",
     icon: Music,
     items: [
       {
         href: "/administration?tab=leaders&dept=music",
-        label: "Music",
+        label: "Music Ministry",
         icon: Music,
         match: ["/administration"],
         tab: "leaders",

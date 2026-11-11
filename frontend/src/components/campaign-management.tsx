@@ -213,8 +213,8 @@ export function CampaignManagement({
 
   // Announcement option during drive creation
   const [postAsAnnouncement, setPostAsAnnouncement] = useState(true);
-  const [announcementChannels, setAnnouncementChannels] = useState<string[]>(["site", "email"]);
-  const [givingActions, setGivingActions] = useState<string[]>(["give_now", "pledge", "in_kind", "comment"]);
+  const [announcementChannels, setAnnouncementChannels] = useState<string[]>(["site"]);
+  const [givingActions, setGivingActions] = useState<string[]>(["give_now"]);
   const [announcementIsPopup, setAnnouncementIsPopup] = useState(false);
   const [announcementCustomText, setAnnouncementCustomText] = useState("");
 
@@ -656,8 +656,8 @@ export function CampaignManagement({
     });
     setDriveAttachment(null);
     setPostAsAnnouncement(true);
-    setAnnouncementChannels(["site", "email"]);
-    setGivingActions(["give_now", "pledge", "in_kind", "comment"]);
+    setAnnouncementChannels(["site"]);
+    setGivingActions(["give_now"]);
     setAnnouncementIsPopup(false);
     setAnnouncementCustomText("");
     setSourceAccountId(presetAccountId);
