@@ -15388,7 +15388,20 @@ class DepartmentEventEnrollView(APIView):
         except ValueError as error:
             return Response({'phone_number': str(error)}, status=status.HTTP_400_BAD_REQUEST)
         donor_name = (request.data.get('donor_name') or request.user.get_full_name() or '').strip()
-        purpose = f'{event.title} registration'[:120]
+        # The seat is bought under the event's own account name: when the
+        # title names an existing treasury account (the camporee's), the
+        # payment keys to it — the M-Pesa reference and the ledger line both
+        # read Camporee — rather than minting another name from the title.
+        account_names = TreasuryAccount.objects.values_list('name', flat=True)
+        account_word = ''
+        for account_name in account_names:
+            if (
+                account_name
+                and len(account_name) > len(account_word)
+                and re.search(rf'\b{re.escape(account_name)}\b', event.title or '', re.IGNORECASE)
+            ):
+                account_word = account_name
+        purpose = (account_word or f'{event.title} registration')[:120]
         context = {
             'amount': str(event.fee_amount),
             'purpose': purpose,
