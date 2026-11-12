@@ -1016,11 +1016,68 @@ export function AnnouncementManager({
                 </p>
               </div>
 
+              <div className="text-xs font-semibold text-bark md:col-span-2">
+                {/* The name and the picker share one row: an attachment is a
+                    single choice, not a section of its own, and the row ends
+                    at the picker's own edge. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="shrink-0">Attachment (optional)</span>
+                  {existingAttachment && !removeAttachment && (
+                    <p className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-xl border border-sand-deep bg-sand-veil px-3 py-2 text-xs font-normal text-moss-mid">
+                      <span className="truncate">{existingAttachment.name || "Current attachment"}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setRemoveAttachment(true); setAttachment(null); }}
+                        className="ml-auto shrink-0 text-[11px] font-bold text-red-700 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </p>
+                  )}
+                  {!removeAttachment && (
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        setAttachment(e.target.files?.[0] ?? null);
+                        if (e.target.files?.[0]) setRemoveAttachment(false);
+                      }}
+                      className="min-w-0 flex-1 rounded-xl border border-sand-mute px-3 py-2 font-normal text-bark outline-none file:mr-3 file:rounded-full file:border-0 file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-bark focus:border-ember"
+                    />
+                  )}
+                </div>
+                {removeAttachment && (
+                  <p className="mt-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-normal text-red-700">
+                    Current attachment will be removed when you save.
+                  </p>
+                )}
+              </div>
+
+              <label className="block text-xs font-semibold text-bark md:col-span-2">
+                Announcement Text *
+                <textarea
+                  required
+                  rows={4}
+                  maxLength={ANNOUNCEMENT_TEXT_LIMIT}
+                  value={form.text}
+                  onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
+                  placeholder="Write full announcement content..."
+                  className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
+                />
+                <span
+                  className={`mt-1 block text-right text-[10px] font-semibold ${
+                    form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
+                  }`}
+                >
+                  {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
+                </span>
+              </label>
+
               {/* When the post goes out: now, or at a day and hour the office
-                  picks. Post now is the default — the board's oldest habit —
-                  and the scheduling fields appear only when Schedule is
-                  chosen, so a post going out at once is never asked for a day
-                  it does not have. */}
+                  picks — the last thing set, after the words themselves.
+                  Post now is the default, the board's oldest habit, and the
+                  scheduling fields appear only when Schedule is chosen, so a
+                  post going out at once is never asked for a day it does
+                  not have. */}
               <div className="md:col-span-2 rounded-xl border border-sand-line bg-sand-linen/40 p-3">
                 <span className="block text-xs font-semibold text-bark">When it goes out</span>
                 <div role="radiogroup" aria-label="When the announcement goes out" className="mt-1.5 flex flex-wrap gap-2">
@@ -1110,62 +1167,6 @@ export function AnnouncementManager({
                       : "The post is published the moment you save it."}
                 </p>
               </div>
-
-              <div className="text-xs font-semibold text-bark md:col-span-2">
-                {/* The name and the picker share one row: an attachment is a
-                    single choice, not a section of its own, and the row ends
-                    at the picker's own edge. */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="shrink-0">Attachment (optional)</span>
-                  {existingAttachment && !removeAttachment && (
-                    <p className="flex min-w-0 flex-1 flex-wrap items-center gap-2 rounded-xl border border-sand-deep bg-sand-veil px-3 py-2 text-xs font-normal text-moss-mid">
-                      <span className="truncate">{existingAttachment.name || "Current attachment"}</span>
-                      <button
-                        type="button"
-                        onClick={() => { setRemoveAttachment(true); setAttachment(null); }}
-                        className="ml-auto shrink-0 text-[11px] font-bold text-red-700 hover:underline"
-                      >
-                        Remove
-                      </button>
-                    </p>
-                  )}
-                  {!removeAttachment && (
-                    <input
-                      type="file"
-                      onChange={(e) => {
-                        setAttachment(e.target.files?.[0] ?? null);
-                        if (e.target.files?.[0]) setRemoveAttachment(false);
-                      }}
-                      className="min-w-0 flex-1 rounded-xl border border-sand-mute px-3 py-2 font-normal text-bark outline-none file:mr-3 file:rounded-full file:border-0 file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-bark focus:border-ember"
-                    />
-                  )}
-                </div>
-                {removeAttachment && (
-                  <p className="mt-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-normal text-red-700">
-                    Current attachment will be removed when you save.
-                  </p>
-                )}
-              </div>
-
-              <label className="block text-xs font-semibold text-bark md:col-span-2">
-                Announcement Text *
-                <textarea
-                  required
-                  rows={4}
-                  maxLength={ANNOUNCEMENT_TEXT_LIMIT}
-                  value={form.text}
-                  onChange={(e) => setForm({ ...form, text: e.target.value.slice(0, ANNOUNCEMENT_TEXT_LIMIT) })}
-                  placeholder="Write full announcement content..."
-                  className="mt-1 w-full rounded-xl border border-sand-mute px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember"
-                />
-                <span
-                  className={`mt-1 block text-right text-[10px] font-semibold ${
-                    form.text.length >= ANNOUNCEMENT_TEXT_LIMIT ? "text-ember font-bold" : "text-moss"
-                  }`}
-                >
-                  {form.text.length}/{ANNOUNCEMENT_TEXT_LIMIT} characters
-                </span>
-              </label>
 
               {message && (
                 <div className="md:col-span-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-700">
