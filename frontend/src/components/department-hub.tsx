@@ -6899,7 +6899,6 @@ function DepartmentDetail({
   // the same compose modal the console posts from, over the desk. The feed
   // remounts on a posted announcement so the desk sees it at once.
   const [showShareComposer, setShowShareComposer] = useState(false);
-  const [shareActionsEl, setShareActionsEl] = useState<HTMLDivElement | null>(null);
   const [shareFeedKey, setShareFeedKey] = useState(0);
   // The feed's Edit opens the same composer loaded from that post, and the
   // panel's word/thought button opens the daily word on its own — the two
@@ -10153,7 +10152,6 @@ function DepartmentDetail({
               <AnnouncementManager
                 composerOnly
                 editItem={shareEditItem}
-                actionsTarget={shareActionsEl}
                 onChanged={() => setShareFeedKey((key) => key + 1)}
                 onDone={() => {
                   setShowShareComposer(false);
@@ -10162,7 +10160,6 @@ function DepartmentDetail({
                 }}
               />
             </div>
-            <div ref={setShareActionsEl} className="shrink-0 border-t border-sand-line bg-white px-4 py-3 sm:px-5" />
           </div>
         </div>
       )}
