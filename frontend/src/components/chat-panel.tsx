@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
+  CheckCheck,
   FileText,
+  LogOut,
   Mail,
   MessageSquarePlus,
   MessagesSquare,
-  MoreVertical,
   Paperclip,
   Send,
   Smile,
@@ -46,65 +47,89 @@ import {
 
 const SABBATH_SCHOOL_CODE = "sabbath_school";
 
-/** An Actions popover for a room's row — a group's Leave (except Sabbath
-    School) and Contact Leadership, and any room's Delete chat. One open at
-    a time across the whole list. */
-function RoomActionsPopover({
+/** WhatsApp-style room menu: nothing rides on the row itself — a long press
+    on a phone, or a right-click on a desk, opens the room's actions where the
+    press landed. One open at a time. */
+function RoomContextMenu({
   room,
-  open,
+  x,
+  y,
   onClose,
+  onMarkRead,
   onDelete,
   onLeave,
   onContactLeadership,
 }: {
   room: ChatConversation;
-  open: boolean;
+  x: number;
+  y: number;
   onClose: () => void;
+  onMarkRead: () => void;
   onDelete: () => void;
-  onLeave?: () => void;
-  onContactLeadership?: () => void;
+  onLeave: () => void;
+  onContactLeadership: () => void;
 }) {
   useEffect(() => {
-    if (!open) return;
-    const handleOutside = (event: MouseEvent) => {
-      const el = event.target as HTMLElement | null;
-      if (el?.closest?.("[data-room-actions]")) return;
-      onClose();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [open, onClose]);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
   const isGroup = room.kind === "group";
   const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
   const menuItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-bark transition hover:bg-sand";
   const dangerItem = "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50";
+  // The menu opens at the press and stays on screen.
+  const left = Math.max(8, Math.min(x, window.innerWidth - 224));
+  const top = Math.max(8, Math.min(y, window.innerHeight - 220));
 
   return (
-    <div className="absolute right-0 top-full z-40 mt-1.5 w-44 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5" data-room-actions>
-      {isGroup && !isSabbathSchool && (
-        <button type="button" onClick={() => { onClose(); onLeave?.(); }} className={dangerItem}>
-          <MoreVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Leave
-        </button>
-      )}
-      {isGroup && (
-        <button type="button" onClick={() => { onClose(); onContactLeadership?.(); }} className={menuItem}>
-          <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Contact Leadership
-        </button>
-      )}
-      {/* Delete is a member's own verb, for the rooms that are theirs: a
-          direct message or their office thread. A group reads the same
-          button as Leave — the room is the church's, not theirs to take
-          out of other members' reach. */}
-      {!isGroup && (
-        <button type="button" onClick={() => { onClose(); onDelete(); }} className={dangerItem}>
-          <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Delete chat
-        </button>
-      )}
-    </div>
+    <>
+      <button
+        type="button"
+        aria-label="Close menu"
+        className="fixed inset-0 z-40 cursor-default bg-transparent"
+        onClick={onClose}
+        onContextMenu={(event) => { event.preventDefault(); onClose(); }}
+      />
+      <div
+        role="menu"
+        aria-label={`Actions for ${room.title}`}
+        className="fixed z-50 w-52 rounded-2xl border border-sand-line bg-white p-1.5 text-left shadow-2xl ring-1 ring-black/5"
+        style={{ left, top }}
+      >
+        {room.unread_count > 0 && (
+          <button type="button" onClick={onMarkRead} className={menuItem}>
+            <CheckCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Mark as read
+          </button>
+        )}
+        {isGroup && (
+          <button type="button" onClick={onContactLeadership} className={menuItem}>
+            <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Contact Leadership
+          </button>
+        )}
+        {isGroup && !isSabbathSchool && (
+          <button type="button" onClick={onLeave} className={dangerItem}>
+            <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Leave
+          </button>
+        )}
+        {/* Delete is a member's own verb, for the rooms that are theirs: a
+            direct message or their office thread. A group reads the same
+            button as Leave — the room is the church's, not theirs to take
+            out of other members' reach. */}
+        {!isGroup && (
+          <button type="button" onClick={onDelete} className={dangerItem}>
+            <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Delete chat
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -187,8 +212,15 @@ export function ChatPanel() {
   // the member's own direct messages and their thread with the office.
   const [tab, setTab] = useState<"inbox" | "groups">("inbox");
 
-  // Which group room's Actions popover is open.
-  const [actionsOpenId, setActionsOpenId] = useState<number | null>(null);
+  // The room whose long-press/right-click menu is open, and where the press
+  // landed — the menu floats there, WhatsApp-style.
+  const [menuFor, setMenuFor] = useState<{ room: ChatConversation; x: number; y: number } | null>(null);
+  // Long-press bookkeeping for a room's row: the timer, where the finger
+  // landed, and whether the tap that follows the press must be swallowed
+  // (a finger lifted after the menu opened must not also walk into the room).
+  const pressTimer = useRef<number | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const suppressTap = useRef(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const draftRef = useRef<HTMLTextAreaElement>(null);
@@ -452,6 +484,53 @@ export function ChatPanel() {
     }
   };
 
+  const markRead = (room: ChatConversation) => {
+    setMenuFor(null);
+    if (room.unread_count > 0) {
+      setRooms((prev) => prev.map((entry) => (entry.id === room.id ? { ...entry, unread_count: 0 } : entry)));
+    }
+    void markConversationRead(room.id).then(() => void pollChatUnread());
+  };
+
+  // ── Long-press (phone) / right-click (desk) on a room's row ──────────
+  const cancelPress = () => {
+    if (pressTimer.current !== null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  };
+
+  const pressHandlers = (room: ChatConversation) => ({
+    onTouchStart: (event: React.TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      cancelPress();
+      pressStart.current = { x: touch.clientX, y: touch.clientY };
+      suppressTap.current = false;
+      pressTimer.current = window.setTimeout(() => {
+        pressTimer.current = null;
+        suppressTap.current = true;
+        if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(10);
+        setMenuFor({ room, x: touch.clientX, y: touch.clientY });
+      }, 550);
+    },
+    onTouchMove: (event: React.TouchEvent) => {
+      const start = pressStart.current;
+      const touch = event.touches[0];
+      if (!start || !touch) return;
+      // A finger that travels is scrolling, not pressing.
+      if (Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 10) cancelPress();
+    },
+    onTouchEnd: () => cancelPress(),
+    onTouchCancel: () => cancelPress(),
+    onContextMenu: (event: React.MouseEvent) => {
+      event.preventDefault();
+      cancelPress();
+      setMenuFor({ room, x: event.clientX, y: event.clientY });
+    },
+  });
+
   /** Splice an emoji into the draft at the caret, leaving the caret on it. */
   const insertEmoji = (emoji: string) => {
     const el = draftRef.current;
@@ -651,18 +730,22 @@ export function ChatPanel() {
         ) : (
           <ul>
             {visibleRooms.map((room) => {
-              const isGroup = room.kind === "group";
-              // Every room carries an Actions affordance now: a group's Leave
-              // and Contact Leadership, and a direct message's or an office
-              // thread's Delete chat (the Sabbath School's family group
-              // leaves the list untouched, as before).
-              const isSabbathSchool = room.department_code === SABBATH_SCHOOL_CODE;
-              const showActions = isGroup ? !isSabbathSchool : true;
-              const actionsOpen = actionsOpenId === room.id;
-
+              // A tap walks into the room; a long press (phone) or right-click
+              // (desk) raises its actions where the press landed. The tap that
+              // follows a long press is swallowed so it does not walk in too.
               return (
                 <li key={room.id}>
-                  <div className="relative">
+                  <div
+                    className="select-none"
+                    {...pressHandlers(room)}
+                    onClickCapture={(event) => {
+                      if (suppressTap.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        suppressTap.current = false;
+                      }
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => openRoom(room)}
@@ -688,28 +771,6 @@ export function ChatPanel() {
                         </span>
                       </span>
                     </button>
-                    {showActions && (
-                      <button
-                        type="button"
-                        onClick={() => setActionsOpenId(actionsOpen ? null : room.id)}
-                        aria-expanded={actionsOpen}
-                        aria-label={`Actions for ${room.title}`}
-                        title="Actions"
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sand-mute text-ember transition hover:bg-sand"
-                      >
-                        <MoreVertical className="h-4 w-4 text-moss" aria-hidden="true" />
-                      </button>
-                    )}
-                    {actionsOpen && showActions && (
-                      <RoomActionsPopover
-                        room={room}
-                        open={actionsOpen}
-                        onClose={() => setActionsOpenId(null)}
-                        onDelete={() => void deleteChat(room)}
-                        onLeave={() => leaveGroup(room)}
-                        onContactLeadership={() => contactLeadership(room)}
-                      />
-                    )}
                   </div>
                 </li>
               );
@@ -899,6 +960,18 @@ export function ChatPanel() {
     <div className="flex h-full min-h-0 w-full">
       {roomsPane}
       {threadPane}
+      {menuFor && (
+        <RoomContextMenu
+          room={menuFor.room}
+          x={menuFor.x}
+          y={menuFor.y}
+          onClose={() => { setMenuFor(null); suppressTap.current = false; }}
+          onMarkRead={() => markRead(menuFor.room)}
+          onDelete={() => { setMenuFor(null); void deleteChat(menuFor.room); }}
+          onLeave={() => { setMenuFor(null); void leaveGroup(menuFor.room); }}
+          onContactLeadership={() => { setMenuFor(null); void contactLeadership(menuFor.room); }}
+        />
+      )}
     </div>
   );
 }
