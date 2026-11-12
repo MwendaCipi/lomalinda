@@ -515,6 +515,29 @@ export function AnnouncementManager({
         showAlert("Deadline Missing", err, "error");
         return;
       }
+      // An event cannot start on a day that has gone: a register open for
+      // yesterday takes money for a seat nobody can sit in. Today is fine —
+      // an event may open today. A post already filed keeps its own day, so an
+      // officer fixing the words of an old post is not driven off it.
+      const storedStart = editItem?.event_date_from ?? "";
+      if (form.event_date_from < localDate() && form.event_date_from !== storedStart) {
+        const err = "An event cannot start on a day that has already passed. Choose today or a later day.";
+        setMessage(err);
+        showAlert("Event Date Invalid", err, "error");
+        return;
+      }
+      // And the register closes by the event's own last day, never after it —
+      // unless the row already stood that way, which is the row's own history.
+      const lastDay = form.event_date_to || form.event_date_from;
+      const storedLast = editItem?.event_date_to || storedStart;
+      const storedDeadline = editItem?.enroll_deadline ?? "";
+      const alreadyStood = Boolean(editingId) && form.enroll_deadline === storedDeadline && lastDay === storedLast;
+      if (form.enroll_deadline > lastDay && !alreadyStood) {
+        const err = "The register closes after the event has ended. Close it on or before the event's last day.";
+        setMessage(err);
+        showAlert("Deadline Invalid", err, "error");
+        return;
+      }
     }
     // A scheduled post must fall in the future — the API refuses an hour that
     // has already passed, and the form says so before the round trip.

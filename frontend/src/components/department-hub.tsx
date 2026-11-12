@@ -1164,7 +1164,15 @@ function AddEventModal({
   // default — the church's own week is filed into the ministry that runs it,
   // so the heading follows the choice.
   const targetLabel = departments.find((row) => row.code === form.department)?.label ?? departmentLabel;
-  const valid = form.title.trim() && form.date;
+  // A day that has gone cannot be chosen: the calendar is the church's
+  // forward plan, and a row filed for yesterday is a mistyped year the desk
+  // would only find out after the day passed. An event already sitting in the
+  // past keeps its own day, so the desk correcting an old row — its title, its
+  // hours — is not driven off the day the calendar already answered.
+  const today = localDate();
+  const earliest = editing && editEvent?.date && editEvent.date < today ? editEvent.date : today;
+  const startsInPast = Boolean(form.date) && form.date < earliest;
+  const valid = form.title.trim() && form.date && !startsInPast;
   const inputCls = "mt-1 w-full rounded-xl border border-sand-line bg-sand px-3 py-2 text-xs focus:border-ember focus:outline-none";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="presentation">
@@ -1237,6 +1245,7 @@ function AddEventModal({
                   type="date"
                   aria-label="From date"
                   value={form.date}
+                  min={earliest}
                   onChange={(e) => setForm({ ...form, date: e.target.value })}
                   className={inputCls}
                 />
@@ -1253,6 +1262,11 @@ function AddEventModal({
                 />
               </div>
             </div>
+            {startsInPast && (
+              <p className="mt-1 text-[11px] font-semibold text-red-700">
+                An event cannot start on a day that has already passed.
+              </p>
+            )}
           </div>
 
           {/* Times — both on one row */}

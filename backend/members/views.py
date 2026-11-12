@@ -15393,6 +15393,14 @@ class DepartmentEventsView(APIView):
         event_date = request.data.get('date') or ''
         if not title or not event_date:
             return Response({'detail': 'A title and a date are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        # The calendar is the church's forward plan: an event filed for a day
+        # that has gone is a mistyped year the desk would only find out after
+        # the day passed. Today is still allowed — an event may open today.
+        if str(event_date) < timezone.localdate().isoformat():
+            return Response(
+                {'date': 'An event cannot start on a day that has already passed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         unit = str(request.data.get('unit') or '').strip()
         if unit and unit not in target.unit_names:
             return Response({'unit': 'That is not one of this department\u2019s units.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -15402,6 +15410,11 @@ class DepartmentEventsView(APIView):
         event_time = _calendar_time_from_string(request.data.get('time'))
         end_event_time = _calendar_time_from_string(request.data.get('end_time'))
         end_event_date = request.data.get('end_date') or None
+        if end_event_date and str(end_event_date) < str(event_date):
+            return Response(
+                {'end_date': 'The event cannot end before it starts.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # The calendar is shared: nothing may be filed onto a slot another
         # event already holds. The desk is refused with the occupant named.
         conflicts = _calendar_slot_conflicts(event_date, event_time, end_event_date, end_event_time)
@@ -15471,6 +15484,14 @@ class DepartmentEventsView(APIView):
             date_value = (request.data.get('date') or '').strip()
             if not date_value:
                 return Response({'detail': 'A date is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            # A day that has gone cannot be chosen, but an event already filed
+            # there keeps its own day: the desk correcting a past row's title
+            # sends the day it sits on, and that day was the calendar's answer.
+            if date_value < timezone.localdate().isoformat() and date_value != event.event_date.isoformat():
+                return Response(
+                    {'date': 'An event cannot start on a day that has already passed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             event.event_date = date_value
         if 'end_date' in request.data:
             event.end_date = (request.data.get('end_date') or '').strip() or None
@@ -15489,6 +15510,11 @@ class DepartmentEventsView(APIView):
             event.lead = (request.data.get('lead') or '').strip()
         if 'notes' in request.data:
             event.notes = (request.data.get('notes') or '').strip()
+        if event.end_date and event.end_date < event.event_date:
+            return Response(
+                {'end_date': 'The event cannot end before it starts.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         # The same rule a new event is held to: the calendar is shared, so a
         # correction may not drive the event onto a slot another already
         # holds. Its own row is excluded, so everything may return to where

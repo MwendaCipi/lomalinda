@@ -792,6 +792,34 @@ class AnnouncementSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     'A post that enrols or registers people needs the event date the register is for.'
                 )
+            # An event cannot start on a day that has gone: a register open for
+            # yesterday takes money for a seat nobody can sit in. A row written
+            # before the rule keeps its own day — a post whose day has passed
+            # is still editable, its text corrected, its register closed — but
+            # the day cannot be moved onto one that has already gone.
+            already_filed = instance is not None and start == instance.event_date_from
+            if start < timezone.localdate() and not already_filed:
+                raise serializers.ValidationError(
+                    'An event cannot start on a day that has already passed.'
+                )
+            # The register closes by the event's own last day, never after it:
+            # a closing day past the end names a seat on an event that is over.
+            # A row already filed that way — written before the rule — keeps
+            # its words editable until its own days are touched.
+            last_day = attrs.get('event_date_to', instance.event_date_to if instance else None) or start
+            previous_deadline = instance.enroll_deadline if instance else None
+            previous_last = (
+                (instance.event_date_to or instance.event_date_from) if instance else None
+            )
+            untouched = (
+                instance is not None
+                and deadline == previous_deadline
+                and last_day == previous_last
+            )
+            if deadline > last_day and not untouched:
+                raise serializers.ValidationError(
+                    'The register cannot close after the event has ended.'
+                )
         # A scheduled post must fall in the future: a row written for an hour
         # already past is a post the feed would show the moment it is saved,
         # which is not what the officer asked for.

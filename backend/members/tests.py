@@ -7246,6 +7246,59 @@ class AnnouncementEventDatesAPITests(APITestCase):
         titles = [row['title'] for row in response.data]
         self.assertLess(titles.index('Sooner event'), titles.index('Later event'))
 
+    def test_a_register_cannot_open_for_a_day_that_has_gone(self):
+        """A register takes money for a seat on the day its event starts, so
+        that day cannot already have passed — the post is refused in words
+        rather than going out with a register nobody can use. An event that
+        opens today is still today's business."""
+        today = timezone.localdate()
+        seat = {
+            'title': 'Youth camp',
+            'text': 'Book a seat for the camp.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'options': ['register'],
+            'enroll_department': 'aym',
+            'enroll_fee': '500',
+            **ANNOUNCEMENT_WINDOW,
+        }
+        gone = self.client.post('/api/members/announcements/', {
+            **seat,
+            'event_date_from': (today - timedelta(days=1)).isoformat(),
+            'event_date_to': (today + timedelta(days=2)).isoformat(),
+            'enroll_deadline': (today - timedelta(days=2)).isoformat(),
+        }, format='json')
+        self.assertEqual(gone.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already passed', str(gone.data))
+
+        opened = self.client.post('/api/members/announcements/', {
+            **seat,
+            'event_date_from': today.isoformat(),
+            'event_date_to': (today + timedelta(days=2)).isoformat(),
+            'enroll_deadline': (today + timedelta(days=1)).isoformat(),
+        }, format='json')
+        self.assertEqual(opened.status_code, status.HTTP_201_CREATED)
+
+    def test_a_register_cannot_close_after_the_event_ends(self):
+        """The register closes by the event's own last day: a closing day past
+        the end names a seat on an event that is already over."""
+        today = timezone.localdate()
+        late = self.client.post('/api/members/announcements/', {
+            'title': 'Youth camp',
+            'text': 'Book a seat for the camp.',
+            'visibility': 'members_only',
+            'sharing_option': 'site',
+            'options': ['register'],
+            'enroll_department': 'aym',
+            'enroll_fee': '500',
+            'event_date_from': (today + timedelta(days=5)).isoformat(),
+            'event_date_to': (today + timedelta(days=6)).isoformat(),
+            'enroll_deadline': (today + timedelta(days=9)).isoformat(),
+            **ANNOUNCEMENT_WINDOW,
+        }, format='json')
+        self.assertEqual(late.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('after the event has ended', str(late.data))
+
     def test_event_dates_and_link_round_trip(self):
         # The link belongs to a web conference: since posts carry a type, a
         # plain notice has its link cleared (see the serializer's type rules),
@@ -7294,7 +7347,12 @@ class AnnouncementEventDatesAPITests(APITestCase):
             'sharing_option': 'site',
             'href': 'https://example.com/choir',
             'options': ['register', 'comment'],
-            'event_date_from': '2026-10-01',
+            # A Register now post is also an event: the seat, the day it opens
+            # and the day its register closes, none of them in the past.
+            'enroll_department': 'aym',
+            'enroll_fee': '500',
+            'event_date_from': str(timezone.localdate() + timedelta(days=3)),
+            'enroll_deadline': str(timezone.localdate() + timedelta(days=2)),
             **ANNOUNCEMENT_WINDOW,
         }, format='json')
 
@@ -13443,7 +13501,7 @@ class DepartmentApiTests(APITestCase):
     def test_events_add_list_delete(self):
         self._auth(self.leader)
         res = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Men Sabbath', 'date': '2026-10-10', 'time': '09:00 AM', 'location': 'Main Hall',
+            'title': 'Men Sabbath', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '09:00 AM', 'location': 'Main Hall',
         }, format='json')
         self.assertEqual(res.status_code, 201)
         res = self.client.get('/api/members/departments/amm/events/')
@@ -13474,7 +13532,7 @@ class DepartmentApiTests(APITestCase):
         self.assertTrue(listed.data['can_schedule_across'])
         self.assertIn('aym', [row['code'] for row in listed.data['departments']])
         res = self.client.post('/api/members/departments/personal_ministries/events/', {
-            'title': 'Youth Sabbath', 'date': '2026-11-07', 'department': 'aym',
+            'title': 'Youth Sabbath', 'date': str(timezone.localdate() + timedelta(days=9)), 'department': 'aym',
         }, format='json')
         self.assertEqual(res.status_code, 201)
         self.assertEqual(res.data['department'], 'aym')
@@ -13511,7 +13569,7 @@ class DepartmentApiTests(APITestCase):
         )
         self._auth(self.plain)
         filed = self.client.post('/api/members/departments/aym/events/', {
-            'title': 'Youth Sabbath', 'date': '2026-11-07', 'time': '09:00',
+            'title': 'Youth Sabbath', 'date': str(timezone.localdate() + timedelta(days=9)), 'time': '09:00',
         }, format='json')
         self.assertEqual(filed.status_code, 201)
         event_id = filed.data['id']
@@ -13558,7 +13616,7 @@ class DepartmentApiTests(APITestCase):
         file picker that used to sit in the add form is gone with them."""
         self._auth(self.leader)
         filed = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Men Sabbath', 'date': '2026-10-10', 'time': '09:30',
+            'title': 'Men Sabbath', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '09:30',
         }, format='json')
         event_id = filed.data['id']
         listed = self.client.get('/api/members/departments/amm/events/')
@@ -14366,12 +14424,13 @@ class CalendarSlotConflictTests(APITestCase):
 
     def test_an_event_without_a_time_holds_its_whole_day(self):
         filed = self.client.post('/api/members/departments/aym/events/', {
-            'title': 'Youth Camp', 'date': '2026-10-10', 'end_date': '2026-10-12',
+            'title': 'Youth Camp', 'date': str(timezone.localdate() + timedelta(days=7)),
+            'end_date': str(timezone.localdate() + timedelta(days=9)),
         }, format='json')
         self.assertEqual(filed.status_code, 201)
 
         refused = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Men Meeting', 'date': '2026-10-11', 'time': '10:00',
+            'title': 'Men Meeting', 'date': str(timezone.localdate() + timedelta(days=8)), 'time': '10:00',
         }, format='json')
         self.assertEqual(refused.status_code, status.HTTP_409_CONFLICT)
         self.assertIn('Youth Camp', refused.data['detail'])
@@ -14384,23 +14443,23 @@ class CalendarSlotConflictTests(APITestCase):
 
     def test_two_events_at_different_hours_share_a_day(self):
         self.client.post('/api/members/departments/aym/events/', {
-            'title': 'Sunrise Run', 'date': '2026-10-10', 'time': '06:00', 'end_time': '08:00',
+            'title': 'Sunrise Run', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '06:00', 'end_time': '08:00',
         }, format='json')
         second = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Men Sabbath', 'date': '2026-10-10', 'time': '09:30',
+            'title': 'Men Sabbath', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '09:30',
         }, format='json')
         self.assertEqual(second.status_code, 201)
 
         # The same hour twice is still one slot: the second asking is
         # refused, told who is already there.
         clash = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Bible Study', 'date': '2026-10-10', 'time': '06:30',
+            'title': 'Bible Study', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '06:30',
         }, format='json')
         self.assertEqual(clash.status_code, status.HTTP_409_CONFLICT)
         self.assertIn('Sunrise Run', clash.data['detail'])
         # Back-to-back windows share no hour, so both are kept.
         allowed = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Bible Study', 'date': '2026-10-10', 'time': '08:00',
+            'title': 'Bible Study', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '08:00',
         }, format='json')
         self.assertEqual(allowed.status_code, 201)
 
@@ -14409,16 +14468,64 @@ class CalendarSlotConflictTests(APITestCase):
         collides with another set for that same moment — and two hours set
         apart on the same day share the day the way services do."""
         self.client.post('/api/members/departments/aym/events/', {
-            'title': 'Choir Rehearsal', 'date': '2026-10-10', 'time': '14:00',
+            'title': 'Choir Rehearsal', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '14:00',
         }, format='json')
         same = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Visitation', 'date': '2026-10-10', 'time': '14:00',
+            'title': 'Visitation', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '14:00',
         }, format='json')
         self.assertEqual(same.status_code, status.HTTP_409_CONFLICT)
         later = self.client.post('/api/members/departments/amm/events/', {
-            'title': 'Bible Study', 'date': '2026-10-10', 'time': '16:00',
+            'title': 'Bible Study', 'date': str(timezone.localdate() + timedelta(days=7)), 'time': '16:00',
         }, format='json')
         self.assertEqual(later.status_code, 201)
+
+    def test_an_event_cannot_be_filed_for_a_day_that_has_gone(self):
+        """The calendar is the church's forward plan: a row filed for yesterday
+        is refused in words and nothing is written, while an event opening
+        today is still today's business."""
+        yesterday = (timezone.localdate() - timedelta(days=1)).isoformat()
+        refused = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Last Sabbath', 'date': yesterday, 'time': '09:30',
+        }, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already passed', refused.data['date'])
+        self.assertFalse(DepartmentEvent.objects.filter(department='amm').exists())
+
+        today = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'This evening', 'date': timezone.localdate().isoformat(), 'time': '18:00',
+        }, format='json')
+        self.assertEqual(today.status_code, 201)
+
+    def test_a_past_event_keeps_its_day_but_cannot_be_moved_onto_another(self):
+        """A row already sitting in the past is still correctable — its title,
+        its hours — and its own day is sent back with it, so the desk is not
+        driven off the day the calendar already answered. It simply cannot be
+        moved onto a different day that has also gone."""
+        long_ago = (timezone.localdate() - timedelta(days=30)).isoformat()
+        event = DepartmentEvent.objects.create(
+            department='amm', title='Men Sabbath', event_date=long_ago,
+        )
+        kept = self.client.patch(f'/api/members/departments/amm/events/{event.id}/', {
+            'date': long_ago, 'lead': 'Sam Okello',
+        }, format='json')
+        self.assertEqual(kept.status_code, 200)
+
+        moved = self.client.patch(f'/api/members/departments/amm/events/{event.id}/', {
+            'date': (timezone.localdate() - timedelta(days=10)).isoformat(),
+        }, format='json')
+        self.assertEqual(moved.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already passed', moved.data['date'])
+        event.refresh_from_db()
+        self.assertEqual(event.event_date.isoformat(), long_ago)
+
+    def test_an_event_cannot_end_before_it_starts(self):
+        day = (timezone.localdate() + timedelta(days=7)).isoformat()
+        refused = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Youth Camp', 'date': day,
+            'end_date': (timezone.localdate() + timedelta(days=5)).isoformat(),
+        }, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cannot end before it starts', refused.data['end_date'])
 
     def test_a_saved_event_may_be_corrected_without_clashing_with_itself(self):
         event = DepartmentEvent.objects.create(
