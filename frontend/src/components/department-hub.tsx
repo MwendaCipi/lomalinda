@@ -5219,6 +5219,10 @@ export function DepartmentAccountsPanel({
   showDriveAction = true,
   className = "flex min-h-0 flex-1 flex-col border border-sand-line bg-white h-full",
   footer,
+  hideAccountTabs = false,
+  accountFilter: accountFilterProp,
+  onAccountFilterChange,
+  onAccountsLoaded,
 }: {
   department: { code: string; label: string };
   onChanged?: () => void;
@@ -5234,10 +5238,31 @@ export function DepartmentAccountsPanel({
   showDriveAction?: boolean;
   className?: string;
   footer?: React.ReactNode;
+  /**
+   * Whether the fund's account tabs stay inside the panel. A desk that has a
+   * strip of its own above the ledger (Ledger / Fund Drives) hangs them off
+   * that strip's right-hand end instead, one row rather than two — so the
+   * panel gives the row up here and reads the chosen account as a prop.
+   */
+  hideAccountTabs?: boolean;
+  /** The chosen account (an id, or "all"), when the desk holds it. */
+  accountFilter?: string;
+  onAccountFilterChange?: (account: string) => void;
+  /** The fund's accounts as the panel last read them, so a desk drawing the
+   *  tabs itself shows the same names and balances. */
+  onAccountsLoaded?: (accounts: DepartmentAccountInfo[]) => void;
 }) {
   const isDeaconate = department.code === "deaconate";
   const [accounts, setAccounts] = useState<DepartmentAccountInfo[]>([]);
-  const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [accountFilterInternal, setAccountFilterInternal] = useState<string>("all");
+  const accountFilter = accountFilterProp ?? accountFilterInternal;
+  const setAccountFilter = useCallback(
+    (value: string) => {
+      if (onAccountFilterChange) onAccountFilterChange(value);
+      else setAccountFilterInternal(value);
+    },
+    [onAccountFilterChange],
+  );
   const [movements, setMovements] = useState<FundMovement[]>([]);
   const [withdrawals, setWithdrawals] = useState<FundWithdrawal[]>([]);
   const [canRequest, setCanRequest] = useState(false);
@@ -5310,6 +5335,7 @@ export function DepartmentAccountsPanel({
             ? [data.account]
             : [];
         setAccounts(accList);
+        onAccountsLoaded?.(accList);
         setMovements(Array.isArray(data?.movements) ? data.movements : []);
         setWithdrawals(Array.isArray(data?.withdrawals) ? data.withdrawals : []);
         setCanRequest(Boolean(data?.can_request_withdrawal));
@@ -5339,7 +5365,7 @@ export function DepartmentAccountsPanel({
         setCanStartDrive(false);
       })
       .finally(() => setLoading(false));
-  }, [department.code]);
+  }, [department.code, onAccountsLoaded, setAccountFilter]);
 
   useEffect(() => {
     let alive = true;
@@ -5807,7 +5833,7 @@ export function DepartmentAccountsPanel({
           )}
 
           {/* Account Filter Switcher Tabs: when more than 1 account is accessible */}
-          {accounts.length > 1 && (
+          {accounts.length > 1 && !hideAccountTabs && (
             <div className={`flex shrink-0 items-center gap-1.5 border-b border-sand-line bg-sand/30 px-4 py-2 text-xs overflow-x-auto ${showInlineControls ? "" : "rounded-t-2xl"}`}>
               <button
                 type="button"
@@ -7050,6 +7076,16 @@ function DepartmentDetail({
   // strip above already names Accounts — so it stays here rather than in the
   // address bar, and every desk that reads Accounts gets the same two views.
   const [accountsView, setAccountsView] = useState<AccountsView>("ledger");
+  // The fund's accounts, worn on the Accounts strip beside Ledger and Fund
+  // Drives instead of on a row of their own under it. The ledger panel reads
+  // them and reports them here, and the account it is narrowed to is held in
+  // this one place, so the tabs and the table can never disagree.
+  const [ledgerAccounts, setLedgerAccounts] = useState<DepartmentAccountInfo[]>([]);
+  const [ledgerAccountId, setLedgerAccountId] = useState<string>("all");
+  const noteLedgerAccounts = useCallback(
+    (list: DepartmentAccountInfo[]) => setLedgerAccounts(list),
+    [],
+  );
   // The members view holds the roll *and* the asks to join it, so the desk
   // reads one list and narrows it here rather than opening a second view.
   const [memberFilter, setMemberFilter] = useState<MemberFilter>("all");
@@ -8766,7 +8802,12 @@ function DepartmentDetail({
             ? "gap-2 overflow-y-auto p-1 custom-hover-scrollbar"
             : deskFillsPhone || subTab === "calendar"
               ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
-              : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
+              : subTab === "accounts"
+                // Accounts sits a shade closer to the desk's own strip: its
+                // row of views and its accounts are one line, not a page
+                // opening with a band of dead air.
+                ? "px-2 pb-2 pt-1 md:gap-4 md:overflow-hidden md:px-4 md:pb-0 md:pt-1 lg:px-6"
+                : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
       }`}
     >
 
@@ -9327,7 +9368,7 @@ function DepartmentDetail({
           page's own, not the desk's: the desk's strip above already names
           Accounts, and this answers which half of it is open. */}
       {subTab === "accounts" && (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           <SubNav
             label="Accounts views"
             value={accountsView}
@@ -9345,6 +9386,53 @@ function DepartmentDetail({
                 help: "The drives this desk has started, how far each has come, and ending them.",
               },
             ]}
+            // The fund's accounts ride the far end of the same row: one line
+            // for the page's own views and the accounts they read, rather than
+            // a second row of tabs under it.
+            trailing={
+              accountsView === "ledger" && ledgerAccounts.length > 1 ? (
+                <div
+                  role="group"
+                  aria-label="Fund accounts"
+                  className="ml-auto flex max-w-full shrink-0 items-center gap-1.5 overflow-x-auto pb-0.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setLedgerAccountId("all")}
+                    aria-pressed={ledgerAccountId === "all"}
+                    className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                      ledgerAccountId === "all"
+                        ? "bg-ember text-white shadow-2xs"
+                        : "border border-sand-line bg-white text-bark hover:bg-sand"
+                    }`}
+                  >
+                    All Accounts
+                  </button>
+                  {ledgerAccounts.map((acc) => {
+                    const active = ledgerAccountId === String(acc.id);
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => setLedgerAccountId(String(acc.id))}
+                        aria-pressed={active}
+                        title={acc.description || acc.name}
+                        className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                          active
+                            ? "bg-ember text-white shadow-2xs"
+                            : "border border-sand-line bg-white text-bark hover:bg-sand"
+                        }`}
+                      >
+                        {acc.name}{" "}
+                        <span className={active ? "font-normal text-white/80" : "font-normal text-moss"}>
+                          (KES {Number(acc.balance).toLocaleString("en-KE", { minimumFractionDigits: 0 })})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : undefined
+            }
           />
           {accountsView === "ledger" ? (
             <DepartmentAccountsPanel
@@ -9355,6 +9443,12 @@ function DepartmentDetail({
               // Starting a drive is the Fund Drives view's own door beside
               // this one, so the ledger keeps to the ledger.
               showDriveAction={false}
+              // Its account tabs ride the strip above, not a row of the
+              // panel's own.
+              hideAccountTabs
+              accountFilter={ledgerAccountId}
+              onAccountFilterChange={setLedgerAccountId}
+              onAccountsLoaded={noteLedgerAccounts}
               // The same panel the console pages draw whole, here given the
               // whole view.
               className="flex min-h-0 flex-1 flex-col rounded-2xl border border-sand-line bg-white shadow-sm sm:overflow-hidden"
