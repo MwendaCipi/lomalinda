@@ -9893,23 +9893,21 @@ function DepartmentDetail({
       {(subTab === "announcements" || subTab === "sharing") && canShareFeed && (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           {/* The posts themselves, read the simple way they are read in the
-              fellowship feed — flat cards, no manager chrome, no nesting.
-              The feed scrolls within the barely-framed card; nothing above
-              it moves, and the desk's own edge is the card's. */}
-          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-sand-line bg-white ${isEldership || isPersonalMinistries ? "p-0" : "p-0.5"}`}>
-            <AnnouncementsFeed
-              key={shareFeedKey}
-              embedded
-              canManage={canShareFeed}
-              includeScheduled
-              includeUnpublished
-              onEdit={(item) => {
-                setShareEditItem(item);
-                setShowShareComposer(true);
-              }}
-              onChanged={() => setShareFeedKey((key) => key + 1)}
-            />
-          </div>
+              fellowship feed — flat cards, no manager chrome, no nesting
+              and no framing card of their own. The feed is the room it
+              scrolls in; nothing above it moves. */}
+          <AnnouncementsFeed
+            key={shareFeedKey}
+            embedded
+            canManage={canShareFeed}
+            includeScheduled
+            includeUnpublished
+            onEdit={(item) => {
+              setShareEditItem(item);
+              setShowShareComposer(true);
+            }}
+            onChanged={() => setShareFeedKey((key) => key + 1)}
+          />
           {/* The buttons panel: fixed to the bottom with buttons centered
               and a small margin below. */}
           <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
