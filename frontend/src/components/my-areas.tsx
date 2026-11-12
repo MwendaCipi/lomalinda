@@ -16,6 +16,7 @@ import {
   MINISTRIES_AND_DEPARTMENTS_HEADING,
 } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
+import { backOrDashboard } from "@/lib/app-history";
 import { brand } from "@/lib/brand";
 import { invalidateDepartments, useAllDepartments, useMyTies } from "@/hooks/use-departments";
 import { useHeaderData } from "@/hooks/use-header-data";
@@ -252,7 +253,13 @@ export function MyAreas() {
   // history (back returns to the map); moving between its views replaces the
   // entry instead, so a session of toggling leaves one step, not thirty,
   // while the bar still names the card on screen.
-  const showMap = useCallback(() => router.replace("/my-areas"), [router]);
+  const showMap = useCallback(() => {
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      backOrDashboard(router);
+      return;
+    }
+    router.replace("/my-areas");
+  }, [router]);
   const openAreaView = useCallback(
     // The Treasury card is a door, not a view: the registry names its
     // destination once — "Treasury opening the accounts tab of

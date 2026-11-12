@@ -77,6 +77,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { showAlert } from "@/lib/alerts";
+import { backOrDashboard } from "@/lib/app-history";
 import { showOfflineGuard } from "@/components/toast";
 import {
   areaHasLetters,
@@ -7874,7 +7875,13 @@ function DepartmentDetail({
       ) : !onConsole && inAnArea ? (
         <button
           type="button"
-          onClick={() => router.replace("/my-areas", { scroll: false })}
+          onClick={() => {
+            if (window.matchMedia("(min-width: 768px)").matches) {
+              backOrDashboard(router);
+              return;
+            }
+            router.replace("/my-areas", { scroll: false });
+          }}
           aria-label="Back to the ministry map"
           className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
         >
@@ -10339,6 +10346,7 @@ export function DepartmentHub({
   // Which department detail (and which of its tabs) is open; the row's
   // Calendar/Members buttons open the detail directly on that tab.
   const [selected, setSelected] = useState<DepartmentRow | null>(null);
+  const router = useRouter();
   const hubSearchParams = useSearchParams();
   const urlTab = (hubSearchParams?.get("view") || hubSearchParams?.get("subtab")) as DeptSubTab | null;
   const [detailTab, setDetailTab] = useState<DeptSubTab | undefined>(urlTab ?? initialTab);
@@ -10484,7 +10492,16 @@ export function DepartmentHub({
         department={selected}
         onChanged={loadDirectory}
         initialTab={detailTab}
-        onBack={onBack ?? (() => setSelected(null))}
+        onBack={
+          onBack ??
+          (() => {
+            if (window.matchMedia("(min-width: 768px)").matches) {
+              backOrDashboard(router);
+              return;
+            }
+            setSelected(null);
+          })
+        }
         embedded={embedded}
       />
     );

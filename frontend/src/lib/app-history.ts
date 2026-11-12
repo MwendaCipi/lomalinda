@@ -261,6 +261,21 @@ export function atAppFloor() {
 }
 
 /**
+ * Back one step, or the dashboard when there is nowhere to go back to.
+ *
+ * Desk back arrows on a wide screen use this: the phone's map is out of sight
+ * there, so the way out of a desk is the page the reader came from — and the
+ * dashboard when the desk was deep-linked with no page behind it.
+ */
+export function backOrDashboard(router: { back: () => void; replace: (url: string) => void }) {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+  } else {
+    router.replace("/dashboard");
+  }
+}
+
+/**
  * Go home, dropping everything the app stacked above it.
  *
  * `onFloor` runs once the app's opening entry is the one in view — the caller
