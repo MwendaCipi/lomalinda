@@ -98,8 +98,10 @@ DEFAULT_APPOINTMENT_MESSAGE = (
 DEFAULT_RELEASE_MESSAGE = (
     '{greeting}, {name}.\n\n'
     'Thank you for serving as {position} of {area} at {church}. Your service '
-    'has been a blessing, and the church is grateful. '
-    '{successor} now takes up the role.\n\n'
+    'has been a blessing, and the church is grateful. {successor_line}\n\n'
+    'As you step down, please prepare and hand over everything the office '
+    'holds — its records, keys, equipment and any other items — so that '
+    'whoever takes the seat up next has what they need to run it well.\n\n'
     '{church}'
 )
 
@@ -110,6 +112,10 @@ APPOINTMENT_PLACEHOLDERS = (
     ('area', 'the department or ministry'),
     ('church', 'the church name from these settings'),
     ('successor', 'the person taking up the role (the thank-you letter only)'),
+    (
+        'successor_line',
+        'the sentence naming who takes the role up — or that it stands open — in the thank-you letter',
+    ),
 )
 
 

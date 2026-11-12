@@ -353,6 +353,41 @@ class RoleHistory(models.Model):
         return f"{self.member.get_username()} — {self.get_role_display()}"
 
 
+class DepartmentServiceHistory(models.Model):
+    """One stretch a member served in a ministry's or department's office.
+
+    ``RoleHistory`` remembers the church-wide flags (elder, clerk, treasurer);
+    a seat at a ministry's desk is not one of those, so the record of who led
+    the welfare desk from when to when had nowhere to live. Every appointment
+    opens a row here and every release, replacement or removal closes it —
+    with the name of whoever took the seat up after — so the member's profile
+    can say what they served, where, and between which dates.
+
+    The area is kept by name and code rather than by foreign key: the record
+    is the person's, and it outlives a desk the church later folds away.
+    """
+
+    KIND_CHOICES = [('leader', 'Leader'), ('assistant', 'Assistant')]
+
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='department_service')
+    department_code = models.CharField(max_length=60)
+    department_name = models.CharField(max_length=150)
+    unit = models.CharField(max_length=120, blank=True, default='')
+    role_name = models.CharField(max_length=120)
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='leader')
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True, blank=True, help_text="Blank while the member still holds the seat")
+    #: Who took the seat up when this stretch ended; blank when it was left open.
+    successor_name = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        ordering = ('-started_at',)
+        indexes = [models.Index(fields=['member', 'ended_at'])]
+
+    def __str__(self):
+        return f"{self.member.get_username()} — {self.role_name} ({self.department_name})"
+
+
 #: The departments every church is seeded with. Eldership, Clerkship and
 #: Deaconate are departments like the rest — leadership bodies the desk
 #: staffs from the same screen — and the church itself is not one: its
@@ -2414,8 +2449,10 @@ class ChurchSettings(models.Model):
         default=(
             '{greeting}, {name}.\n\n'
             'Thank you for serving as {position} of {area} at {church}. Your service '
-            'has been a blessing, and the church is grateful. '
-            '{successor} now takes up the role.\n\n'
+            'has been a blessing, and the church is grateful. {successor_line}\n\n'
+            'As you step down, please prepare and hand over everything the office '
+            'holds — its records, keys, equipment and any other items — so that '
+            'whoever takes the seat up next has what they need to run it well.\n\n'
             '{church}'
         ),
         blank=True,

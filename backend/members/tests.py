@@ -71,7 +71,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, DepartmentWithdrawalRequest, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DepartmentServiceHistory, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, DepartmentWithdrawalRequest, Announcement, AnnouncementResponse
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -14087,6 +14087,98 @@ class DepartmentApiTests(APITestCase):
         # Duplicate names are refused.
         res = self.client.post('/api/members/departments/create/', {'name': 'stewardship'}, format='json')
         self.assertEqual(res.status_code, 400)
+
+
+class LeadershipHandoverLetterTests(APITestCase):
+    """A seat changing hands thanks the person leaving it.
+
+    The letter to the outgoing holder names whoever now holds the seat and
+    asks them to hand the office's records and things over; and the member's
+    profile keeps the stretch they served, between which dates, and to whom
+    they passed the work.
+    """
+
+    def setUp(self):
+        from django.core import mail
+
+        mail.outbox.clear()
+        self.elder = User.objects.create_user('handover.elder', 'handover.elder@example.com', 'StrongPass#2026', first_name='Ellen', last_name='Elder')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder,member')
+        self.outgoing = User.objects.create_user('handover.out', 'handover.out@example.com', 'StrongPass#2026', first_name='Otieno', last_name='Outgoing')
+        MemberProfile.objects.create(user=self.outgoing, role='member', roles='member')
+        self.incoming = User.objects.create_user('handover.in', 'handover.in@example.com', 'StrongPass#2026', first_name='Imani', last_name='Incoming')
+        MemberProfile.objects.create(user=self.incoming, role='member', roles='member')
+        self.amm = Department.objects.get(code='amm')
+        self.leader_role = DepartmentRole.objects.get(department=self.amm, name='Leader')
+        DepartmentAssignment.objects.create(
+            department=self.amm, role=self.leader_role, member=self.outgoing, kind='leader',
+        )
+        self.client.force_authenticate(self.elder)
+
+    def _seat(self, member):
+        return self.client.put('/api/members/departments/amm/leadership/', {
+            'assignments': [{'role_id': self.leader_role.id, 'member_id': member.id, 'kind': 'leader'}],
+        }, format='json')
+
+    def test_the_exiting_holder_is_told_who_replaces_them_and_to_hand_over(self):
+        from django.core import mail
+
+        self.assertEqual(self._seat(self.incoming).status_code, 200)
+
+        letter = next(m for m in mail.outbox if self.outgoing.email in m.to)
+        # The one thing they need to know: who takes it up now...
+        self.assertIn('Imani Incoming', letter.body)
+        self.assertIn('now takes up the role', letter.body)
+        # ...and what they must do before they go.
+        self.assertIn('hand over', letter.body.lower())
+        self.assertIn('records, keys, equipment', letter.body.lower())
+
+        appointment = next(m for m in mail.outbox if self.incoming.email in m.to)
+        self.assertNotIn('hand over', appointment.body.lower())
+
+    def test_a_seat_left_open_says_so_instead_of_naming_anyone(self):
+        from django.core import mail
+
+        seat = DepartmentAssignment.objects.get(
+            department=self.amm, role=self.leader_role, member=self.outgoing, kind='leader',
+        )
+        released = self.client.delete(
+            '/api/members/departments/amm/leadership/', {'assignment_id': seat.id}, format='json',
+        )
+        self.assertEqual(released.status_code, status.HTTP_200_OK)
+        letter = next(m for m in mail.outbox if self.outgoing.email in m.to)
+        self.assertIn('seat is now open', letter.body)
+        self.assertIn('hand over', letter.body.lower())
+
+    def test_the_profile_keeps_the_stretch_each_person_served(self):
+        # The desk seats the holder who is already there first, so their
+        # stretch opens the way an appointment opens it.
+        self._seat(self.outgoing)
+        self._seat(self.incoming)
+
+        past = DepartmentServiceHistory.objects.get(
+            member=self.outgoing, department_code='amm', role_name='Leader',
+        )
+        self.assertIsNotNone(past.ended_at)
+        self.assertEqual(past.successor_name, 'Imani Incoming')
+        self.assertEqual(past.department_name, self.amm.name)
+
+        current = DepartmentServiceHistory.objects.get(
+            member=self.incoming, department_code='amm', role_name='Leader',
+        )
+        self.assertIsNone(current.ended_at)
+
+        # And the office's See Profile reads it: what they served, where,
+        # and the dates the stretch ran between.
+        self.client.force_authenticate(self.elder)
+        profile = self.client.get(f'/api/members/users/{self.outgoing.id}/profile/')
+        self.assertEqual(profile.status_code, 200)
+        entry = profile.data['service_history'][0]
+        self.assertEqual(entry['role'], 'Leader')
+        self.assertEqual(entry['department'], self.amm.name)
+        self.assertIsNotNone(entry['started_at'])
+        self.assertIsNotNone(entry['ended_at'])
+        self.assertEqual(entry['successor_name'], 'Imani Incoming')
 
 
 class TreasuryLeadershipAndAssistantPermissionsTests(APITestCase):

@@ -224,6 +224,17 @@ function AccountTypeCell({ member }: { member: MemberUser }) {
   );
 }
 
+/** One stretch a member served at a ministry's desk, with its dates. */
+type ServiceHistoryRow = {
+  department: string;
+  unit?: string;
+  role: string;
+  kind: "leader" | "assistant";
+  started_at: string;
+  ended_at: string | null;
+  successor_name?: string;
+};
+
 /** The read-only payload behind See Profile: roster fields plus history. */
 type MemberProfileData = Partial<MemberUser> & {
   date_joined?: string;
@@ -232,6 +243,8 @@ type MemberProfileData = Partial<MemberUser> & {
   baptismal_status_label?: string;
   current_roles?: RoleHistoryRow[];
   past_roles?: RoleHistoryRow[];
+  /** One stretch served in a ministry's or department's office. */
+  service_history?: ServiceHistoryRow[];
 };
 
 const fmtDate = (value?: string | null) => dayFirst(value);
@@ -3169,6 +3182,42 @@ export function UserManagement() {
                         <span className="text-[10px]">{fmtDate(r.started_at)} – {fmtDate(r.ended_at)}</span>
                       </li>
                     ))}
+                  </ul>
+                </section>
+              )}
+
+              {(profileData.service_history && profileData.service_history.length > 0) && (
+                <section>
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-moss-faint">Ministries served</h4>
+                  <p className="mt-0.5 text-[11px] text-moss">
+                    The offices this person has held at a ministry or department, and the dates their service ran.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {profileData.service_history.map((entry, index) => {
+                      const serving = !entry.ended_at;
+                      return (
+                        <li
+                          key={`${entry.department}-${entry.role}-${entry.started_at}-${index}`}
+                          className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg px-3 py-1.5 text-xs ${
+                            serving ? "bg-sand text-bark" : "border border-sand-line text-moss"
+                          }`}
+                        >
+                          <span className="min-w-0">
+                            <span className="font-semibold text-bark">
+                              {entry.role}
+                              {entry.kind === "assistant" ? " (assistant)" : ""}
+                            </span>
+                            <span className="text-moss">
+                              {" · "}{entry.department}{entry.unit ? ` · ${entry.unit}` : ""}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[10px]">
+                            {fmtDate(entry.started_at)} – {entry.ended_at ? fmtDate(entry.ended_at) : "serving now"}
+                            {entry.ended_at && entry.successor_name ? ` · passed to ${entry.successor_name}` : ""}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </section>
               )}

@@ -49,7 +49,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
-from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, DepartmentServiceHistory, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentPolicy, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
 from .models import ReportSigning, ReportSignature
 from .mpesa import MpesaConfigurationError, initiate_b2c_payout, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
@@ -9482,6 +9482,21 @@ def member_profile_payload(user):
         'baptismal_status_label': profile.get_baptismal_status_display() if profile and profile.baptismal_status else '',
         'current_roles': [row(r) for r in current],
         'past_roles': [row(r) for r in past],
+        # The ministries and departments this person has served, and when: a
+        # seat at a desk is not one of the church-wide role flags, so it is
+        # kept and read on its own.
+        'service_history': [
+            {
+                'department': entry.department_name or entry.department_code,
+                'unit': entry.unit,
+                'role': entry.role_name,
+                'kind': entry.kind,
+                'started_at': entry.started_at,
+                'ended_at': entry.ended_at,
+                'successor_name': entry.successor_name,
+            }
+            for entry in DepartmentServiceHistory.objects.filter(member=user)
+        ],
         # The office's own assessment of whether the member currently holds
         # each role they have ever served in, for the card's chip.
         'ever_held_roles': sorted(held_now | {r.role for r in past}),
@@ -13709,17 +13724,105 @@ def send_appointment_emails(department, appointment_notes):
                 connection=connection_for(APPOINTMENT),
                 fail_silently=True,
             )
-            if note['replaced'] and note['replaced'].email:
-                send_mail(
-                    f"Thank you — {note['position']}, {department.name}",
-                    render_message(release_template, {**context, 'name': recipient_name(note['replaced'])}),
-                    sender_for(APPOINTMENT),
-                    [note['replaced'].email],
-                    connection=connection_for(APPOINTMENT),
-                    fail_silently=True,
-                )
         except Exception:
             logger.exception("Could not send the leadership letters for %s", department.code)
+        if note['replaced']:
+            # The person leaving is written to as well — thanked, told who now
+            # holds the seat, and asked to hand the office's things over.
+            send_release_email(
+                department,
+                note['replaced'],
+                note['position'],
+                successor=note['member'],
+            )
+
+
+def send_release_email(department, member, position, successor=None, successor_line=''):
+    """Thank whoever left the seat and ask them to hand the office over.
+
+    The letter names the person now taking the role up — the one thing an
+    exiting holder needs to know — and asks them to prepare and hand over
+    whatever the office holds (its records, keys, tools, equipment) so the
+    ministry keeps running from the first day. A seat that is left standing
+    open says so instead. The wording is the Church Settings template
+    (default_release_thank_you_message); failure never fails the save.
+    """
+    if member is None or not getattr(member, 'email', ''):
+        return
+    church = ChurchSettings.objects.first()
+    church_name = church.church_name if church else ''
+    template = (church.default_release_thank_you_message if church else '') or DEFAULT_RELEASE_MESSAGE
+    # The letter names the person in full: the exiting holder is being told
+    # who to hand the office to, and a first name alone can be two people.
+    successor_name = giver_display_name('', member=successor) if successor is not None else ''
+    if not (successor_line or '').strip():
+        successor_line = (
+            f"{successor_name} now takes up the role."
+            if successor_name
+            else "The seat is now open, and the church will appoint someone to it in due course."
+        )
+    context = {
+        'greeting': eat_greeting(),
+        'name': recipient_name(member),
+        'position': position,
+        'area': department.name,
+        'church': church_name,
+        'successor': successor_name,
+        'successor_line': successor_line,
+    }
+    try:
+        send_mail(
+            f"Thank you — {position}, {department.name}",
+            render_message(template, context),
+            sender_for(APPOINTMENT),
+            [member.email],
+            connection=connection_for(APPOINTMENT),
+            fail_silently=True,
+        )
+    except Exception:
+        logger.exception("Could not send the release letter for %s", department.code)
+
+
+def seat_position(role, kind):
+    """The name a seat wears in a letter: the office itself, or its assistant
+    seat ("Assistant Choir Leader"), which is how the desk reads it too."""
+    name = (role.name or '').strip()
+    if kind == 'assistant' and not name.lower().startswith('assistant'):
+        return f"Assistant {name}"
+    return name
+
+
+def open_service_record(department, member, role, kind='leader', unit=''):
+    """Open the member's stretch in an office, the day they take it up.
+
+    Called wherever an appointment lands (the desk's save and an approved
+    request), so the profile can later say what they served and from when.
+    """
+    if member is None or role is None:
+        return
+    DepartmentServiceHistory.objects.get_or_create(
+        member=member,
+        department_code=department.code,
+        role_name=role.name,
+        unit=unit or '',
+        ended_at__isnull=True,
+        defaults={'department_name': department.name, 'kind': kind},
+    )
+
+
+def close_service_record(department, member, role=None, unit='', successor=None):
+    """Close the member's stretch in an office when the seat changes hands."""
+    if member is None:
+        return
+    rows = DepartmentServiceHistory.objects.filter(
+        member=member, department_code=department.code, ended_at__isnull=True,
+    )
+    if role is not None:
+        rows = rows.filter(role_name=role.name, unit=unit or '')
+    rows.update(
+        ended_at=timezone.now(),
+        successor_name=(giver_display_name('', member=successor) if successor is not None else '')[:150],
+    )
 
 
 class DepartmentLeadershipView(APIView):
@@ -13894,6 +13997,10 @@ class DepartmentLeadershipView(APIView):
                 # may have its leader while Pathfinders keeps its own.
                 replaced = DepartmentAssignment.objects.filter(role=role, kind='leader', unit=unit).exclude(member=member).select_related('member').first()
                 DepartmentAssignment.objects.filter(role=role, kind='leader', unit=unit).exclude(member=member).delete()
+                if replaced is not None:
+                    # The outgoing holder's stretch closes the day the seat
+                    # changes hands, and keeps the name of the successor.
+                    close_service_record(target, replaced.member, role=role, unit=unit, successor=member)
                 appointment_notes.append({'member': member, 'position': role.name, 'kind': kind, 'replaced': replaced.member if replaced else None})
             else:
                 already = DepartmentAssignment.objects.filter(role=role, kind='assistant', member=member, unit=unit).exists()
@@ -13909,6 +14016,7 @@ class DepartmentLeadershipView(APIView):
                 role=role, member=member, kind=kind, unit=unit,
                 defaults={'department': target},
             )
+            open_service_record(target, member, role, kind, unit)
             updates = []
             if assignment.department_id != target.id:
                 assignment.department = target
@@ -13950,6 +14058,8 @@ class DepartmentLeadershipView(APIView):
                     {'detail': f"{role.name} is set by {target.name}'s leader, not from the church office."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            for held in DepartmentAssignment.objects.filter(role=role).select_related('member'):
+                close_service_record(target, held.member, role=role, unit=held.unit or '')
             role.delete()
             sync_role_flags_from_assignments()
             return Response({'detail': 'Office removed.'})
@@ -13985,8 +14095,16 @@ class DepartmentLeadershipView(APIView):
                 },
                 status=status.HTTP_202_ACCEPTED,
             )
+        released_member = assignment.member
+        released_role = assignment.role
+        released_unit = assignment.unit or ''
+        released_kind = assignment.kind
         assignment.delete()
+        close_service_record(target, released_member, role=released_role, unit=released_unit)
         sync_role_flags_from_assignments()
+        # The person let go is thanked, and asked to hand the office's things
+        # over; the seat stands open until someone is appointed to it.
+        send_release_email(target, released_member, seat_position(released_role, released_kind))
         return Response({'detail': 'Appointment released.'})
 
 
@@ -14071,8 +14189,16 @@ def apply_leadership_change(row):
     if row.kind == 'release':
         assignment = row.assignment
         if assignment is not None and DepartmentAssignment.objects.filter(pk=assignment.pk).exists():
+            released_member = assignment.member
+            released_role = assignment.role
+            released_unit = assignment.unit or ''
+            released_kind = assignment.kind
             assignment.delete()
+            close_service_record(row.department, released_member, role=released_role, unit=released_unit)
             sync_role_flags_from_assignments()
+            send_release_email(
+                row.department, released_member, seat_position(released_role, released_kind),
+            )
         return
     role = row.role
     if role is None:
@@ -14088,6 +14214,8 @@ def apply_leadership_change(row):
             .exclude(member=member).select_related('member').first()
         )
         DepartmentAssignment.objects.filter(role=role, kind='leader', unit=row.unit).exclude(member=member).delete()
+        if replaced is not None:
+            close_service_record(target, replaced.member, role=role, unit=row.unit, successor=member)
         notes.append({
             'member': member, 'position': role.name, 'kind': 'leader',
             'replaced': replaced.member if replaced else None,
@@ -14104,6 +14232,7 @@ def apply_leadership_change(row):
         role=role, member=member, kind=row.seat_kind, unit=row.unit,
         defaults={'department': target},
     )
+    open_service_record(target, member, role, row.seat_kind, row.unit)
     updates = []
     if assignment.department_id != target.id:
         assignment.department = target
@@ -14505,6 +14634,12 @@ class DepartmentMembersView(APIView):
         if not leaving_self and not can_manage_department(request.user, department):
             return Response({'detail': 'Only church officers or this department\'s leader can remove members.'}, status=status.HTTP_403_FORBIDDEN)
         deleted, _ = DepartmentMembership.objects.filter(department=department, member_id=target_id).delete()
+        # Leaving the roll ends every seat they held at this desk, and the
+        # profile's record closes with it.
+        leaving_desk = Department.objects.filter(code=department).first()
+        if leaving_desk is not None:
+            for held in DepartmentAssignment.objects.filter(department__code=department, member_id=target_id).select_related('member', 'role'):
+                close_service_record(leaving_desk, held.member, role=held.role, unit=held.unit or '')
         DepartmentAssignment.objects.filter(department__code=department, member_id=target_id).delete()
         unfiled = drop_area_filing(request.user, department) if leaving_self else False
         if not deleted and not unfiled:
