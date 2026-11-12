@@ -1,7 +1,9 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { MoveLeft } from "lucide-react";
+import { backOrDashboard } from "@/lib/app-history";
 
 import { NavRail } from "./nav-rail";
 import { AppTopBar } from "./app-topbar";
@@ -145,6 +147,7 @@ const HEADING_FIRST_SECTIONS = new Set(["Fellowship", "Stewardship"]);
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = normalizePath(usePathname());
+  const router = useRouter();
   const { me, hasToken } = useHeaderData();
 
   const [headerRightAction, setHeaderRightAction] = useState<React.ReactNode>(null);
@@ -469,7 +472,17 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                           place it returns from. The node carries its own
                           breakpoints. */}
                       <div className="flex items-center gap-2">
-                        {header.leading}
+                        {header.leading ??
+                          (pathname !== "/dashboard" ? (
+                            <button
+                              type="button"
+                              onClick={() => backOrDashboard(router)}
+                              aria-label="Back"
+                              className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
+                            >
+                              <MoveLeft className="h-5 w-5" aria-hidden="true" />
+                            </button>
+                          ) : null)}
                         <h1 className="text-xl font-semibold tracking-tight text-bark sm:text-2xl">{header.label}</h1>
                       </div>
                       {header.description && (
