@@ -8719,8 +8719,10 @@ function DepartmentDetail({
   // same screen. Every other view keeps the page's padding and scrolls it.
   const deskFillsPhone = subTab === "members";
   // Sharing (and the announcements page that draws the same feed) is a wall
-  // of cards with its actions pinned at the foot: the page's own inset would
-  // only be dead space around them, so the card takes the panel edge to edge.
+  // of cards the page scrolls freely, the way the fellowship feed does — no
+  // inner scroll room with a hard edge for posts to slide under. The page's
+  // own inset would only be dead space around them, so the card takes the
+  // panel edge to edge.
   const sharingWall = subTab === "sharing" || subTab === "announcements";
 
   return (
@@ -8745,7 +8747,7 @@ function DepartmentDetail({
             ? "gap-3 overflow-y-auto p-2 sm:p-3"
             : "gap-3 overflow-hidden p-0"
           : sharingWall
-            ? "gap-2 overflow-hidden p-1"
+            ? "gap-2 overflow-y-auto p-1 custom-hover-scrollbar"
             : deskFillsPhone || subTab === "calendar"
               ? "px-2 py-2 md:gap-4 md:overflow-hidden md:px-4 md:py-0 lg:px-6"
               : "gap-4 overflow-y-auto px-2 py-3 md:overflow-hidden md:px-4 lg:px-6"
