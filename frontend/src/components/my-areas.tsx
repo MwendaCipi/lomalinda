@@ -278,6 +278,14 @@ export function MyAreas() {
     if (openCode !== "treasury") return;
     router.replace(holdsTreasury ? "/administration/treasury" : "/my-areas");
   }, [openCode, holdsTreasury, router]);
+  // The map is a phone's page: on a wide screen the rail already names every
+  // ministry desk, so a bare `/my-areas` goes to the dashboard instead. Open
+  // areas (`?area=`) still resolve, since the desk links they come from are
+  // kept on every width.
+  useEffect(() => {
+    if (openCode) return;
+    if (window.matchMedia("(min-width: 768px)").matches) router.replace("/dashboard");
+  }, [openCode, router]);
   // The sub-nav: the map's own two halves. An open area draws its own strip
   // — the desk's, exactly as the dashboard's ministry card draws it — so
   // touching the strip here as well would trade the desk's views for the
