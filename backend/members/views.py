@@ -15217,17 +15217,21 @@ def _calendar_slot_conflicts(event_date, event_time, end_date=None, end_time=Non
     days, or a day-and-hours window — blocks a second one. The row being
     written is excluded here, so a saved event corrected in place is judged
     against the rest of the calendar rather than against itself.
+
+    An announcement's dates are not a booking. A post's event window is often
+    only how long the post should stay up, and the row written for its
+    Register now button carries that window onto the calendar — so those rows
+    are left out of the rule entirely: they neither hold a slot nor refuse an
+    event a desk files over the same period.
     """
     start, end = _event_slot_bounds(event_date, event_time, end_date, end_time)
     if start is None or end is None:
         return []
     last_day = max(end_date or event_date, event_date, key=str)
     first_day = event_date
-    queryset = (
-        DepartmentEvent.objects.exclude(pk=exclude_id)
-        if exclude_id is not None
-        else DepartmentEvent.objects.all()
-    )
+    queryset = DepartmentEvent.objects.filter(announcement__isnull=True)
+    if exclude_id is not None:
+        queryset = queryset.exclude(pk=exclude_id)
     # A cheap first sweep — rows whose day range touches the one being filed
     # — then the exact hour-by-hour read in Python, so a 2 PM event beside a
     # 9 AM one shares a day without sharing a slot.

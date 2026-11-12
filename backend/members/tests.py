@@ -14496,6 +14496,28 @@ class CalendarSlotConflictTests(APITestCase):
         }, format='json')
         self.assertEqual(today.status_code, 201)
 
+    def test_an_announcements_dates_do_not_hold_a_slot(self):
+        """A post's event dates are often only how long the post should stay
+        up, so the row written for its Register now button is a window on the
+        feed rather than a booking on the calendar: an event may be filed over
+        the same day."""
+        day = (timezone.localdate() + timedelta(days=7)).isoformat()
+        post = Announcement.objects.create(
+            title='WELFARE', text='The welfare drive is open.', visibility='members_only',
+        )
+        DepartmentEvent.objects.create(
+            department='welfare', title='WELFARE', event_date=day, announcement=post,
+        )
+
+        filed = self.client.post('/api/members/departments/amm/events/', {
+            'title': 'Choir Day', 'date': day, 'time': '09:00',
+        }, format='json')
+        self.assertEqual(filed.status_code, 201)
+        self.assertEqual(
+            [event.title for event in DepartmentEvent.objects.filter(department='amm')],
+            ['Choir Day'],
+        )
+
     def test_a_program_save_is_not_refused_by_a_slot_the_event_already_sits_in(self):
         """The slot rule is about the slot: a programme written on a row that
         already shares its period with another event — filed before that event
