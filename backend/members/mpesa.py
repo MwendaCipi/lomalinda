@@ -2,6 +2,7 @@ import base64
 import re
 import uuid
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from os import environ
 from zoneinfo import ZoneInfo
 
@@ -107,7 +108,9 @@ def initiate_stk_push_for_context(phone_number, amount, purpose, context_token):
         'Password': password,
         'Timestamp': timestamp,
         'TransactionType': environ.get('MPESA_TRANSACTION_TYPE', 'CustomerPayBillOnline'),
-        'Amount': int(amount),
+        # Amounts arrive as decimals ("1200.00") while Daraja takes whole
+        # shillings — int() on the raw string raised for every enrollment.
+        'Amount': int(Decimal(str(amount))),
         'PartyA': phone_number,
         'PartyB': shortcode,
         'PhoneNumber': phone_number,
@@ -205,7 +208,7 @@ def _initiate_b2c(*, originator_id, amount, phone_number, remarks, occasion):
         'InitiatorName': settings_map['MPESA_INITIATOR_NAME'],
         'SecurityCredential': settings_map['MPESA_SECURITY_CREDENTIAL'],
         'CommandID': 'BusinessPayment',
-        'Amount': int(amount),
+        'Amount': int(Decimal(str(amount))),
         'PartyA': settings_map['MPESA_B2C_SHORTCODE'],
         'PartyB': phone_number,
         'Remarks': _b2c_text(remarks, 'Payout'),

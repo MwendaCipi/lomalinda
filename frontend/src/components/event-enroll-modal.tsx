@@ -88,7 +88,12 @@ export function EventEnrollModal({
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.detail || "The registration could not be started.");
+        const fieldProblem = Array.isArray(data.phone_number)
+          ? data.phone_number[0]
+          : data.phone_number;
+        throw new Error(
+          data.detail || fieldProblem || "The registration could not be started.",
+        );
       }
       showAlert(
         "M-Pesa Prompt Sent",
