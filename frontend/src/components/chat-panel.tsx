@@ -218,8 +218,10 @@ export function ChatPanel() {
   };
 
   // When the URL carries ?dm=<member_id> (e.g. from the roster's "Chat here"),
-  // open that direct message as soon as the contacts and conversations are
-  // available — the officer lands inside the thread, not at the inbox.
+  // open that direct message — the officer lands inside the thread, not at
+  // the inbox. Opening is idempotent server-side, so no contacts lookup is
+  // needed first: gating on the contacts list (capped at 100 names) is what
+  // silently swallowed members past it, and the room never opened.
   useEffect(() => {
     if (!openDmId) return;
     const memberId = Number(openDmId);
@@ -228,9 +230,6 @@ export function ChatPanel() {
     void Promise.resolve().then(async () => {
       if (!alive) return;
       try {
-        const contacts = await fetchContacts("");
-        const person = contacts.find((p) => p.id === memberId);
-        if (!person) return;
         enterRoom(await openConversation({ kind: "dm", member_id: memberId }));
       } catch (error) {
         showAlert("Could not open the message", error instanceof Error ? error.message : "Try again.", "error");

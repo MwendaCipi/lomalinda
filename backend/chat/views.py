@@ -279,7 +279,9 @@ class ChatContactsView(APIView):
                 | Q(last_name__icontains=search)
                 | Q(username__icontains=search)
             )
-        return Response({'contacts': ChatPersonSerializer(people[:100], many=True).data})
+        # The roster picker browses this unfiltered, so the cap must clear the
+        # whole church: anyone past it could not be found to start a chat.
+        return Response({'contacts': ChatPersonSerializer(people[:500], many=True).data})
 
 
 class ChatConversationLeaveView(APIView):
