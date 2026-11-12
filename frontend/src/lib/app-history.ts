@@ -144,6 +144,20 @@ function notifyLocation() {
   locationListeners.forEach((listener) => listener());
 }
 
+/** The dashboard's path, normalised the way `pathKey` normalises. */
+const DASHBOARD_PATH = "/dashboard/";
+
+/** Whether the entry in view is the dashboard, whatever its query. */
+function atDashboard() {
+  try {
+    let path = new URL(window.location.href).pathname;
+    if (path.length > 1 && !path.endsWith("/")) path += "/";
+    return path === DASHBOARD_PATH;
+  } catch {
+    return false;
+  }
+}
+
 /** Index of the entry we are on; 0 is the entry the app opened with. */
 let currentIndex = 0;
 let installed = false;
@@ -238,6 +252,17 @@ export function trackAppHistory() {
     // several entries in one go.
     currentIndex = readIndex(event.state);
     entryPaths.set(currentIndex, pathKey(null));
+    // A traversal that lands on the dashboard makes it the floor: whatever
+    // was walked past becomes forward history the next push drops, whatever
+    // sits below predates the app as far as the count knows, and the map is
+    // forgotten — so the next page tapped starts the history afresh instead
+    // of folding onto, or counting past, the pages that led here.
+    if (currentIndex !== 0 && atDashboard()) {
+      currentIndex = 0;
+      entryPaths.clear();
+      entryPaths.set(0, pathKey(null));
+      replaceState.call(window.history, stamp(window.history.state, 0), "", window.location.href);
+    }
     // The member has taken the stack over; a queued walk would now be wrong.
     cancelCollapse();
     notifyLocation();
