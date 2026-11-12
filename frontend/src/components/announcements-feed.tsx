@@ -110,6 +110,25 @@ function deskNotice(item: FeedItem): string | null {
   return null;
 }
 
+/** What a link button says on the card: the service it opens, where the
+ *  church meets on one it recognises — Google Meet, Zoom, Teams, Webex — and
+ *  "Open link" for anything else. A link that will not parse is the plain
+ *  case, not an error: nothing is promised by its wording. */
+function linkLabel(href: string): string {
+  let host = "";
+  try {
+    host = new URL(href).hostname.toLowerCase();
+  } catch {
+    return "Open link";
+  }
+  if (host === "meet.google.com") return "Open Google Meet";
+  if (host === "zoom.us" || host.endsWith(".zoom.us")) return "Open Zoom";
+  if (host === "teams.microsoft.com" || host === "teams.live.com") return "Open Microsoft Teams";
+  if (host === "webex.com" || host.endsWith(".webex.com")) return "Open Webex";
+  if (host === "meet.jit.si") return "Open Jitsi Meet";
+  return "Open link";
+}
+
 /** The drive's own giving link, opened straight into the giving modal. */
 function driveGiveHref(drive: FundDrive) {
   return `/give?purpose=${encodeURIComponent(drive.title || drive.name)}`;
@@ -347,14 +366,18 @@ export function AnnouncementsFeed({
                     <p className="mt-1 text-sm font-semibold text-ember">Event date: {eventLabel(item)}</p>
                   )}
                   <p className="mt-2 text-sm leading-6 text-bark">{item.text}</p>
-                  {item.href && (
+                  {/* The card's links are its buttons now — a plain hyperlink
+                      under the words said nothing the button does not say
+                      better. A vacancy keeps its own line, since applying is
+                      the whole point of posting it. */}
+                  {item.href && item.announcement_type === "job_vacancy" && (
                     <a
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-ember underline underline-offset-2"
                     >
-                      {item.announcement_type === "job_vacancy" ? "Apply / View details" : "Open link"}{" "}
+                      Apply / View details{" "}
                       <ArrowUpRight size={12} className="inline" aria-hidden="true" />
                     </a>
                   )}
@@ -510,7 +533,7 @@ export function AnnouncementsFeed({
                         }
                         if (code === "join_meeting") {
                           if (!item.href) return null;
-                          const label = "Join meeting";
+                          const label = linkLabel(item.href);
                           return (
                             <a
                               key={code}

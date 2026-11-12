@@ -9935,7 +9935,7 @@ function DepartmentDetail({
               scrolling page, buttons centred on it. It goes with them on
               scroll — down hides the pair, up and back to the top brings it
               back — so the posts are never read through a standing bar. */}
-          <div className={`sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-3 py-2.5 mb-1 shadow-sm transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
+          <div className={`sticky bottom-0 z-10 -mx-1 flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-3 py-2.5 mb-1 shadow-sm transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <button
               type="button"
               onClick={() => {

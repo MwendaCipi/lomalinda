@@ -16,7 +16,9 @@ export const CARD_OPTION_CHOICES = [
   { value: "pledge", label: "Pledge" },
   { value: "in_kind", label: "Give in kind" },
   { value: "comment", label: "Comment" },
-  { value: "join_meeting", label: "Join meeting" },
+  // A meeting's door on the card says where it leads — Open Google Meet, Open
+  // Zoom, Open link — so the tick here names the act, not the venue.
+  { value: "join_meeting", label: "Open link" },
   { value: "enroll", label: "Enroll now" },
   { value: "register", label: "Register now" },
 ] as const;
