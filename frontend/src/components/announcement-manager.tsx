@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { showAlert } from "@/lib/alerts";
 import { Send, Sparkles, X } from "lucide-react";
 import { localDate, dayFirst } from "@/lib/dates";
@@ -203,11 +204,13 @@ export function AnnouncementManager({
       loaded from that row, so a post edited from the feed changes only
       itself. Null means a fresh post. */
   editItem = null,
-  
+  /** Communicate mode: the element the composer's Cancel / Post buttons are
+      portalled into — the host's fixed footer, outside its scrolling body. */
+  actionsTarget = null,
   /** The host's refresh: run after Delete or Hide/Unhide so the feed behind
       the still-open composer reads the change at once. */
   onChanged = null,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null; onChanged?: (() => void) | null } = {}) {
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null; actionsTarget?: HTMLElement | null; onChanged?: (() => void) | null } = {}) {
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
   // Whether the post being edited is visible to users: Hide keeps the row
@@ -1249,13 +1252,15 @@ export function AnnouncementManager({
   }
 
   /**
-   * The composer's buttons, standing at the end of the scrolling form rather
-   * than in a fixed footer — they travel with the fields, so there is no
-   * standing panel at the dialog's foot.
+   * The composer's buttons, at the dialog's foot rather than inside the
+   * form.
    *
-   * The submit rides the form by its id, since it no longer sits inside it.
-   * Editing adds the card's old Delete beside Hide — the card itself keeps
-   * Edit only.
+   * An announcement is a long form, and honours the request modals under
+   * Fellowship instead: the fields scroll between a standing header and a
+   * standing footer, so Post is in reach without scrolling a post's own
+   * length. The submit rides the form by its id, since it no longer sits
+   * inside it. Editing adds the card's old Delete beside Hide — the card
+   * itself keeps Edit only.
    */
   function renderComposerActions() {
     return (
@@ -1401,12 +1406,13 @@ export function AnnouncementManager({
   if (composerOnly) {
     // Communicate mode: the compose fields alone — the host modal supplies
     // the frame, the heading, and the close button. The buttons come along,
-    // because no frame of ours is here to draw them, and they stand at the
-    // end of the scrolling body so they move with the fields.
+    // because no frame of ours is here to draw them.
     return (
       <>
         {renderComposerFields()}
-        <div className="mt-4">{renderComposerActions()}</div>
+        {/* The buttons sit in the host's fixed footer, outside its scrolling
+            body, so Cancel and Post stay in reach while the fields scroll. */}
+        {actionsTarget && createPortal(renderComposerActions(), actionsTarget)}
       </>
     );
   }
