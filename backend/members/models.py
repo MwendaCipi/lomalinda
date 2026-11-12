@@ -3031,6 +3031,11 @@ class DepartmentPolicy(models.Model):
     department = models.OneToOneField('Department', on_delete=models.CASCADE, related_name='policy')
     title = models.CharField(max_length=200, default='Policy')
     content = models.TextField(blank=True, default='')
+    # The paper the desk already has: a PDF or Word document handed in and
+    # kept beside the words typed here, so the signed original travels with
+    # the policy instead of living in someone's downloads folder.
+    document = models.FileField(upload_to='department_policies/%Y/%m/', null=True, blank=True)
+    document_name = models.CharField(max_length=255, blank=True, default='')
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='department_policies_written',

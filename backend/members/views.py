@@ -17523,14 +17523,19 @@ class DepartmentPolicyView(APIView):
     permission_classes = [IsAuthenticated]
 
     @staticmethod
-    def _payload(row, code, can_edit):
+    def _payload(row, code, can_edit, request=None):
         writer = row.updated_by if row and row.updated_by_id else None
+        document = getattr(row, 'document', None) if row else None
         return {
             'department': code,
             'title': row.title if row else 'Policy',
             'content': row.content if row else '',
             'updated_at': row.updated_at if row else None,
             'updated_by_name': ((writer.get_full_name() or writer.username) if writer else ''),
+            'document_url': (
+                request.build_absolute_uri(document.url) if document and request else (document.url if document else '')
+            ),
+            'document_name': (row.document_name or document.name.rsplit('/', 1)[-1]) if document else '',
             'can_edit': can_edit,
         }
 
@@ -17538,7 +17543,9 @@ class DepartmentPolicyView(APIView):
         if not Department.objects.filter(code=department).exists():
             return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
         row = DepartmentPolicy.objects.select_related('updated_by').filter(department__code=department).first()
-        return Response(self._payload(row, department, can_manage_department(request.user, department)))
+        return Response(
+            self._payload(row, department, can_manage_department(request.user, department), request)
+        )
 
     def put(self, request, department):
         target = Department.objects.filter(code=department, is_active=True).first()
@@ -17557,7 +17564,63 @@ class DepartmentPolicyView(APIView):
             department=target,
             defaults={'title': title, 'content': content, 'updated_by': request.user},
         )
-        return Response(self._payload(row, department, True))
+        return Response(self._payload(row, department, True, request))
+
+    def post(self, request, department):
+        """Hand the desk's own paper in: a PDF or Word document kept with the
+        policy. The words typed on the page stay as they are; the upload sits
+        beside them, and a new upload replaces the one before it."""
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only this department's leadership or a church officer can upload its policy."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        upload = request.FILES.get('document')
+        if upload is None:
+            return Response({'document': 'Choose a PDF or Word document first.'}, status=status.HTTP_400_BAD_REQUEST)
+        name = (getattr(upload, 'name', '') or '').strip()
+        extension = name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+        if extension not in {'pdf', 'docx'}:
+            return Response(
+                {'document': 'The policy is uploaded as a PDF or a Word (.docx) document.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size > 15 * 1024 * 1024:
+            return Response(
+                {'document': 'That document is over 15 MB — send a smaller copy.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        row, _created = DepartmentPolicy.objects.get_or_create(department=target)
+        if row.document:
+            row.document.delete(save=False)
+        row.document = upload
+        row.document_name = name[:255]
+        row.updated_by = request.user
+        row.save()
+        return Response(self._payload(row, department, True, request))
+
+    def delete(self, request, department):
+        """Take the uploaded paper off the policy, keeping the words typed on
+        the page."""
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only this department's leadership or a church officer can change its policy."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        row = DepartmentPolicy.objects.filter(department=target).first()
+        if row and row.document:
+            row.document.delete(save=False)
+            row.document = None
+            row.document_name = ''
+            row.updated_by = request.user
+            row.save()
+        return Response(self._payload(row, department, True, request))
 
 
 class DepartmentLetterListCreateView(APIView):

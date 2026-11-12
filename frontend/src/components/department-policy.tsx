@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Download, FileText, PenLine, Save, Send } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, FileText, Paperclip, PenLine, Save, Send, Upload, X } from "lucide-react";
 
 import { showAlert } from "@/lib/alerts";
 import { dayFirst } from "@/lib/dates";
@@ -16,6 +16,9 @@ type Policy = {
   content: string;
   updated_at: string | null;
   updated_by_name: string;
+  /** The desk's own paper, where one was uploaded — a PDF or Word document. */
+  document_url?: string;
+  document_name?: string;
   can_edit: boolean;
 };
 
@@ -59,6 +62,8 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     // No state is written before the first await: the panel mounts on its
@@ -142,6 +147,67 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
     });
   };
 
+  /** Hand the desk's own paper in: a PDF or Word document kept beside the
+   *  words typed on the page. Uploading again replaces the copy before it. */
+  const uploadDocument = async (file: File) => {
+    if (uploading) return;
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (extension !== "pdf" && extension !== "docx") {
+      showAlert("Not a policy document", "Upload the policy as a PDF or a Word (.docx) document.", "info");
+      return;
+    }
+    setUploading(true);
+    try {
+      const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
+      const body = new FormData();
+      body.append("document", file);
+      const res = await fetch(`${API_URL}/api/members/departments/${code}/policy/`, {
+        method: "POST",
+        // FormData brings its own boundary: a content type laid over it would
+        // arrive unreadable.
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not upload it", data.document || data.detail || "Try again.", "error");
+        return;
+      }
+      setPolicy(data as Policy);
+      showAlert("Document uploaded", "The policy paper sits with its words.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+    } catch {
+      showAlert("Network error", "Could not reach the server.", "error");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeDocument = async () => {
+    if (uploading) return;
+    setUploading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/${code}/policy/`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not remove it", data.detail || "Try again.", "error");
+        return;
+      }
+      setPolicy(data as Policy);
+    } catch {
+      showAlert("Network error", "Could not reach the server.", "error");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const sendForSignature = async () => {
     if (sending || !policy) return;
     if (!hasWords) {
@@ -187,7 +253,8 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-3 sm:p-4">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto custom-hover-scrollbar p-3 sm:p-4">
       <section className="rounded-2xl border border-sand-line bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-line px-4 py-3">
           <div className="min-w-0">
@@ -240,39 +307,36 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
           )}
         </div>
 
-        {/* The page's own buttons, in the flow of the page rather than pinned:
-            this is a page, not a dialog. */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-sand-line px-4 py-3">
-          <button
-            type="button"
-            onClick={download}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
-          >
-            <Download className="h-3.5 w-3.5" aria-hidden="true" /> Download
-          </button>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void sendForSignature()}
-              disabled={sending || !canEdit}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
+        {/* The desk's own paper, where one was handed in: a PDF or Word file
+            kept with the policy, opened from here and lifted again when a
+            newer copy replaces it. */}
+        {policy?.document_url && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-sand-line px-4 py-2.5">
+            <Paperclip className="h-3.5 w-3.5 shrink-0 text-ember" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-bark">
+              {policy.document_name || "Policy document"}
+            </span>
+            <a
+              href={policy.document_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-lg border border-sand-line px-2.5 py-1 text-[11px] font-semibold text-bark transition hover:border-ember hover:text-ember"
             >
-              <Send className="h-3.5 w-3.5" aria-hidden="true" />
-              {sending ? "Sending…" : "Send for signing"}
-            </button>
+              Open
+            </a>
             {canEdit && (
               <button
                 type="button"
-                onClick={() => void save()}
-                disabled={saving || !dirty}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep disabled:opacity-50"
+                onClick={() => void removeDocument()}
+                disabled={uploading}
+                aria-label="Remove the uploaded document"
+                className="shrink-0 rounded-lg p-1 text-moss transition hover:text-red-600 disabled:opacity-50"
               >
-                <Save className="h-3.5 w-3.5" aria-hidden="true" />
-                {saving ? "Saving…" : "Save policy"}
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             )}
           </div>
-        </div>
+        )}
       </section>
 
       {copies.length > 0 && (
@@ -321,6 +385,64 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
           </ul>
         </section>
       )}
+      </div>
+
+      {/* The page's buttons, held at the foot: the words and copies scroll
+          above them and the bar stays where the hand expects it. */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-sand-line bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={download}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember"
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" /> Download
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void uploadDocument(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || !canEdit}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
+          >
+            <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void sendForSignature()}
+            disabled={sending || !canEdit}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
+          >
+            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            {sending ? "Sending…" : "Send for signing"}
+          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={saving || !dirty}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-ember px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-ember-deep disabled:opacity-50"
+            >
+              <Save className="h-3.5 w-3.5" aria-hidden="true" />
+              {saving ? "Saving…" : "Save policy"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -21841,6 +21841,54 @@ class DepartmentPolicyTests(APITestCase):
         }, format='json')
         self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_the_desk_uploads_its_policy_paper_and_can_lift_it_again(self):
+        import tempfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+
+        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            self.client.force_authenticate(self.leader)
+            uploaded = self.client.post(
+                '/api/members/departments/welfare/policy/',
+                {'document': SimpleUploadedFile('welfare-policy.pdf', b'%PDF-1.4 policy', content_type='application/pdf')},
+                format='multipart',
+            )
+            self.assertEqual(uploaded.status_code, status.HTTP_200_OK, uploaded.data)
+            self.assertEqual(uploaded.data['document_name'], 'welfare-policy.pdf')
+            self.assertTrue(uploaded.data['document_url'])
+
+            # A Word copy is the desk's paper too, and it replaces the PDF.
+            replaced = self.client.post(
+                '/api/members/departments/welfare/policy/',
+                {'document': SimpleUploadedFile('welfare-policy.docx', b'PK policy', content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')},
+                format='multipart',
+            )
+            self.assertEqual(replaced.status_code, status.HTTP_200_OK, replaced.data)
+            self.assertEqual(replaced.data['document_name'], 'welfare-policy.docx')
+
+            # A picture is not the desk's policy paper.
+            refused = self.client.post(
+                '/api/members/departments/welfare/policy/',
+                {'document': SimpleUploadedFile('policy.png', b'x', content_type='image/png')},
+                format='multipart',
+            )
+            self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
+            # The roll reads it; only the leadership hands one in.
+            self.client.force_authenticate(self.reader)
+            denied = self.client.post(
+                '/api/members/departments/welfare/policy/',
+                {'document': SimpleUploadedFile('other.pdf', b'%PDF-1.4', content_type='application/pdf')},
+                format='multipart',
+            )
+            self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+
+            self.client.force_authenticate(self.leader)
+            removed = self.client.delete('/api/members/departments/welfare/policy/')
+            self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.data)
+            self.assertEqual(removed.data['document_url'], '')
+
     def test_a_policy_copy_is_a_letter_and_is_listed_apart_from_the_rest(self):
         self._save_policy()
         self.client.force_authenticate(self.leader)

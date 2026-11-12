@@ -9369,7 +9369,9 @@ function DepartmentDetail({
           where a new one is written. While the composer is open the page
           stands down, the sheet taking the whole view with its own way back. */}
       {subTab === "policy" && isWelfare && (
-        <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
+        // The panel keeps its own scroll, so its buttons stay at the foot of
+        // the page while the words above them move.
+        <div className="h-full min-h-0">
           <DepartmentPolicyPanel code={department.code} />
         </div>
       )}
