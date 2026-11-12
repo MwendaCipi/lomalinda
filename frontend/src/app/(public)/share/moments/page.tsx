@@ -2,37 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, Film, ImagePlus, Images, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Loader2, Plus, Sparkles, X } from "lucide-react";
 
 import { useHeaderData } from "@/hooks/use-header-data";
-import { isImageAttachment, resolveAttachmentUrl } from "@/components/announcement-attachment";
-import { dayFirst } from "@/lib/dates";
+import { AlbumDialog, AlbumGrid, type MomentAlbum, type MomentMedia } from "@/components/moments-album";
 import { showAlert } from "@/lib/alerts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-/** One picture or video of an event's album, as the API serves it. */
-type MomentMedia = {
-  id: number;
-  url: string;
-  file_name: string | null;
-  is_video: boolean;
-};
-
-/** One church event — the day, its words, and everything the camera kept. */
-type MomentEvent = {
-  id: number;
-  title: string;
-  description: string;
-  happened_on: string | null;
-  published: boolean;
-  posted_by_name: string | null;
-  media_count: number;
-  media: MomentMedia[];
-};
-
-const dayLabel = (iso: string | null) =>
-  iso ? dayFirst(iso, "") || null : null;
 
 /** The pictures and videos among what was dragged in, the rest left behind. */
 const mediaFrom = (list: FileList | null) =>
@@ -44,24 +20,24 @@ const mediaFrom = (list: FileList | null) =>
  * Moments — the church's photo and video wall, kept as event albums.
  *
  * An album is a church event — "Baptism 3rd October 2026" — and holds every
- * picture and video of that day, not one file per notice. Anyone may read
- * the published albums; the officers who post announcements open albums
- * here: they post one, add more pictures or videos to it later, take one
- * file down without losing the album, or unpublish it. Photos
- * open in the in-app viewer's full lightbox; a video plays right on the
- * wall, with sound, the way a family album would.
+ * picture and video of that day, not one file per notice. The wall shows one
+ * card per album, its first picture as the cover; pressing the card opens the
+ * whole day. Anyone may read the published albums; the officers who post
+ * announcements open albums here: they post one, add more pictures or videos
+ * to it later, correct its words, take one file down without losing the
+ * album, or unpublish it. A department's or ministry's own albums live on that
+ * area's page, not here.
  */
 export default function MomentsPage() {
   const { me } = useHeaderData();
-  // Moments is the administrators' gallery: only the admin role (or Django
-  // staff) posts albums and keeps them; everyone else reads the wall.
+  // The church's wall is the administrators' gallery: only the admin role (or
+  // Django staff) posts albums and keeps them; everyone else reads the wall.
   const canManage = Boolean(
     me && (me.is_staff || me.is_superuser || me.roles.includes("admin"))
   );
 
-  const [events, setEvents] = useState<MomentEvent[]>([]);
+  const [events, setEvents] = useState<MomentAlbum[]>([]);
   const [fetching, setFetching] = useState(true);
-  const [lightbox, setLightbox] = useState<{ url: string; name: string; video: boolean } | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [posting, setPosting] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -69,25 +45,23 @@ export default function MomentsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Dragging files in: the composer's own pad, and an album on the wall that
-  // takes more pictures where they are shown.
+  // Dragging files in: the composer's own pad.
   const [draggingComposer, setDraggingComposer] = useState(false);
-  const [dropAlbumId, setDropAlbumId] = useState<number | null>(null);
-  // Adding to an album that is already on the wall: the picker is one input
-  // for the whole page, and the album it was opened for is held here.
+  // The album opened from the wall, and the picker that adds more of the day
+  // to it.
+  const [openId, setOpenId] = useState<number | null>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
-  const addTargetRef = useRef<MomentEvent | null>(null);
-  const [addingTo, setAddingTo] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     try {
-      // The desk reads its unpublished albums too; the wall serves the rest.
+      // The office reads its unpublished albums too; the wall serves the rest.
       const res = await fetch(`${API_URL}/api/members/church-events/${canManage ? "?include_unpublished=true" : ""}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = res.ok ? await res.json().catch(() => []) : [];
-      setEvents(Array.isArray(data) ? (data as MomentEvent[]) : []);
+      setEvents(Array.isArray(data) ? (data as MomentAlbum[]) : []);
     } catch {
       setEvents([]);
     } finally {
@@ -100,23 +74,17 @@ export default function MomentsPage() {
     void Promise.resolve().then(load);
   }, [load]);
 
-  // Scroll lock while the lightbox or the composer is up.
+  const openAlbum = events.find((event) => event.id === openId) ?? null;
+
+  // Scroll lock while an album or the composer is up.
   useEffect(() => {
-    if (!lightbox && !composerOpen) return;
+    if (!openId && !composerOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setLightbox(null);
-        setComposerOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
     };
-  }, [lightbox, composerOpen]);
+  }, [openId, composerOpen]);
 
   const openComposer = () => {
     setNewTitle("");
@@ -161,15 +129,9 @@ export default function MomentsPage() {
     }
   };
 
-  /** Pick more pictures or videos for an album that is already posted. */
-  const openAdder = (event: MomentEvent) => {
-    addTargetRef.current = event;
-    addInputRef.current?.click();
-  };
-
-  const addMedia = async (event: MomentEvent, picked: File[]) => {
+  const addMedia = async (event: MomentAlbum, picked: File[]) => {
     if (picked.length === 0) return;
-    setAddingTo(event.id);
+    setAdding(true);
     try {
       const body = new FormData();
       picked.forEach((file) => body.append("media_files", file));
@@ -186,18 +148,14 @@ export default function MomentsPage() {
       }
       await load();
     } catch (err) {
-      showAlert(
-        "Could not add the files",
-        err instanceof Error ? err.message : "Please try again.",
-        "error",
-      );
+      showAlert("Could not add the files", err instanceof Error ? err.message : "Please try again.", "error");
     } finally {
-      setAddingTo(null);
+      setAdding(false);
       if (addInputRef.current) addInputRef.current.value = "";
     }
   };
 
-  const removeMedia = async (event: MomentEvent, media: MomentMedia) => {
+  const removeMedia = async (event: MomentAlbum, media: MomentMedia) => {
     const answer = await showAlert(
       "Take this file out of the album?",
       "It disappears from Moments. This cannot be undone.",
@@ -223,24 +181,40 @@ export default function MomentsPage() {
     }
   };
 
-  const unpublish = async (event: MomentEvent) => {
-    const answer = await showAlert(
-      `Take “${event.title}” off the wall?`,
-      "The album stays in the desk (published again any time) but members no longer see it.",
-      "warning",
-      { showCancelButton: true, confirmButtonText: "Take it off", cancelButtonText: "Leave it" }
-    );
-    if (!answer.isConfirmed) return;
+  const saveWords = async (
+    event: MomentAlbum,
+    values: { title: string; description: string; happened_on: string },
+  ) => {
     const token = localStorage.getItem("access_token") ?? "";
     const res = await fetch(`${API_URL}/api/members/church-events/${event.id}/`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ published: false }),
+      body: JSON.stringify({
+        title: values.title,
+        description: values.description,
+        happened_on: values.happened_on || null,
+      }),
     });
-    if (res.ok) await load();
+    if (!res.ok) {
+      showAlert("Could not save the words", "Please try again.", "error");
+      return false;
+    }
+    await load();
+    return true;
   };
 
-  const removeAlbum = async (event: MomentEvent) => {
+  const togglePublished = async (event: MomentAlbum) => {
+    const token = localStorage.getItem("access_token") ?? "";
+    const res = await fetch(`${API_URL}/api/members/church-events/${event.id}/`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ published: !event.published }),
+    });
+    if (res.ok) await load();
+    else showAlert("Could not change the album", "Please try again.", "error");
+  };
+
+  const removeAlbum = async (event: MomentAlbum) => {
     const answer = await showAlert(
       `Delete “${event.title}” and all its files?`,
       "The whole album is gone for good. This cannot be undone.",
@@ -253,7 +227,12 @@ export default function MomentsPage() {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.ok) await load();
+    if (res.ok) {
+      setOpenId(null);
+      await load();
+    } else {
+      showAlert("Could not delete the album", "Please try again.", "error");
+    }
   };
 
   return (
@@ -307,199 +286,37 @@ export default function MomentsPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-12">
-              {events.map((event) => (
-                <article key={event.id} className="rounded-3xl border border-sand-line bg-white shadow-sm">
-                  <header className="flex flex-wrap items-start justify-between gap-3 border-b border-sand-line p-5 sm:p-6">
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-bold text-bark sm:text-xl">{event.title}</h2>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-moss">
-                        {dayLabel(event.happened_on) && (
-                          <span className="inline-flex items-center gap-1">
-                            <CalendarDays size={11} aria-hidden="true" /> {dayLabel(event.happened_on)}
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1">
-                          <Images size={11} aria-hidden="true" /> {event.media_count} {event.media_count === 1 ? "moment" : "moments"}
-                        </span>
-                        {event.posted_by_name && <span>Posted by {event.posted_by_name}</span>}
-                        {!event.published && (
-                          <span className="rounded-full bg-alert-film px-2 py-0.5 font-semibold text-brick">Unpublished (only the desk sees this)</span>
-                        )}
-                      </div>
-                      {event.description && <p className="mt-2 max-w-2xl text-sm leading-6 text-moss">{event.description}</p>}
-                    </div>
-                    {canManage && (
-                      <div className="flex shrink-0 items-center gap-2">
-                        {!event.published && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const token = localStorage.getItem("access_token") ?? "";
-                              await fetch(`${API_URL}/api/members/church-events/${event.id}/`, {
-                                method: "PATCH",
-                                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                                body: JSON.stringify({ published: true }),
-                              });
-                              await load();
-                            }}
-                            className="rounded-xl border border-sand-line px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember"
-                          >
-                            Publish
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => openAdder(event)}
-                          disabled={addingTo === event.id}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember disabled:opacity-50"
-                        >
-                          {addingTo === event.id ? (
-                            <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                          ) : (
-                            <ImagePlus size={13} aria-hidden="true" />
-                          )}
-                          {addingTo === event.id ? "Adding…" : "Add pictures"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => unpublish(event)}
-                          className="rounded-xl border border-sand-line px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember"
-                        >
-                          Unpublish
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeAlbum(event)}
-                          aria-label={`Delete ${event.title}`}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line px-3 py-1.5 text-xs font-semibold text-brick hover:border-brick"
-                        >
-                          <Trash2 size={13} aria-hidden="true" /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </header>
-
-                  <div
-                    // The album's own pad for more of the day: files dropped
-                    // anywhere on the pictures join this album.
-                    onDragOver={
-                      canManage
-                        ? (e) => {
-                            e.preventDefault();
-                            setDropAlbumId(event.id);
-                          }
-                        : undefined
-                    }
-                    onDragLeave={
-                      canManage
-                        ? (e) => {
-                            if (e.currentTarget === e.target) setDropAlbumId(null);
-                          }
-                        : undefined
-                    }
-                    onDrop={
-                      canManage
-                        ? (e) => {
-                            e.preventDefault();
-                            setDropAlbumId(null);
-                            const picked = mediaFrom(e.dataTransfer.files);
-                            if (picked.length > 0) void addMedia(event, picked);
-                          }
-                        : undefined
-                    }
-                    className={`grid gap-3 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3 ${
-                      dropAlbumId === event.id ? "bg-sand ring-2 ring-inset ring-ember/40" : ""
-                    }`}
-                  >
-                    {event.media.map((media) => {
-                      const url = resolveAttachmentUrl(media.url);
-                      const looksVideo = media.is_video || !isImageAttachment(media.url, media.file_name);
-                      return (
-                        <figure key={media.id} className="group relative overflow-hidden rounded-2xl border border-sand-line bg-sand">
-                          {looksVideo ? (
-                            <button type="button" onClick={() => setLightbox({ url, name: media.file_name ?? "Video", video: true })} className="block w-full">
-                              <video src={url} preload="metadata" controls={false} className="h-48 w-full object-cover sm:h-56" />
-                              <span className="absolute inset-0 flex items-center justify-center">
-                                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
-                                  <Film size={20} aria-hidden="true" />
-                                </span>
-                              </span>
-                            </button>
-                          ) : (
-                            <button type="button" onClick={() => setLightbox({ url, name: media.file_name ?? "Photo", video: false })} className="block w-full">
-                              {/* Plain img: album files are same-origin uploads
-                                  and next/image adds nothing to a cover tile. */}
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={url} alt={media.file_name ?? event.title} loading="lazy" className="h-48 w-full object-cover transition duration-300 group-hover:scale-[1.03] sm:h-56" />
-                            </button>
-                          )}
-                          {canManage && (
-                            // Always in sight rather than on hover alone: a
-                            // file is taken out from a phone too, where there
-                            // is no pointer to hover with.
-                            <button
-                              type="button"
-                              onClick={() => removeMedia(event, media)}
-                              title={`Remove ${media.file_name ?? "this file"} from the album`}
-                              aria-label="Remove this file from the album"
-                              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold text-brick shadow-sm transition hover:bg-white hover:text-red-700"
-                            >
-                              <Trash2 size={12} aria-hidden="true" /> Remove
-                            </button>
-                          )}
-                        </figure>
-                      );
-                    })}
-                  </div>
-                </article>
-              ))}
-            </div>
+            <AlbumGrid albums={events} onOpen={(album) => setOpenId(album.id)} />
           )}
         </div>
       </section>
 
-      {/* The one picker the album buttons open: which album asked is held in
-          the ref, since the picker closes before the click is answered. */}
-      {canManage && (
-        <input
-          ref={addInputRef}
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          className="hidden"
-          aria-hidden="true"
-          tabIndex={-1}
-          onChange={(e) => {
-            const target = addTargetRef.current;
-            const picked = Array.from(e.target.files ?? []);
-            if (target) void addMedia(target, picked);
-          }}
-        />
-      )}
+      {/* The one picker the album's own "Add" button opens. */}
+      <input
+        ref={addInputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          if (openAlbum) void addMedia(openAlbum, mediaFrom(e.target.files));
+        }}
+      />
 
-      {/* ── Lightbox: a photo at full size, a video with its sound. ── */}
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-          role="presentation"
-          onClick={(e) => e.target === e.currentTarget && setLightbox(null)}
-        >
-          <div className="max-h-full w-full max-w-4xl">
-            <div className="mb-3 flex items-center justify-between text-white/90">
-              <p className="truncate text-sm font-semibold">{lightbox.name}</p>
-              <button type="button" onClick={() => setLightbox(null)} aria-label="Close" className="rounded-full p-2 hover:bg-white/10">
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
-            {lightbox.video ? (
-              <video src={lightbox.url} controls autoPlay className="max-h-[80vh] w-full rounded-2xl bg-black" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={lightbox.url} alt={lightbox.name} className="max-h-[80vh] w-full rounded-2xl object-contain" />
-            )}
-          </div>
-        </div>
+      {/* ── The album, opened whole. ── */}
+      {openAlbum && (
+        <AlbumDialog
+          album={openAlbum}
+          busy={adding}
+          onClose={() => setOpenId(null)}
+          onAddFiles={() => addInputRef.current?.click()}
+          onRemoveMedia={(media) => void removeMedia(openAlbum, media)}
+          onSaveWords={(values) => saveWords(openAlbum, values)}
+          onTogglePublished={() => void togglePublished(openAlbum)}
+          onDeleteAlbum={() => void removeAlbum(openAlbum)}
+        />
       )}
 
       {/* ── Composer: the day, its words, its files. ── */}

@@ -2404,10 +2404,37 @@ class CanManageAnnouncements(permissions.BasePermission):
 
 class CanManageMoments(permissions.BasePermission):
     """Moments opens at the top to the administrators and to the deaconate;
-    everyone else reads the wall."""
+    a department's or ministry's desk keeps its own albums; everyone else
+    reads the wall."""
 
     def has_permission(self, request, view):
-        return can_manage_moments(request.user)
+        if can_manage_moments(request.user):
+            return True
+        # A new album says which area holds it, and that area's desk may open
+        # it. Nothing else is refused here: an album already on the wall is
+        # judged by its own area, in the object check below.
+        if request.method == 'POST':
+            return can_manage_area_moments(request.user, request.data.get('department'))
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        return can_manage_area_moments(request.user, obj.department)
+
+
+def can_manage_area_moments(user, department):
+    """Who keeps one album: the church's wall is the office's and the
+    deaconate's, and an area's own albums are its desk's.
+
+    Read on every album the API serves (``can_manage``) and asked again on
+    every write, so the panels offer their buttons only where the server
+    would answer yes.
+    """
+    if can_manage_moments(user):
+        return True
+    code = (department or '').strip()
+    if not code or not user or not user.is_authenticated:
+        return False
+    return can_manage_department(user, code)
 
 
 def can_manage_moments(user):
@@ -2454,6 +2481,12 @@ class ChurchEventView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = ChurchEvent.objects.all()
+        # One area's page reads that area's own albums — the days its desk
+        # documented — so a ministry never carries another's pictures. The
+        # church's wall asks for nothing and reads every published album.
+        area = (self.request.query_params.get('department') or '').strip()
+        if area:
+            queryset = queryset.filter(department=area)
         # The desk can read what it has not let out yet; the wall serves only
         # what is published — the flag means nothing to a member's request.
         wants_drafts = self.request.query_params.get('include_unpublished') == 'true'
@@ -2482,6 +2515,11 @@ class ChurchEventDetailView(generics.RetrieveUpdateDestroyAPIView):
         event = generics.get_object_or_404(ChurchEvent, pk=self.kwargs['pk'])
         if self.request.method == 'GET' and not event.published:
             raise Http404
+        # The generic view's own lookup is bypassed here, so the album's own
+        # permission check is asked by hand: who may keep this album is a
+        # question about the row — its area's desk, or the office — not about
+        # the endpoint.
+        self.check_object_permissions(self.request, event)
         return event
 
     def perform_destroy(self, instance):

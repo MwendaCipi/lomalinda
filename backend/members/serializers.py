@@ -464,15 +464,40 @@ class ChurchEventSerializer(serializers.ModelSerializer):
     )
     posted_by_name = serializers.SerializerMethodField()
     media_count = serializers.IntegerField(source='media.count', read_only=True)
+    # Whether this reader may keep this album — add to it, take a file out,
+    # correct its words, take it down. The area's own desk may; the office and
+    # the deaconate may anywhere; a member may not, so the desk never offers a
+    # button the server would refuse.
+    can_manage = serializers.SerializerMethodField()
 
     class Meta:
         model = ChurchEvent
         fields = (
-            'id', 'title', 'description', 'happened_on', 'published',
-            'posted_by_name', 'media_count', 'media',
+            'id', 'title', 'description', 'happened_on', 'published', 'department',
+            'posted_by_name', 'media_count', 'media', 'can_manage',
             'media_files', 'remove_media_ids', 'video_links', 'created_at',
         )
         read_only_fields = ('created_at',)
+
+    def get_can_manage(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return False
+        # Imported here rather than at the top: the view module imports this
+        # one, so the gate it keeps is asked lazily, at read time.
+        from .views import can_manage_area_moments
+        return can_manage_area_moments(user, obj.department)
+
+    def validate_department(self, value):
+        """The area an album belongs to is one of the church's own areas:
+        blank is the church's wall, and anything else must name a real desk."""
+        code = (value or '').strip()
+        if not code:
+            return ''
+        if not Department.objects.filter(code=code, is_active=True).exists():
+            raise serializers.ValidationError('That is not one of the church\u2019s departments.')
+        return code
 
     def get_posted_by_name(self, obj):
         if not obj.posted_by_id:

@@ -16491,6 +16491,72 @@ class ChurchEventMomentsTests(APITestCase):
         response = self.client.post('/api/members/church-events/', {'title': 'Choir Sunday'}, format='json')
         self.assertEqual(response.status_code, 403)
 
+    def _choir_leader(self):
+        """The choir's own leader — the desk that keeps the choir's albums."""
+        leader = User.objects.create_user('choir.leader', 'choir.leader@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=leader, role='member', roles='member')
+        choir = Department.objects.get(code='choir')
+        DepartmentAssignment.objects.create(
+            department=choir,
+            role=DepartmentRole.objects.get(department=choir, name='Leader'),
+            member=leader, kind='leader',
+        )
+        return leader
+
+    def test_an_areas_desk_keeps_its_own_albums(self):
+        """A ministry's page reads only its own moments — not the church's
+        other albums — and its own desk keeps them from that page, while
+        another area's album is not its to touch."""
+        leader = self._choir_leader()
+        self.client.force_authenticate(leader)
+        posted = self.client.post('/api/members/church-events/', {
+            'title': 'Choir Festival', 'department': 'choir',
+            'media_files': [self._jpg('festival.jpg')],
+        }, format='multipart')
+        self.assertEqual(posted.status_code, 201, posted.data)
+        self.assertEqual(posted.data['department'], 'choir')
+        self.assertTrue(posted.data['can_manage'])
+        choir_album = posted.data['id']
+
+        # One area's page carries one area's albums.
+        self.assertEqual(
+            [row['title'] for row in self.client.get('/api/members/church-events/?department=choir').data],
+            ['Choir Festival'],
+        )
+        self.assertEqual(self.client.get('/api/members/church-events/?department=aym').data, [])
+
+        # The desk adds the day's second picture from the album itself.
+        added = self.client.patch(f'/api/members/church-events/{choir_album}/', {
+            'media_files': [self._jpg('festival-2.jpg')],
+        }, format='multipart')
+        self.assertEqual(added.status_code, 200)
+        self.assertEqual(added.data['media_count'], 2)
+
+        # Another area's album is not the choir's to keep, and the choir's
+        # desk may not open an album in another area either.
+        self.client.force_authenticate(self.admin)
+        other = self.client.post('/api/members/church-events/', {
+            'title': 'Youth Camp', 'department': 'aym',
+        }, format='json')
+        self.assertEqual(other.status_code, 201, other.data)
+        self.client.force_authenticate(leader)
+        refused = self.client.patch(f'/api/members/church-events/{other.data["id"]}/', {
+            'title': 'Mine now',
+        }, format='json')
+        self.assertEqual(refused.status_code, 403)
+        elsewhere = self.client.post('/api/members/church-events/', {
+            'title': 'Not mine', 'department': 'aym',
+        }, format='json')
+        self.assertEqual(elsewhere.status_code, 403)
+
+    def test_an_album_belongs_to_one_of_the_churchs_areas(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/members/church-events/', {
+            'title': 'Nowhere in particular', 'department': 'not_a_desk',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('department', response.data)
+
     def test_the_deaconate_documents_a_moment_with_pictures_and_a_video_link(self):
         """The deaconate stands in the middle of the church's days and holds
         their pictures, so it documents its own moments: pictures as files,

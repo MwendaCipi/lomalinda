@@ -7045,14 +7045,16 @@ function DepartmentDetail({
   );
   const canOpenEldershipRota = canOpenOfficeViews;
   // May this viewer document a moment from the desk? The same answer the
-  // server gives on the POST — administrators, and the deaconate, whose desk
-  // holds the pictures of the church's days — so the button never appears
-  // where it would come back refused.
+  // server gives on the POST — administrators, the deaconate whose desk holds
+  // the pictures of the church's days, and this desk's own leadership, whose
+  // albums these are — so the button never appears where it would come back
+  // refused.
   const canDocumentMoments = Boolean(
     me &&
       (me.is_staff ||
         me.is_superuser ||
         viewerRoles.includes("admin") ||
+        holdsOffice ||
         (isDeaconate && onRoll)),
   );
   // The pastorate carries no Event Calendar and no duty rota of its own — the
@@ -9888,7 +9890,11 @@ function DepartmentDetail({
           lived the day. Every ministry and department desk carries this view; the
           Treasury and the Clerkship do not (see `areaHasMoments`). */}
       {subTab === "moments" && areaHasMoments(department.code) && (
-        <AreaMomentsPanel departmentLabel={department.label} canManage={canDocumentMoments} />
+        <AreaMomentsPanel
+          departmentLabel={department.label}
+          department={department.code}
+          canManage={canDocumentMoments}
+        />
       )}
 
       {/* Messaging — the desk's own text to its roll: the composer over the

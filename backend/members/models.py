@@ -1504,6 +1504,14 @@ class ChurchEvent(models.Model):
     # album whose day is simply the title's wording.
     happened_on = models.DateField(null=True, blank=True, help_text="The day the event happened; orders the albums, newest first")
     posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='church_events')
+    # The area whose desk documented the day. Blank is the church's own wall —
+    # the office's and the deaconate's albums, which every page shows as the
+    # church's news. A department's or ministry's albums are read, kept and
+    # corrected on that area's own page, not mixed into another's.
+    department = models.CharField(
+        max_length=100, blank=True, default='', db_index=True,
+        help_text="The area whose desk keeps this album; blank for the church's own wall",
+    )
     published = models.BooleanField(default=True, help_text="Unpublished albums stay behind the desk until the office lets them out")
     #: Links to videos the day's footage lives on elsewhere — a YouTube or
     #: Vimeo page. An album takes links rather than uploaded video for now

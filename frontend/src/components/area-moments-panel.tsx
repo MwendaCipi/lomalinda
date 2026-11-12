@@ -1,44 +1,28 @@
 "use client";
 
 /**
- * Moments on a ministry's or department's desk — the church's photo and video
- * wall, read from the area that lived the day.
+ * Moments on a ministry's or department's desk — the days that area lived,
+ * kept as albums of their own.
+ *
+ * The desk reads only its own area's albums (the API is asked for them by the
+ * area's code), so a ministry never carries another's pictures, and it keeps
+ * them from here: opening an album, adding the day's pictures or videos,
+ * taking one out, correcting the words, taking the album off the wall. The
+ * church-wide wall — the office's and the deaconate's albums — stays on the
+ * public Moments page; what an area documents is the area's own record.
  *
  * Every area carries this view except the two office record desks (Treasury
- * and Clerkship — see `areaHasMoments` in the navigation registry), because
- * the wall itself is the church's own: one set of event albums, whichever
- * desk opens it. Documenting is the server's gate to keep — administrators
- * and the deaconate may post (`can_manage_moments` on the API) — so the
- * composer only appears for a viewer the server would answer anyway, and a
- * reader never meets a button that comes back refused.
+ * and Clerkship — see `areaHasMoments`); the server's `can_manage` on each
+ * album decides whose hand sees the keeping buttons.
  */
 
-import { useEffect, useState } from "react";
-import { ExternalLink, Images, Plus } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Images, Plus } from "lucide-react";
+
+import { AlbumDialog, AlbumGrid, type MomentAlbum, type MomentMedia } from "@/components/moments-album";
 import { showAlert } from "@/lib/alerts";
-import { dayFirst } from "@/lib/dates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-/** One picture inside a moment's album, as the wall serves it. */
-interface MomentMedia {
-  id: number;
-  url: string;
-  file_name: string | null;
-  is_video: boolean;
-}
-
-/** One documented moment on the Moments wall: the day, its words, its album. */
-interface MomentAlbum {
-  id: number;
-  title: string;
-  description: string;
-  happened_on: string | null;
-  posted_by_name: string | null;
-  media_count: number;
-  media: MomentMedia[];
-  video_links: string[];
-}
 
 /** Authenticated call against the members API. */
 async function apiFetch(path: string, init?: RequestInit) {
@@ -56,7 +40,7 @@ async function apiFetch(path: string, init?: RequestInit) {
   });
 }
 
-/** The pictures and videos among what was dragged in, the rest left behind. */
+/** The pictures and videos among what was chosen, the rest left behind. */
 function mediaFrom(list: FileList | null): File[] {
   return Array.from(list ?? []).filter(
     (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
@@ -75,10 +59,14 @@ function firstErrorMessage(payload: unknown): string {
 
 export function AreaMomentsPanel({
   departmentLabel,
+  department,
   canManage = false,
 }: {
   /** The area's name, used in the empty state and the posting confirmations. */
   departmentLabel: string;
+  /** The area whose albums this page reads and writes; blank is the church's
+      own wall, which only the office and the deaconate keep. */
+  department?: string;
   /**
    * May this viewer document a moment? The server decides the same question
    * on the POST; the desk only hides the button where the answer would be no.
@@ -96,33 +84,35 @@ export function AreaMomentsPanel({
   const [links, setLinks] = useState("");
   // The pad lights up while files are dragged over it.
   const [dragging, setDragging] = useState(false);
+  // The album opened from the wall, and the file picker that adds to it.
+  const [openId, setOpenId] = useState<number | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const [adding, setAdding] = useState(false);
 
-  // The wall is read when the view is opened — the list is what most visits
-  // are here for. A manager reads what the wall has not let out yet; everyone
-  // else is served the published albums only, the same as the public Moments
-  // page. State is settled inside the promise's callbacks, and the request is
-  // cancelled if the view closes before it lands.
+  const load = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (canManage) params.set("include_unpublished", "true");
+    if (department) params.set("department", department);
+    const query = params.toString();
+    try {
+      const res = await apiFetch(`/church-events/${query ? `?${query}` : ""}`);
+      const data = res.ok ? await res.json().catch(() => []) : [];
+      setMoments(Array.isArray(data) ? (data as MomentAlbum[]) : []);
+    } catch {
+      setMoments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [canManage, department]);
+
   useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const token = typeof window === "undefined" ? null : localStorage.getItem("access_token");
-      const query = canManage ? "?include_unpublished=true" : "";
-      try {
-        const res = await fetch(`${API_URL}/api/members/church-events/${query}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const data = res.ok ? await res.json().catch(() => []) : [];
-        if (alive) setMoments(Array.isArray(data) ? (data as MomentAlbum[]) : []);
-      } catch {
-        if (alive) setMoments([]);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [canManage]);
+    // Deferred by a microtask: the effect body itself stays setState-free.
+    void Promise.resolve().then(load);
+  }, [load]);
+
+  // The album stays as the last read of it — a save replaces the list, and
+  // the open dialog follows the row it is showing.
+  const openAlbum = moments.find((album) => album.id === openId) ?? null;
 
   const closeComposer = () => {
     setComposerOpen(false);
@@ -134,9 +124,8 @@ export function AreaMomentsPanel({
   };
 
   /**
-   * Document a moment: the day, a few words, the pictures, and the address
-   * of any video of it. It goes straight out — the desk documents, the wall
-   * shows — because a moment is the church's own news.
+   * Document a moment: the day, a few words, the pictures and videos, and the
+   * address of any video kept elsewhere. It goes into this area's albums.
    */
   const documentMoment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -153,6 +142,7 @@ export function AreaMomentsPanel({
       body.append("title", trimmedTitle);
       if (note.trim()) body.append("description", note.trim());
       if (day) body.append("happened_on", day);
+      if (department) body.append("department", department);
       files.forEach((file) => body.append("media_files", file));
       videoLinks.forEach((link) => body.append("video_links", link));
 
@@ -168,11 +158,98 @@ export function AreaMomentsPanel({
       const album = (await res.json()) as MomentAlbum;
       setMoments((prev) => [album, ...prev]);
       closeComposer();
-      showAlert("Moment documented", `"${trimmedTitle}" is on the Moments wall.`, "success");
+      showAlert("Moment documented", `"${trimmedTitle}" is on ${departmentLabel}'s Moments.`, "success");
     } catch {
       showAlert("The moment was not documented", "Check your connection and try again.", "error");
     } finally {
       setPosting(false);
+    }
+  };
+
+  /** More of the day: files added to an album already on the wall. */
+  const addMedia = async (album: MomentAlbum, picked: File[]) => {
+    if (picked.length === 0) return;
+    setAdding(true);
+    try {
+      const body = new FormData();
+      picked.forEach((file) => body.append("media_files", file));
+      const res = await apiFetch(`/church-events/${album.id}/`, { method: "PATCH", body });
+      if (!res.ok) {
+        showAlert(
+          "The files were not added",
+          firstErrorMessage(await res.json().catch(() => null)) || "Please try again.",
+          "error",
+        );
+        return;
+      }
+      await load();
+    } catch {
+      showAlert("The files were not added", "Check your connection and try again.", "error");
+    } finally {
+      setAdding(false);
+      if (addInputRef.current) addInputRef.current.value = "";
+    }
+  };
+
+  const removeMedia = async (album: MomentAlbum, media: MomentMedia) => {
+    const answer = await showAlert(
+      "Take this file out of the album?",
+      "It disappears from Moments. This cannot be undone.",
+      "warning",
+      { showCancelButton: true, confirmButtonText: "Take it out", cancelButtonText: "Keep it" },
+    );
+    if (!answer.isConfirmed) return;
+    const res = await apiFetch(`/church-events/${album.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ remove_media_ids: [media.id] }),
+    });
+    if (res.ok) await load();
+    else showAlert("Could not take it out", "Please try again.", "error");
+  };
+
+  const saveWords = async (
+    album: MomentAlbum,
+    values: { title: string; description: string; happened_on: string },
+  ) => {
+    const res = await apiFetch(`/church-events/${album.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        title: values.title,
+        description: values.description,
+        happened_on: values.happened_on || null,
+      }),
+    });
+    if (!res.ok) {
+      showAlert("Could not save the words", firstErrorMessage(await res.json().catch(() => null)) || "Please try again.", "error");
+      return false;
+    }
+    await load();
+    return true;
+  };
+
+  const togglePublished = async (album: MomentAlbum) => {
+    const res = await apiFetch(`/church-events/${album.id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ published: !album.published }),
+    });
+    if (res.ok) await load();
+    else showAlert("Could not change the album", "Please try again.", "error");
+  };
+
+  const deleteAlbum = async (album: MomentAlbum) => {
+    const answer = await showAlert(
+      `Delete “${album.title}” and all its files?`,
+      "The whole album is gone for good. This cannot be undone.",
+      "warning",
+      { showCancelButton: true, confirmButtonText: "Delete the album", cancelButtonText: "Keep it" },
+    );
+    if (!answer.isConfirmed) return;
+    const res = await apiFetch(`/church-events/${album.id}/`, { method: "DELETE" });
+    if (res.ok) {
+      setOpenId(null);
+      await load();
+    } else {
+      showAlert("Could not delete the album", "Please try again.", "error");
     }
   };
 
@@ -184,7 +261,7 @@ export function AreaMomentsPanel({
             <Images className="h-4 w-4 text-ember" aria-hidden="true" /> Moments
           </h3>
           <p className="mt-0.5 text-xs text-moss">
-            The days {departmentLabel} has lived, picture by picture — the same wall the whole church reads.
+            The days {departmentLabel} has lived, album by album — {departmentLabel}&apos;s own pictures and videos.
           </p>
         </div>
         {canManage && (
@@ -279,6 +356,23 @@ export function AreaMomentsPanel({
               />
             </label>
           </div>
+          {files.length > 0 && (
+            <ul className="space-y-1.5">
+              {files.map((file, index) => (
+                <li key={`${file.name}-${index}`} className="flex items-center justify-between rounded-xl bg-white px-3 py-1.5 text-xs">
+                  <span className="min-w-0 truncate font-semibold text-bark">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                    aria-label={`Remove ${file.name}`}
+                    className="shrink-0 text-moss hover:text-brick"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <button
             type="submit"
             disabled={posting || !title.trim()}
@@ -296,66 +390,39 @@ export function AreaMomentsPanel({
           </div>
         ) : moments.length === 0 ? (
           <div className="rounded-2xl border border-sand-soft bg-white p-8 text-center text-xs text-moss">
-            No moment has been documented yet. The Sabbath that just was — its pictures belong on the wall.
+            No moment has been documented here yet. The Sabbath that just was — its pictures belong on {departmentLabel}&apos;s wall.
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {moments.map((album) => {
-              const cover = album.media.find((picture) => !picture.is_video);
-              const videoLinks = album.video_links ?? [];
-              return (
-                <article
-                  key={album.id}
-                  className="overflow-hidden rounded-2xl border border-sand-soft bg-white shadow-sm"
-                >
-                  {cover ? (
-                    // The wall's own tiles are plain images: the pictures are
-                    // the point, and a next/image proxy adds nothing here.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover.url} alt={album.title} className="h-40 w-full object-cover" />
-                  ) : (
-                    <div className="flex h-40 w-full items-center justify-center bg-sand-card text-moss">
-                      <Images className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                  )}
-                  <div className="space-y-2 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-sm font-bold text-bark">{album.title}</h4>
-                      {album.happened_on && (
-                        <span className="shrink-0 text-[11px] font-bold text-bark">{dayFirst(album.happened_on)}</span>
-                      )}
-                    </div>
-                    {album.description && <p className="text-xs text-moss">{album.description}</p>}
-                    <p className="text-[11px] text-moss">
-                      {album.media_count} {album.media_count === 1 ? "picture" : "pictures"}
-                      {videoLinks.length > 0 &&
-                        ` · ${videoLinks.length} ${videoLinks.length === 1 ? "video" : "videos"}`}
-                      {album.posted_by_name && ` · by ${album.posted_by_name}`}
-                    </p>
-                    {videoLinks.length > 0 && (
-                      <ul className="space-y-1">
-                        {videoLinks.map((link, idx) => (
-                          <li key={`${album.id}-link-${idx}`}>
-                            <a
-                              href={link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-ember hover:underline"
-                            >
-                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                              {link.replace(/^https?:\/\//, "").slice(0, 42)}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+          <AlbumGrid albums={moments} onOpen={(album) => setOpenId(album.id)} />
         )}
       </div>
+
+      {/* The one picker the album's own "Add" button opens. */}
+      <input
+        ref={addInputRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          if (openAlbum) void addMedia(openAlbum, mediaFrom(e.target.files));
+        }}
+      />
+
+      {openAlbum && (
+        <AlbumDialog
+          album={openAlbum}
+          busy={adding}
+          onClose={() => setOpenId(null)}
+          onAddFiles={() => addInputRef.current?.click()}
+          onRemoveMedia={(media) => void removeMedia(openAlbum, media)}
+          onSaveWords={(values) => saveWords(openAlbum, values)}
+          onTogglePublished={() => void togglePublished(openAlbum)}
+          onDeleteAlbum={() => void deleteAlbum(openAlbum)}
+        />
+      )}
     </div>
   );
 }
