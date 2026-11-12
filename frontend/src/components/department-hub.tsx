@@ -8745,7 +8745,12 @@ function DepartmentDetail({
             // where their rows are the content and air would only be lost
             // space.
             ? "gap-3 overflow-y-auto p-2 sm:p-3"
-            : "gap-3 overflow-hidden p-0"
+            : sharingWall
+              // Sharing (and the announcements page drawing the same feed)
+              // scrolls the page freely like the fellowship feed — never a
+              // clipped inner room with an edge for posts to slide under.
+              ? "gap-2 overflow-y-auto p-1 custom-hover-scrollbar"
+              : "gap-3 overflow-hidden p-0"
           : sharingWall
             ? "gap-2 overflow-y-auto p-1 custom-hover-scrollbar"
             : deskFillsPhone || subTab === "calendar"
