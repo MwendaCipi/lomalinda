@@ -21765,6 +21765,85 @@ class DepartmentLetterFlowTests(APITestCase):
         self.assertIn('/my-areas?area=pastorate&view=letter-approvals', notice[0].body)
 
 
+class DepartmentPolicyTests(APITestCase):
+    """A desk's policy: one page its leadership writes and its roll reads, and
+    a copy of it filed for signatures as a letter marked as a policy."""
+
+    def setUp(self):
+        from .models import DepartmentPolicy  # noqa: F401 — the row this test keeps
+
+        self.welfare = Department.objects.get_or_create(
+            code='welfare', defaults={'name': 'Welfare', 'group': 'department'},
+        )[0]
+        self.leader_role = DepartmentRole.objects.get_or_create(
+            department=self.welfare, name='Leader', defaults={'has_assistant': True},
+        )[0]
+        self.leader = User.objects.create_user('pol.leader', 'pol.leader@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.leader, role='member', roles='member')
+        DepartmentAssignment.objects.create(
+            department=self.welfare, member=self.leader, role=self.leader_role, kind='leader',
+        )
+        self.reader = User.objects.create_user('pol.reader', 'pol.reader@example.com', 'StrongPass#2026')
+        MemberProfile.objects.create(user=self.reader, role='member', roles='member')
+        DepartmentMembership.objects.create(department='welfare', member=self.reader)
+
+    def _save_policy(self):
+        self.client.force_authenticate(self.leader)
+        return self.client.put('/api/members/departments/welfare/policy/', {
+            'title': 'Welfare Policy',
+            'content': 'The desk helps a member in need once the committee has met.',
+        }, format='json')
+
+    def test_the_page_opens_empty_and_the_leadership_writes_it(self):
+        from .models import DepartmentPolicy
+
+        self.client.force_authenticate(self.reader)
+        empty = self.client.get('/api/members/departments/welfare/policy/')
+        self.assertEqual(empty.status_code, status.HTTP_200_OK, empty.data)
+        self.assertEqual(empty.data['content'], '')
+        self.assertFalse(empty.data['can_edit'])
+
+        saved = self._save_policy()
+        self.assertEqual(saved.status_code, status.HTTP_200_OK, saved.data)
+        row = DepartmentPolicy.objects.get(department=self.welfare)
+        self.assertEqual(row.title, 'Welfare Policy')
+        self.assertEqual(row.updated_by, self.leader)
+
+        # The roll reads the words; it does not rewrite them.
+        self.client.force_authenticate(self.reader)
+        read = self.client.get('/api/members/departments/welfare/policy/')
+        self.assertEqual(read.data['content'], row.content)
+        self.assertEqual(read.data['updated_by_name'], self.leader.get_full_name() or self.leader.username)
+        refused = self.client.put('/api/members/departments/welfare/policy/', {
+            'title': 'Mine now', 'content': 'No.',
+        }, format='json')
+        self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_a_policy_copy_is_a_letter_and_is_listed_apart_from_the_rest(self):
+        self._save_policy()
+        self.client.force_authenticate(self.leader)
+
+        sent = self.client.post('/api/members/department-letters/', {
+            'department': 'welfare',
+            'title': 'Welfare Policy',
+            'content': 'The desk helps a member in need once the committee has met.',
+            'is_policy': True,
+        }, format='json')
+        self.assertEqual(sent.status_code, status.HTTP_201_CREATED, sent.data)
+        self.assertTrue(sent.data['is_policy'])
+
+        # An ordinary letter from the same desk is not one of the copies.
+        self.client.post('/api/members/department-letters/', {
+            'department': 'welfare',
+            'title': 'Thanks for the food parcels',
+            'content': 'Thank you for the parcels.',
+        }, format='json')
+
+        copies = self.client.get('/api/members/department-letters/?department=welfare&policy=1')
+        self.assertEqual(copies.status_code, status.HTTP_200_OK, copies.data)
+        self.assertEqual([row['title'] for row in copies.data], ['Welfare Policy'])
+
+
 class DepartmentLetterheadTests(DepartmentLetterFlowTests):
     """The church's own letterhead, created at the letters desk.
 

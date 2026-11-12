@@ -50,7 +50,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentPolicy, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
 from .models import ReportSigning, ReportSignature
 from .mpesa import MpesaConfigurationError, initiate_b2c_payout, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -17492,6 +17492,62 @@ def _letter_desk_link(department):
     return f'{settings.FRONTEND_URL}/my-areas?area={department.code}&view={view}'
 
 
+class DepartmentPolicyView(APIView):
+    """A desk's own policy: the words its office keeps, read and rewritten.
+
+    GET hands the page as it stands — an empty sheet before the first save,
+    so the desk always has somewhere to write — and says whether this reader
+    may change it. PUT saves the words in place. The desk's leadership writes
+    it and the roll reads it, the same split the rest of the desk keeps; a
+    church officer may write it too, since the office answers for every
+    desk's paper.
+
+    The sheet itself is not drawn here: the paper is the church's letterhead,
+    printed by the letters preview, and a policy needing signatures is filed
+    as a letter so the pastor's and the clerk's pens reach it as they reach
+    any other.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _payload(row, code, can_edit):
+        writer = row.updated_by if row and row.updated_by_id else None
+        return {
+            'department': code,
+            'title': row.title if row else 'Policy',
+            'content': row.content if row else '',
+            'updated_at': row.updated_at if row else None,
+            'updated_by_name': ((writer.get_full_name() or writer.username) if writer else ''),
+            'can_edit': can_edit,
+        }
+
+    def get(self, request, department):
+        if not Department.objects.filter(code=department).exists():
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        row = DepartmentPolicy.objects.select_related('updated_by').filter(department__code=department).first()
+        return Response(self._payload(row, department, can_manage_department(request.user, department)))
+
+    def put(self, request, department):
+        target = Department.objects.filter(code=department, is_active=True).first()
+        if target is None:
+            return Response({'detail': 'Unknown department.'}, status=status.HTTP_404_NOT_FOUND)
+        if not can_manage_department(request.user, department):
+            return Response(
+                {'detail': "Only this department's leadership or a church officer can write its policy."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        title = str(request.data.get('title') or '').strip() or 'Policy'
+        content = str(request.data.get('content') or '')
+        if len(title) > 200:
+            return Response({'title': 'Keep the title under 200 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        row, _created = DepartmentPolicy.objects.update_or_create(
+            department=target,
+            defaults={'title': title, 'content': content, 'updated_by': request.user},
+        )
+        return Response(self._payload(row, department, True))
+
+
 class DepartmentLetterListCreateView(APIView):
     """List or create official department letters.
 
@@ -17522,6 +17578,10 @@ class DepartmentLetterListCreateView(APIView):
 
         if status_filter:
             qs = qs.filter(status=status_filter)
+        # A desk's policy copies are letters too; the policy page asks for its
+        # own by name rather than reading every paper the desk has written.
+        if str(request.query_params.get('policy') or '').strip().lower() in ('1', 'true', 'yes'):
+            qs = qs.filter(is_policy=True)
 
         serializer = DepartmentLetterRequestSerializer(qs, many=True)
         return Response(serializer.data)
@@ -17550,6 +17610,7 @@ class DepartmentLetterListCreateView(APIView):
             title=title[:200],
             content=content,
             status='pending_pastor',
+            is_policy=bool(request.data.get('is_policy')),
             letter_date=str(request.data.get('letter_date') or '').strip()[:40],
             recipient_address=str(request.data.get('recipient_address') or '').strip()[:255],
             recipient_name=str(request.data.get('recipient_name') or '').strip()[:120],

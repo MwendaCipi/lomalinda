@@ -2958,6 +2958,11 @@ class DepartmentLetterRequest(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_pastor', db_index=True)
+    # A desk's policy sent round for signatures is filed as a letter, so the
+    # pastor's and the clerk's pens reach it the way they reach any paper.
+    # This marks it as one, so the policy page lists its own copies apart
+    # from the desk's ordinary letters.
+    is_policy = models.BooleanField(default=False, db_index=True)
     # The letter's own front matter, kept as the writer typed it: the date
     # the letter carries and the one address the recipient church receives
     # it at. They print above and beside the subject on the paper itself —
@@ -3010,6 +3015,34 @@ class DepartmentLetterRequest(models.Model):
     def __str__(self):
         return f"{self.department.name} letter: {self.title} ({self.status})"
 
+
+class DepartmentPolicy(models.Model):
+    """A desk's own policy: one page of words its office keeps.
+
+    Welfare is the first desk to carry one — the policy its committee works
+    by — but nothing here is welfare's alone: a department keeps exactly one
+    policy row, edited in place rather than stacked as versions. The words
+    are the desk's to write; the paper is the church's own letterhead (the
+    same sheet the letters preview prints on), and a policy that needs a
+    signature is filed through the letters flow, so the pastor's and the
+    clerk's pens reach it the way they reach any letter.
+    """
+
+    department = models.OneToOneField('Department', on_delete=models.CASCADE, related_name='policy')
+    title = models.CharField(max_length=200, default='Policy')
+    content = models.TextField(blank=True, default='')
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='department_policies_written',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['department_id']
+
+    def __str__(self):
+        return f"{self.department.name} policy: {self.title}"
 
 
 class Expenditure(models.Model):

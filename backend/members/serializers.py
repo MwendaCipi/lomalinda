@@ -2536,10 +2536,10 @@ class DepartmentLetterRequestSerializer(serializers.ModelSerializer):
             'pastor_signed_by', 'pastor_name', 'pastor_signed_at',
             'clerk_signed_by', 'clerk_name', 'clerk_signed_at',
             'reply', 'declined_by', 'declined_by_name',
-            'created_at', 'updated_at',
+            'is_policy', 'created_at', 'updated_at',
         )
         read_only_fields = (
-            'id', 'department', 'requested_by', 'status',
+            'id', 'department', 'requested_by', 'status', 'is_policy',
             'pastor_signed_by', 'pastor_signed_at',
             'clerk_signed_by', 'clerk_signed_at',
             'reply', 'declined_by', 'created_at', 'updated_at',

@@ -1468,7 +1468,7 @@ export function areaHasMoments(code: string): boolean {
  * and rosters the church's people rather than writing its paper, so the
  * letters page moves to the desk that does write it (the eldership's).
  */
-const LETTERS_LESS_AREA_CODES = new Set(["personal_ministries"]);
+const LETTERS_LESS_AREA_CODES = new Set(["personal_ministries", "welfare"]);
 
 /** Does this area's desk carry a Letters view? Asked by the strip that draws a
  *  desk's pages and by the view itself, so the two cannot disagree. */

@@ -110,6 +110,7 @@ import { RecordList } from "./record-list";
 import { SectionNav, SubNav } from "./sub-nav";
 import { CampaignManagement } from "./campaign-management";
 import { DepartmentLettersPanel, WriteLetterModal } from "./department-letters";
+import { DepartmentPolicyPanel } from "./department-policy";
 import { formatOfficeRole, formatRoles, NO_ROLE_LABEL, seatTitle } from "./roles-combobox";
 import { ComboboxPopover } from "./combobox-popover";
 import { LessonOrdersPanel } from "@/components/lesson-orders-panel";
@@ -6748,7 +6749,10 @@ type DeptSubTab =
   | "treasury-approvals"
   | "letter-approvals"
   | "spiritual"
-  | "church-members";
+  | "church-members"
+  // The welfare desk's own policy — one page of words its office keeps,
+  // printed on the church's letterhead and sendable for signatures.
+  | "policy";
 
 /**
  * The month a search names, as an index into the year's wall: "mar",
@@ -6852,6 +6856,9 @@ function DepartmentDetail({
   const isDeaconate = department.code === "deaconate";
   const isEldership = department.code === "eldership";
   const isPersonalMinistries = department.code === "personal_ministries";
+  // Welfare is the desk of the church's compassion, not of its roster: it
+  // keeps no duty rota of who serves on a Sabbath.
+  const isWelfare = department.code === "welfare";
   const onConsole = usePathname().startsWith("/administration");
   // Whether the console's own strip already names the deaconate's pages: it
   // does on every one of them (`?tab=deaconate-*`), and not on the desk opened
@@ -7600,6 +7607,10 @@ function DepartmentDetail({
       ...(areaHasMessaging(department.code)
         ? [{ key: "messaging", label: "Messaging", short: "Messaging", icon: MessageSquare }]
         : []),
+      // Welfare keeps its policy on the desk: the words its committee works
+      // by, printed on the church's own letterhead and sent round the offices
+      // for signatures when it changes.
+      ...(isWelfare ? [{ key: "policy", label: "Policy", short: "Policy", icon: FileText }] : []),
       // The church's leadership register — who leads each office, ministry
       // and department. It sits on the desk that appoints them, and opens the
       // directory the console holds.
@@ -7664,7 +7675,7 @@ function DepartmentDetail({
       // rota — get no second page. Nor does the pastorate keep one at all: the
       // office answers the church's asks (treasury, letters, spiritual) rather
       // than rostering who serves on a Sabbath.
-      ...(!isDeaconate && !isMusic && !isSabbathSchool && !isPastorate
+      ...(!isDeaconate && !isMusic && !isSabbathSchool && !isPastorate && !isWelfare
         ? [
             {
               key: "pulpit-team",
@@ -7697,7 +7708,7 @@ function DepartmentDetail({
           ]
         : []),
     ];
-  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code, waitingJoins, pendingToggles.treasury, pendingToggles.letters, pendingToggles.spiritual, pendingToggles.prayerCells, pendingToggles.lessonOrders]);
+  }, [unitsKey, hasMemberUnitPages, isMusic, isSabbathSchool, canKeepBaptismalClass, isDeaconate, isEldership, isPersonalMinistries, isWelfare, keepsTheWeek, keepsLeadership, canOpenOfficeViews, isPastor, isPastorate, department.code, waitingJoins, pendingToggles.treasury, pendingToggles.letters, pendingToggles.spiritual, pendingToggles.prayerCells, pendingToggles.lessonOrders]);
 
   // The pastorate's strip reads Sharing first, Requests second, and keeps
   // Team where Requests stood: the office publishes its notices as it opens,
@@ -9357,7 +9368,12 @@ function DepartmentDetail({
           state until the first letter exists; the panel below the list is
           where a new one is written. While the composer is open the page
           stands down, the sheet taking the whole view with its own way back. */}
-      {subTab === "letters" && !showWriteLetter && (
+      {subTab === "policy" && isWelfare && (
+        <div className="h-full min-h-0 overflow-y-auto custom-hover-scrollbar">
+          <DepartmentPolicyPanel code={department.code} />
+        </div>
+      )}
+      {subTab === "letters" && areaHasLetters(department.code) && !showWriteLetter && (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="custom-hover-scrollbar min-h-0 flex-1 overflow-y-auto rounded-2xl border border-sand-line bg-white shadow-sm">
             <DepartmentLettersPanel
@@ -9802,7 +9818,7 @@ function DepartmentDetail({
           on Personal Ministries, this desk's own duty rota everywhere else.
           Rostered on the same panel the deaconate keeps its duty on, so the
           desk hands it over with its own desk's lines. */}
-      {subTab === "pulpit-team" && !isDeaconate && !isMusic && !isSabbathSchool && !isPastorate && (
+      {subTab === "pulpit-team" && !isDeaconate && !isMusic && !isSabbathSchool && !isPastorate && !isWelfare && (
         <div className="h-full min-h-0">
           <DeaconateManager
             initialTab="rota"
