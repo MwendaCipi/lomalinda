@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, Film, Images, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { CalendarDays, Film, ImagePlus, Images, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import { useHeaderData } from "@/hooks/use-header-data";
 import { isImageAttachment, resolveAttachmentUrl } from "@/components/announcement-attachment";
@@ -40,7 +40,8 @@ const dayLabel = (iso: string | null) =>
  * An album is a church event — "Baptism 3rd October 2026" — and holds every
  * picture and video of that day, not one file per notice. Anyone may read
  * the published albums; the officers who post announcements open albums
- * here: they post one, add to it, take a file down, or unpublish it. Photos
+ * here: they post one, add more pictures or videos to it later, take one
+ * file down without losing the album, or unpublish it. Photos
  * open in the in-app viewer's full lightbox; a video plays right on the
  * wall, with sound, the way a family album would.
  */
@@ -62,6 +63,11 @@ export default function MomentsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Adding to an album that is already on the wall: the picker is one input
+  // for the whole page, and the album it was opened for is held here.
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const addTargetRef = useRef<MomentEvent | null>(null);
+  const [addingTo, setAddingTo] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
@@ -145,6 +151,42 @@ export default function MomentsPage() {
     }
   };
 
+  /** Pick more pictures or videos for an album that is already posted. */
+  const openAdder = (event: MomentEvent) => {
+    addTargetRef.current = event;
+    addInputRef.current?.click();
+  };
+
+  const addMedia = async (event: MomentEvent, picked: File[]) => {
+    if (picked.length === 0) return;
+    setAddingTo(event.id);
+    try {
+      const body = new FormData();
+      picked.forEach((file) => body.append("media_files", file));
+      const token = localStorage.getItem("access_token") ?? "";
+      // A FormData body carries its own boundary, so no content type is set.
+      const res = await fetch(`${API_URL}/api/members/church-events/${event.id}/`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+      if (!res.ok) {
+        const problem = await res.json().catch(() => ({}));
+        throw new Error(Object.values(problem).flat().join(" ") || "The files could not be added.");
+      }
+      await load();
+    } catch (err) {
+      showAlert(
+        "Could not add the files",
+        err instanceof Error ? err.message : "Please try again.",
+        "error",
+      );
+    } finally {
+      setAddingTo(null);
+      if (addInputRef.current) addInputRef.current.value = "";
+    }
+  };
+
   const removeMedia = async (event: MomentEvent, media: MomentMedia) => {
     const answer = await showAlert(
       "Take this file out of the album?",
@@ -159,7 +201,16 @@ export default function MomentsPage() {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ remove_media_ids: [media.id] }),
     });
-    if (res.ok) await load();
+    if (res.ok) {
+      await load();
+      showAlert("File taken out", `It is out of “${event.title}”; the album stays on the wall.`, "success", {
+        toast: true,
+        timer: 3500,
+        showConfirmButton: false,
+      });
+    } else {
+      showAlert("Could not take it out", "Please try again.", "error");
+    }
   };
 
   const unpublish = async (event: MomentEvent) => {
@@ -289,6 +340,19 @@ export default function MomentsPage() {
                         )}
                         <button
                           type="button"
+                          onClick={() => openAdder(event)}
+                          disabled={addingTo === event.id}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-sand-line px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember disabled:opacity-50"
+                        >
+                          {addingTo === event.id ? (
+                            <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                          ) : (
+                            <ImagePlus size={13} aria-hidden="true" />
+                          )}
+                          {addingTo === event.id ? "Adding…" : "Add pictures"}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => unpublish(event)}
                           className="rounded-xl border border-sand-line px-3 py-1.5 text-xs font-semibold text-bark hover:border-ember"
                         >
@@ -330,13 +394,17 @@ export default function MomentsPage() {
                             </button>
                           )}
                           {canManage && (
+                            // Always in sight rather than on hover alone: a
+                            // file is taken out from a phone too, where there
+                            // is no pointer to hover with.
                             <button
                               type="button"
                               onClick={() => removeMedia(event, media)}
+                              title={`Remove ${media.file_name ?? "this file"} from the album`}
                               aria-label="Remove this file from the album"
-                              className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 text-brick opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100"
+                              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold text-brick shadow-sm transition hover:bg-white hover:text-red-700"
                             >
-                              <Trash2 size={13} aria-hidden="true" />
+                              <Trash2 size={12} aria-hidden="true" /> Remove
                             </button>
                           )}
                         </figure>
@@ -349,6 +417,25 @@ export default function MomentsPage() {
           )}
         </div>
       </section>
+
+      {/* The one picker the album buttons open: which album asked is held in
+          the ref, since the picker closes before the click is answered. */}
+      {canManage && (
+        <input
+          ref={addInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(e) => {
+            const target = addTargetRef.current;
+            const picked = Array.from(e.target.files ?? []);
+            if (target) void addMedia(target, picked);
+          }}
+        />
+      )}
 
       {/* ── Lightbox: a photo at full size, a video with its sound. ── */}
       {lightbox && (
