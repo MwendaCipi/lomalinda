@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/lib/alerts";
 import { Clock, FileImage, Landmark, Mail, MapPin, Megaphone, Scale, Smartphone, Stamp, HandHelping } from "lucide-react";
-import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { resolveAttachmentUrl } from "@/components/announcement-attachment";
 
 const LocationMapPicker = dynamic(() => import("@/components/location-map-picker"), { ssr: false });
@@ -301,8 +300,8 @@ export function ChurchSettingsManager() {
     <section className="w-full min-h-dvh bg-white p-6 sm:p-8 lg:p-10 border-b border-sand-line">
       <div className="flex items-center justify-between border-b border-sand-line pb-4">
         <div className="flex items-center gap-1">
-          <BackToOverviewArrow />
-          {/* Named by the strip above on a wide screen. */}
+          {/* No way-out arrow here: the page's own heading above already
+              carries one, and this row only names the page a phone. */}
           <div className="md:hidden">
             <h2 className="text-2xl font-semibold text-bark">Church Settings & Configuration</h2>
             <p className="mt-1 text-xs text-moss">
