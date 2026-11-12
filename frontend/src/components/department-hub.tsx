@@ -9905,7 +9905,7 @@ function DepartmentDetail({
           </div>
           {/* The buttons panel: fixed to the bottom with buttons centered
               and a small margin below. */}
-          <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 rounded-2xl border border-sand-line bg-white px-3 py-2.5 shadow-sm mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
+          <div className={`flex shrink-0 flex-wrap items-center justify-center gap-2 mb-2 sm:mb-3 transition-all duration-300 ease-out ${buttonsHidden ? "translate-y-16 opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}>
             <button
               type="button"
               onClick={() => {
