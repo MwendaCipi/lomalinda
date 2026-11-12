@@ -17713,6 +17713,10 @@ class DepartmentPolicyView(APIView):
                 {'detail': "Only this department's leadership or a church officer can upload its policy."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        if str(request.data.get('from_content') or '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+            # The words typed on the page, cut onto the church's paper and
+            # kept as the policy's own PDF.
+            return self._write_pdf_from_words(request, target, department)
         upload = request.FILES.get('document')
         if upload is None:
             return Response({'document': 'Choose a PDF or Word document first.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -17733,6 +17737,67 @@ class DepartmentPolicyView(APIView):
             row.document.delete(save=False)
         row.document = upload
         row.document_name = name[:255]
+        row.updated_by = request.user
+        row.save()
+        return Response(self._payload(row, department, True, request))
+
+    def _write_pdf_from_words(self, request, target, department):
+        """Lay the typed policy out as a PDF and file it with the policy.
+
+        The desk writes its words on the page; this cuts the same words onto
+        the church's letterhead — the sheet the letters desk prints, with the
+        pastor's and the clerk's lines beneath it — and keeps that sheet as
+        the policy's document. A new press replaces the copy before it, so the
+        PDF the desk reads and shares is always the last words saved.
+        """
+        from django.core.files.base import ContentFile
+
+        from .pdf_generator import generate_department_letter_pdf
+
+        row = DepartmentPolicy.objects.filter(department=target).first()
+        title = ((row.title if row else '') or '').strip() or 'Policy'
+        content = ((row.content if row else '') or '').strip()
+        if not content:
+            return Response(
+                {'detail': 'Write the policy first — the PDF is cut from those words.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        record = {
+            'id': 0,
+            'title': title,
+            'content': content,
+            'status': 'pending_pastor',
+            'letter_date': '',
+            'recipient_name': '',
+            'recipient_address': '',
+            'recipient_town': '',
+            'recipient_phone': '',
+            'recipient_email': '',
+        }
+        letterhead = None
+        settings_row = ChurchSettings.objects.filter(pk=1).first()
+        if settings_row and settings_row.letterhead:
+            try:
+                letterhead = settings_row.letterhead.read()
+            except Exception:
+                letterhead = None
+        pdf_bytes = generate_department_letter_pdf(
+            record,
+            current_church_name(),
+            _default_letter_signatory('pastor', 'Church Pastor'),
+            _default_letter_signatory('clerk', 'Church Clerk'),
+            letterhead=letterhead,
+        )
+        if row is None:
+            row = DepartmentPolicy.objects.create(department=target)
+        if row.document:
+            row.document.delete(save=False)
+        row.document.save(
+            f'policy-{timezone.now():%Y%m%d-%H%M%S}.pdf',
+            ContentFile(pdf_bytes),
+            save=False,
+        )
+        row.document_name = f'{title}.pdf'[:255]
         row.updated_by = request.user
         row.save()
         return Response(self._payload(row, department, True, request))

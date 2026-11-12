@@ -63,6 +63,10 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [makingPdf, setMakingPdf] = useState(false);
+  // Once the policy has a PDF, the paper is what the page shows; the words
+  // behind it are one press away.
+  const [showWords, setShowWords] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -99,6 +103,12 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
   const canEdit = Boolean(policy?.can_edit);
   const dirty = Boolean(policy) && (title !== policy?.title || content !== policy?.content);
   const hasWords = content.trim().length > 0;
+  // A PDF the page can lay out is shown in place of the typed words; a Word
+  // document has no reader in the browser, so it keeps the file line instead.
+  const documentIsPdf = Boolean(
+    policy?.document_url &&
+      (/\.pdf($|\?)/i.test(policy.document_url) || /\.pdf$/i.test(policy.document_name ?? "")),
+  );
 
   const save = async () => {
     if (saving) return;
@@ -145,6 +155,44 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
       fallbackError: "The policy sheet could not be opened.",
       onError: () => showAlert("Could not open the sheet", "Try again.", "error"),
     });
+  };
+
+  /** Cut the words saved on the page onto the church's own paper and keep
+   *  that sheet as the policy's PDF, replacing the copy before it. */
+  const makePdf = async () => {
+    if (makingPdf) return;
+    if (!hasWords) {
+      showAlert("Nothing to lay out", "Write the policy first — the PDF is cut from those words.", "info");
+      return;
+    }
+    if (dirty) {
+      showAlert("Save it first", "The PDF carries the policy as saved.", "info");
+      return;
+    }
+    setMakingPdf(true);
+    try {
+      const res = await fetch(`${API_URL}/api/members/departments/${code}/policy/`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ from_content: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAlert("Could not make the PDF", data.detail || data.document || "Try again.", "error");
+        return;
+      }
+      setPolicy(data as Policy);
+      setShowWords(false);
+      showAlert("PDF updated", "The policy's own paper carries the words you saved.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+    } catch {
+      showAlert("Network error", "Could not reach the server.", "error");
+    } finally {
+      setMakingPdf(false);
+    }
   };
 
   /** Hand the desk's own paper in: a PDF or Word document kept beside the
@@ -273,8 +321,23 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
           </span>
         </div>
 
-        <div className="p-4">
-          {canEdit ? (
+        <div className="space-y-3 p-4">
+          {/* The paper itself, once the policy has one: the PDF the desk will
+              read, print and share, laid out on the page in place of the
+              typed words. */}
+          {documentIsPdf && policy?.document_url && (
+            <div className="space-y-2">
+              <iframe
+                src={policy.document_url}
+                title={`${title.trim() || "Policy"} — PDF`}
+                className="h-[65vh] w-full rounded-xl border border-sand-line bg-white"
+              />
+              <p className="text-[11px] text-moss">
+                The desk&apos;s policy paper, as it stands{policy.document_name ? ` — ${policy.document_name}` : ""}.
+              </p>
+            </div>
+          )}
+          {(!documentIsPdf || showWords) && (canEdit ? (
             <>
               <label className="block text-xs font-semibold text-bark">
                 Title
@@ -304,6 +367,15 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
                 <p className="text-xs text-moss">The desk has not written its policy yet.</p>
               )}
             </div>
+          ))}
+          {documentIsPdf && canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowWords((current) => !current)}
+              className="text-[11px] font-semibold text-ember hover:underline"
+            >
+              {showWords ? "Hide the typed words" : "Write the words instead"}
+            </button>
           )}
         </div>
 
@@ -418,6 +490,16 @@ export function DepartmentPolicyPanel({ code }: { code: string }) {
           >
             <Upload className="h-3.5 w-3.5" aria-hidden="true" />
             {uploading ? "Uploading…" : "Upload"}
+          </button>
+          {/* The typed words, laid out as the policy's own PDF. */}
+          <button
+            type="button"
+            onClick={() => void makePdf()}
+            disabled={makingPdf || !canEdit || !hasWords}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-3.5 py-2 text-xs font-semibold text-bark transition hover:border-ember hover:text-ember disabled:opacity-50"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            {makingPdf ? "Laying it out…" : policy?.document_url ? "Update PDF" : "Make PDF"}
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2">

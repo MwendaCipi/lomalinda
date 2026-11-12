@@ -21933,6 +21933,57 @@ class DepartmentPolicyTests(APITestCase):
         }, format='json')
         self.assertEqual(refused.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_the_saved_words_are_cut_into_the_policy_pdf(self):
+        """Make PDF: the words typed on the page become the policy's paper.
+
+        The same sheet the letters desk prints — title and words on the
+        church's letterhead — is stored as the policy's document, and a
+        second press replaces it rather than stacking copies.
+        """
+        import tempfile
+
+        from django.test import override_settings
+
+        from .models import DepartmentPolicy
+
+        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            self.assertEqual(self._save_policy().status_code, 200)
+            first = self.client.post(
+                '/api/members/departments/welfare/policy/', {'from_content': True}, format='json',
+            )
+            self.assertEqual(first.status_code, 200, first.data)
+            self.assertTrue(first.data['document_url'].endswith('.pdf'))
+            self.assertEqual(first.data['document_name'], 'Welfare Policy.pdf')
+
+            row = DepartmentPolicy.objects.get(department__code='welfare')
+            with row.document.open('rb') as paper:
+                first_paper = paper.read()
+            self.assertTrue(first_paper.startswith(b'%PDF'))
+
+            # The next press carries the newer words and keeps one sheet.
+            self.client.put('/api/members/departments/welfare/policy/', {
+                'title': 'Welfare Policy',
+                'content': 'The desk visits every member once a term.',
+            }, format='json')
+            second = self.client.post(
+                '/api/members/departments/welfare/policy/', {'from_content': True}, format='json',
+            )
+            self.assertEqual(second.status_code, 200, second.data)
+            row.refresh_from_db()
+            with row.document.open('rb') as paper:
+                self.assertNotEqual(paper.read(), first_paper)
+            # One sheet, not a shelf of them.
+            self.assertEqual(DepartmentPolicy.objects.filter(department__code='welfare').count(), 1)
+
+            # Words are the sheet: an empty page is refused.
+            self.client.put('/api/members/departments/welfare/policy/', {
+                'title': 'Welfare Policy', 'content': '   ',
+            }, format='json')
+            refused = self.client.post(
+                '/api/members/departments/welfare/policy/', {'from_content': True}, format='json',
+            )
+            self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_the_desk_uploads_its_policy_paper_and_can_lift_it_again(self):
         import tempfile
 
