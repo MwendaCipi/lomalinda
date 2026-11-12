@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, FolderCheck, Lock, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CloudDownload, FolderCheck, Lock, Plus, RefreshCw, RotateCw, Phone, MessageSquare, Send, CheckCircle2, Printer, Download, Loader2, Trash2, Undo2, X, MoveLeft } from "lucide-react";
 import { AddReceiptModal } from "@/components/add-receipt-modal";
 import { ClosePeriodModal, closingDay, startingDay, type TreasuryPeriodWindow } from "@/components/close-period-modal";
 import { waMeNumber } from "@/components/contact-modal";
@@ -465,6 +465,9 @@ export default function TreasuryPage() {
   // refresh does. It lives in the header band now — the bottom panel
   // keeps only the writes it guards.
   const [refreshingLedger, setRefreshingLedger] = useState(false);
+  // The Paybill pull: the desk asking Safaricom what the paybill received, so
+  // a confirmation callback that never arrived is one press from being filed.
+  const [pullingMpesa, setPullingMpesa] = useState(false);
   const datesRef = useRef<HTMLDivElement>(null);
   const datesPanelRef = useRef<HTMLDivElement>(null);
   const customWindow = fromDate !== firstDayOfMonth() || toDate !== localDate();
@@ -1031,6 +1034,61 @@ export default function TreasuryPage() {
           </label>
         </div>
 
+        {/* The Paybill pull: the ledger only learns of paybill money from
+            Safaricom's confirmation callback, and a callback that never
+            arrives leaves the gift on the paybill and out of the books. This
+            asks Safaricom for the last two days and files every receipt the
+            ledger has not seen — a missed callback is one press away. */}
+        <button
+          type="button"
+          onClick={() => {
+            void (async () => {
+              setPullingMpesa(true);
+              try {
+                const res = await fetch(`${API_URL}/api/members/payments/mpesa/pull/`, {
+                  method: "POST",
+                  headers: headers(),
+                  body: JSON.stringify({ days: 2 }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  showAlert(
+                    "Could not pull M-Pesa",
+                    data.detail || "Safaricom did not answer the pull.",
+                    "error",
+                  );
+                  return;
+                }
+                await load();
+                const recorded = Number(data.recorded ?? 0);
+                const pulled = Number(data.pulled ?? 0);
+                showAlert(
+                  "M-Pesa pulled",
+                  recorded > 0
+                    ? `${recorded} payment${recorded === 1 ? "" : "s"} the ledger had not seen ${recorded === 1 ? "is" : "are"} now recorded — any whose reference names no account wait in the Unassigned rows.`
+                    : `Safaricom holds ${pulled} payment${pulled === 1 ? "" : "s"} in the last two days; the ledger already has them all.`,
+                  "success",
+                  { toast: true, timer: 5000, showConfirmButton: false },
+                );
+              } catch {
+                showAlert("Could not pull M-Pesa", "Check your connection and try again.", "error");
+              } finally {
+                setPullingMpesa(false);
+              }
+            })();
+          }}
+          disabled={pullingMpesa}
+          aria-label="Pull M-Pesa transactions"
+          title="Ask Safaricom for the paybill's last two days and record any payment the books have not seen"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-sand-mute bg-white px-2.5 text-[11px] font-semibold text-bark shadow-sm transition hover:border-ember hover:text-ember disabled:opacity-60"
+        >
+          <CloudDownload
+            className={`h-4 w-4 ${pullingMpesa ? "animate-pulse text-ember" : ""}`}
+            aria-hidden="true"
+          />
+          <span className="hidden sm:inline">Pull M-Pesa</span>
+        </button>
+
         {/* The desk re-read: a gift made on the go (the giving desk, M-Pesa)
             shows the moment this is tapped — the lone refresh icon at the
             band's far right, the same mark every refresh on the system
@@ -1047,7 +1105,7 @@ export default function TreasuryPage() {
         </button>
       </div>
     );
-  }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow, refreshingLedger]);
+  }, [setHeaderRightAction, searchQuery, fromDate, toDate, showDates, customWindow, refreshingLedger, pullingMpesa]);
 
   // The treasury's views, as one line. The ledger answers for Individual
   // Givings and Summary in place; every other chip walks to the page that
