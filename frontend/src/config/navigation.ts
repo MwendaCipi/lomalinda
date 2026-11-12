@@ -1160,8 +1160,10 @@ export const treasuryItems: RailRow[] = [
  * the church's own records, read at render time (`fromDepartments`).
  */
 export const railEntries: RailEntry[] = [
-  // The logo at the head of the rail is the way back to the dashboard, so
-  // there is no row for it here — the rail opens on the church's life.
+  // The dashboard stands as the first row of My church — the member's own
+  // page, before the church's life. (The rail sorts each heading's rows, and
+  // Dashboard reads first anyway.)
+  { ...page("dashboard"), sectionKey: "my-church" },
   {
     label: "Fellowship",
     icon: Megaphone,
