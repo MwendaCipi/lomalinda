@@ -34,6 +34,12 @@ type MomentEvent = {
 const dayLabel = (iso: string | null) =>
   iso ? dayFirst(iso, "") || null : null;
 
+/** The pictures and videos among what was dragged in, the rest left behind. */
+const mediaFrom = (list: FileList | null) =>
+  Array.from(list ?? []).filter(
+    (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+  );
+
 /**
  * Moments — the church's photo and video wall, kept as event albums.
  *
@@ -63,6 +69,10 @@ export default function MomentsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Dragging files in: the composer's own pad, and an album on the wall that
+  // takes more pictures where they are shown.
+  const [draggingComposer, setDraggingComposer] = useState(false);
+  const [dropAlbumId, setDropAlbumId] = useState<number | null>(null);
   // Adding to an album that is already on the wall: the picker is one input
   // for the whole page, and the album it was opened for is held here.
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -370,7 +380,38 @@ export default function MomentsPage() {
                     )}
                   </header>
 
-                  <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+                  <div
+                    // The album's own pad for more of the day: files dropped
+                    // anywhere on the pictures join this album.
+                    onDragOver={
+                      canManage
+                        ? (e) => {
+                            e.preventDefault();
+                            setDropAlbumId(event.id);
+                          }
+                        : undefined
+                    }
+                    onDragLeave={
+                      canManage
+                        ? (e) => {
+                            if (e.currentTarget === e.target) setDropAlbumId(null);
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      canManage
+                        ? (e) => {
+                            e.preventDefault();
+                            setDropAlbumId(null);
+                            const picked = mediaFrom(e.dataTransfer.files);
+                            if (picked.length > 0) void addMedia(event, picked);
+                          }
+                        : undefined
+                    }
+                    className={`grid gap-3 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3 ${
+                      dropAlbumId === event.id ? "bg-sand ring-2 ring-inset ring-ember/40" : ""
+                    }`}
+                  >
                     {event.media.map((media) => {
                       const url = resolveAttachmentUrl(media.url);
                       const looksVideo = media.is_video || !isImageAttachment(media.url, media.file_name);
@@ -525,20 +566,53 @@ export default function MomentsPage() {
                 <p className="text-sm font-medium text-bark">
                   Pictures and videos * <span className="font-normal text-moss">(up to 30 at once)</span>
                 </p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="mt-1.5 w-full rounded-xl border border-dashed border-sand-mute px-4 py-6 text-center text-sm font-semibold text-moss transition hover:border-ember hover:text-bark"
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!posting) setDraggingComposer(true);
+                  }}
+                  onDragLeave={(e) => {
+                    if (e.currentTarget === e.target) setDraggingComposer(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDraggingComposer(false);
+                    if (posting) return;
+                    const picked = mediaFrom(e.dataTransfer.files);
+                    if (picked.length === 0) return;
+                    setFiles((current) => [...current, ...picked]);
+                  }}
+                  className={`mt-1.5 rounded-xl border border-dashed px-4 py-6 text-center transition ${
+                    draggingComposer
+                      ? "border-ember bg-sand"
+                      : "border-sand-mute"
+                  }`}
                 >
-                  Choose from this device
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-sm font-semibold text-moss transition hover:text-bark"
+                  >
+                    Choose from this device
+                  </button>
+                  <p className="mt-1 text-xs text-moss">
+                    {draggingComposer
+                      ? "Let go to add them to the album"
+                      : "or drag pictures and videos here"}
+                  </p>
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*,video/*"
                   multiple
                   className="hidden"
-                  onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                  onChange={(e) => {
+                    const picked = mediaFrom(e.target.files);
+                    if (picked.length > 0) setFiles((current) => [...current, ...picked]);
+                    // The picker is emptied so the same file can be chosen again.
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
                 />
                 {files.length > 0 && (
                   <ul className="mt-2 space-y-1.5">

@@ -544,6 +544,8 @@ export function DeaconateManager({
   const [momentDay, setMomentDay] = useState("");
   const [momentNote, setMomentNote] = useState("");
   const [momentFiles, setMomentFiles] = useState<File[]>([]);
+  // The pad lights up while the day's pictures are dragged over it.
+  const [momentDragging, setMomentDragging] = useState(false);
   const [momentLinks, setMomentLinks] = useState("");
   const [postingMoment, setPostingMoment] = useState(false);
   const momentFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2766,20 +2768,53 @@ export function DeaconateManager({
 
               <div>
                 <p className="font-bold text-bark">Pictures</p>
-                <button
-                  type="button"
-                  onClick={() => momentFileInputRef.current?.click()}
-                  className="mt-1 w-full rounded-xl border border-dashed border-sand-line bg-sand-card px-4 py-4 text-center text-[11px] font-semibold text-moss transition hover:border-ember hover:text-bark"
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!postingMoment) setMomentDragging(true);
+                  }}
+                  onDragLeave={(e) => {
+                    if (e.currentTarget === e.target) setMomentDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setMomentDragging(false);
+                    if (postingMoment) return;
+                    const picked = Array.from(e.dataTransfer.files ?? []).filter(
+                      (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+                    );
+                    if (picked.length > 0) setMomentFiles((current) => [...current, ...picked]);
+                  }}
+                  className={`mt-1 rounded-xl border border-dashed px-4 py-4 text-center transition ${
+                    momentDragging
+                      ? "border-ember bg-sand"
+                      : "border-sand-line bg-sand-card"
+                  }`}
                 >
-                  Choose from this device
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => momentFileInputRef.current?.click()}
+                    className="text-[11px] font-semibold text-moss transition hover:text-bark"
+                  >
+                    Choose from this device
+                  </button>
+                  <p className="mt-1 text-[10px] text-moss">
+                    {momentDragging ? "Let go to add them to the album" : "or drag pictures and videos here"}
+                  </p>
+                </div>
                 <input
                   ref={momentFileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   className="hidden"
-                  onChange={(e) => setMomentFiles(Array.from(e.target.files ?? []))}
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []).filter(
+                      (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+                    );
+                    if (picked.length > 0) setMomentFiles((current) => [...current, ...picked]);
+                    e.target.value = "";
+                  }}
                 />
                 {momentFiles.length > 0 && (
                   <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">

@@ -56,6 +56,13 @@ async function apiFetch(path: string, init?: RequestInit) {
   });
 }
 
+/** The pictures and videos among what was dragged in, the rest left behind. */
+function mediaFrom(list: FileList | null): File[] {
+  return Array.from(list ?? []).filter(
+    (file) => file.type.startsWith("image/") || file.type.startsWith("video/"),
+  );
+}
+
 /** The first validation message in a DRF error body, so alerts say what broke. */
 function firstErrorMessage(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "";
@@ -87,6 +94,8 @@ export function AreaMomentsPanel({
   const [note, setNote] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [links, setLinks] = useState("");
+  // The pad lights up while files are dragged over it.
+  const [dragging, setDragging] = useState(false);
 
   // The wall is read when the view is opened — the list is what most visits
   // are here for. A manager reads what the wall has not let out yet; everyone
@@ -224,15 +233,40 @@ export function AreaMomentsPanel({
             />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs font-semibold text-bark">
+            <label
+              className={`block rounded-xl text-xs font-semibold text-bark transition ${
+                dragging ? "ring-2 ring-ember/50" : ""
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!posting) setDragging(true);
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget === e.target) setDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                if (posting) return;
+                const picked = mediaFrom(e.dataTransfer.files);
+                if (picked.length > 0) setFiles((current) => [...current, ...picked]);
+              }}
+            >
               Pictures and videos
               <input
                 type="file"
                 multiple
                 accept="image/*,video/*"
-                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                onChange={(e) => {
+                  const picked = mediaFrom(e.target.files);
+                  if (picked.length > 0) setFiles((current) => [...current, ...picked]);
+                  e.target.value = "";
+                }}
                 className="mt-1 w-full rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-xs text-moss file:mr-3 file:rounded-lg file:border-0 file:bg-sand file:px-3 file:py-1 file:text-xs file:font-bold file:text-bark"
               />
+              <span className="mt-1 block text-[10px] font-normal text-moss">
+                {dragging ? "Let go to add them to the album" : "or drag pictures and videos here"}
+              </span>
             </label>
             <label className="block text-xs font-semibold text-bark">
               Video links (one per line)
