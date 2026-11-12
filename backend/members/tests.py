@@ -14496,6 +14496,31 @@ class CalendarSlotConflictTests(APITestCase):
         }, format='json')
         self.assertEqual(today.status_code, 201)
 
+    def test_a_program_save_is_not_refused_by_a_slot_the_event_already_sits_in(self):
+        """The slot rule is about the slot: a programme written on a row that
+        already shares its period with another event — filed before that event
+        arrived — still saves, while a correction that moves the row into the
+        occupied hours is refused as before."""
+        day = (timezone.localdate() + timedelta(days=7)).isoformat()
+        choir = DepartmentEvent.objects.create(department='amm', title='Choir Day', event_date=day)
+        # A long-running registration event, written by an announcement's own
+        # register row, sits over the same period.
+        DepartmentEvent.objects.create(department='welfare', title='WELFARE', event_date=day)
+
+        saved = self.client.patch(f'/api/members/departments/amm/events/{choir.id}/', {
+            'program_items': [
+                {'start': '08:00', 'end': '10:00', 'title': 'Sabbath School',
+                 'participants': [], 'parts': []},
+            ],
+        }, format='json')
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.data['program_items'][0]['title'], 'Sabbath School')
+
+        moved = self.client.patch(f'/api/members/departments/amm/events/{choir.id}/', {
+            'time': '10:00',
+        }, format='json')
+        self.assertEqual(moved.status_code, status.HTTP_409_CONFLICT)
+
     def test_a_past_event_keeps_its_day_but_cannot_be_moved_onto_another(self):
         """A row already sitting in the past is still correctable — its title,
         its hours — and its own day is sent back with it, so the desk is not

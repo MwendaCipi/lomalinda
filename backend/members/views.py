@@ -15510,7 +15510,15 @@ class DepartmentEventsView(APIView):
             event.lead = (request.data.get('lead') or '').strip()
         if 'notes' in request.data:
             event.notes = (request.data.get('notes') or '').strip()
-        if event.end_date and event.end_date < event.event_date:
+        # The calendar's rules are about the slot, so they are asked only when
+        # the correction touches it. A programme saved on the row, a lead's
+        # name, a meeting link — none of those move the event, and a row that
+        # already sits on a period another event holds (filed before that
+        # event arrived, or written by an announcement's own register row)
+        # must still be able to take its programme and its corrections. A
+        # correction that does move the slot is held to the rule in full.
+        slot_touched = any(key in request.data for key in ('date', 'time', 'end_date', 'end_time'))
+        if slot_touched and event.end_date and event.end_date < event.event_date:
             return Response(
                 {'end_date': 'The event cannot end before it starts.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -15519,9 +15527,12 @@ class DepartmentEventsView(APIView):
         # correction may not drive the event onto a slot another already
         # holds. Its own row is excluded, so everything may return to where
         # it was.
-        conflicts = _calendar_slot_conflicts(
-            event.event_date, event.event_time, event.end_date, event.end_time,
-            exclude_id=event.id,
+        conflicts = (
+            _calendar_slot_conflicts(
+                event.event_date, event.event_time, event.end_date, event.end_time,
+                exclude_id=event.id,
+            )
+            if slot_touched else []
         )
         if conflicts:
             return Response(
