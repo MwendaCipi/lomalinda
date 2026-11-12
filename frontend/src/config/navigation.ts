@@ -720,8 +720,9 @@ const CLERKSHIP_ROLES = ["clerk", "admin"];
 /**
  * Clerkship — the clerk's desk. The pages are ordered by the work a clerk
  * reaches for most: answering arrivals and transfers, then the signatures
- * waiting on the clerk's own pen (every letter the church writes passes the
- * pastor first and then the clerk), then the writing the clerk does — the
+ * waiting on the clerk's own pen (every letter the church writes is signed
+ * by both the pastor and the clerk, in either order), then the writing the
+ * clerk does — the
  * correspondence and the church's messages — and after that the less
  * frequent meeting, register and accounts work. Profiles open from User
  * Management.
@@ -748,19 +749,19 @@ export const clerkshipItems: RailRow[] = [
     short: "Requests",
     description: "New members, ministry joins and membership transfers waiting on an answer.",
   }),
-  // Every letter the church writes — from any desk — waits first for the
-  // pastor's pen and then the clerk's, and this is the one page that holds
-  // them all: the desks' own letters views show only their own paper, so
-  // without it the clerk would chase a signature desk by desk. It offers
-  // the two things the clerk does with paper — sign (or send it back with
-  // a reason) and download the finished sheet for the stamp — and writes
+  // Every letter the church writes — from any desk — waits for both pens,
+  // the pastor's and the clerk's in either order, and this is the one page
+  // that holds them all: the desks' own letters views show only their own
+  // paper, so without it the clerk would chase a signature desk by desk. It
+  // offers the two things the clerk does with paper — sign (or send it back
+  // with a reason) and download the finished sheet for the stamp — and writes
   // none of its own, the way the pastorate's Letter Approvals page does.
   // The short name is "Approvals", not "Letters": the Correspondences row
   // beside it already reads "Letters" in a narrow strip.
   officeTab("clerk-letters", "Letter Approvals", FileText, {
     roles: CLERKSHIP_ROLES,
     short: "Approvals",
-    description: "Letters from every desk awaiting the church clerk's signature, and the signed sheets to download.",
+    description: "Letters from every desk awaiting signature, and the signed sheets to download.",
   }),
   officeTab("correspondence", "Correspondences", FileText, {
     roles: CLERKSHIP_ROLES,

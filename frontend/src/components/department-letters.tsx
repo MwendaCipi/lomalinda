@@ -95,7 +95,7 @@ function publicLetterUrl(token: string) {
 
 /** What a letter's row wears while it is on its way between the two pens. */
 const STATUS: Record<LetterRow["status"], { label: string; className: string }> = {
-  pending_pastor: { label: "With the pastor", className: "bg-purple-50 text-purple-800" },
+  pending_pastor: { label: "Awaiting signatures", className: "bg-purple-50 text-purple-800" },
   pastor_signed: { label: "With the clerk", className: "bg-mist-select text-bark" },
   completed: { label: "Fully signed", className: "bg-green-50 text-green-800" },
   declined: { label: "Declined", className: "bg-red-50 text-red-700" },
@@ -690,9 +690,9 @@ export function DepartmentLettersPanel({
 }) {
   const { me } = useHeaderData();
   const roles = Array.isArray(me?.roles) && me.roles.length > 0 ? me.roles : [me?.role || "member"];
-  // The two pens: the pastor clears it first, the clerk countersigns. The
-  // server refuses anything else; the buttons only show what it would take.
-  // The server's own test (is_pastor_or_admin / is_clerk_or_admin) counts the
+  // The two pens: either may sign first, but both must sign. The server
+  // honours either order; the buttons only show what it would take. The
+  // server's own test (is_pastor_or_admin / is_clerk_or_admin) counts the
   // administrator role and the site's staff and superusers alike, so the two
   // pens are read the same way here: a button the API would honour must not be
   // withheld from the account holding it.
@@ -734,11 +734,15 @@ export function DepartmentLettersPanel({
     void Promise.resolve().then(load);
   }, [load, version]);
 
-  /** The pen this reader may put on this letter, or null — the server's rule, read here. */
+  /** The pen this reader may put on this letter, or null — the server's rule, read here.
+      Either pen may sign first; whoever has not signed yet still may. */
   const signActionFor = (row: LetterRow): "pastor_sign" | "clerk_sign" | "decline" | null => {
-    if (row.status === "pending_pastor" && canSignPastor) return "pastor_sign";
-    if (row.status === "pastor_signed" && canSignClerk) return "clerk_sign";
-    if (row.status === "pastor_signed" && canSignPastor) return "decline";
+    if (row.status !== "pending_pastor" && row.status !== "pastor_signed") return null;
+    if (canSignPastor && !row.pastor_signed_by) return "pastor_sign";
+    if (canSignClerk && !row.clerk_signed_by) return "clerk_sign";
+    // Both pens this reader holds are already on the paper: all that is
+    // left is sending it back with a reason.
+    if (canSignPastor || canSignClerk) return "decline";
     return null;
   };
 
@@ -835,8 +839,8 @@ export function DepartmentLettersPanel({
           <h2 className="text-xs font-bold uppercase tracking-wide text-bark">Letters</h2>
           <p className="truncate text-[11px] text-moss">
             {scope === "all"
-              ? "Every letter the church writes — the pastor's signature first, then the clerk's, then back to its writer for the stamp."
-              : "Written here, signed by the pastor then the clerk, and returned fully signed for stamping."}
+              ? "Department and ministry heads write the letters; the pastor and the clerk both sign, in either order. The clerk stamps the signed sheet, and it goes back to its writer — or straight to the recipient."
+              : "Written here, signed by both the pastor and the clerk, and returned fully signed for stamping."}
           </p>
         </div>
       </header>
@@ -852,14 +856,24 @@ export function DepartmentLettersPanel({
             <p className="mt-2 text-sm font-semibold text-bark">No letters yet</p>
             <p className="mt-0.5 max-w-sm text-xs text-moss">
               {scope === "all"
-                ? "Letters from every desk arrive here for the pastor's signature, then the clerk's — sign, send back with a reason, or read the signed sheet."
-                : "Nothing written on this desk yet. A letter sent for signature is listed here while it waits for the pastor's pen, then the clerk's, and stays once both have signed."}
+                ? "Letters from every desk arrive here for signature — the pastor and the clerk both sign, in either order. Sign, send back with a reason, or read the signed sheet."
+                : "Nothing written on this desk yet. A letter sent for signature is listed here while it waits for both pens, and stays once both have signed."}
             </p>
           </div>
         ) : (
           <ul className="divide-y divide-sand-line">
             {letters.map((row) => {
               const status = STATUS[row.status] ?? STATUS.pending_pastor;
+              // Either pen may sign first, so the badge names who has not
+              // signed yet rather than which office signs first.
+              const statusLabel =
+                row.status === "completed" || row.status === "declined"
+                  ? status.label
+                  : row.pastor_signed_by && !row.clerk_signed_by
+                    ? "With the clerk"
+                    : row.clerk_signed_by && !row.pastor_signed_by
+                      ? "With the pastor"
+                      : "Awaiting signatures";
               const signAction = signActionFor(row);
               const busy = pdfId === row.id;
               return (
@@ -877,7 +891,7 @@ export function DepartmentLettersPanel({
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.className}`}
                     >
-                      {status.label}
+                      {statusLabel}
                     </span>
                   </div>
 

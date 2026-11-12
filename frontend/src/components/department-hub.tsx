@@ -9969,11 +9969,12 @@ function DepartmentDetail({
       )}
       {subTab === "letter-approvals" && isPastorate && (
         <div className="flex h-full min-h-0 flex-col overflow-y-auto p-3">
-          {/* The pastor's pen is the first on every letter the church writes,
-              not only the pastorate's own, so his approvals page reads the
-              church's register — the same rows the strip's badge counts. A
-              page that showed only this desk's letters left the badge
-              pointing at a queue the reader could not see. */}
+          {/* Both pens sign every letter the church writes — the pastor's
+              and the clerk's, in either order — not only the pastorate's
+              own, so his approvals page reads the church's register — the
+              same rows the strip's badge counts. A page that showed only
+              this desk's letters left the badge pointing at a queue the
+              reader could not see. */}
           <DepartmentLettersPanel
             department={department}
             scope="all"

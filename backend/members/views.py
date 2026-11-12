@@ -17496,8 +17496,8 @@ class DepartmentLetterListCreateView(APIView):
     """List or create official department letters.
 
     A department member/leader writes a letter -> status becomes 'pending_pastor'.
-    Pastor signs -> status becomes 'pastor_signed'.
-    Clerk signs -> status becomes 'completed' (fully signed and ready to download for stamping).
+    Either pen may sign first; once both have signed the status becomes
+    'completed' (fully signed and ready to download for stamping).
     """
 
     permission_classes = [IsAuthenticated]
