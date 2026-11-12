@@ -443,23 +443,12 @@ export function AnnouncementsFeed({
                   )}
                 </div>
 
-                {item.attachment && (
-                  <div className="mt-3 border-t border-sand-line pt-3">
-                    <AnnouncementAttachment
-                      attachment={item.attachment}
-                      name={item.attachment_name}
-                      size={item.attachment_size}
-                      mediaHeight="md"
-                    />
-                  </div>
-                )}
-
-                {/* The card's buttons, one row: only the ones the officer
-                    ticked for this post. Give now asks for money and Give in
-                    kind asks for goods, each on its own button, so the officer
-                    decides which of the two a post carries. A meeting, class
-                    or form is a link — the same tie the card's own link
-                    opens. */}
+                {/* The card's buttons, one row, straight under the words: only
+                    the ones the officer ticked for this post. Give now asks
+                    for money and Give in kind asks for goods, each on its own
+                    button, so the officer decides which of the two a post
+                    carries. A meeting, class or form is a link — the same tie
+                    the card's own link opens. */}
                 {feedActions.length > 0 && (
                   <div className="mt-3 border-t border-sand-line pt-3">
                     <div className={actionsClass}>
@@ -551,6 +540,20 @@ export function AnnouncementsFeed({
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {/* A picture or paper rides after the words and the buttons
+                    they carry — the reading order of the notice comes first,
+                    and the attachment closes it. */}
+                {item.attachment && (
+                  <div className="mt-3 border-t border-sand-line pt-3">
+                    <AnnouncementAttachment
+                      attachment={item.attachment}
+                      name={item.attachment_name}
+                      size={item.attachment_size}
+                      mediaHeight="md"
+                    />
                   </div>
                 )}
 
