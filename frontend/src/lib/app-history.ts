@@ -202,6 +202,11 @@ export function trackAppHistory() {
   replaceState.call(window.history, stamp(window.history.state, 0), "", window.location.href);
 
   window.history.pushState = function (data: unknown, unused: string, url?: string | URL | null) {
+    // A fresh navigation supersedes any fold walk still waiting: the walk
+    // would land on the page tapped before, dragging the screen off the page
+    // just opened onto one the member did not ask for. The push below
+    // schedules its own fold when the new page is itself a revisit.
+    cancelCollapse();
     const target = pathKey(url);
     // A push of the page already on screen — a rail row for the desk being
     // read, a chip whose page is the one in view — has nowhere new to go: it
@@ -233,6 +238,9 @@ export function trackAppHistory() {
   };
 
   window.history.replaceState = function (data: unknown, unused: string, url?: string | URL | null) {
+    // A rewrite also retires a waiting fold walk — the entries it counted on
+    // no longer hold what they did.
+    cancelCollapse();
     // A replace rewrites the entry under us; it does not move it, so the
     // entry keeps the index it already carries. Stamping it from the counter
     // instead would misplace it whenever something rewrites an entry this
