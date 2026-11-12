@@ -30,6 +30,7 @@ import { BackToOverviewArrow } from "@/components/back-to-overview-arrow";
 import { FilterPopover, FilterSet } from "@/components/filter-popover";
 import { DepartmentAccountsPanel, DepartmentHub } from "./department-hub";
 import { showAlert } from "@/lib/alerts";
+import { backOrDashboard } from "@/lib/app-history";
 import { openPdfTab } from "@/lib/pdf-lightbox";
 import { brand } from "@/lib/brand";
 import { dayFirst } from "@/lib/dates";
@@ -2057,8 +2058,9 @@ export function DeaconateManager({
           the roll reads the same endpoint every other desk reads, and Add
           member — batch picking included — works exactly as the other
           departments' rolls do. The way out of the opened area leads back to
-          the administration overview, the same place every other tab's back
-          arrow goes — the desk's own directory has no place here. */}
+          the previous page (the dashboard when there is none), the same
+          place every other tab's back arrow goes — the desk's own directory
+          has no place here. */}
       {activeTab === "members" && (
         <DepartmentHub
           initialDept="deaconate"
@@ -2067,7 +2069,7 @@ export function DeaconateManager({
           initialTab="members"
           embedded={embedded}
           onBack={
-            onBack ?? (() => router.replace("/administration?tab=overview", { scroll: false }))
+            onBack ?? (() => backOrDashboard(router))
           }
         />
       )}

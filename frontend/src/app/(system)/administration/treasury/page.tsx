@@ -19,6 +19,7 @@ import { DateField } from "@/components/date-field";
 import { usePageHeader } from "@/components/app-frame";
 import { TREASURY_HEADING } from "@/config/navigation";
 import { showAlert } from "@/lib/alerts";
+import { backOrDashboard } from "@/lib/app-history";
 import { brand } from "@/lib/brand";
 import { localDate, firstDayOfMonth, dayFirst, dayFirstTime, timeOnly } from "@/lib/dates";
 import { densityCellPad } from "@/lib/table-density";
@@ -1098,13 +1099,7 @@ export default function TreasuryPage() {
       leading: (
         <button
           type="button"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-            } else {
-              router.replace("/administration?tab=overview", { scroll: false });
-            }
-          }}
+          onClick={() => backOrDashboard(router)}
           aria-label="Back"
           className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
         >

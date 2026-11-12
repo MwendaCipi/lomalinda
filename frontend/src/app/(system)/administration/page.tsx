@@ -372,7 +372,11 @@ function AdministrationContent() {
   // The fallback desk, chosen once the role is known. A URL tab always
   // outranks it (see `activeTab` above), so this never delays a toggle.
   useEffect(() => {
-    if (searchTab) return;
+    // The overview is the phone's card grid (`lg:hidden`): on a wide screen
+    // it is a blank Administration page nobody opened, so it falls back to
+    // the role's desk the same way a bare address does.
+    const overviewOnDesk = searchTab === "overview" && typeof window !== "undefined" && window.innerWidth >= 1024;
+    if (searchTab && !overviewOnDesk) return;
     // A bare /administration — the account menu's only door to the console —
     // lands on a real desk, never the overview of cards: on a phone that is
     // the register itself, so the console opens where the work is.

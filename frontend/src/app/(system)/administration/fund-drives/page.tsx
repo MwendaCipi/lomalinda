@@ -7,6 +7,7 @@ import { CampaignManagement } from "@/components/campaign-management";
 import { TREASURY_VIEW_HREF, TreasuryNav } from "@/components/treasury-nav";
 import { usePageHeader } from "@/components/app-frame";
 import { TREASURY_HEADING } from "@/config/navigation";
+import { backOrDashboard } from "@/lib/app-history";
 
 /**
  * Fund drives, with the goal management the treasury needs to run them.
@@ -39,13 +40,7 @@ export default function FundDrivesPage() {
       leading: (
         <button
           type="button"
-          onClick={() => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              router.back();
-            } else {
-              router.replace("/administration?tab=overview", { scroll: false });
-            }
-          }}
+          onClick={() => backOrDashboard(router)}
           aria-label="Back"
           className="-ml-1 inline-flex items-center justify-center rounded-xl p-1.5 text-moss transition hover:bg-sand hover:text-bark"
         >
