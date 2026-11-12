@@ -2077,8 +2077,9 @@ export function DeaconateManager({
       {/* ── TAB: CALENDAR & ORDINANCES ── */}
       {activeTab === "calendar" && (
         <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6 space-y-6">
+          {/* No way-out arrow here: the page's own heading above already
+              carries one, and this row only names the page a phone. */}
           <div className="flex items-center gap-1">
-            {backArrow}
             {/* Named by the strip above on a wide screen. */}
             <div className="md:hidden">
               <h2 className="text-base font-bold text-bark">Deaconate Ordinances &amp; Event Schedule</h2>
