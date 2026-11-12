@@ -25,6 +25,9 @@ export function DateField({
   onChange,
   label,
   className = "",
+  required = false,
+  invalid = false,
+  fullWidth = false,
 }: {
   /** ISO yyyy-mm-dd (or empty). */
   value: string;
@@ -33,6 +36,11 @@ export function DateField({
   /** Screen-reader label, e.g. "Expenditures from date". */
   label: string;
   className?: string;
+  required?: boolean;
+  /** Marks a day that cannot be accepted — an hour already gone. */
+  invalid?: boolean;
+  /** Takes the whole row, the way a form's own fields do. */
+  fullWidth?: boolean;
 }) {
   const isoToDisplay = (iso: string) => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
@@ -97,7 +105,9 @@ export function DateField({
   };
 
   return (
-    <span className={`relative inline-flex items-center ${className}`}>
+    <span
+      className={`relative items-center ${fullWidth ? "flex w-full" : "inline-flex"} ${className}`}
+    >
       {/* The real calendar, kept invisible: the icon raises it, a chosen day
           hands its date straight to the caller. */}
       <input
@@ -113,13 +123,23 @@ export function DateField({
       />
       <input
         type="text"
+        // The keypad a phone offers is digits only. That is enough: the
+        // field puts the separators in itself, and focusing it selects the
+        // whole day so the new one can simply be typed over.
         inputMode="numeric"
+        autoComplete="off"
+        enterKeyHint="done"
+        required={required}
         value={draft ?? isoToDisplay(value)}
         onChange={(e) => setDraft(handle(e.target.value))}
+        onFocus={(e) => e.currentTarget.select()}
         onBlur={commitDraft}
         placeholder="dd/mm/yyyy"
         aria-label={label}
-        className="w-[6.75rem] rounded-xl border border-sand-mute bg-white py-1 pl-2 pr-7 text-xs outline-none focus:border-ember"
+        aria-invalid={invalid || undefined}
+        className={`${fullWidth ? "w-full" : "w-[6.75rem]"} rounded-xl border bg-white py-1 pl-2 pr-7 text-xs text-bark outline-none focus:border-ember ${
+          invalid ? "border-red-300" : "border-sand-mute"
+        }`}
       />
       <button
         type="button"

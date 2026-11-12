@@ -7,6 +7,7 @@ import { Send, Sparkles, X } from "lucide-react";
 import { localDate, dayFirst } from "@/lib/dates";
 import { CARD_OPTION_CHOICES, GIVING_OPTION_CODES } from "@/lib/announcement-options";
 import { useAllDepartments } from "@/hooks/use-departments";
+import { DateField } from "@/components/date-field";
 
 /**
  * The "Post to" vocabulary: where a post travels, as one flat list — who it
@@ -107,62 +108,7 @@ const REPEAT_CHOICES = [
   { value: "monthly", label: "Every month" },
 ] as const;
 
-/** A day typed day-first — dd/mm/yyyy, the way the church writes dates.
- *
- *  The browser's own date picker reads month-first in some locales, which is
- *  how the 3rd of November becomes the 11th of March. This field takes the
- *  day first, keeps the wire value ISO, and shows the day-first reading back
- *  once the officer leaves it.
- */
-function parseDayFirst(text: string): string | null {
-  const digits = text.replace(/\D/g, "");
-  if (digits.length !== 8) return null;
-  const day = Number(digits.slice(0, 2));
-  const month = Number(digits.slice(2, 4));
-  const year = Number(digits.slice(4));
-  const date = new Date(year, month - 1, day);
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
 
-function DayField({
-  value,
-  onChange,
-  required = false,
-  invalid = false,
-}: {
-  value: string;
-  onChange: (iso: string) => void;
-  required?: boolean;
-  /** Marks a day that cannot be accepted — a schedule hour already gone. */
-  invalid?: boolean;
-}) {
-  // What is being typed, while it is being typed: the field shows the
-  // officer's own digits rather than snapping back at every keystroke, and
-  // settles on the day-first reading when they leave it.
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <input
-      type="text"
-      inputMode="numeric"
-      required={required}
-      value={draft ?? (value ? dayFirst(value) : "")}
-      placeholder="dd/mm/yyyy"
-      onChange={(event) => {
-        const text = event.target.value;
-        setDraft(text);
-        const iso = parseDayFirst(text);
-        if (iso) onChange(iso);
-        else if (!text.trim()) onChange("");
-      }}
-      onBlur={() => setDraft(null)}
-      aria-invalid={invalid || undefined}
-      className={`mt-1 w-full rounded-xl border bg-white px-3.5 py-2.5 text-xs text-bark outline-none focus:border-ember ${
-        invalid ? "border-red-300" : "border-sand-mute"
-      }`}
-    />
-  );
-}
 
   /** Which reach values are single-choice; the rest are congregation groups. */
   const REACH_VALUES = new Set(["all", "members_only", "public_website"]);
@@ -927,11 +873,15 @@ export function AnnouncementManager({
                     </label>
                     <label className="block text-xs font-semibold text-bark">
                       Register closes *
-                      <DayField
-                        required
-                        value={form.enroll_deadline}
-                        onChange={(iso) => setForm({ ...form, enroll_deadline: iso })}
-                      />
+                      <span className="mt-1 block">
+                        <DateField
+                          label="Register closes"
+                          required
+                          fullWidth
+                          value={form.enroll_deadline}
+                          onChange={(iso) => setForm({ ...form, enroll_deadline: iso })}
+                        />
+                      </span>
                     </label>
                   </div>
                 </>
@@ -940,33 +890,41 @@ export function AnnouncementManager({
               <div className="md:col-span-2 grid grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-bark">
                   Event start *
-                  <DayField
-                    required
-                    value={form.event_date_from}
-                    onChange={(iso) => {
-                      // Picking the start also sets the end to it — most
-                      // events are one day, and the officer widens the end
-                      // only when the event truly spans days. It also keeps
-                      // end >= start no matter how the start moves.
-                      setForm({ ...form, event_date_from: iso, event_date_to: iso });
-                    }}
-                  />
+                  <span className="mt-1 block">
+                    <DateField
+                      label="Event start"
+                      required
+                      fullWidth
+                      value={form.event_date_from}
+                      onChange={(iso) => {
+                        // Picking the start also sets the end to it — most
+                        // events are one day, and the officer widens the end
+                        // only when the event truly spans days. It also keeps
+                        // end >= start no matter how the start moves.
+                        setForm({ ...form, event_date_from: iso, event_date_to: iso });
+                      }}
+                    />
+                  </span>
                 </label>
 
                 <label className="block text-xs font-semibold text-bark">
                   Event end
-                  <DayField
-                    value={form.event_date_to}
-                    onChange={(iso) =>
-                      setForm({
-                        ...form,
-                        event_date_to:
-                          iso && form.event_date_from && iso < form.event_date_from
-                            ? form.event_date_from
-                            : iso,
-                      })
-                    }
-                  />
+                  <span className="mt-1 block">
+                    <DateField
+                      label="Event end"
+                      fullWidth
+                      value={form.event_date_to}
+                      onChange={(iso) =>
+                        setForm({
+                          ...form,
+                          event_date_to:
+                            iso && form.event_date_from && iso < form.event_date_from
+                              ? form.event_date_from
+                              : iso,
+                        })
+                      }
+                    />
+                  </span>
                 </label>
               </div>
 
@@ -1129,7 +1087,10 @@ export function AnnouncementManager({
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     <label className="block text-[11px] font-semibold text-moss">
                       Day
-                      <DayField
+                      <span className="mt-1 block">
+                      <DateField
+                        label="Day the post goes out"
+                        fullWidth
                         invalid={scheduleInPast}
                         value={form.publish_on}
                         onChange={(iso) =>
@@ -1140,6 +1101,7 @@ export function AnnouncementManager({
                           })
                         }
                       />
+                      </span>
                     </label>
                     <label className="block text-[11px] font-semibold text-moss">
                       Time
