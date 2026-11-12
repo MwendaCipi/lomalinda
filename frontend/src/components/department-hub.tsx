@@ -9210,11 +9210,12 @@ function DepartmentDetail({
               </table>
             )}
           </div>
-          {/* The bottom row: count on the left, role-aware actions on the right.
-              Non-members: Request to join + Contact leader (same row on mobile).
+          {/* The bottom row: the roll's count, then its actions centred under
+              it — every desk reads the same, whatever its buttons do.
+              Non-members: Request to join + Contact leader.
               Plain members: Chat (DM to leader) + Contact leader.
-              Leaders / managers: Chat (group) + Add Member. */}
-          <div className="flex shrink-0 flex-col sm:flex-row items-center justify-between gap-2 border-t border-sand-line px-4 py-3 text-center sm:text-left">
+              Leaders / managers: Chat (group) + Message + Add Member. */}
+          <div className="flex shrink-0 flex-col items-center justify-center gap-2 border-t border-sand-line px-4 py-3 text-center">
             <p className="text-xs text-moss">
               {visibleMembers.length} {visibleMembers.length === 1 ? "person" : "people"}
               {rollQuery ? ` of ${memberRows.length}` : ""} shown · {roll.length} on the roll
@@ -9231,7 +9232,7 @@ function DepartmentDetail({
                   3
                     ? "grid-cols-3"
                     : "grid-cols-2"
-                } items-center gap-2 sm:flex sm:w-auto sm:justify-end`}
+                } items-center gap-2 sm:flex sm:w-auto sm:justify-center`}
               >
                 <button
                   type="button"
@@ -9276,8 +9277,8 @@ function DepartmentDetail({
                 </button>
               </div>
             ) : !onRoll && !holdsOffice ? (
-              /* Non-member: Request to join + Contact leader, same row on mobile */
-              <div className="flex w-full flex-row items-center gap-2 sm:w-auto">
+              /* Non-member: Request to join + Contact leader, centred together */
+              <div className="flex w-full flex-row items-center justify-center gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setShowJoin(true)}
@@ -9297,7 +9298,7 @@ function DepartmentDetail({
               </div>
             ) : (onRoll || holdsOffice) && department.leader ? (
               /* Member (not leader): Chat + Contact leader */
-              <div className="flex w-full flex-row items-center gap-2 sm:w-auto">
+              <div className="flex w-full flex-row items-center justify-center gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => void chatWith(department.leader!.id)}
