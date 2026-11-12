@@ -5560,6 +5560,36 @@ class AnnouncementPublishingTests(APITestCase):
         announcement.refresh_from_db()
         self.assertTrue(announcement.published)
 
+    def test_explicit_hide_wins_over_site_channels(self):
+        from .models import Announcement
+
+        announcement = Announcement.objects.create(
+            title='Live notice', text='Body', visibility='members_only', published=True,
+            sharing_option='site,email',
+            starts_at=timezone.localdate(), expires_at=timezone.localdate() + timedelta(days=30),
+        )
+        response = self.client.patch(f'/api/members/announcements/{announcement.pk}/', {
+            'published': False,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        self.assertFalse(announcement.published)
+
+    def test_explicit_unhide_restores_a_hidden_post(self):
+        from .models import Announcement
+
+        announcement = Announcement.objects.create(
+            title='Hidden notice', text='Body', visibility='members_only', published=False,
+            sharing_option='site,email',
+            starts_at=timezone.localdate(), expires_at=timezone.localdate() + timedelta(days=30),
+        )
+        response = self.client.patch(f'/api/members/announcements/{announcement.pk}/', {
+            'published': True,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        announcement.refresh_from_db()
+        self.assertTrue(announcement.published)
+
 
 class ComposerPayloadAnnouncementTests(APITestCase):
     """The composer's exact multipart payload must save.

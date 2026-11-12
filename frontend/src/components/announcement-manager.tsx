@@ -207,9 +207,18 @@ export function AnnouncementManager({
   /** Communicate mode: the element the composer's Cancel / Post buttons are
       portalled into — the host's fixed footer, outside its scrolling body. */
   actionsTarget = null,
-}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null; actionsTarget?: HTMLElement | null } = {}) {
+  /** The host's refresh: run after Delete or Hide/Unhide so the feed behind
+      the still-open composer reads the change at once. */
+  onChanged = null,
+}: { presetAudience?: string[]; composerOnly?: boolean; onDone?: () => void; thoughtOnly?: boolean; editItem?: Announcement | null; actionsTarget?: HTMLElement | null; onChanged?: (() => void) | null } = {}) {
   // The id being edited; null while composing a new announcement.
   const [editingId, setEditingId] = useState<number | null>(null);
+  // Whether the post being edited is visible to users: Hide keeps the row
+  // on the desk while taking it out of every feed. True for a fresh post.
+  const [isPublished, setIsPublished] = useState(true);
+  // Delete / Hide / Unhide in flight — the footer's own buttons, apart from
+  // the form's save.
+  const [acting, setActing] = useState(false);
 
   type DailyWordRow = {
     id: number;
@@ -371,6 +380,7 @@ export function AnnouncementManager({
 
   function handleEdit(item: Announcement) {
     setEditingId(item.id);
+    setIsPublished(item.published ?? true);
     setMessage("");
     setAttachment(null);
     setExistingAttachment(item.attachment ? { name: item.attachment_name, size: item.attachment_size } : null);
@@ -489,6 +499,7 @@ export function AnnouncementManager({
       repeat: "none",
     });
     setEditingId(null);
+    setIsPublished(true);
     setAttachment(null);
     setExistingAttachment(null);
     setRemoveAttachment(false);
@@ -618,6 +629,9 @@ export function AnnouncementManager({
       // would otherwise keep a stale hour standing).
       payload.append("publish_at", publishAt ? publishAt.toISOString() : "");
       payload.append("repeat", form.repeat || "none");
+      // A hidden post stays hidden through a save: without an explicit
+      // published the API re-decides visibility from the sharing channels.
+      if (editingId && !isPublished) payload.append("published", "false");
       const response = await fetch(
         editingId ? `${API_URL}/api/members/announcements/${editingId}/` : `${API_URL}/api/members/announcements/`,
         {
@@ -1163,35 +1177,132 @@ export function AnnouncementManager({
     );
   }
 
+  /** Take down the post being edited, after asking once. The host closes
+      the composer and re-reads its feed. */
+  async function handleDelete() {
+    if (!editingId || acting) return;
+    const answer = await showAlert(
+      "Delete this announcement?",
+      "It will be taken down for everyone. This cannot be undone.",
+      "warning",
+      { showCancelButton: true, confirmButtonText: "Delete", cancelButtonText: "Keep it" },
+    );
+    if (!answer.isConfirmed) return;
+    setActing(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const response = await fetch(`${API_URL}/api/members/announcements/${editingId}/`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Failed to delete announcement.");
+      }
+      showAlert("Announcement Deleted", "The post was taken down for everyone.", "success");
+      resetAndCloseModal();
+    } catch (error) {
+      showAlert("Delete Failed", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  /** Hide the post from users while keeping it on the desk, or let it back
+      out. The change saves at once; the composer stays open. */
+  async function handleToggleHidden() {
+    if (!editingId || acting) return;
+    const next = !isPublished;
+    if (!next) {
+      const answer = await showAlert(
+        "Hide this announcement?",
+        "Users will stop seeing it, but it stays here on the desk. A post still waiting for its scheduled hour goes out at that hour unless the schedule is cleared.",
+        "warning",
+        { showCancelButton: true, confirmButtonText: "Hide", cancelButtonText: "Keep it visible" },
+      );
+      if (!answer.isConfirmed) return;
+    }
+    setActing(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const response = await fetch(`${API_URL}/api/members/announcements/${editingId}/`, {
+        method: "PATCH",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ published: next }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Could not change visibility.");
+      }
+      setIsPublished(next);
+      onChanged?.();
+      showAlert(next ? "Announcement Visible" : "Announcement Hidden", next ? "Users can see the post again." : "Users can no longer see the post; it stays on the desk.", "success", {
+        toast: true,
+        timer: 4000,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      showAlert("Not Changed", error instanceof Error ? error.message : "Try again.", "error");
+    } finally {
+      setActing(false);
+    }
+  }
+
   /**
-   * The composer's two buttons, at the dialog's foot rather than inside the
+   * The composer's buttons, at the dialog's foot rather than inside the
    * form.
    *
    * An announcement is a long form, and honours the request modals under
    * Fellowship instead: the fields scroll between a standing header and a
    * standing footer, so Post is in reach without scrolling a post's own
    * length. The submit rides the form by its id, since it no longer sits
-   * inside it.
+   * inside it. Editing adds the card's old Delete beside Hide — the card
+   * itself keeps Edit only.
    */
   function renderComposerActions() {
     return (
-      <div className="flex shrink-0 items-center justify-end gap-3">
-        <button
-          type="button"
-          disabled={submitting}
-          onClick={resetAndCloseModal}
-          className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          form={COMPOSER_FORM_ID}
-          disabled={submitting}
-          className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep disabled:opacity-60"
-        >
-          {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
-        </button>
+      <div className={`flex shrink-0 items-center gap-3 ${editingId ? "justify-between" : "justify-end"}`}>
+        {editingId ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={submitting || acting}
+              onClick={() => void handleDelete()}
+              className="rounded-full border border-red-200 bg-white px-4 py-2.5 text-xs font-semibold text-red-700 transition hover:border-red-400 disabled:opacity-60"
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              disabled={submitting || acting}
+              onClick={() => void handleToggleHidden()}
+              className="rounded-full border border-sand-mute bg-white px-4 py-2.5 text-xs font-semibold text-moss transition hover:border-ember disabled:opacity-60"
+            >
+              {acting ? "Working..." : isPublished ? "Hide" : "Unhide"}
+            </button>
+          </div>
+        ) : null}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={submitting || acting}
+            onClick={resetAndCloseModal}
+            className="rounded-full border border-sand-mute bg-white px-5 py-2.5 text-xs font-semibold text-moss transition hover:border-ember"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form={COMPOSER_FORM_ID}
+            disabled={submitting || acting}
+            className="rounded-full bg-sage px-6 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-sage-deep disabled:opacity-60"
+          >
+            {submitting ? "Saving..." : editingId ? "Save Changes" : "Post Announcement"}
+          </button>
+        </div>
       </div>
     );
   }

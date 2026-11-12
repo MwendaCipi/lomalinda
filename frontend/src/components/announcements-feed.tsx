@@ -117,9 +117,10 @@ function driveGiveHref(drive: FundDrive) {
 
 export function AnnouncementsFeed({
   embedded = false,
-  /** The office manages the board: each card carries its own Edit and
-      Delete, the acts the manager's board rows used to hold. The host
-      (the eldership desk's Sharing) supplies where Edit opens. */
+  /** The office manages the board: each card carries its own Edit — Delete
+      and Hide live in the composer's own bottom buttons instead, so the
+      card stays a reading surface. The host (the eldership desk's
+      Sharing) supplies where Edit opens. */
   canManage = false,
   /** The desk reads what is still waiting too: a post scheduled for a later
       hour is listed here, wearing the hour it goes live, so the office can
@@ -173,47 +174,6 @@ export function AnnouncementsFeed({
   // the offices — is gone: a post that belongs to a department or ministry
   // wears that area's name, and the feed itself stays one unfiltered list.
   const [myDepartments, setMyDepartments] = useState<MyDepartment[]>([]);
-
-  /** One card's take-down, the way the manager's board does it: asked
-      once, then deleted for everyone. The feed reads without the row the
-      moment it is gone, and the host re-reads its own stores too. */
-  async function takeDown(item: FeedItem) {
-    const Swal = (await import("sweetalert2")).default;
-    const result = await Swal.fire({
-      title: "Delete this announcement?",
-      text: `"${item.title}" will be taken down for everyone. This cannot be undone.`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Delete",
-      cancelButtonText: "Cancel",
-      confirmButtonColor: "#b91c1c",
-    });
-    if (!result.isConfirmed) return;
-    try {
-      const token = localStorage.getItem("access_token");
-      const response = await fetch(`${API_URL}/api/members/announcements/${item.id}/`, {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || "Failed to delete announcement.");
-      }
-      setItems((current) => current.filter((row) => row.id !== item.id));
-      onChanged?.();
-      await Swal.fire({
-        title: "Announcement Deleted",
-        text: `Announcement "${item.title}" was successfully deleted.`,
-        icon: "success",
-      });
-    } catch (error) {
-      await Swal.fire({
-        title: "Delete Error",
-        text: error instanceof Error ? error.message : "Failed to delete announcement.",
-        icon: "error",
-      });
-    }
-  }
 
   // The feed is the one live list. Each announcement carries the window it
   // is displayed for, so there is no From/To to pick and nothing that has
@@ -370,13 +330,6 @@ export function AnnouncementsFeed({
                             className="rounded-lg border border-sand-line bg-white px-2 py-0.5 text-[10px] font-semibold text-bark transition hover:border-ember hover:text-ember"
                           >
                             Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void takeDown(item)}
-                            className="rounded-lg border border-sand-line bg-white px-2 py-0.5 text-[10px] font-semibold text-moss transition hover:border-red-300 hover:text-red-600"
-                          >
-                            Delete
                           </button>
                         </span>
                       )}

@@ -2802,22 +2802,35 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
         remove_attachment = str(self.request.data.get('remove_attachment', '')).strip().lower() in ('1', 'true', 'yes')
         # Editing the sharing channels re-decides site visibility, so an
         # announcement whose channels gain or lose "site" flips accordingly.
+        # A PATCH carrying an explicit published (the desk's Hide/Unhide)
+        # wins instead: hiding a live post must not be undone by the
+        # channels it keeps, and a hidden post must not broadcast.
         announcement = serializer.save()
         if remove_attachment:
             if announcement.attachment:
                 announcement.attachment.delete(save=False)
             announcement.attachment = None
             announcement.save(update_fields=['attachment'])
-        sharing_raw = (announcement.sharing_option or '').lower()
-        channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
-        show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
-        if announcement.published != show_site:
-            announcement.published = show_site
-            announcement.save(update_fields=['published'])
+        explicit_published = 'published' in self.request.data
+        hiding = False
+        if explicit_published:
+            raw_published = self.request.data.get('published')
+            if isinstance(raw_published, str):
+                hiding = raw_published.strip().lower() in ('0', 'false', 'no', 'off')
+            else:
+                hiding = not raw_published
+        if not explicit_published:
+            sharing_raw = (announcement.sharing_option or '').lower()
+            channels = [c.strip() for c in sharing_raw.replace(';', ',').split(',') if c.strip()]
+            show_site = any(c in ('site', 'all') for c in channels) or sharing_raw in ('site', 'all') or not channels
+            if announcement.published != show_site:
+                announcement.published = show_site
+                announcement.save(update_fields=['published'])
         # An edit can bring a waiting post's hour forward (or post a draft that
         # was written for later): it is announced when it lands, and a post
         # already announced once is not announced again.
-        broadcast_announcement_if_due(announcement, self.request)
+        if not hiding:
+            broadcast_announcement_if_due(announcement, self.request)
 
     def perform_destroy(self, instance):
         if not can_manage_announcements(self.request.user):

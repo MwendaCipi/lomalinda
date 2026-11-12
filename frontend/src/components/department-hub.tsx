@@ -10155,6 +10155,7 @@ function DepartmentDetail({
                 composerOnly
                 editItem={shareEditItem}
                 actionsTarget={shareActionsEl}
+                onChanged={() => setShareFeedKey((key) => key + 1)}
                 onDone={() => {
                   setShowShareComposer(false);
                   setShareEditItem(null);
