@@ -576,7 +576,6 @@ export function ChatPanel() {
     }
   };
 
-  const totalUnread = rooms.reduce((sum, room) => sum + (room.unread_count || 0), 0);
   // Each tab counts its own rooms: the badge on Groups is the areas talking,
   // the one on Inbox is a member's private threads.
   // A direct message with nothing said in it yet is not in the inbox —
@@ -599,11 +598,12 @@ export function ChatPanel() {
       }`}
     >
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sand-line px-2.5 py-3 sm:px-4">
-        {/* The way out of chat, read before the name it returns from. Chat is
-            reached from the top bar on a PC and the bottom bar on a phone, and
-            neither leaves a way back once the page is open — so the page
-            carries its own, the same shape the desks use. */}
-        <div className="flex min-w-0 items-center gap-1">
+        {/* The way out of chat. Chat is reached from the top bar on a PC and
+            the bottom bar on a phone, and neither leaves a way back once the
+            page is open — so the page carries its own, the same shape the
+            desks use. Beside it, a line pointing at the + button, which is
+            how a conversation is started. */}
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           <button
             type="button"
             onClick={() => {
@@ -619,12 +619,9 @@ export function ChatPanel() {
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </button>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-bold text-bark">Chat</h2>
-            <p className="truncate text-[11px] text-moss">
-              {totalUnread > 0 ? `${totalUnread} unread` : tab === "groups" ? "Your groups" : "Your rooms and messages"}
-            </p>
-          </div>
+          <p className="min-w-0 flex-1 truncate px-1 text-xs text-moss">
+            Tap + to start a conversation.
+          </p>
         </div>
         <button
           type="button"
