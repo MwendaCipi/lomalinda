@@ -522,6 +522,19 @@ def get_pdf_styles():
         alignment=2,  # Right align
     )
 
+    # A section's own name — the band a categorised report is cut into. It
+    # stands centred on the sheet, larger than the rows it names, so a reader
+    # sees where one category ends and the next begins.
+    band_style = ParagraphStyle(
+        "TableBand",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=14,
+        alignment=1,
+        textColor=colors.HexColor("#26352f"),
+    )
+
     table_header = ParagraphStyle(
         "TableHeader",
         parent=styles["Normal"],
@@ -562,6 +575,7 @@ def get_pdf_styles():
         "cell_bold": cell_bold,
         "cell_right": cell_right,
         "cell_right_bold": cell_right_bold,
+        "band": band_style,
         "header": table_header,
         "header_right": table_header_right,
     }
@@ -691,6 +705,7 @@ def generate_treasury_pdf(
         # speaks for and the days it covers.
         group_labels = {
             "account": "Account",
+            "date": "Date",
             "month": "Month",
             "mode": "Mode of giving",
             "giver": "Giver",
@@ -769,11 +784,16 @@ def generate_treasury_pdf(
             children = group.get("groups") or []
             count = len(rows)
             pad = "&nbsp;" * (depth * 6)
-            band_indexes.append(len(ind_data))
+            # The band's name stands in the middle of the page, the way a
+            # report's section headings read: a deeper band is named under a
+            # dash, so a band inside a band is told apart without indenting
+            # the line out of the centre.
+            marker = f"{pad}— " if depth else pad
+            band_indexes.append((len(ind_data), depth))
             ind_data.append([
                 Paragraph(
-                    f"{pad}<b>{label}</b> ({count} record{'s' if count != 1 else ''})",
-                    st["cell_bold"],
+                    f"{marker}<b>{label}</b> &nbsp;({count} record{'s' if count != 1 else ''})",
+                    st["band"],
                 ),
                 Paragraph("", st["cell"]),
                 Paragraph("", st["cell"]),
@@ -834,9 +854,17 @@ def generate_treasury_pdf(
         for position, i in enumerate(data_row_indexes):
             if position % 2 == 1:
                 ind_style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#faf9f6")))
-        for i in band_indexes:
+        for i, depth in band_indexes:
             ind_style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#efe9df")))
             ind_style.append(("SPAN", (0, i), (-1, i)))
+            # Centred across the whole sheet, with the air a section needs
+            # above it — and a rule above an outer band, so one category ends
+            # and the next begins without the reader hunting for the break.
+            ind_style.append(("ALIGN", (0, i), (-1, i), "CENTER"))
+            ind_style.append(("TOPPADDING", (0, i), (-1, i), 14 if depth == 0 else 8))
+            ind_style.append(("BOTTOMPADDING", (0, i), (-1, i), 8))
+            if depth == 0:
+                ind_style.append(("LINEABOVE", (0, i), (-1, i), 0.75, colors.HexColor("#26352f")))
         for i in subtotal_indexes:
             # The amount keeps its own last column; the label spans the rest.
             ind_style.append(("SPAN", (0, i), (4, i)))

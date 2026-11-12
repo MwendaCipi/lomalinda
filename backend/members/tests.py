@@ -3154,6 +3154,28 @@ class PdfGenerationAPITests(APITestCase):
         self.assertIn('GRANDTOTAL', text)
         self.assertIn('900.00', text)
 
+    def test_the_givings_report_groups_by_date_one_day_per_section(self):
+        # A day is a category too: the paper can be cut into dated sections,
+        # each carrying its own gifts and its own subtotal.
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('300.00'), purpose='Tithe',
+            received_on=date(2026, 1, 5), payment_method='cash',
+        )
+        CashContribution.objects.create(
+            received_by=self.user, amount=Decimal('200.00'), purpose='Tithe',
+            received_on=date(2026, 1, 6), payment_method='cash',
+        )
+
+        text = self._grouped_report_text(
+            start_date='2026-01-01', end_date='2026-01-31', group_by='date',
+        )
+
+        self.assertIn('GROUPEDBYDATE', text)
+        self.assertIn('05Jan2026', text)
+        self.assertIn('06Jan2026', text)
+        self.assertLess(text.index('05Jan2026'), text.index('06Jan2026'))
+        self.assertIn('Subtotal-05Jan2026', text)
+
     def test_the_givings_report_groups_by_account_and_keeps_the_order_inside(self):
         # Grouping re-sections the ordered register: the order the desk chose
         # still runs inside each account's own block.

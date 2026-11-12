@@ -10939,7 +10939,7 @@ class TreasuryPdfView(APIView):
         group_bys = []
         for raw in request.query_params.getlist("group_by"):
             value = raw.strip().lower()
-            if value in {"account", "month", "mode", "giver"} and value not in group_bys:
+            if value in {"account", "date", "month", "mode", "giver"} and value not in group_bys:
                 group_bys.append(value)
         group_bys = group_bys[:3]
         group_by = group_bys[0] if group_bys else ""
@@ -11153,7 +11153,19 @@ class TreasuryPdfView(APIView):
                     label = datetime.strptime(f"{key}-01", "%Y-%m-%d").strftime("%B %Y")
                 except ValueError:
                     label = key or "Unknown month"
-                return label.casefold(), label
+                # The section's place is its calendar month, not its name:
+                # sorted by name, February would print before January.
+                return key, label
+            if field == "date":
+                # One band per day, read the way the church writes dates. The
+                # key is the ISO day, so the sections stand in date order
+                # whichever way the rows themselves were sorted.
+                day = str(row.get("date", ""))[:10]
+                try:
+                    label = datetime.strptime(day, "%Y-%m-%d").strftime("%d %b %Y")
+                except ValueError:
+                    return day, day or "Unknown date"
+                return day, label
             if field == "account":
                 label = str(row.get("purpose_name") or "Unassigned")
             elif field == "mode":

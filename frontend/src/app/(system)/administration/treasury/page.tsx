@@ -115,7 +115,7 @@ const isMpesaGiving = (g: IndividualGiving) => g.source === "digital" && /^m-?pe
 type ReportOrderRule = { field: "account" | "date" | "amount" | "name"; direction: "asc" | "desc" };
 
 /** The sections the givings paper can be cut into, after its order is set. */
-type ReportGroupBy = "" | "account" | "month" | "mode" | "giver";
+type ReportGroupBy = "" | "account" | "date" | "month" | "mode" | "giver";
 
 /** One level of sectioning: a section of the paper, or of the section above it. */
 type ReportGroupLevel = Exclude<ReportGroupBy, "">;
@@ -123,6 +123,7 @@ type ReportGroupLevel = Exclude<ReportGroupBy, "">;
 const reportGroupOptions: { value: ReportGroupBy; label: string }[] = [
   { value: "", label: "One sheet" },
   { value: "account", label: "Account" },
+  { value: "date", label: "Date" },
   { value: "month", label: "Month" },
   { value: "mode", label: "Mode of giving" },
   { value: "giver", label: "Giver" },
@@ -3101,9 +3102,62 @@ export default function TreasuryPage() {
               </button>
             </div>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-3">
-              {/* The accounts the period actually holds: a giving account with
-                  no gift in these dates has nothing to print, so it is not
-                  offered as a choice that would come back empty. */}
+              {/* Who the paper is for, asked first: a treasurer opening this to
+                  print one member's statement should not have to scroll past
+                  the account filters to name them. */}
+              <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
+                      Individuals
+                    </span>
+                    <p className="mt-0.5 text-[11px] text-moss">
+                      {reportMembers.length === 0
+                        ? "Every giver"
+                        : `${reportMembers.length} chosen`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMemberPicker(true)}
+                    className="shrink-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
+                  >
+                    Select individuals
+                  </button>
+                </div>
+                {reportMembers.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-1.5">
+                    {reportMembers.map((member) => (
+                      <li
+                        key={member.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-bark ring-1 ring-sand-line"
+                      >
+                        {member.name}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReportMembers((current) =>
+                              current.filter((entry) => entry.id !== member.id),
+                            )
+                          }
+                          aria-label={`Remove ${member.name}`}
+                          className="text-moss transition hover:text-ember"
+                        >
+                          <X className="h-3 w-3" aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* The two filters a treasurer pairs most — which accounts, and how
+                  the money came — share one row, so the rest of the picker fits
+                  without a scroll. The accounts the period actually holds: a
+                  giving account with no gift in these dates has nothing to
+                  print, so it is not offered as a choice that would come back
+                  empty. */}
+              <div className="grid gap-3 sm:grid-cols-2">
               <ReportCombo
                 label="Accounts"
                 summary={
@@ -3136,6 +3190,31 @@ export default function TreasuryPage() {
               />
 
               <ReportCombo
+                label="Mode of giving"
+                summary={
+                  reportModes.length === 0
+                    ? "Every mode"
+                    : reportModes
+                        .map(
+                          (code) =>
+                            reportModeOptions.find((option) => option.value === code)?.label ?? code,
+                        )
+                        .join(", ")
+                }
+                open={openReportCombo === "modes"}
+                setOpen={(open) => setOpenReportCombo(open ? "modes" : null)}
+                options={reportModeOptions}
+                selected={reportModes}
+                onToggle={(value, checked) =>
+                  setReportModes((current) =>
+                    checked ? [...current, value] : current.filter((entry) => entry !== value),
+                  )
+                }
+                onClear={() => setReportModes([])}
+              />
+              </div>
+
+              <ReportCombo
                 label="Departments"
                 summary={
                   reportDepartments.length === 0
@@ -3162,35 +3241,11 @@ export default function TreasuryPage() {
                 onClear={() => setReportDepartments([])}
               />
 
-              <ReportCombo
-                label="Mode of giving"
-                summary={
-                  reportModes.length === 0
-                    ? "Every mode"
-                    : reportModes
-                        .map(
-                          (code) =>
-                            reportModeOptions.find((option) => option.value === code)?.label ?? code,
-                        )
-                        .join(", ")
-                }
-                open={openReportCombo === "modes"}
-                setOpen={(open) => setOpenReportCombo(open ? "modes" : null)}
-                options={reportModeOptions}
-                selected={reportModes}
-                onToggle={(value, checked) =>
-                  setReportModes((current) =>
-                    checked ? [...current, value] : current.filter((entry) => entry !== value),
-                  )
-                }
-                onClear={() => setReportModes([])}
-              />
-
               {/* One column at a time: the paper prints in this order, then
-                  the sections it is cut into (see Group by, below). */}
+                  the categories it is cut into (see Categories, below). */}
               <div className="space-y-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
-                  Order by
+                  Document order
                 </span>
                 {(() => {
                   const rule = reportOrderRules[0] ?? { field: "date", direction: "desc" };
@@ -3246,7 +3301,7 @@ export default function TreasuryPage() {
               {reportMode === "individual" && (
                 <div className="space-y-2">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
-                    Group by
+                    Categories
                   </span>
                   {reportGroupBys.length === 0 ? (
                     <select
@@ -3335,51 +3390,6 @@ export default function TreasuryPage() {
                 </div>
               )}
 
-              <div className="rounded-2xl border border-sand-line bg-sand-linen/40 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-moss">
-                      Individuals
-                    </span>
-                    <p className="mt-0.5 text-[11px] text-moss">
-                      {reportMembers.length === 0
-                        ? "Every giver"
-                        : `${reportMembers.length} chosen`}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowMemberPicker(true)}
-                    className="shrink-0 rounded-xl border border-sand-mute bg-white px-3 py-1.5 text-[11px] font-semibold text-bark transition hover:bg-sand"
-                  >
-                    Select individuals
-                  </button>
-                </div>
-                {reportMembers.length > 0 && (
-                  <ul className="mt-2 flex flex-wrap gap-1.5">
-                    {reportMembers.map((member) => (
-                      <li
-                        key={member.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-bark ring-1 ring-sand-line"
-                      >
-                        {member.name}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setReportMembers((current) =>
-                              current.filter((entry) => entry.id !== member.id),
-                            )
-                          }
-                          aria-label={`Remove ${member.name}`}
-                          className="text-moss transition hover:text-ember"
-                        >
-                          <X className="h-3 w-3" aria-hidden="true" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
             </div>
             {/* One row of answers: the X at the top already closes, so no
                 Cancel — Send, Download and Preview stand side by side, each
