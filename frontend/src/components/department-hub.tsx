@@ -7483,7 +7483,12 @@ function DepartmentDetail({
       // inside itself: the desk's heading band carries the desk's name, and
       // the rota's search and dates answer in that row. Clearing here would
       // race the panel's own write and leave the strip row bare.
-      !(isEldership && subTab === "rota") && subTab !== "spiritual"
+      !(isEldership && subTab === "rota") &&
+      // The leadership register is the directory drawn inside this desk, and
+      // it writes the directory's search into this same slot; clearing here
+      // would race its write and leave the page without its bar.
+      !(keepsLeadership && subTab === "leaders") &&
+      subTab !== "spiritual"
     ) {
       // The deaconate's property and rota panels are the console desk's own:
       // they write their own search (and rota filters) to this slot from
@@ -7497,6 +7502,7 @@ function DepartmentDetail({
     subTab,
     isDeaconate,
     isEldership,
+    keepsLeadership,
     rollSearch,
     eventSearch,
     calendarView,
@@ -10569,7 +10575,7 @@ export function DepartmentHub({
     };
   }, [directoryHeading, embedded, loading, initialDept, selected, setCustomHeader, setHeadingFirst]);
   const directoryNeedle = directorySearch.trim().toLowerCase();
-  const visibleDepartments = directoryNeedle
+  const matchedDepartments = directoryNeedle
     ? departments.filter((d) =>
         // The short forms ride beside the row's words: the initials on its
         // badge, the church record's own code and the older spellings of it
@@ -10579,6 +10585,12 @@ export function DepartmentHub({
           .includes(directoryNeedle)
       )
     : departments;
+  // The register reads as an index: every ministry and department in the
+  // order its name takes — an office the church record keeps last still turns
+  // up where a reader would look for it, and a search keeps the same order.
+  const visibleDepartments = [...matchedDepartments].sort((a, b) =>
+    a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+  );
 
   const loadDirectory = useCallback(() => {
     fetch(`${API_URL}/api/members/departments/`, { headers: authHeaders() })
