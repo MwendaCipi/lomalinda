@@ -5747,6 +5747,125 @@ class JoinRequestApprovalTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class JoinRequestReachesTheOfficeTests(APITestCase):
+    """The office hears when somebody asks to join — at the ask, not after.
+
+    A request sits in the queue as "Awaiting their email" until the person
+    types the code we mailed them. Nothing used to be said at that point: the
+    only notice fired when a completed request still needed a decision, so a
+    queue of people waiting on their own email went unmentioned and a join
+    request could sit unseen for days. These pin the notice to the moment the
+    ask is made, and pin it to leaving exactly once.
+    """
+
+    def setUp(self):
+        from django.utils import timezone
+
+        self.elder = User.objects.create_user('bell.elder', 'bell.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder', phone_number='0700111222')
+        self.plain = User.objects.create_user('bell.plain', 'bell.plain@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.plain, role='member', roles='member')
+        self.now = timezone.now()
+
+    def _signup(self, email='bell.joiner@example.com'):
+        return self.client.post('/api/members/auth/enrollment-request/', {
+            'name': 'Bell Joiner',
+            'first_name': 'Bell',
+            'last_name': 'Joiner',
+            'email': email,
+            'phone_number': '0712345678',
+            'joining_mode': 'baptism',
+            'privacy_accepted': True,
+            'terms_accepted': True,
+        }, format='json')
+
+    def _code_from_inbox(self, address):
+        """The verification code as the person themselves would read it."""
+        for letter in reversed(mail.outbox):
+            if address in letter.to and 'Your verification code is:' in letter.body:
+                return letter.body.split('Your verification code is:')[1].strip().splitlines()[0].strip()
+        self.fail('No verification letter was sent to ' + address)
+
+    def test_a_new_join_request_tells_the_elders_straight_away(self):
+        from .models import ChurchNotification
+
+        response = self._signup()
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        enrollment = EnrollmentRequest.objects.get(email='bell.joiner@example.com')
+        self.assertIsNotNone(enrollment.notified_at)
+        self.assertTrue(
+            ChurchNotification.objects.filter(user=self.elder, title__icontains='join request').exists()
+        )
+        # The office's own inbox, not just the bell — a leader who has not
+        # opened the app that day still learns about it.
+        self.assertTrue(any('bell.elder@example.com' in letter.to for letter in mail.outbox))
+        # A plain member is not an office holder: no bell, no letter.
+        self.assertFalse(ChurchNotification.objects.filter(user=self.plain).exists())
+
+    def test_the_named_person_is_on_the_notice(self):
+        from .models import ChurchNotification
+
+        self._signup()
+        notice = ChurchNotification.objects.filter(user=self.elder, title__icontains='join request').first()
+        self.assertIsNotNone(notice)
+        self.assertIn('Bell Joiner', notice.title)
+
+    def test_completing_the_same_request_does_not_announce_it_twice(self):
+        from .models import ChurchNotification
+
+        self._signup()
+        before = ChurchNotification.objects.filter(user=self.elder).count()
+        letters_before = len(mail.outbox)
+        raw = self._code_from_inbox('bell.joiner@example.com')
+
+        complete = self.client.post('/api/members/auth/enrollment/complete/', {
+            'code': raw,
+            'username': 'bell.joiner',
+            'password': 'ChurchPass#2026',
+            'phone_number': '0712345678',
+            'privacy_accepted': True,
+            'terms_accepted': True,
+        }, format='json')
+        self.assertEqual(complete.status_code, status.HTTP_201_CREATED, complete.data)
+
+        self.assertEqual(ChurchNotification.objects.filter(user=self.elder).count(), before)
+        self.assertEqual(len(mail.outbox), letters_before)
+
+    def test_a_request_that_never_rang_the_bell_is_announced_when_it_completes(self):
+        """Requests started before this change (or while no listener existed)
+        still reach the office once their account exists to act on."""
+        from .models import ChurchNotification
+
+        enrollment = EnrollmentRequest.objects.create(
+            email='silent.joiner@example.com',
+            first_name='Silent',
+            last_name='Joiner',
+            joining_mode='baptism',
+            status='verification_pending',
+            expires_at=self.now + timedelta(hours=48),
+        )
+        raw = enrollment.set_code()
+        enrollment.save(update_fields=['code'])
+        self.assertIsNone(enrollment.notified_at)
+
+        complete = self.client.post('/api/members/auth/enrollment/complete/', {
+            'code': raw,
+            'username': 'silent.joiner',
+            'password': 'ChurchPass#2026',
+            'phone_number': '0712345678',
+            'privacy_accepted': True,
+            'terms_accepted': True,
+        }, format='json')
+        self.assertEqual(complete.status_code, status.HTTP_201_CREATED, complete.data)
+
+        enrollment.refresh_from_db()
+        self.assertIsNotNone(enrollment.notified_at)
+        self.assertTrue(
+            ChurchNotification.objects.filter(user=self.elder, title__icontains='join request').exists()
+        )
+
+
 class TransferApprovalTests(APITestCase):
     """Join and membership-transfer requests are answered by admin, elder and clerk."""
 

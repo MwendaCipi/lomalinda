@@ -1362,6 +1362,21 @@ class EnrollmentRequestView(generics.CreateAPIView):
             send_enrollment_email(enrollment)
         except Exception:
             pass
+        # The office is told now, at the moment the request is made — not only
+        # after the person has confirmed their address. Someone's name sitting
+        # in the queue under "Awaiting their email" with no word to anyone is
+        # how a join request goes unseen for a fortnight: the people who decide
+        # membership need the bell while the ask is new.
+        told = notify_request_safely(
+            'join',
+            enrollment.pk,
+            submitted_by=f'{enrollment.first_name} {enrollment.last_name}'.strip() or email,
+            church_name=current_church_name(),
+            submitted_at=enrollment.created_at,
+        )
+        if told:
+            enrollment.notified_at = timezone.now()
+            enrollment.save(update_fields=['notified_at'])
         return Response({
             'message': 'A verification code has been sent to your email. Enter it on this page to continue your account setup.',
             'token': str(enrollment.token)
@@ -1415,17 +1430,21 @@ class EnrollmentCompleteView(APIView):
         enrollment.terms_accepted_at = timezone.now()
         enrollment.terms_of_use_version = CURRENT_TERMS_OF_USE_VERSION
         enrollment.save(update_fields=['user', 'status', 'privacy_accepted_at', 'privacy_policy_version', 'terms_accepted_at', 'terms_of_use_version'])
-        if not user.is_active:
-            # The request only becomes something to answer now: the person has
-            # verified their address and chosen their account, so the office is
-            # told about a request it can act on rather than an unverified form.
-            notify_request_safely(
+        if not user.is_active and enrollment.notified_at is None:
+            # A request that never rang the bell at the start still gets its
+            # notice here, once its account exists to act on. Requests the
+            # office already heard about are not announced again: the queue is
+            # where this stage shows up, not a second round of texts.
+            told = notify_request_safely(
                 'join',
                 enrollment.pk,
                 submitted_by=f'{enrollment.first_name} {enrollment.last_name}'.strip() or enrollment.email,
                 church_name=current_church_name(),
                 submitted_at=enrollment.created_at,
             )
+            if told:
+                enrollment.notified_at = timezone.now()
+                enrollment.save(update_fields=['notified_at'])
         return Response({'message': 'Your account request has been submitted for review. You can sign in after approval.' if not user.is_active else 'Your account is ready. You can now sign in.'}, status=status.HTTP_201_CREATED)
 
 

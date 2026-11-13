@@ -1088,6 +1088,10 @@ class EnrollmentRequest(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    # When the office was told about this request. Set the first time a notice
+    # leaves, so the later stages of the same request cannot ring the same
+    # bells twice.
+    notified_at = models.DateTimeField(null=True, blank=True)
 
     # The raw verification code only lives in memory: set_code() keeps it here
     # so the email that goes out in the same request cycle can quote it, while
