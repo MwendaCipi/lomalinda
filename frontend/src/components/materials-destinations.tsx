@@ -133,12 +133,12 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
   "bible-egw": [
     {
       key: "bible",
-      href: fellowshipResources.bible,
-      label: "Read & Search the Holy Bible",
+      href: fellowshipResources.bibleReader,
+      label: "Read the Holy Bible",
       description:
-        "Search books, chapters, parallel translations and study references for daily devotions, family altar and lesson preparation.",
+        "All 66 books, read in the app: pick a book and a chapter for daily devotions, family altar and lesson preparation.",
       icon: Library,
-      isExternal: true,
+      isExternal: false,
     },
     {
       key: "egw",

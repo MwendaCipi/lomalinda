@@ -18,16 +18,19 @@ const referenceShelf: {
   description: string;
   href: string;
   button: string;
+  /** The Bible is a page of this app; the EGW writings are another site. */
+  external: boolean;
 }[] = [
   {
     id: "bible",
     icon: BookOpen,
     badge: "Scripture & Word",
-    title: "Read & Search the Holy Bible",
+    title: "Read the Holy Bible",
     description:
-      "Search books, chapters, parallel translations, and study references for daily personal devotions, family altar, and Sabbath School lesson preparation.",
-    href: fellowshipResources.bible,
-    button: "Launch Online Bible Search",
+      "All 66 books read in the app — pick a book and a chapter for daily devotions, family altar, and Sabbath School lesson preparation.",
+    href: fellowshipResources.bibleReader,
+    button: "Open the Bible reader",
+    external: false,
   },
   {
     id: "egw",
@@ -38,6 +41,7 @@ const referenceShelf: {
       "The complete published writings of Ellen G. White, searchable by topic, scripture reference or phrase.",
     href: fellowshipResources.egw,
     button: "Open EGW Writings",
+    external: true,
   },
 ];
 
@@ -64,12 +68,10 @@ export default function BiblePage() {
         <div className="grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
           {referenceShelf.map((item) => {
             const Icon = item.icon;
-            return (
-              <a
-                key={item.id}
-                href={item.href}
-                className="group flex flex-col justify-between rounded-2xl border border-sand-line bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:border-ember hover:shadow-md sm:p-5"
-              >
+            const cardClass =
+              "group flex flex-col justify-between rounded-2xl border border-sand-line bg-white p-3.5 shadow-sm transition hover:-translate-y-0.5 hover:border-ember hover:shadow-md sm:p-5";
+            const body = (
+              <>
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <span
@@ -94,7 +96,16 @@ export default function BiblePage() {
                     <span>&rarr;</span>
                   </span>
                 </div>
+              </>
+            );
+            return item.external ? (
+              <a key={item.id} href={item.href} className={cardClass}>
+                {body}
               </a>
+            ) : (
+              <Link key={item.id} href={item.href} className={cardClass}>
+                {body}
+              </Link>
             );
           })}
         </div>

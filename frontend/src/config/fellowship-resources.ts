@@ -1,5 +1,7 @@
 export const fellowshipResources = {
   bible: "https://www.biblesearch.me/Bible",
+  /** The Bible read in the app — its own page, fetched chapter by chapter. */
+  bibleReader: "/materials/bible/read",
   egw: "https://egwwritings.org/allCollection/en",
   hymnal: "https://sdahymnals.com/Hymnal/",
   // All 220 Nyimbo za Kristo hymns, searchable by number or title. The old
