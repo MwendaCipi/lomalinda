@@ -9,6 +9,49 @@ import { Bell, Monitor, Moon, RotateCcw, SlidersHorizontal, Sun, Type } from "lu
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+/** The church's other notices, one switch each, as `/me/` names them. */
+type NoticePrefs = {
+  notify_pledge_reminders: boolean;
+  notify_duty_reminders: boolean;
+  notify_meeting_invitations: boolean;
+  notify_signature_requests: boolean;
+  notify_fund_drive_notices: boolean;
+  notify_request_notices: boolean;
+};
+
+const NOTICE_ROWS: { key: keyof NoticePrefs; label: string; detail: string }[] = [
+  {
+    key: "notify_pledge_reminders",
+    label: "Pledge reminders",
+    detail: "The email the day before a pledge you made falls due.",
+  },
+  {
+    key: "notify_duty_reminders",
+    label: "Duty rota reminders",
+    detail: "A text, email and phone alert when you are on a duty line.",
+  },
+  {
+    key: "notify_meeting_invitations",
+    label: "Meeting invitations",
+    detail: "Board and business meeting invitations, with the agenda and RSVP.",
+  },
+  {
+    key: "notify_signature_requests",
+    label: "Signature requests",
+    detail: "When a report is waiting for your office's signature.",
+  },
+  {
+    key: "notify_fund_drive_notices",
+    label: "Fund drive notices",
+    detail: "When a drive you raised or watch has closed.",
+  },
+  {
+    key: "notify_request_notices",
+    label: "Requests and approvals",
+    detail: "When a request is waiting for your office to answer.",
+  },
+];
+
 export default function MemberPreferencesPage() {
   const {
     theme,
@@ -31,6 +74,7 @@ export default function MemberPreferencesPage() {
   // Receipts default to the email carrying the receipt alone, with the SMS
   // standing behind it; "both" texts every receipt beside the email.
   const [receiptBoth, setReceiptBoth] = useState<boolean | null>(null);
+  const [noticePrefs, setNoticePrefs] = useState<NoticePrefs | null>(null);
   const [pushSupport, setPushSupport] = useState<PushSupport | null>(null);
   // A switch press asks the browser for permission, which can take a moment
   // on a phone — the button says so rather than looking dead.
@@ -56,6 +100,14 @@ export default function MemberPreferencesPage() {
           push: !!data.announce_push,
         });
         setReceiptBoth(data.receipt_delivery === "both");
+        setNoticePrefs({
+          notify_pledge_reminders: !!data.notify_pledge_reminders,
+          notify_duty_reminders: !!data.notify_duty_reminders,
+          notify_meeting_invitations: !!data.notify_meeting_invitations,
+          notify_signature_requests: !!data.notify_signature_requests,
+          notify_fund_drive_notices: !!data.notify_fund_drive_notices,
+          notify_request_notices: !!data.notify_request_notices,
+        });
       })
       .catch(() => {});
     return () => {
@@ -141,6 +193,30 @@ export default function MemberPreferencesPage() {
       showAlert("Saved", "Your giving receipt delivery has been updated.", "success");
     } catch {
       setReceiptBoth(previous);
+      showAlert("Not saved", "Your preference could not be saved. Try again.", "error");
+    } finally {
+      setSavingPref(false);
+    }
+  }
+
+  /** One of the church's other notices, switched on or off on its own. */
+  async function saveNoticePref(field: keyof NoticePrefs, value: boolean) {
+    if (!token || !noticePrefs) return;
+    const previous = noticePrefs;
+    setNoticePrefs({ ...noticePrefs, [field]: value });
+    setPrefMessage("");
+    setSavingPref(true);
+    try {
+      const response = await fetch(`${API_URL}/api/members/me/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!response.ok) throw new Error();
+      setPrefMessage("Notification preference saved.");
+      showAlert("Saved", "Your notification preference has been updated.", "success");
+    } catch {
+      setNoticePrefs(previous);
       showAlert("Not saved", "Your preference could not be saved. Try again.", "error");
     } finally {
       setSavingPref(false);
@@ -462,6 +538,38 @@ export default function MemberPreferencesPage() {
                   className="h-4 w-4 rounded accent-bark"
                 />
               </label>
+            </div>
+          )}
+
+          {/* Every other notice the church sends, one switch each: a member
+              who wants no pledge nudge still wants their duty line. */}
+          {noticePrefs && (
+            <div className="mt-4 border-t border-sand-line pt-4">
+              <h3 className="text-sm font-bold text-bark">Other notifications</h3>
+              <p className="mt-1 text-xs text-moss">
+                Each kind of notice has its own switch. Turning one off silences that kind everywhere — email, text,
+                phone alert and the bell in the app — without touching the others.
+              </p>
+              <div className="mt-3 space-y-3">
+                {NOTICE_ROWS.map(({ key, label, detail }) => (
+                  <label
+                    key={key}
+                    className="flex items-center justify-between gap-4 rounded-2xl bg-sand p-3.5 text-xs font-medium cursor-pointer"
+                  >
+                    <span>
+                      <strong className="block text-bark">{label}</strong>
+                      <span className="text-moss">{detail}</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      disabled={savingPref}
+                      checked={noticePrefs[key]}
+                      onChange={(e) => saveNoticePref(key, e.target.checked)}
+                      className="h-4 w-4 rounded accent-bark"
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
           )}
 

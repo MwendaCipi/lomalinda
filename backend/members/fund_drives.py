@@ -120,7 +120,11 @@ def notify_drive_ended(drive) -> int:
     if not links:
         return 0
 
-    people = list(User.objects.filter(pk__in=links).select_related('member_profile'))
+    people = [
+        person
+        for person in User.objects.filter(pk__in=links).select_related('member_profile')
+        if getattr(getattr(person, 'member_profile', None), 'notify_fund_drive_notices', True)
+    ]
 
     try:
         ChurchNotification.objects.bulk_create([

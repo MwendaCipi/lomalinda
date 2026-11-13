@@ -251,6 +251,7 @@ def push_request_notification(kind: str, title: str, body: str, link: str, audie
     return sum(
         push_to_user(user, title=title, body=body, link=link)
         for user in request_audience(kind, audience)
+        if getattr(getattr(user, 'member_profile', None), 'notify_request_notices', True)
     )
 
 

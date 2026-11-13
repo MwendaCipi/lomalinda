@@ -33,6 +33,10 @@ export function EventEnrollModal({
 }) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [donorName, setDonorName] = useState("");
+  // Whose seat is being bought: the member's own, or somebody they are paying
+  // for — the same choice the giving form offers for a gift.
+  const [who, setWho] = useState<"self" | "other">("self");
+  const [attendeeName, setAttendeeName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // On open, the member's own phone and name arrive pre-filled.
@@ -63,6 +67,11 @@ export function EventEnrollModal({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!target) return;
+    const attendee = who === "other" ? attendeeName.trim() : "";
+    if (who === "other" && !attendee) {
+      showAlert("Name needed", "Type the name of the person this seat is for.", "warning");
+      return;
+    }
     const cleanPhone = phoneNumber.replace(/\D/g, "");
     if (cleanPhone.length !== 10) {
       showAlert("Invalid phone number", "Please enter a valid 10-digit M-Pesa number.", "error");
@@ -83,21 +92,28 @@ export function EventEnrollModal({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ phone_number: phoneNumber, donor_name: donorName.trim() }),
+          body: JSON.stringify({
+            phone_number: phoneNumber,
+            donor_name: donorName.trim(),
+            ...(attendee ? { attendee_name: attendee } : {}),
+          }),
         },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const fieldProblem = Array.isArray(data.phone_number)
           ? data.phone_number[0]
-          : data.phone_number;
+          : data.phone_number || data.attendee_name;
         throw new Error(
           data.detail || fieldProblem || "The registration could not be started.",
         );
       }
       showAlert(
         "M-Pesa Prompt Sent",
-        data.message || "Check your phone for the M-Pesa prompt; the seat is yours once it is paid.",
+        data.message ||
+          (attendee
+            ? `Check your phone for the M-Pesa prompt; ${attendee}'s seat is written once it is paid.`
+            : "Check your phone for the M-Pesa prompt; the seat is yours once it is paid."),
         "info",
         { toast: true, position: "top-end", timer: 7000, showConfirmButton: false },
       );
@@ -164,16 +180,56 @@ export function EventEnrollModal({
         ) : (
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4 pt-4 sm:px-7">
-              <label className="block text-sm font-medium text-bark">
-                Name
-                <input
-                  type="text"
-                  placeholder="Your name"
-                  value={donorName}
-                  onChange={(event) => setDonorName(event.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
-                />
-              </label>
+              <div>
+                <p className="text-sm font-medium text-bark">Who is this seat for?</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ["self", "Myself"],
+                      ["other", "Another person"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setWho(value)}
+                      aria-pressed={who === value}
+                      className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                        who === value
+                          ? "border-ember bg-ember/10 text-ember"
+                          : "border-sand-mute text-moss hover:border-ember hover:text-bark"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {who === "self" ? (
+                <label className="block text-sm font-medium text-bark">
+                  Name
+                  <input
+                    type="text"
+                    placeholder="Your name"
+                    value={donorName}
+                    onChange={(event) => setDonorName(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
+                  />
+                </label>
+              ) : (
+                <label className="block text-sm font-medium text-bark">
+                  Their name *
+                  <input
+                    type="text"
+                    required
+                    placeholder="Full name of the person attending"
+                    value={attendeeName}
+                    onChange={(event) => setAttendeeName(event.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-sand-mute px-4 py-2.5 text-sm outline-none focus:border-ember"
+                  />
+                </label>
+              )}
               <label className="block text-sm font-medium text-bark">
                 M-Pesa Phone Number *
                 <input
@@ -191,8 +247,9 @@ export function EventEnrollModal({
                 />
               </label>
               <p className="text-[11px] leading-relaxed text-moss">
-                Your seat is written once the payment lands. The desk can also enroll you by hand
-                on the day.
+                {who === "other"
+                  ? `The M-Pesa prompt goes to your phone; the seat is written in ${attendeeName.trim() || "their"} name once the payment lands, and your own seat stays yours.`
+                  : "Your seat is written once the payment lands. The desk can also enroll you by hand on the day."}
               </p>
             </div>
             <div className="shrink-0 border-t border-sand-line px-6 pb-5 pt-3 sm:px-7">

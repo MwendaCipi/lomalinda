@@ -3462,6 +3462,14 @@ class MeView(APIView):
             'declared_relationships': profile.declared_relationships if profile else [],
             'announce_email': profile.announce_email if profile else True,
             'announce_push': profile.announce_push if profile else True,
+            # The rest of the church's notices, each on its own switch — the
+            # preferences page draws one toggle per field.
+            'notify_pledge_reminders': profile.notify_pledge_reminders if profile else True,
+            'notify_duty_reminders': profile.notify_duty_reminders if profile else True,
+            'notify_meeting_invitations': profile.notify_meeting_invitations if profile else True,
+            'notify_signature_requests': profile.notify_signature_requests if profile else True,
+            'notify_fund_drive_notices': profile.notify_fund_drive_notices if profile else True,
+            'notify_request_notices': profile.notify_request_notices if profile else True,
             # How a giving receipt reaches this member: the email goes out
             # first, and the SMS follows only when the email could not be
             # sent — unless the member asked for both channels on their
@@ -3507,10 +3515,12 @@ class MeView(APIView):
         for or ask to give: the giving form reads it rather than asking on
         every gift.
 
-        The two switches govern mass communication only: ``announce_email``
-        withholds announcement broadcasts, ``announce_push`` announcement
-        notifications. Duty notices — a request waiting for your office —
-        always arrive regardless of both.
+        The announcement switches govern mass communication only:
+        ``announce_email`` withholds announcement broadcasts, ``announce_push``
+        announcement notifications. The ``notify_*`` switches each silence one
+        other kind of notice — a pledge reminder, a duty line, a meeting
+        invitation, a signature ask, a fund drive closing, a request waiting —
+        without touching the rest.
 
         A giving receipt's channels are the member's own choice too: the
         default delivers the email first and hands the SMS only the slips
@@ -3594,7 +3604,16 @@ class MeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        for field in ('announce_email', 'announce_push'):
+        for field in (
+            'announce_email',
+            'announce_push',
+            'notify_pledge_reminders',
+            'notify_duty_reminders',
+            'notify_meeting_invitations',
+            'notify_signature_requests',
+            'notify_fund_drive_notices',
+            'notify_request_notices',
+        ):
             if field in request.data:
                 value = request.data[field]
                 if value in (True, False, 'true', 'false', 'True', 'False', '1', '0', 1, 0):
@@ -7647,6 +7666,11 @@ def _notify_report_signatories(signing):
         query |= Q(member_profile__roles__contains=role) | Q(member_profile__role=role)
     audience = User.objects.filter(query, is_active=True).distinct()
     for member in audience:
+        profile = getattr(member, 'member_profile', None)
+        if profile is not None and not profile.notify_signature_requests:
+            # This office asked not to be told about signature asks; the report
+            # still waits on the desk, it simply raises no bell.
+            continue
         ChurchNotification.objects.create(
             user=member,
             title=f'Signature requested: {signing.title}',
@@ -15352,10 +15376,17 @@ def confirm_event_enrollment(context, contribution):
     event = DepartmentEvent.objects.filter(pk=event_id).first()
     if event is None:
         return
-    member = User.objects.filter(pk=context.get('enrollment_member_id')).first()
-    name = (context.get('donor_name') or '').strip()
-    if not name and member is not None:
-        name = member.get_full_name()
+    # A seat bought for somebody else belongs to them by name, not to the
+    # account that paid; the payer keeps their own seat for another day.
+    attendee_name = (context.get('enrollment_attendee_name') or '').strip()
+    if attendee_name:
+        member = None
+        name = attendee_name
+    else:
+        member = User.objects.filter(pk=context.get('enrollment_member_id')).first()
+        name = (context.get('donor_name') or '').strip()
+        if not name and member is not None:
+            name = member.get_full_name()
     enrollment = None
     if member is not None:
         enrollment = EventEnrollment.objects.filter(event=event, member=member).first()
@@ -15639,7 +15670,19 @@ class DepartmentEventEnrollView(APIView):
             return Response({'detail': 'This event has no registration fee.'}, status=status.HTTP_400_BAD_REQUEST)
         if event.registration_deadline and event.registration_deadline < timezone.localdate():
             return Response({'detail': 'Registration for this event has closed.'}, status=status.HTTP_400_BAD_REQUEST)
-        if EventEnrollment.objects.filter(event=event, member=request.user).exists():
+        # Whose seat this is: the member's own, or somebody they are paying for
+        # — a child, a parent, a guest. The money still leaves the payer's
+        # phone, so the prompt and the receipt stay theirs.
+        attendee_name = str(request.data.get('attendee_name') or '').strip()[:160]
+        if attendee_name.casefold() == (request.user.get_full_name() or '').strip().casefold():
+            attendee_name = ''
+        if attendee_name:
+            if EventEnrollment.objects.filter(event=event, name__iexact=attendee_name).exists():
+                return Response(
+                    {'attendee_name': f'{attendee_name} already has a seat for this event.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif EventEnrollment.objects.filter(event=event, member=request.user).exists():
             return Response({'detail': 'You are already enrolled for this event.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             phone_number = normalize_mpesa_phone(str(request.data.get('phone_number') or ''))
@@ -15667,6 +15710,7 @@ class DepartmentEventEnrollView(APIView):
             'donor_name': donor_name,
             'enrollment_event_id': event.id,
             'enrollment_member_id': request.user.id,
+            'enrollment_attendee_name': attendee_name,
         }
         try:
             initiate_stk_push_for_context(

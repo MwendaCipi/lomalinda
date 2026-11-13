@@ -187,6 +187,28 @@ class MemberProfile(models.Model):
     # these; duty notices (a request waiting for the office) always arrive.
     announce_email = models.BooleanField(default=True, help_text="Receive announcement broadcasts by email")
     announce_push = models.BooleanField(default=True, help_text="Receive announcements as phone/browser notifications")
+    # Every other notice the church sends, each on its own switch so a member
+    # can silence one kind without losing the rest. They all default on: these
+    # are the church's own household messages — a pledge, a duty, a meeting, a
+    # signature, a drive, a request — not a mailing list.
+    notify_pledge_reminders = models.BooleanField(
+        default=True, help_text="Receive the reminder the day before a pledge falls due",
+    )
+    notify_duty_reminders = models.BooleanField(
+        default=True, help_text="Receive duty rota reminders — text, email, phone alert and bell",
+    )
+    notify_meeting_invitations = models.BooleanField(
+        default=True, help_text="Receive board and business meeting invitations",
+    )
+    notify_signature_requests = models.BooleanField(
+        default=True, help_text="Be told when a report waits for your office's signature",
+    )
+    notify_fund_drive_notices = models.BooleanField(
+        default=True, help_text="Be told when a fund drive you raised or watch has closed",
+    )
+    notify_request_notices = models.BooleanField(
+        default=True, help_text="Be told when a request waits for your office",
+    )
     # How a completed gift's receipt reaches the member. The email goes out
     # first; the SMS follows only when the email could not be sent (no
     # address, or the send failed) — unless the member asked for both.

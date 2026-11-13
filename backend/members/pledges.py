@@ -222,7 +222,17 @@ def pledge_reminder_body(pledge, church_name: str) -> str:
 
 
 def send_pledge_reminder(pledge, church_name: str) -> bool:
-    """Email one reminder and stamp it. False when the send failed."""
+    """Email one reminder and stamp it. False when the send failed.
+
+    A member who switched pledge reminders off is stamped without a letter:
+    the reminder was handled by not being sent, and tomorrow's run should not
+    ask again.
+    """
+    profile = getattr(pledge.user, 'member_profile', None)
+    if profile is not None and not profile.notify_pledge_reminders:
+        pledge.pledge_reminder_sent_at = timezone.now()
+        pledge.save(update_fields=['pledge_reminder_sent_at'])
+        return True
     subject = f"Your pledge tomorrow — {money(pledge.pledge_amount)}"
     try:
         sent = send_mail(

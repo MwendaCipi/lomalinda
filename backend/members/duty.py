@@ -361,6 +361,12 @@ def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'rem
     than a failure. Returns what actually went.
     """
     report = {'bell': False, 'letter': False, 'sms': False, 'push': 0}
+    profile = getattr(user, 'member_profile', None)
+    if profile is not None and not profile.notify_duty_reminders:
+        # Switched off: the rota reaches this member by no channel at all — no
+        # text, no letter, no phone alert, no bell. The report says nothing
+        # went, which is the truth.
+        return report
     subject = reminder_subject(entry) if kind == 'reminder' else assignment_subject(entry)
     body = render_duty_message(kind, entry, officer, user, church_name)
 

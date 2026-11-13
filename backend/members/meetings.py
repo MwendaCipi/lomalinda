@@ -253,6 +253,11 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
     already_emailed = set()
 
     for user in audience:
+        profile = getattr(user, 'member_profile', None)
+        if profile is not None and not profile.notify_meeting_invitations:
+            # A member who switched invitations off is not invited by any
+            # channel — and is not counted as invited either.
+            continue
         context = invitation_context(meeting, user, church_name)
         message = render_message(template, context)
         # The board answers its invite from the phone: the confirm link rides

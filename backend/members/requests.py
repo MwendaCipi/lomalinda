@@ -263,7 +263,11 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
 
     sent = 0
     already_sent = set()
-    listeners = list(request_audience(kind, audience))
+    listeners = [
+        user
+        for user in request_audience(kind, audience)
+        if getattr(getattr(user, 'member_profile', None), 'notify_request_notices', True)
+    ]
     for user in listeners:
         address = (user.email or '').strip()
         # Two accounts can share one mailbox; that inbox gets one letter, not two.
