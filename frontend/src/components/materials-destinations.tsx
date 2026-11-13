@@ -161,11 +161,12 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
     },
     {
       key: "nzk",
-      href: fellowshipResources.nzk,
+      href: fellowshipResources.nzkHymnbook,
       label: "Nyimbo za Kristo (Swahili)",
-      description: "Browse the complete Swahili hymnbook collection for Sabbath School, vespers, family devotions and worship praise.",
+      description:
+        "All 220 Swahili hymns, read in the app: search by number, title or first line, with verses and chorus.",
       icon: Music2,
-      isExternal: true,
+      isExternal: false,
     },
   ],
 };
