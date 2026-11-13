@@ -32,6 +32,37 @@ function fold(value: string) {
     .trim();
 }
 
+/** The address carries the open hymn as `?hymn=42`, so a hymn can be shared. */
+const HYMN_PARAM = "hymn";
+/** Fired on this tab when the address changes; `popstate` only reaches us on Back. */
+const HYMN_URL_EVENT = "hymnal:hymn-changed";
+
+/** The open hymn as the address names it, or "" when it names none. */
+function readHymn() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(HYMN_PARAM) ?? "";
+}
+
+function subscribeToHymn(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  window.addEventListener(HYMN_URL_EVENT, onChange);
+  return () => {
+    window.removeEventListener("popstate", onChange);
+    window.removeEventListener(HYMN_URL_EVENT, onChange);
+  };
+}
+
+/** Puts the open hymn in the address, without adding a history entry. */
+function setHymn(number: number | null) {
+  const url = new URL(window.location.href);
+  if (number === null) url.searchParams.delete(HYMN_PARAM);
+  else url.searchParams.set(HYMN_PARAM, String(number));
+  // Replaced rather than pushed: opening a hymn is not a step deeper into the
+  // page, so Back still leaves the hymnbook instead of closing one hymn.
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  window.dispatchEvent(new Event(HYMN_URL_EVENT));
+}
+
 /**
  * The device's own list of marked hymns, per hymnbook.
  *
@@ -152,13 +183,24 @@ function HymnalPreparing({ data }: { data: HymnalData }) {
 
 function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKey: string; credit?: ReactNode }) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<number | null>(null);
   const [favouritesOnly, setFavouritesOnly] = useState(false);
   const readerRef = useRef<HTMLDivElement | null>(null);
 
   const hymns = data.hymns;
   const numbers = useMemo(() => new Set(hymns.map((hymn) => hymn.n)), [hymns]);
   const store = useMemo(() => makeFavourites(storageKey, numbers), [storageKey, numbers]);
+
+  // A leader sends the hymn they mean rather than "number 42 in Wende Nyasaye",
+  // so the address carries the open hymn and the page opens on it. The address
+  // is the state itself, read through `useSyncExternalStore` rather than
+  // `useSearchParams` because this page is a static export: a hymn opened by a
+  // click and one opened by a link then take the same path, and Back closes the
+  // hymn instead of the page growing its own parallel idea of where it is.
+  const linked = useSyncExternalStore(subscribeToHymn, readHymn, () => "");
+  const selected = useMemo(() => {
+    const number = Number.parseInt(linked, 10);
+    return Number.isFinite(number) && numbers.has(number) ? number : null;
+  }, [linked, numbers]);
 
   // The marks live in the device, not in React state: the page is rendered on
   // the server, where there is no storage to read, so the list starts empty
@@ -187,13 +229,16 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
   }, [query, favouritesOnly, favourites, hymns, haystacks]);
 
   const open = useCallback((number: number) => {
-    setSelected(number);
+    setHymn(number);
     // The reader is the other half of the page: on a phone the list is gone by
     // now, and on a desk the hymn has to be in view rather than 200 rows below.
     requestAnimationFrame(() => {
       readerRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   }, []);
+
+  /** Back to the index, and the address stops naming a hymn. */
+  const close = useCallback(() => setHymn(null), []);
 
   const hymn = selected === null ? null : hymns.find((entry) => entry.n === selected) ?? null;
   const position = hymn ? hymns.findIndex((entry) => entry.n === hymn.n) : -1;
@@ -253,7 +298,7 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
             </button>
           </div>
 
-          <div className="max-h-[calc(100vh-13rem)] overflow-y-auto rounded-xl border border-sand-line bg-white shadow-sm">
+          <div className="max-h-[calc(100vh-13rem)] overflow-y-auto rounded-xl border border-sand-line bg-sand/60 shadow-sm">
             {matches.length === 0 ? (
               <p className="p-4 text-xs leading-5 text-moss">
                 {favouritesOnly && !favourites.length ? (
@@ -266,26 +311,37 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
                 )}
               </p>
             ) : (
-              <ul className="divide-y divide-sand-line">
+              <ul className="space-y-1.5 p-1.5">
                 {matches.map((entry) => {
                   const active = entry.n === selected;
                   const starred = starOn(entry.n);
                   return (
-                    <li key={entry.n} className="flex items-center">
+                    <li
+                      key={entry.n}
+                      className={`flex items-center gap-1 rounded-xl border pr-1 shadow-sm transition ${
+                        active
+                          ? "border-ember bg-ember/5"
+                          : "border-sand-line bg-white hover:-translate-y-px hover:border-ember/50"
+                      }`}
+                    >
                       <button
                         type="button"
                         onClick={() => open(entry.n)}
                         aria-current={active ? "true" : undefined}
-                        className={`flex min-w-0 flex-1 items-baseline gap-2.5 px-3 py-2 text-left transition ${
-                          active ? "bg-ember/10 text-ember" : "text-bark hover:bg-sand"
-                        }`}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-2.5 text-left"
                       >
                         <span
-                          className={`w-8 shrink-0 text-[11px] font-semibold tabular-nums ${active ? "text-ember" : "text-sand-mute"}`}
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold tabular-nums ${
+                            active ? "bg-ember text-white" : "bg-sand text-bark"
+                          }`}
                         >
                           {entry.n}
                         </span>
-                        <span className="min-w-0 flex-1 text-[13px] font-medium leading-5">{entry.title}</span>
+                        <span
+                          className={`min-w-0 flex-1 text-[13px] font-semibold leading-5 ${active ? "text-ember" : "text-bark"}`}
+                        >
+                          {entry.title}
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -293,11 +349,11 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
                         aria-pressed={starred}
                         aria-label={`${starred ? "Remove" : "Mark"} hymn ${entry.n}, ${entry.title}`}
                         title={starred ? "Remove from favourites" : "Mark as a favourite"}
-                        className={`shrink-0 rounded-full p-2 pr-3 transition ${
+                        className={`shrink-0 rounded-full p-1.5 transition ${
                           starred ? "text-ember" : "text-sand-mute hover:text-ember"
                         }`}
                       >
-                        <Star className={`h-3.5 w-3.5 ${starred ? "fill-ember" : "fill-none"}`} aria-hidden="true" />
+                        <Star className={`h-4 w-4 ${starred ? "fill-ember" : "fill-none"}`} aria-hidden="true" />
                       </button>
                     </li>
                   );
@@ -345,7 +401,7 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelected(null)}
+                  onClick={close}
                   className="rounded-full border border-sand-line px-3 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember lg:hidden"
                 >
                   All hymns
