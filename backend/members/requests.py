@@ -263,12 +263,12 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
 
     sent = 0
     already_sent = set()
-    listeners = [
-        user
-        for user in request_audience(kind, audience)
-        if getattr(getattr(user, 'member_profile', None), 'notify_request_notices', True)
-    ]
+    from .models import wants_notice
+
+    listeners = list(request_audience(kind, audience))
     for user in listeners:
+        if not wants_notice(user, 'requests', 'email'):
+            continue
         address = (user.email or '').strip()
         # Two accounts can share one mailbox; that inbox gets one letter, not two.
         if not address or address.lower() in already_sent:
@@ -295,6 +295,7 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
             link=desk_link,
         )
         for user in listeners
+        if wants_notice(user, 'requests', 'bell')
     ])
 
     # And, for those who enabled it, the phone itself: an encrypted web push
@@ -316,6 +317,8 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
             else f"{church_name}: New {label} from {context_common['user_name']}. Review: {full_link}"
         )
         for user in listeners:
+            if not wants_notice(user, 'requests', 'sms'):
+                continue
             phone = getattr(getattr(user, 'member_profile', None), 'phone_number', '')
             if phone:
                 try:

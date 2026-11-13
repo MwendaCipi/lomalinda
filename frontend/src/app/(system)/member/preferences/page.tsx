@@ -9,48 +9,35 @@ import { Bell, Monitor, Moon, RotateCcw, SlidersHorizontal, Sun, Type } from "lu
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-/** The church's other notices, one switch each, as `/me/` names them. */
-type NoticePrefs = {
-  notify_pledge_reminders: boolean;
-  notify_duty_reminders: boolean;
-  notify_meeting_invitations: boolean;
-  notify_signature_requests: boolean;
-  notify_fund_drive_notices: boolean;
-  notify_request_notices: boolean;
-};
+/** The channels a notice can arrive by, as the church's records name them. */
+const NOTICE_CHANNELS = [
+  { key: "email", label: "Email" },
+  { key: "sms", label: "SMS" },
+  { key: "push", label: "Push" },
+  { key: "bell", label: "In app" },
+] as const;
 
-const NOTICE_ROWS: { key: keyof NoticePrefs; label: string; detail: string }[] = [
-  {
-    key: "notify_pledge_reminders",
-    label: "Pledge reminders",
-    detail: "The email the day before a pledge you made falls due.",
-  },
-  {
-    key: "notify_duty_reminders",
-    label: "Duty rota reminders",
-    detail: "A text, email and phone alert when you are on a duty line.",
-  },
-  {
-    key: "notify_meeting_invitations",
-    label: "Meeting invitations",
-    detail: "Board and business meeting invitations, with the agenda and RSVP.",
-  },
-  {
-    key: "notify_signature_requests",
-    label: "Signature requests",
-    detail: "When a report is waiting for your office's signature.",
-  },
-  {
-    key: "notify_fund_drive_notices",
-    label: "Fund drive notices",
-    detail: "When a drive you raised or watch has closed.",
-  },
-  {
-    key: "notify_request_notices",
-    label: "Requests and approvals",
-    detail: "When a request is waiting for your office to answer.",
-  },
+type NoticeChannel = (typeof NOTICE_CHANNELS)[number]["key"];
+
+/**
+ * Every notice, with the channels that notice actually uses.
+ *
+ * One answer per notice per channel — "pledge reminders by SMS" is its own
+ * switch — so a member can keep the email and drop the text. The channels
+ * listed here are the ones the church really sends; nothing offers a switch
+ * for a message that never travels that way.
+ */
+const NOTICE_ROWS: { key: string; label: string; channels: NoticeChannel[] }[] = [
+  { key: "pledge", label: "Pledge reminders", channels: ["email"] },
+  { key: "duty", label: "Duty rota reminders", channels: ["email", "sms", "push", "bell"] },
+  { key: "meetings", label: "Meeting invitations", channels: ["email", "sms", "bell"] },
+  { key: "signatures", label: "Signature requests", channels: ["bell"] },
+  { key: "fund_drives", label: "Fund drive notices", channels: ["email", "push", "bell"] },
+  { key: "requests", label: "Requests and approvals", channels: ["email", "sms", "push", "bell"] },
 ];
+
+/** `{ "pledge_email": true, "duty_sms": false, … }` — missing means on. */
+type NoticePrefs = Record<string, boolean>;
 
 export default function MemberPreferencesPage() {
   const {
@@ -100,14 +87,11 @@ export default function MemberPreferencesPage() {
           push: !!data.announce_push,
         });
         setReceiptBoth(data.receipt_delivery === "both");
-        setNoticePrefs({
-          notify_pledge_reminders: !!data.notify_pledge_reminders,
-          notify_duty_reminders: !!data.notify_duty_reminders,
-          notify_meeting_invitations: !!data.notify_meeting_invitations,
-          notify_signature_requests: !!data.notify_signature_requests,
-          notify_fund_drive_notices: !!data.notify_fund_drive_notices,
-          notify_request_notices: !!data.notify_request_notices,
-        });
+        setNoticePrefs(
+          data.notification_prefs && typeof data.notification_prefs === "object"
+            ? (data.notification_prefs as NoticePrefs)
+            : {},
+        );
       })
       .catch(() => {});
     return () => {
@@ -199,8 +183,8 @@ export default function MemberPreferencesPage() {
     }
   }
 
-  /** One of the church's other notices, switched on or off on its own. */
-  async function saveNoticePref(field: keyof NoticePrefs, value: boolean) {
+  /** One notice on one channel, switched on or off on its own. */
+  async function saveNoticePref(field: string, value: boolean) {
     if (!token || !noticePrefs) return;
     const previous = noticePrefs;
     setNoticePrefs({ ...noticePrefs, [field]: value });
@@ -210,7 +194,7 @@ export default function MemberPreferencesPage() {
       const response = await fetch(`${API_URL}/api/members/me/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ [field]: value }),
+        body: JSON.stringify({ notification_prefs: { [field]: value } }),
       });
       if (!response.ok) throw new Error();
       setPrefMessage("Notification preference saved.");
@@ -547,27 +531,35 @@ export default function MemberPreferencesPage() {
             <div className="mt-4 border-t border-sand-line pt-4">
               <h3 className="text-sm font-bold text-bark">Other notifications</h3>
               <p className="mt-1 text-xs text-moss">
-                Each kind of notice has its own switch. Turning one off silences that kind everywhere — email, text,
-                phone alert and the bell in the app — without touching the others.
+                Each notice has a switch for every way it can reach you. Untick the email and keep the text, or drop
+                both — the others are untouched.
               </p>
-              <div className="mt-3 space-y-3">
-                {NOTICE_ROWS.map(({ key, label, detail }) => (
-                  <label
-                    key={key}
-                    className="flex items-center justify-between gap-4 rounded-2xl bg-sand p-3.5 text-xs font-medium cursor-pointer"
-                  >
-                    <span>
-                      <strong className="block text-bark">{label}</strong>
-                      <span className="text-moss">{detail}</span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      disabled={savingPref}
-                      checked={noticePrefs[key]}
-                      onChange={(e) => saveNoticePref(key, e.target.checked)}
-                      className="h-4 w-4 rounded accent-bark"
-                    />
-                  </label>
+              <div className="mt-3 space-y-2">
+                {NOTICE_ROWS.map((row) => (
+                  <div key={row.key} className="rounded-2xl bg-sand p-3.5">
+                    <p className="text-xs font-bold text-bark">{row.label}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                      {row.channels.map((channel) => {
+                        const field = `${row.key}_${channel}`;
+                        const label = NOTICE_CHANNELS.find((entry) => entry.key === channel)?.label ?? channel;
+                        return (
+                          <label
+                            key={field}
+                            className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-moss"
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={savingPref}
+                              checked={noticePrefs[field] !== false}
+                              onChange={(e) => saveNoticePref(field, e.target.checked)}
+                              className="h-4 w-4 rounded accent-bark"
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

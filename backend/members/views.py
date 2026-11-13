@@ -50,6 +50,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, DepartmentServiceHistory, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
+from .models import notification_pref_keys, wants_notice
 from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentPolicy, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
 from .models import ReportSigning, ReportSignature
 from .mpesa import MpesaConfigurationError, initiate_b2c_payout, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
@@ -3462,14 +3463,13 @@ class MeView(APIView):
             'declared_relationships': profile.declared_relationships if profile else [],
             'announce_email': profile.announce_email if profile else True,
             'announce_push': profile.announce_push if profile else True,
-            # The rest of the church's notices, each on its own switch — the
-            # preferences page draws one toggle per field.
-            'notify_pledge_reminders': profile.notify_pledge_reminders if profile else True,
-            'notify_duty_reminders': profile.notify_duty_reminders if profile else True,
-            'notify_meeting_invitations': profile.notify_meeting_invitations if profile else True,
-            'notify_signature_requests': profile.notify_signature_requests if profile else True,
-            'notify_fund_drive_notices': profile.notify_fund_drive_notices if profile else True,
-            'notify_request_notices': profile.notify_request_notices if profile else True,
+            # The rest of the church's notices, one switch per notice per
+            # channel — `pledge_email`, `duty_sms` — with every key answered so
+            # the preferences page can draw the whole grid.
+            'notification_prefs': {
+                key: (profile.notification_prefs if profile else {}).get(key, True)
+                for key in notification_pref_keys()
+            },
             # How a giving receipt reaches this member: the email goes out
             # first, and the SMS follows only when the email could not be
             # sent — unless the member asked for both channels on their
@@ -3604,16 +3604,7 @@ class MeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        for field in (
-            'announce_email',
-            'announce_push',
-            'notify_pledge_reminders',
-            'notify_duty_reminders',
-            'notify_meeting_invitations',
-            'notify_signature_requests',
-            'notify_fund_drive_notices',
-            'notify_request_notices',
-        ):
+        for field in ('announce_email', 'announce_push'):
             if field in request.data:
                 value = request.data[field]
                 if value in (True, False, 'true', 'false', 'True', 'False', '1', '0', 1, 0):
@@ -3633,6 +3624,34 @@ class MeView(APIView):
             if profile.receipt_delivery != new_value:
                 profile.receipt_delivery = new_value
                 changed.append('receipt_delivery')
+
+        if 'notification_prefs' in request.data:
+            submitted = request.data.get('notification_prefs')
+            if not isinstance(submitted, dict):
+                return Response(
+                    {'notification_prefs': 'Send the switches as an object of true/false values.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            valid = set(notification_pref_keys())
+            prefs = dict(profile.notification_prefs or {})
+            for key, value in submitted.items():
+                if key not in valid:
+                    return Response(
+                        {'notification_prefs': f'Unknown notification switch: {key}.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if value in (True, 'true', 'True', '1', 1):
+                    prefs[key] = True
+                elif value in (False, 'false', 'False', '0', 0):
+                    prefs[key] = False
+                else:
+                    return Response(
+                        {'notification_prefs': f'{key} must be true or false.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if prefs != (profile.notification_prefs or {}):
+                profile.notification_prefs = prefs
+                changed.append('notification_prefs')
 
         if changed:
             profile.save(update_fields=changed)
@@ -7665,9 +7684,10 @@ def _notify_report_signatories(signing):
     for role in roles:
         query |= Q(member_profile__roles__contains=role) | Q(member_profile__role=role)
     audience = User.objects.filter(query, is_active=True).distinct()
+    from .models import wants_notice
+
     for member in audience:
-        profile = getattr(member, 'member_profile', None)
-        if profile is not None and not profile.notify_signature_requests:
+        if not wants_notice(member, 'signatures', 'bell'):
             # This office asked not to be told about signature asks; the report
             # still waits on the desk, it simply raises no bell.
             continue

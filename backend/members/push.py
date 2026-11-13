@@ -248,10 +248,12 @@ def push_request_notification(kind: str, title: str, body: str, link: str, audie
     if not vapid_keys_ready():
         logger.warning('Push skipped for the %s desk: the church has no VAPID key pair on record.', kind)
         return 0
+    from .models import wants_notice
+
     return sum(
         push_to_user(user, title=title, body=body, link=link)
         for user in request_audience(kind, audience)
-        if getattr(getattr(user, 'member_profile', None), 'notify_request_notices', True)
+        if wants_notice(user, 'requests', 'push')
     )
 
 

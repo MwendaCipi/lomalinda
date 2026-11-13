@@ -252,11 +252,15 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
     invited = sms_sent = emailed = 0
     already_emailed = set()
 
+    from .models import wants_notice
+
     for user in audience:
-        profile = getattr(user, 'member_profile', None)
-        if profile is not None and not profile.notify_meeting_invitations:
-            # A member who switched invitations off is not invited by any
-            # channel — and is not counted as invited either.
+        # Per channel: an invite can arrive by text and not by email, or in the
+        # app alone. A member who wants none of them is not invited at all.
+        send_bell = wants_notice(user, 'meetings', 'bell')
+        send_sms = notify_sms and wants_notice(user, 'meetings', 'sms')
+        send_email = notify_email and wants_notice(user, 'meetings', 'email')
+        if not (send_bell or send_sms or send_email):
             continue
         context = invitation_context(meeting, user, church_name)
         message = render_message(template, context)
@@ -267,16 +271,17 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
         notify_body = (
             f"{message}\n\nConfirm your attendance: {confirm_link}" if confirm_link else message
         )
-        ChurchNotification.objects.create(
-            user=user,
-            title=f'{subject_kind} Invitation: {meeting.title}',
-            message=notify_body,
-            link=f'/board-meeting?m={meeting.id}&u={user.id}&t={rsvp_token(meeting.id, user.id)}' if confirm_link else '',
-        )
+        if send_bell:
+            ChurchNotification.objects.create(
+                user=user,
+                title=f'{subject_kind} Invitation: {meeting.title}',
+                message=notify_body,
+                link=f'/board-meeting?m={meeting.id}&u={user.id}&t={rsvp_token(meeting.id, user.id)}' if confirm_link else '',
+            )
         invited += 1
         # SMS first — try sending SMS, fall back to email if it fails
         phone = getattr(getattr(user, 'member_profile', None), 'phone_number', '')
-        if notify_sms and phone:
+        if send_sms and phone:
             try:
                 from . import sms
                 meet_url = (
@@ -291,7 +296,7 @@ def broadcast_invitation(meeting, kind, church_name, template=None, notify_sms=T
                 pass
         # Email falls back if SMS was not sent
         address = (user.email or '').strip().lower()
-        if notify_email and address and address not in already_emailed:
+        if send_email and address and address not in already_emailed:
             already_emailed.add(address)
             try:
                 send_mail(

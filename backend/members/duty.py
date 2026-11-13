@@ -360,33 +360,32 @@ def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'rem
     being written, and a phone with no subscription is the normal state rather
     than a failure. Returns what actually went.
     """
+    from .models import wants_notice
+
     report = {'bell': False, 'letter': False, 'sms': False, 'push': 0}
-    profile = getattr(user, 'member_profile', None)
-    if profile is not None and not profile.notify_duty_reminders:
-        # Switched off: the rota reaches this member by no channel at all — no
-        # text, no letter, no phone alert, no bell. The report says nothing
-        # went, which is the truth.
-        return report
+    # One channel at a time: a member may take the rota by text and drop the
+    # email, or keep the bell and mute the phone.
     subject = reminder_subject(entry) if kind == 'reminder' else assignment_subject(entry)
     body = render_duty_message(kind, entry, officer, user, church_name)
 
     phone = officer_phone(officer, user)
-    if phone:
+    if phone and wants_notice(user, 'duty', 'sms'):
         try:
             report['sms'] = sms.send(phone, body)
         except Exception:
             report['sms'] = False
 
-    try:
-        ChurchNotification.objects.create(
-            user=user, title=subject, message=body, link=rota_link(entry),
-        )
-        report['bell'] = True
-    except Exception:  # a notice never breaks the run that sends it
-        pass
+    if wants_notice(user, 'duty', 'bell'):
+        try:
+            ChurchNotification.objects.create(
+                user=user, title=subject, message=body, link=rota_link(entry),
+            )
+            report['bell'] = True
+        except Exception:  # a notice never breaks the run that sends it
+            pass
 
     address = (getattr(user, 'email', '') or '').strip()
-    if address:
+    if address and wants_notice(user, 'duty', 'email'):
         try:
             sent = send_mail(
                 subject, body, sender_for(IDENTITY), [address],
@@ -398,12 +397,13 @@ def notify_officer(entry, officer, user, church_name: str = '', kind: str = 'rem
 
     # A duty is a request to serve, not mass communication: it rides past the
     # announcement switch, exactly as the other duty notices do.
-    try:
-        report['push'] = push_to_user(
-            user, title=subject, body=body.split('\n')[0], link=rota_link(entry),
-        )
-    except Exception:
-        report['push'] = 0
+    if wants_notice(user, 'duty', 'push'):
+        try:
+            report['push'] = push_to_user(
+                user, title=subject, body=body.split('\n')[0], link=rota_link(entry),
+            )
+        except Exception:
+            report['push'] = 0
     return report
 
 

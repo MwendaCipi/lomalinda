@@ -120,16 +120,15 @@ def notify_drive_ended(drive) -> int:
     if not links:
         return 0
 
-    people = [
-        person
-        for person in User.objects.filter(pk__in=links).select_related('member_profile')
-        if getattr(getattr(person, 'member_profile', None), 'notify_fund_drive_notices', True)
-    ]
+    from .models import wants_notice
+
+    people = list(User.objects.filter(pk__in=links).select_related('member_profile'))
 
     try:
         ChurchNotification.objects.bulk_create([
             ChurchNotification(user=person, title=title, message=message, link=links[person.pk])
             for person in people
+            if wants_notice(person, 'fund_drives', 'bell')
         ])
     except Exception:
         pass
@@ -139,6 +138,8 @@ def notify_drive_ended(drive) -> int:
     for person in people:
         address = (person.email or '').strip()
         if not address or address.lower() in sent_to:
+            continue
+        if not wants_notice(person, 'fund_drives', 'email'):
             continue
         sent_to.add(address.lower())
         try:
@@ -153,6 +154,8 @@ def notify_drive_ended(drive) -> int:
         from .push import push_to_user
 
         for person in people:
+            if not wants_notice(person, 'fund_drives', 'push'):
+                continue
             try:
                 push_to_user(
                     person, title=title, body=message.split('\n')[0],

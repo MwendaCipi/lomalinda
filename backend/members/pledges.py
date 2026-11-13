@@ -228,8 +228,10 @@ def send_pledge_reminder(pledge, church_name: str) -> bool:
     the reminder was handled by not being sent, and tomorrow's run should not
     ask again.
     """
-    profile = getattr(pledge.user, 'member_profile', None)
-    if profile is not None and not profile.notify_pledge_reminders:
+    from .models import wants_notice
+
+    if not wants_notice(pledge.user, 'pledge', 'email'):
+        # Switched off by email: stamp it so tomorrow's run does not ask again.
         pledge.pledge_reminder_sent_at = timezone.now()
         pledge.save(update_fields=['pledge_reminder_sent_at'])
         return True

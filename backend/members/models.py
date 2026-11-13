@@ -79,6 +79,37 @@ def format_invitation_code(raw_code):
     return f'{code[:4]}-{code[4:]}'
 
 
+#: The channels a notice can travel by. "bell" is the in-app notification list.
+NOTIFICATION_CHANNELS = (
+    ('email', 'Email'),
+    ('sms', 'SMS'),
+    ('push', 'Push notification'),
+    ('bell', 'In the app'),
+)
+
+#: Every notice the church sends that a member may switch off, and the channels
+#: that notice actually uses. A notice is silenced one channel at a time — a
+#: member can keep a pledge reminder by email and drop the text — so the switches
+#: are the cross product of this list, stored as ``{category}_{channel}``.
+NOTIFICATION_PREFERENCES = (
+    ('pledge', 'Pledge reminders', ('email',)),
+    ('duty', 'Duty rota reminders', ('email', 'sms', 'push', 'bell')),
+    ('meetings', 'Meeting invitations', ('email', 'sms', 'bell')),
+    ('signatures', 'Signature requests', ('bell',)),
+    ('fund_drives', 'Fund drive notices', ('email', 'push', 'bell')),
+    ('requests', 'Requests and approvals', ('email', 'sms', 'push', 'bell')),
+)
+
+
+def notification_pref_keys() -> list[str]:
+    """Every switch's name, in the order the preferences page draws them."""
+    return [
+        f'{category}_{channel}'
+        for category, _label, channels in NOTIFICATION_PREFERENCES
+        for channel in channels
+    ]
+
+
 class MemberProfile(models.Model):
     ACCOUNT_TYPE_CHOICES = [('member', 'Member'), ('friend', 'Friend of SDA Church Loma Linda'), ('sabbath_school', 'Sabbath School')]
     # Hard-coded church roles; see members/roles.py for the full definitions.
@@ -187,27 +218,14 @@ class MemberProfile(models.Model):
     # these; duty notices (a request waiting for the office) always arrive.
     announce_email = models.BooleanField(default=True, help_text="Receive announcement broadcasts by email")
     announce_push = models.BooleanField(default=True, help_text="Receive announcements as phone/browser notifications")
-    # Every other notice the church sends, each on its own switch so a member
-    # can silence one kind without losing the rest. They all default on: these
-    # are the church's own household messages — a pledge, a duty, a meeting, a
-    # signature, a drive, a request — not a mailing list.
-    notify_pledge_reminders = models.BooleanField(
-        default=True, help_text="Receive the reminder the day before a pledge falls due",
-    )
-    notify_duty_reminders = models.BooleanField(
-        default=True, help_text="Receive duty rota reminders — text, email, phone alert and bell",
-    )
-    notify_meeting_invitations = models.BooleanField(
-        default=True, help_text="Receive board and business meeting invitations",
-    )
-    notify_signature_requests = models.BooleanField(
-        default=True, help_text="Be told when a report waits for your office's signature",
-    )
-    notify_fund_drive_notices = models.BooleanField(
-        default=True, help_text="Be told when a fund drive you raised or watch has closed",
-    )
-    notify_request_notices = models.BooleanField(
-        default=True, help_text="Be told when a request waits for your office",
+    # Which notices reach this member, and by which channel: one answer per
+    # notice per channel, keyed `{category}_{channel}` — `pledge_email`,
+    # `duty_sms`. A missing key is on, so a new notice arrives until the member
+    # says otherwise and an existing account needs no backfill.
+    notification_prefs = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Per-notice, per-channel switches, e.g. {'pledge_email': false, 'duty_sms': false}",
     )
     # How a completed gift's receipt reaches the member. The email goes out
     # first; the SMS follows only when the email could not be sent (no
@@ -1036,6 +1054,20 @@ class DepartmentEvent(models.Model):
 
     def __str__(self):
         return f"{self.department} — {self.title} ({self.event_date})"
+
+
+def wants_notice(user, category: str, channel: str) -> bool:
+    """Whether `user` wants this notice on this channel. Silence is explicit.
+
+    Anything the profile does not answer is on: a member who has never opened
+    Preferences still hears from the church, and a channel added to a notice
+    later does not arrive switched off for everybody.
+    """
+    profile = getattr(user, 'member_profile', None)
+    if profile is None:
+        return True
+    prefs = profile.notification_prefs or {}
+    return prefs.get(f'{category}_{channel}', True) is not False
 
 
 class EventEnrollment(models.Model):
