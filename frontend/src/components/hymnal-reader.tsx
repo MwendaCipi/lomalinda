@@ -34,6 +34,8 @@ function fold(value: string) {
 
 /** The address carries the open hymn as `?hymn=42`, so a hymn can be shared. */
 const HYMN_PARAM = "hymn";
+/** The address can carry a section filter, such as `?section=extra`. */
+const SECTION_PARAM = "section";
 /** Fired on this tab when the address changes; `popstate` only reaches us on Back. */
 const HYMN_URL_EVENT = "hymnal:hymn-changed";
 
@@ -41,6 +43,22 @@ const HYMN_URL_EVENT = "hymnal:hymn-changed";
 function readHymn() {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get(HYMN_PARAM) ?? "";
+}
+
+/** Which part of the book the index is showing. */
+type HymnSection = "all" | "standard" | "extra";
+
+/** The English book starts its second collection here; the hymnal ends at 695. */
+const EXTRA_START = 696;
+
+/** The active section filter as the address names it, or "" when none. */
+function readSection() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get(SECTION_PARAM) ?? "";
+}
+
+function sectionFromUrl(raw: string): HymnSection {
+  return raw === "standard" || raw === "extra" ? raw : "all";
 }
 
 function subscribeToHymn(onChange: () => void) {
@@ -52,11 +70,24 @@ function subscribeToHymn(onChange: () => void) {
   };
 }
 
-/** Puts the open hymn in the address, without adding a history entry. */
-function setHymn(number: number | null) {
+/**
+ * Writes the address once, without adding a history entry.
+ *
+ * The hymn and the section are written together because they are one piece of
+ * state: opening a hymn the current filter hides has to widen the filter in the
+ * same write, or two dispatches would leave the page showing a hymn its own
+ * index says is not there. `undefined` leaves either one as it is.
+ */
+function writeAddress({ hymn, section }: { hymn?: number | null; section?: HymnSection }) {
   const url = new URL(window.location.href);
-  if (number === null) url.searchParams.delete(HYMN_PARAM);
-  else url.searchParams.set(HYMN_PARAM, String(number));
+  if (hymn !== undefined) {
+    if (hymn === null) url.searchParams.delete(HYMN_PARAM);
+    else url.searchParams.set(HYMN_PARAM, String(hymn));
+  }
+  if (section !== undefined) {
+    if (section === "all") url.searchParams.delete(SECTION_PARAM);
+    else url.searchParams.set(SECTION_PARAM, section);
+  }
   // Replaced rather than pushed: opening a hymn is not a step deeper into the
   // page, so Back still leaves the hymnbook instead of closing one hymn.
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
@@ -190,6 +221,18 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
   const numbers = useMemo(() => new Set(hymns.map((hymn) => hymn.n)), [hymns]);
   const store = useMemo(() => makeFavourites(storageKey, numbers), [storageKey, numbers]);
 
+  // The English book is the hymnal's 695 hymns plus a second collection from
+  // 696 up, so its index can be narrowed to either part. A book with no extras
+  // never shows the strip.
+  const hasExtraHymns = useMemo(() => hymns.some((hymn) => hymn.n >= EXTRA_START), [hymns]);
+  const linkedSection = useSyncExternalStore(subscribeToHymn, readSection, () => "");
+  // The filter is the address, like the open hymn: there is no second copy in
+  // React state for the two to disagree about.
+  const currentSection = sectionFromUrl(linkedSection);
+  const highest = useMemo(() => hymns.reduce((top, hymn) => Math.max(top, hymn.n), 0), [hymns]);
+
+  const selectSection = useCallback((next: HymnSection) => writeAddress({ section: next }), []);
+
   // A leader sends the hymn they mean rather than "number 42 in Wende Nyasaye",
   // so the address carries the open hymn and the page opens on it. The address
   // is the state itself, read through `useSyncExternalStore` rather than
@@ -223,22 +266,36 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
   const matches = useMemo(() => {
     const words = fold(query).split(" ").filter(Boolean);
     return hymns.filter((hymn, index) => {
+      if (currentSection === "standard" && hymn.n >= EXTRA_START) return false;
+      if (currentSection === "extra" && hymn.n < EXTRA_START) return false;
       if (favouritesOnly && !favourites.includes(hymn.n)) return false;
       return words.every((word) => haystacks[index].includes(word));
     });
-  }, [query, favouritesOnly, favourites, hymns, haystacks]);
+  }, [query, favouritesOnly, favourites, hymns, haystacks, currentSection]);
 
-  const open = useCallback((number: number) => {
-    setHymn(number);
-    // The reader is the other half of the page: on a phone the list is gone by
-    // now, and on a desk the hymn has to be in view rather than 200 rows below.
-    requestAnimationFrame(() => {
-      readerRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-    });
-  }, []);
+  const open = useCallback(
+    (number: number) => {
+      // A hymn the filter hides — a favourite, or the next hymn in the reader —
+      // widens the filter as it opens, so the index keeps showing the hymn that
+      // is being read.
+      const hidden =
+        currentSection === "standard"
+          ? number >= EXTRA_START
+          : currentSection === "extra"
+            ? number < EXTRA_START
+            : false;
+      writeAddress({ hymn: number, section: hidden ? "all" : undefined });
+      // The reader is the other half of the page: on a phone the list is gone by
+      // now, and on a desk the hymn has to be in view rather than 200 rows below.
+      requestAnimationFrame(() => {
+        readerRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    },
+    [currentSection]
+  );
 
   /** Back to the index, and the address stops naming a hymn. */
-  const close = useCallback(() => setHymn(null), []);
+  const close = useCallback(() => writeAddress({ hymn: null }), []);
 
   const hymn = selected === null ? null : hymns.find((entry) => entry.n === selected) ?? null;
   const position = hymn ? hymns.findIndex((entry) => entry.n === hymn.n) : -1;
@@ -253,6 +310,38 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
           steps aside rather than sitting under it. */}
       <section className={`min-w-0 ${hymn ? "hidden lg:block" : "block"}`} aria-label="Hymn index">
         <div className="sticky top-1 space-y-2 lg:top-4">
+          {hasExtraHymns && (
+            <div className="flex items-center gap-1 rounded-xl border border-sand-line bg-white/70 p-1 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => selectSection("all")}
+                className={`flex-1 rounded-lg py-1 text-center transition ${
+                  currentSection === "all" ? "bg-ember text-white shadow-xs" : "text-moss hover:text-bark"
+                }`}
+              >
+                All ({hymns.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => selectSection("standard")}
+                className={`flex-1 rounded-lg py-1 text-center transition ${
+                  currentSection === "standard" ? "bg-ember text-white shadow-xs" : "text-moss hover:text-bark"
+                }`}
+              >
+                Hymnal (1–{EXTRA_START - 1})
+              </button>
+              <button
+                type="button"
+                onClick={() => selectSection("extra")}
+                className={`flex-1 rounded-lg py-1 text-center transition ${
+                  currentSection === "extra" ? "bg-ember text-white shadow-xs" : "text-moss hover:text-bark"
+                }`}
+              >
+                Extra Hymns ({EXTRA_START}–{highest})
+              </button>
+            </div>
+          )}
+
           <label className="relative block">
             <span className="sr-only">Search the hymnal</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-mute" aria-hidden="true" />
@@ -281,7 +370,9 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
                 ? `${matches.length} of ${hymns.length} hymns`
                 : favouritesOnly
                   ? `${matches.length} marked hymn${matches.length === 1 ? "" : "s"}`
-                  : `${hymns.length} hymns · ${data.hymnal}`}
+                  : hasExtraHymns && currentSection !== "all"
+                    ? `${matches.length} ${currentSection === "extra" ? "extra hymns" : "hymns"} · ${data.hymnal}`
+                    : `${hymns.length} hymns · ${data.hymnal}`}
             </p>
             <button
               type="button"
@@ -340,7 +431,14 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
                         <span
                           className={`min-w-0 flex-1 text-[13px] font-semibold leading-5 ${active ? "text-ember" : "text-bark"}`}
                         >
-                          {entry.title}
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate">{entry.title}</span>
+                            {entry.n >= 696 && (
+                              <span className="shrink-0 rounded bg-sand-line/60 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wider text-moss">
+                                Extra
+                              </span>
+                            )}
+                          </span>
                         </span>
                       </button>
                       <button
@@ -370,15 +468,27 @@ function HymnalIndex({ data, storageKey, credit }: { data: HymnalData; storageKe
           <div className="rounded-2xl border border-dashed border-sand-line bg-white/60 p-8 text-center">
             <p className="text-sm font-semibold text-bark">Choose a hymn from the index</p>
             <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-moss">
-              All {hymns.length} hymns of {data.hymnal} are here — search by number, title or first line, then read the
-              verses as the congregation sings them. Star the ones this week&apos;s service needs.
+              {hasExtraHymns ? (
+                <>
+                  All {hymns.length} hymns of {data.hymnal} are here — the standard 1–695 collection and the 257 Extra
+                  Hymns (696–952) from Christ in Song. Search by number, title or first line, then read the verses as
+                  the congregation sings them.
+                </>
+              ) : (
+                <>
+                  All {hymns.length} hymns of {data.hymnal} are here — search by number, title or first line, then read the
+                  verses as the congregation sings them. Star the ones this week&apos;s service needs.
+                </>
+              )}
             </p>
           </div>
         ) : (
           <article className="min-w-0 rounded-2xl border border-sand-line bg-white p-4 shadow-sm sm:p-7">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ember">{data.hymnal}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ember">
+                  {hymn.n >= 696 ? `${data.hymnal} · Extra Hymns` : data.hymnal}
+                </p>
                 <h2 className="mt-1 flex items-baseline gap-2 text-lg font-semibold tracking-tight text-bark sm:text-2xl">
                   <span className="shrink-0 tabular-nums text-ember">{hymn.n}.</span>
                   <span className="min-w-0 break-words">{hymn.title}</span>
