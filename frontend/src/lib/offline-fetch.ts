@@ -11,6 +11,21 @@
  * than an error screen.
  */
 
+/**
+ * Raised when a page's data could not be read at all — the one case the app's
+ * offline notice answers (see `ConnectivityToast`).
+ */
+export const PAGE_LOAD_FAILED_EVENT = "app:page-load-failed";
+
+/** Tells the shell a page failed to load because the network is gone. */
+function reportPageLoadFailure() {
+  if (typeof window === "undefined") return;
+  // A server that answered badly is not an offline notice: only a request that
+  // never left the device is.
+  if (navigator.onLine) return;
+  window.dispatchEvent(new Event(PAGE_LOAD_FAILED_EVENT));
+}
+
 export type OfflineFetchResult<T> = {
   data: T | null;
   ok: boolean;
@@ -38,7 +53,11 @@ export async function offlineFetch<T = unknown>(
     return { data: null, ok: false, status: res.status, isOffline, cachedAt, error: null };
   } catch {
     /* Network error with no SW fallback available (never opened this URL
-       while online). Treat as offline with no cached data. */
+       while online). Treat as offline with no cached data — and, because a
+       page that could not load at all is exactly what the offline notice is
+       for, say so. Nothing else in the app raises that notice: a failed save
+       or sign-in is the page's own business, not a banner over it. */
+    reportPageLoadFailure();
     return { data: null, ok: false, status: 0, isOffline: true, cachedAt: null, error: "offline" };
   }
 }

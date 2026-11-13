@@ -3,10 +3,12 @@
 /**
  * The two connection notices.
  *
- * Rule 2 — ConnectivityToast: the moment the network drops, a small note
- * slides up above the tab bar telling the user what is about to happen —
- * pages they have opened before keep working from the device's copy; the
- * next thing that must talk to the server will wait until they are back.
+ * Rule 2 — ConnectivityToast: when a page fails to load because the network
+ * is gone, a small note slides up above the tab bar saying so — pages already
+ * opened keep working from the device's copy. It is raised by the failed page
+ * itself (`PAGE_LOAD_FAILED_EVENT`), never by the network merely dropping and
+ * never by a failed save or sign-in: an alert about a page that has not failed
+ * is noise, and the thing in front of the member already says what went wrong.
  * It clears itself quietly when the network returns.
  *
  * Rule 3 — showOfflineGuard: every action that must reach the server —
@@ -23,26 +25,24 @@ import { useEffect, useState } from "react";
 import { Wifi, WifiOff } from "lucide-react";
 import Swal from "sweetalert2";
 import { brand } from "@/lib/brand";
+import { PAGE_LOAD_FAILED_EVENT } from "@/lib/offline-fetch";
 
 /* ── Rule 2: the live watcher ─────────────────────────────────────────── */
 
 /** Renders itself; mounts anywhere in the shell (once per layout). */
 export function ConnectivityToast() {
-  // SSR-safe initial state: server renders with no navigator; once mounted on
-  // the client we read the live value (below) rather than hydrate a wrong one.
-  const [offline, setOffline] = useState(true);
+  // Nothing shows until a page actually fails to load, so the first render —
+  // server and client alike — is silent.
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
-    installOfflineFetchGuard();
-    const goOffline = () => setOffline(true);
-    const goOnline = () => setOffline(false);
-    goOffline();
-    goOnline();
-    window.addEventListener("offline", goOffline);
-    window.addEventListener("online", goOnline);
+    const failed = () => setOffline(true);
+    const back = () => setOffline(false);
+    window.addEventListener(PAGE_LOAD_FAILED_EVENT, failed);
+    window.addEventListener("online", back);
     return () => {
-      window.removeEventListener("offline", goOffline);
-      window.removeEventListener("online", goOnline);
+      window.removeEventListener(PAGE_LOAD_FAILED_EVENT, failed);
+      window.removeEventListener("online", back);
     };
   }, []);
 
@@ -56,9 +56,8 @@ export function ConnectivityToast() {
     >
       <WifiOff className="h-5 w-5 shrink-0" aria-hidden />
       <p className="text-sm">
-        <span className="font-semibold">You&apos;re offline.</span> Pages
-        you&apos;ve opened before still work. Actions that need the internet
-        wait until you&apos;re back.
+        <span className="font-semibold">You&apos;re offline.</span> This page
+        could not load. Pages you&apos;ve opened before still work.
       </p>
     </div>
   );
@@ -96,46 +95,17 @@ export function showOfflineGuard(action: DoingWhat = "saving changes") {
 
 /* ─────────────────────────────────────────────────────────────────────── */
 
-/* ── The net under every fetch ───────────────────────────────────────────
-   The app's API calls are spread across a hundred desks, each with its own
-   handler, and a handler that was written for a server error may stay
-   silent when the request never leaves the device. So instead of relying
-   on every desk to check the network first, the guard watches window.fetch
-   itself: whenever the browser is offline, any call that must change
-   something (POST) answers in person — the guard note opens, and the
-   promise rejects the same way a browser does when the network drops, so
-   every desk's own "could not …" path still runs and nothing is swallowed.
+/* ── Why there is no net under every fetch ───────────────────────────────
+   This file used to patch `window.fetch` so that any POST made offline — a
+   save, a sign-in, a poll — opened a “You're offline” note of its own. It
+   could not tell a page that had failed from a background call that had, so
+   it fired on things the member never asked to hear about: pressing Sign in
+   on a dropped network produced an offline alert instead of the sign-in
+   page's own message.
 
-   Reads are left alone: pages keep reading from the offline cache, which
-   is the whole point of an installed app on the road. */
-
-const GUARD_REPEAT_WINDOW_MS = 6000;
-let lastGuardShown = 0;
-let fetchPatched = false;
-
-function noteOffline(method: string) {
-  const now = Date.now();
-  if (now - lastGuardShown < GUARD_REPEAT_WINDOW_MS) return;
-  lastGuardShown = now;
-  const action: DoingWhat =
-    method === "POST" ? "saving changes" : "signing you in";
-  showOfflineGuard(action);
-}
-
-export function installOfflineFetchGuard() {
-  if (fetchPatched || typeof window === "undefined" || typeof window.fetch !== "function") return;
-  fetchPatched = true;
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = function scopedFetch(input: RequestInfo | URL, init?: RequestInit) {
-    let method: string | undefined;
-    if (typeof init?.method === "string") method = init.method;
-    else if (input instanceof Request) method = input.method;
-    method = (method ?? "GET").toUpperCase();
-    if (method === "GET" || navigator.onLine) return originalFetch(input as RequestInfo, init);
-    noteOffline(method);
-    return Promise.reject(new TypeError("Failed to fetch"));
-  };
-}
+   The notice now belongs to the page that failed to load (Rule 2), and an
+   action a member deliberately pressed still answers for itself through
+   `showOfflineGuard` at the place that sends it. */
 
 /* ─────────────────────────────────────────────────────────────────────── */
 

@@ -40,6 +40,8 @@ import {
   Wallet,
 } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
 /**
  * The navigation model — one registry of destinations, each with one canonical
  * href and one canonical label, so no surface can rename a place or invent a
@@ -488,6 +490,31 @@ export const destinations = {
     // The old sibling pages answer to this one chip too, so a deep link into
     // any of them still reads as the requests place and keeps it lit.
     match: ["/requests", "/enroll", "/community", "/community/prayer", "/community/visitation", "/community/child-dedication"],
+  },
+  /**
+   * Today's Lesson — the week's Sabbath School guide, opened straight into the
+   * reader. A tile is pressed on the way to class, so it lands on the lesson
+   * rather than on a shelf of lesson cards.
+   */
+  todaysLesson: {
+    href: `${API_URL}/api/members/lesson-reading/adult/`,
+    label: "Today's Lesson",
+    description: "This week's Sabbath School lesson, ready to read.",
+    icon: BookOpen,
+    area: "study",
+    match: [],
+  },
+  /**
+   * Hymnals — the hymnbooks read in the app. The address names the Hymnals
+   * shelf, so the tile opens that shelf of Materials rather than the first one.
+   */
+  hymnals: {
+    href: "/materials/?section=hymnals",
+    label: "Hymnals",
+    description: "English, Swahili, Dholuo, Kisii and Kikuyu hymnbooks.",
+    icon: Music,
+    area: "study",
+    match: ["/materials/hymnal"],
   },
 } satisfies Record<string, NavDestination>;
 
@@ -1856,9 +1883,9 @@ export const REQUESTS_DESK_HREF = "/administration?tab=requests";
  * copy of the map competing with the card next to it.
  */
 export const dashboardTiles: readonly DestinationKey[] = [
-  "announcements",
+  "todaysLesson",
   "give",
-  "requests",
+  "hymnals",
   "calendar",
 ];
 
