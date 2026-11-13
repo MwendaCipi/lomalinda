@@ -153,12 +153,12 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
   hymnals: [
     {
       key: "hymnal",
-      href: fellowshipResources.hymnal,
+      href: fellowshipResources.sdaHymnalBook,
       label: "Seventh-day Adventist Hymnal",
       description:
-        "Search hymns by title, lyrics, category or hymn number. Ideal for personal worship, choir preparation and church song services.",
+        "The English hymnbook, read in the app: search by number or title, then read the verses and chorus.",
       icon: Music,
-      isExternal: true,
+      isExternal: false,
     },
     {
       key: "nzk",
@@ -173,25 +173,25 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
       key: "dholuo",
       href: fellowshipResources.dholuoHymnal,
       label: "Wende Nyasaye (Dholuo)",
-      description: "The Dholuo Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+      description: "The Dholuo hymnbook, read in the app: search by number or title, then read the verses and chorus.",
       icon: Music2,
-      isExternal: true,
+      isExternal: false,
     },
     {
       key: "kisii",
       href: fellowshipResources.kisiiHymnal,
       label: "Ogotera kw'ogotogia Nyasae (Kisii)",
-      description: "The Ekegusii Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+      description: "The Ekegusii hymnbook, read in the app: search by number or title, then read the verses and chorus.",
       icon: Music2,
-      isExternal: true,
+      isExternal: false,
     },
     {
       key: "kikuyu",
       href: fellowshipResources.kikuyuHymnal,
       label: "Nyimbo cia Agendi (Kikuyu)",
-      description: "The Kikuyu Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+      description: "The Kikuyu hymnbook, read in the app: search by number or title, then read the verses and chorus.",
       icon: Music2,
-      isExternal: true,
+      isExternal: false,
     },
   ],
 };

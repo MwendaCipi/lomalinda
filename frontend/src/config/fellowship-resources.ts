@@ -10,8 +10,13 @@ export const fellowshipResources = {
   nzk: "https://christinsong.com/nyimbo-za-kristo/",
   /** The Swahili hymnal as the app's own page — the hymnals cards read here. */
   nzkHymnbook: "/materials/hymnal/nyimbo-za-kristo",
-  /** Christ in Song hymnals in other languages, opened at their own sites. */
-  dholuoHymnal: "https://christinsong.com/wende-nyasaye/",
-  kisiiHymnal: "https://christinsong.com/ogotera-kw-ogotogia-nyasae/",
-  kikuyuHymnal: "https://christinsong.com/nyimbo-cia-agendi/",
+  /**
+   * The other hymnbooks, read in the app like the Swahili one. Each page reads
+   * its own data file under `src/data/`; the source site each book credits is
+   * named in that file.
+   */
+  sdaHymnalBook: "/materials/hymnal/seventh-day-adventist-hymnal",
+  dholuoHymnal: "/materials/hymnal/wende-nyasaye",
+  kisiiHymnal: "/materials/hymnal/ogotera-kw-ogotogia-nyasae",
+  kikuyuHymnal: "/materials/hymnal/nyimbo-cia-agendi",
 } as const;
