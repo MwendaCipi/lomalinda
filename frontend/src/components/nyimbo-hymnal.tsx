@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ChevronLeft, ChevronRight, Search, Star, X } from "lucide-react";
 
 import hymnal from "@/data/nyimbo-za-kristo.json";
 
@@ -10,6 +10,46 @@ type Hymn = { n: number; title: string; verses: Verse[]; chorus: string[] };
 
 const hymns = hymnal.hymns as Hymn[];
 const source = hymnal.source;
+
+/** The device's own list of marked hymns — the same on the phone in the pew. */
+const FAVOURITES_KEY = "nzk:favourites";
+/** Fired on this tab when a star changes; `storage` only reaches other tabs. */
+const FAVOURITES_EVENT = "nzk:favourites-changed";
+
+const NO_FAVOURITES: number[] = [];
+let cachedRaw: string | null | undefined;
+let cachedValue: number[] = NO_FAVOURITES;
+
+/** The stored marks, parsed once per stored value rather than per render. */
+function snapshotFavourites(): number[] {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(FAVOURITES_KEY);
+  } catch {
+    return NO_FAVOURITES;
+  }
+  if (raw === cachedRaw) return cachedValue;
+  cachedRaw = raw;
+  let parsed: unknown = null;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  cachedValue = Array.isArray(parsed)
+    ? parsed.filter((value): value is number => typeof value === "number" && value >= 1 && value <= hymns.length)
+    : NO_FAVOURITES;
+  return cachedValue;
+}
+
+function subscribeFavourites(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(FAVOURITES_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(FAVOURITES_EVENT, onChange);
+  };
+}
 
 /**
  * One line of a hymn may carry a typographic apostrophe while a member types
@@ -44,6 +84,13 @@ const haystacks = hymns.map((hymn) => fold(`${hymn.n} ${hymn.title} ${hymn.verse
  * the search box answers to the same three things a leader knows: the number,
  * the title, or the first line they can hum.
  *
+ * A song leader arrives with this week's hymns already chosen, so each hymn
+ * carries a star and the index can narrow to the starred ones alone: four taps
+ * before the service instead of a search during it. The marks are the device's
+ * own (localStorage, key `nzk:favourites`) — no account, nothing sent
+ * anywhere, and they survive a reload, an offline launch and the app being
+ * closed. Another member's phone keeps its own list.
+ *
  * Twelve of the hymns came off the online archive cut at the start or end of a
  * line — the short responses of the Maitikio and the doxology among them — and
  * were completed from the printed Nyimbo za Kristo, so what is read here is the
@@ -52,14 +99,37 @@ const haystacks = hymns.map((hymn) => fold(`${hymn.n} ${hymn.title} ${hymn.verse
 export function NyimboHymnal() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
+  const [favouritesOnly, setFavouritesOnly] = useState(false);
   const readerRef = useRef<HTMLDivElement | null>(null);
+
+  // The marks live in the device, not in React state: the page is rendered on
+  // the server, where there is no storage to read, so the list starts empty
+  // and fills from the device once — no hydration mismatch, and a star tapped
+  // in another tab shows here too.
+  const favourites = useSyncExternalStore(subscribeFavourites, snapshotFavourites, () => NO_FAVOURITES);
+
+  const toggleFavourite = useCallback((number: number) => {
+    const current = snapshotFavourites();
+    const next = current.includes(number)
+      ? current.filter((value) => value !== number)
+      : [...current, number].sort((a, b) => a - b);
+    try {
+      localStorage.setItem(FAVOURITES_KEY, JSON.stringify(next));
+    } catch {
+      // A phone with storage switched off simply keeps no marks; refusing to
+      // star a hymn would be worse than forgetting it.
+    }
+    window.dispatchEvent(new Event(FAVOURITES_EVENT));
+  }, []);
 
   const tokens = fold(query).split(" ").filter(Boolean);
   const matches = useMemo(() => {
     const words = fold(query).split(" ").filter(Boolean);
-    if (!words.length) return hymns;
-    return hymns.filter((_, index) => words.every((word) => haystacks[index].includes(word)));
-  }, [query]);
+    return hymns.filter((hymn, index) => {
+      if (favouritesOnly && !favourites.includes(hymn.n)) return false;
+      return words.every((word) => haystacks[index].includes(word));
+    });
+  }, [query, favouritesOnly, favourites]);
 
   const open = useCallback((number: number) => {
     setSelected(number);
@@ -74,6 +144,8 @@ export function NyimboHymnal() {
   const position = hymn ? hymns.findIndex((entry) => entry.n === hymn.n) : -1;
   const previous = position > 0 ? hymns[position - 1] : null;
   const next = position >= 0 && position < hymns.length - 1 ? hymns[position + 1] : null;
+
+  const starOn = (number: number) => favourites.includes(number);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
@@ -103,28 +175,53 @@ export function NyimboHymnal() {
             )}
           </label>
 
-          <p className="px-1 text-[11px] font-medium text-moss" aria-live="polite">
-            {tokens.length
-              ? `${matches.length} of ${hymns.length} hymns`
-              : `${hymns.length} hymns · Nyimbo za Kristo`}
-          </p>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="text-[11px] font-medium text-moss" aria-live="polite">
+              {tokens.length
+                ? `${matches.length} of ${hymns.length} hymns`
+                : favouritesOnly
+                  ? `${matches.length} marked hymn${matches.length === 1 ? "" : "s"}`
+                  : `${hymns.length} hymns · Nyimbo za Kristo`}
+            </p>
+            <button
+              type="button"
+              onClick={() => setFavouritesOnly((current) => !current)}
+              aria-pressed={favouritesOnly}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${
+                favouritesOnly
+                  ? "border-ember bg-ember text-white"
+                  : "border-sand-line bg-white text-moss hover:border-ember hover:text-ember"
+              }`}
+            >
+              <Star className={`h-3 w-3 ${favouritesOnly ? "fill-white text-white" : "fill-none"}`} aria-hidden="true" />
+              Favourites{favourites.length ? ` (${favourites.length})` : ""}
+            </button>
+          </div>
 
           <div className="max-h-[calc(100vh-13rem)] overflow-y-auto rounded-xl border border-sand-line bg-white shadow-sm">
             {matches.length === 0 ? (
               <p className="p-4 text-xs leading-5 text-moss">
-                No hymn answers to “{query}”. Try the number, the title, or the words of its first line.
+                {favouritesOnly && !favourites.length ? (
+                  <>
+                    No hymns marked yet. Tap the star beside a hymn — or on the one you have open — to keep it here for
+                    the next service.
+                  </>
+                ) : (
+                  <>No hymn answers to “{query}”. Try the number, the title, or the words of its first line.</>
+                )}
               </p>
             ) : (
               <ul className="divide-y divide-sand-line">
                 {matches.map((entry) => {
                   const active = entry.n === selected;
+                  const starred = starOn(entry.n);
                   return (
-                    <li key={entry.n}>
+                    <li key={entry.n} className="flex items-center">
                       <button
                         type="button"
                         onClick={() => open(entry.n)}
                         aria-current={active ? "true" : undefined}
-                        className={`flex w-full items-baseline gap-2.5 px-3 py-2 text-left transition ${
+                        className={`flex min-w-0 flex-1 items-baseline gap-2.5 px-3 py-2 text-left transition ${
                           active ? "bg-ember/10 text-ember" : "text-bark hover:bg-sand"
                         }`}
                       >
@@ -134,6 +231,18 @@ export function NyimboHymnal() {
                           {entry.n}
                         </span>
                         <span className="min-w-0 flex-1 text-[13px] font-medium leading-5">{entry.title}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleFavourite(entry.n)}
+                        aria-pressed={starred}
+                        aria-label={`${starred ? "Remove" : "Mark"} hymn ${entry.n}, ${entry.title}`}
+                        title={starred ? "Remove from favourites" : "Mark as a favourite"}
+                        className={`shrink-0 rounded-full p-2 pr-3 transition ${
+                          starred ? "text-ember" : "text-sand-mute hover:text-ember"
+                        }`}
+                      >
+                        <Star className={`h-3.5 w-3.5 ${starred ? "fill-ember" : "fill-none"}`} aria-hidden="true" />
                       </button>
                     </li>
                   );
@@ -151,7 +260,7 @@ export function NyimboHymnal() {
             <p className="text-sm font-semibold text-bark">Choose a hymn from the index</p>
             <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-moss">
               All {hymns.length} hymns of Nyimbo za Kristo are here — search by number, title or first line, then read
-              the verses as the congregation sings them.
+              the verses as the congregation sings them. Star the ones this week&apos;s service needs.
             </p>
           </div>
         ) : (
@@ -164,13 +273,29 @@ export function NyimboHymnal() {
                   <span className="min-w-0">{hymn.title}</span>
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="shrink-0 rounded-full border border-sand-line px-3 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember lg:hidden"
-              >
-                All hymns
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => toggleFavourite(hymn.n)}
+                  aria-pressed={starOn(hymn.n)}
+                  aria-label={`${starOn(hymn.n) ? "Remove" : "Mark"} hymn ${hymn.n}, ${hymn.title}`}
+                  title={starOn(hymn.n) ? "Remove from favourites" : "Mark as a favourite"}
+                  className={`rounded-full border p-1.5 transition ${
+                    starOn(hymn.n)
+                      ? "border-ember bg-ember/10 text-ember"
+                      : "border-sand-line text-sand-mute hover:border-ember hover:text-ember"
+                  }`}
+                >
+                  <Star className={`h-4 w-4 ${starOn(hymn.n) ? "fill-ember" : "fill-none"}`} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  className="rounded-full border border-sand-line px-3 py-1 text-[11px] font-semibold text-moss transition hover:border-ember hover:text-ember lg:hidden"
+                >
+                  All hymns
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 space-y-5">
