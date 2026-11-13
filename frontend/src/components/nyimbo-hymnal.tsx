@@ -151,7 +151,7 @@ export function NyimboHymnal() {
     <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
       {/* The index. On a phone an opened hymn takes the screen, so the list
           steps aside rather than sitting under it. */}
-      <section className={hymn ? "hidden lg:block" : "block"} aria-label="Hymn index">
+      <section className={`min-w-0 ${hymn ? "hidden lg:block" : "block"}`} aria-label="Hymn index">
         <div className="sticky top-1 space-y-2 lg:top-4">
           <label className="relative block">
             <span className="sr-only">Search the hymnal</span>
@@ -254,7 +254,7 @@ export function NyimboHymnal() {
       </section>
 
       {/* The reader. */}
-      <section ref={readerRef} className="scroll-mt-4" aria-label="Hymn">
+      <section ref={readerRef} className="min-w-0 scroll-mt-4" aria-label="Hymn">
         {!hymn ? (
           <div className="rounded-2xl border border-dashed border-sand-line bg-white/60 p-8 text-center">
             <p className="text-sm font-semibold text-bark">Choose a hymn from the index</p>
@@ -264,13 +264,13 @@ export function NyimboHymnal() {
             </p>
           </div>
         ) : (
-          <article className="rounded-2xl border border-sand-line bg-white p-5 shadow-sm sm:p-7">
+          <article className="min-w-0 rounded-2xl border border-sand-line bg-white p-4 shadow-sm sm:p-7">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ember">Nyimbo za Kristo</p>
-                <h2 className="mt-1 flex items-baseline gap-2 text-xl font-semibold tracking-tight text-bark sm:text-2xl">
-                  <span className="tabular-nums text-ember">{hymn.n}.</span>
-                  <span className="min-w-0">{hymn.title}</span>
+                <h2 className="mt-1 flex items-baseline gap-2 text-lg font-semibold tracking-tight text-bark sm:text-2xl">
+                  <span className="shrink-0 tabular-nums text-ember">{hymn.n}.</span>
+                  <span className="min-w-0 break-words">{hymn.title}</span>
                 </h2>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
@@ -300,11 +300,11 @@ export function NyimboHymnal() {
 
             <div className="mt-5 space-y-5">
               {hymn.verses.map((verse, index) => (
-                <div key={`${verse.n ?? "v"}-${index}`} className="flex gap-3">
-                  <span className="mt-0.5 w-5 shrink-0 text-right text-xs font-semibold tabular-nums text-sand-mute">
+                <div key={`${verse.n ?? "v"}-${index}`} className="flex gap-2 sm:gap-3">
+                  <span className="mt-0.5 w-4 shrink-0 text-right text-xs font-semibold tabular-nums text-sand-mute sm:w-5">
                     {verse.n ?? ""}
                   </span>
-                  <div className="min-w-0 space-y-0.5 text-[15px] leading-7 text-bark">
+                  <div className="min-w-0 flex-1 space-y-0.5 break-words text-[15px] leading-7 text-bark">
                     {verse.lines.map((line, lineIndex) => (
                       <p key={lineIndex}>{line}</p>
                     ))}
@@ -313,11 +313,11 @@ export function NyimboHymnal() {
               ))}
 
               {hymn.chorus.length > 0 && (
-                <div className="flex gap-3 border-t border-sand-line pt-4">
-                  <span className="mt-0.5 w-5 shrink-0" aria-hidden="true" />
-                  <div className="min-w-0">
+                <div className="flex gap-2 border-t border-sand-line pt-4 sm:gap-3">
+                  <span className="mt-0.5 w-4 shrink-0 sm:w-5" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ember">Chorus</p>
-                    <div className="mt-1 space-y-0.5 text-[15px] leading-7 text-bark">
+                    <div className="mt-1 space-y-0.5 break-words text-[15px] leading-7 text-bark">
                       {hymn.chorus.map((line, lineIndex) => (
                         <p key={lineIndex}>{line}</p>
                       ))}
@@ -327,7 +327,7 @@ export function NyimboHymnal() {
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-between gap-3 border-t border-sand-line pt-4">
+            <div className="mt-6 flex items-center justify-between gap-2 border-t border-sand-line pt-4 sm:gap-3">
               <button
                 type="button"
                 onClick={() => previous && open(previous.n)}

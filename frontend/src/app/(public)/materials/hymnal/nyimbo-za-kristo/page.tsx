@@ -35,10 +35,6 @@ export default function NyimboZaKristoPage() {
             </Link>
           </div>
           <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Nyimbo za Kristo</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-moss">
-            The complete Swahili hymnal, 220 hymns — search by number, title or first line, then read the verses and
-            chorus as the congregation sings them. Works offline once the app is open.
-          </p>
         </div>
       </section>
 
