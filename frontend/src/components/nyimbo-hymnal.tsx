@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Info, Search, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 
 import hymnal from "@/data/nyimbo-za-kristo.json";
 
 type Verse = { n: string | null; lines: string[] };
-type Hymn = { n: number; title: string; verses: Verse[]; chorus: string[]; incomplete: boolean };
+type Hymn = { n: number; title: string; verses: Verse[]; chorus: string[] };
 
 const hymns = hymnal.hymns as Hymn[];
 const source = hymnal.source;
@@ -44,9 +44,10 @@ const haystacks = hymns.map((hymn) => fold(`${hymn.n} ${hymn.title} ${hymn.verse
  * the search box answers to the same three things a leader knows: the number,
  * the title, or the first line they can hum.
  *
- * A hymn the online archive holds only in part says so above its verses rather
- * than quietly ending mid-line, so a missing verse reads as the source's gap
- * and not as the church's typo.
+ * Twelve of the hymns came off the online archive cut at the start or end of a
+ * line — the short responses of the Maitikio and the doxology among them — and
+ * were completed from the printed Nyimbo za Kristo, so what is read here is the
+ * book's text rather than a webpage's half-line.
  */
 export function NyimboHymnal() {
   const [query, setQuery] = useState("");
@@ -133,11 +134,6 @@ export function NyimboHymnal() {
                           {entry.n}
                         </span>
                         <span className="min-w-0 flex-1 text-[13px] font-medium leading-5">{entry.title}</span>
-                        {entry.incomplete && (
-                          <span className="shrink-0 text-[10px] font-semibold text-sand-mute" title="The archive holds only part of this hymn">
-                            part
-                          </span>
-                        )}
                       </button>
                     </li>
                   );
@@ -176,13 +172,6 @@ export function NyimboHymnal() {
                 All hymns
               </button>
             </div>
-
-            {hymn.incomplete && (
-              <p className="mt-3 flex items-start gap-2 rounded-xl bg-sand px-3 py-2 text-[11px] leading-5 text-moss">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember" aria-hidden="true" />
-                <span>The online archive holds only part of this hymn — the text below is what it has, not all there is.</span>
-              </p>
-            )}
 
             <div className="mt-5 space-y-5">
               {hymn.verses.map((verse, index) => (
@@ -247,7 +236,9 @@ export function NyimboHymnal() {
           >
             {source.name}
           </a>
-          . {source.note} Provided here for the church&apos;s own worship; corrections welcome at the church office.
+          . {source.note} Twelve hymns — the Maitikio responses of 210–220, the doxology at 12 and 207 — were
+          completed from the printed Nyimbo za Kristo, where the archive&apos;s text began or ended mid-line. Provided
+          here for the church&apos;s own worship; corrections welcome at the church office.
         </p>
       </section>
     </div>
