@@ -6,6 +6,7 @@ import { usePageHeader } from "@/components/app-frame";
 import { showAlert } from "@/lib/alerts";
 import { dayFirstTime } from "@/lib/dates";
 import { reviewBucket, type StatusFilter } from "@/lib/requests";
+import { usePendingRequestCounts } from "@/hooks/use-pending-request-counts";
 import { pinnedMapHref } from "@/lib/places";
 import { Check, Handshake, MapPin, X } from "lucide-react";
 import { RecordList } from "./record-list";
@@ -291,6 +292,12 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
   // The phone keeps both filters behind one shared FilterPopover button;
   // the wide screen shows them in the open, like every other desk.
 
+  // How much each desk is holding. This picker is a menu rather than a strip
+  // of toggles that could wear a badge, so the number rides the label itself:
+  // "Join (2)" tells a leader where the work is without opening the queue.
+  // The counts come from the same hook the console's badges read, so the menu
+  // and the tabs can never disagree about what is waiting.
+  const pending = usePendingRequestCounts();
   const { setHeaderRightAction } = usePageHeader();
   useEffect(() => {
     const statusOpts: { value: string; label: string }[] =
@@ -309,19 +316,51 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
             { value: "rejected", label: "Rejected" },
             { value: "all", label: "All" },
           ];
+    // A desk's own queue, as a number: "Join (2)" says more than "Join" when
+    // the point of opening this menu is to find where the work is.
+    const held = (value: KindFilter) => {
+      switch (value) {
+        case "join":
+          return pending.joins;
+        case "area":
+          return pending.ministry;
+        case "prayer":
+          return pending.prayer;
+        case "visitation":
+          return pending.visitation;
+        case "dedication":
+          return pending.dedication;
+        case "welfare":
+          return pending.welfare;
+        case "transfer":
+          return pending.transfers;
+        case "joins":
+          return pending.joins + pending.ministry;
+        case "clerk":
+          return pending.joins + pending.ministry + pending.transfers;
+        case "all":
+          return pending.total;
+        default:
+          return 0;
+      }
+    };
+    const named = (value: KindFilter, text: string) => {
+      const count = held(value);
+      return count > 0 ? `${text} (${count})` : text;
+    };
     // Short labels: the popover is a jump between desks, not an explanation,
     // and the long names are what made it occupy most of the header.
     const deskOpts: { value: KindFilter; label: string }[] = [
-      { value: "all", label: "All requests" },
-      { value: "join", label: "Join" },
-      { value: "area", label: "Ministry" },
-      { value: "prayer", label: "Prayer" },
-      { value: "visitation", label: "Visitation" },
-      { value: "dedication", label: "Dedication" },
-      { value: "welfare", label: "Welfare" },
-      { value: "transfer", label: "Transfers" },
-      { value: "property", label: "Property" },
-      { value: "leadership", label: "Leadership" },
+      { value: "all", label: named("all", "All requests") },
+      { value: "join", label: named("join", "Join") },
+      { value: "area", label: named("area", "Ministry") },
+      { value: "prayer", label: named("prayer", "Prayer") },
+      { value: "visitation", label: named("visitation", "Visitation") },
+      { value: "dedication", label: named("dedication", "Dedication") },
+      { value: "welfare", label: named("welfare", "Welfare") },
+      { value: "transfer", label: named("transfer", "Transfers") },
+      { value: "property", label: named("property", "Property") },
+      { value: "leadership", label: named("leadership", "Leadership") },
     ];
     // Membership Requests reads every request and shows each row's state, so
     // it needs no review-state control — one popover, and a narrow one.
@@ -424,7 +463,20 @@ export function RequestsAdminManager({ initialTab = "all", focusRequest = null }
         </div>
       </div>
     );
-    return () => setHeaderRightAction(null);    }, [search, statusFilter, activeTab, setHeaderRightAction]);
+    return () => setHeaderRightAction(null);    }, [
+      search,
+      statusFilter,
+      activeTab,
+      setHeaderRightAction,
+      pending.joins,
+      pending.ministry,
+      pending.transfers,
+      pending.prayer,
+      pending.visitation,
+      pending.dedication,
+      pending.welfare,
+      pending.total,
+    ]);
 
 
   useEffect(() => {

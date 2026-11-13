@@ -72,6 +72,24 @@ export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
     loading: true,
   });
 
+  // A leader leaves this app open all morning; a count read once when the page
+  // loaded would still say "nothing" after three join asks had arrived. Coming
+  // back to the window re-reads the queues, so opening the app is enough to
+  // see how much is waiting now.
+  const [read, setRead] = useState(0);
+  useEffect(() => {
+    const rerun = () => setRead((value) => value + 1);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") rerun();
+    };
+    window.addEventListener("focus", rerun);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", rerun);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   useEffect(() => {
     // A member with no desk to answer for is not asked: the requests endpoints
     // would refuse every call, and six refused calls per dashboard visit is a
@@ -122,7 +140,7 @@ export function usePendingRequestCounts(enabled = true): PendingRequestCounts {
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [enabled, read]);
 
   return counts;
 }
