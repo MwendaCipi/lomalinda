@@ -5866,6 +5866,97 @@ class JoinRequestReachesTheOfficeTests(APITestCase):
         )
 
 
+class StaleJoinRequestReminderTests(APITestCase):
+    """A join request left unconfirmed for a day is chased, once.
+
+    The office is told when the ask is made; if the person never types their
+    code, nobody looks at the row again and it expires in silence. The daily
+    sweep is the second look — worded as a reminder, stamped so it cannot
+    become a daily nuisance, and blind to requests whose 48 hours have gone.
+    """
+
+    def setUp(self):
+        from django.utils import timezone
+
+        self.elder = User.objects.create_user('nudge.elder', 'nudge.elder@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.elder, role='elder', roles='elder')
+        self.now = timezone.now()
+
+    def _enrollment(self, email, *, hours_old, hours_left=24, status='verification_pending', reminded_at=None):
+        enrollment = EnrollmentRequest.objects.create(
+            email=email,
+            first_name='Waiting',
+            last_name='Person',
+            joining_mode='baptism',
+            status=status,
+            expires_at=self.now + timedelta(hours=hours_left),
+            reminded_at=reminded_at,
+        )
+        # `created_at` is auto_now_add, so the age is set afterwards.
+        EnrollmentRequest.objects.filter(pk=enrollment.pk).update(
+            created_at=self.now - timedelta(hours=hours_old)
+        )
+        enrollment.refresh_from_db()
+        return enrollment
+
+    def _run(self, **options):
+        from django.core.management import call_command
+        from io import StringIO
+
+        out = StringIO()
+        call_command('remind_stale_join_requests', stdout=out, **options)
+        return out.getvalue()
+
+    def test_a_request_a_day_old_is_chased(self):
+        from .models import ChurchNotification
+
+        enrollment = self._enrollment('nudge.old@example.com', hours_old=25)
+        self._run()
+
+        enrollment.refresh_from_db()
+        self.assertIsNotNone(enrollment.reminded_at)
+        notice = ChurchNotification.objects.filter(user=self.elder, title__icontains='still waiting').first()
+        self.assertIsNotNone(notice)
+        self.assertIn('Waiting Person', notice.title)
+
+    def test_a_fresh_request_is_left_alone(self):
+        enrollment = self._enrollment('nudge.fresh@example.com', hours_old=2)
+        self._run()
+        enrollment.refresh_from_db()
+        self.assertIsNone(enrollment.reminded_at)
+
+    def test_a_request_past_its_window_is_not_chased(self):
+        """Its 48 hours are gone: chasing a person who can no longer finish,
+        or an office that can no longer approve it, wastes the letter."""
+        enrollment = self._enrollment('nudge.expired@example.com', hours_old=60, hours_left=-12)
+        self._run()
+        enrollment.refresh_from_db()
+        self.assertIsNone(enrollment.reminded_at)
+
+    def test_an_answered_request_is_not_chased(self):
+        enrollment = self._enrollment('nudge.approved@example.com', hours_old=30, status='approved')
+        self._run()
+        enrollment.refresh_from_db()
+        self.assertIsNone(enrollment.reminded_at)
+
+    def test_the_same_request_is_not_chased_twice(self):
+        from .models import ChurchNotification
+
+        self._enrollment('nudge.once@example.com', hours_old=26)
+        self._run()
+        first = ChurchNotification.objects.filter(user=self.elder, title__icontains='still waiting').count()
+        self._run()
+        second = ChurchNotification.objects.filter(user=self.elder, title__icontains='still waiting').count()
+        self.assertEqual(first, second)
+        self.assertEqual(first, 1)
+
+    def test_a_dry_run_stamps_nothing(self):
+        enrollment = self._enrollment('nudge.dry@example.com', hours_old=30)
+        self._run(dry_run=True)
+        enrollment.refresh_from_db()
+        self.assertIsNone(enrollment.reminded_at)
+
+
 class TransferApprovalTests(APITestCase):
     """Join and membership-transfer requests are answered by admin, elder and clerk."""
 

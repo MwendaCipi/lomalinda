@@ -150,6 +150,18 @@ FUND_DRIVES_CRON="5 0 * * * TZ=Africa/Nairobi cd ${PROJECT_DIR}/backend && venv/
 crontab -l 2>/dev/null | grep -F 'close_ended_fund_drives' > /dev/null \
   || fail "the fund-drive closing cron entry could not be installed."
 
+echo "⏰ Ensuring the stale join-request nudge is installed..."
+# A join request is announced when it is made, then waits on the person to
+# confirm their email. At 8:00 am EAT the sweep chases the ones that have sat
+# unanswered for a day, so a code lost in a spam folder does not become a
+# request nobody remembers. Each row is stamped as it is chased, so the sweep
+# is idempotent in the same shape as the lines above: rewritten, never
+# duplicated.
+JOIN_NUDGE_CRON="0 8 * * * TZ=Africa/Nairobi cd ${PROJECT_DIR}/backend && venv/bin/python manage.py remind_stale_join_requests >> /var/log/loma_linda_join_nudges.log 2>&1"
+( crontab -l 2>/dev/null | grep -vF 'remind_stale_join_requests' || true; echo "$JOIN_NUDGE_CRON" ) | crontab -
+crontab -l 2>/dev/null | grep -F 'remind_stale_join_requests' > /dev/null \
+  || fail "the stale join-request nudge cron entry could not be installed."
+
 echo "🔄 Restarting ${SERVICE} systemd service..."
 systemctl restart "$SERVICE"
 

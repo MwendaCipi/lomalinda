@@ -218,11 +218,16 @@ def request_email_html(*, heading: str, body_text: str, link: str, church_name: 
     )
 
 
-def send_request_notification(kind, request_id, *, submitted_by, church_name, submitted_at=None, audience=''):
+def send_request_notification(kind, request_id, *, submitted_by, church_name, submitted_at=None, audience='', reminder=''):
     """Email the right office holders that a request is waiting.
 
     Returns how many letters left the building. A failure is never allowed to
     fail the member's request: the submission matters more than the notice.
+
+    ``reminder`` turns the same letter into the second one: a request that is
+    still unanswered after a day is not news any more, so its subject and
+    opening line say it is *still* waiting (with the words the caller gives,
+    e.g. "still waiting after a day") instead of announcing it as new.
     """
     label = REQUEST_LABELS.get(kind, 'request')
     template = request_notification_template()
@@ -234,17 +239,23 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
         'link': link,
         'church': church_name,
     }
-    subject = f'New {label} from {context_common["user_name"]}'
-    if submitted_at is not None:
-        subject = f'{subject} · {submitted_at.strftime("%d/%m/%Y")}'
+    if reminder:
+        subject = f'{label.capitalize()} still waiting: {context_common["user_name"]} · {reminder}'
+    else:
+        subject = f'New {label} from {context_common["user_name"]}'
+        if submitted_at is not None:
+            subject = f'{subject} · {submitted_at.strftime("%d/%m/%Y")}'
 
     desk_link = f'/administration?tab={request_desk_tab(kind)}&request={kind}-{request_id}'
     full_link = request_desk_link(kind, request_id)
     # The letter opens with the desk named, all caps, before anything else:
     # an inbox scan should read the desk before the sender's name registers.
-    body = f"{label.upper()}\n\n{render_message(template, context_common)}"
+    opener = label.upper()
+    if reminder:
+        opener = f"{opener} — STILL WAITING ({reminder.upper()})"
+    body = f"{opener}\n\n{render_message(template, context_common)}"
     html_body = request_email_html(
-        heading=label.upper(),
+        heading=f"{label.upper()} — still waiting" if reminder else label.upper(),
         body_text=render_message(template, context_common),
         link=full_link,
         church_name=church_name,
@@ -295,7 +306,11 @@ def send_request_notification(kind, request_id, *, submitted_by, church_name, su
     try:
         from . import sms
 
-        sms_text = f"{church_name}: New {label} from {context_common['user_name']}. Review: {full_link}"
+        sms_text = (
+            f"{church_name}: {label.capitalize()} from {context_common['user_name']} still waiting. Review: {full_link}"
+            if reminder
+            else f"{church_name}: New {label} from {context_common['user_name']}. Review: {full_link}"
+        )
         for user in listeners:
             phone = getattr(getattr(user, 'member_profile', None), 'phone_number', '')
             if phone:

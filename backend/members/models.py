@@ -1092,6 +1092,9 @@ class EnrollmentRequest(models.Model):
     # leaves, so the later stages of the same request cannot ring the same
     # bells twice.
     notified_at = models.DateTimeField(null=True, blank=True)
+    # When the office was nudged that this request is still unanswered. Set by
+    # the daily sweep so one forgotten request is not chased every morning.
+    reminded_at = models.DateTimeField(null=True, blank=True)
 
     # The raw verification code only lives in memory: set_code() keeps it here
     # so the email that goes out in the same request cycle can quote it, while

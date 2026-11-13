@@ -11,10 +11,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='enrollmentrequest',
             name='notified_at',
-            field=models.DateTimeField(
-                blank=True,
-                help_text='When the office was first told this request was made',
-                null=True,
-            ),
+            field=models.DateTimeField(blank=True, null=True),
         ),
     ]

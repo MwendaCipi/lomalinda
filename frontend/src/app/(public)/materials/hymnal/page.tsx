@@ -36,6 +36,36 @@ const hymnals: {
     badge: "Swahili Hymns",
     icon: Music2,
   },
+  {
+    id: "dholuo",
+    title: "Wende Nyasaye (Dholuo)",
+    description: "The Dholuo Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+    href: fellowshipResources.dholuoHymnal,
+    external: true,
+    button: "Open Wende Nyasaye",
+    badge: "Dholuo Hymns",
+    icon: Music2,
+  },
+  {
+    id: "kisii",
+    title: "Ogotera kw'ogotogia Nyasae (Kisii)",
+    description: "The Ekegusii Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+    href: fellowshipResources.kisiiHymnal,
+    external: true,
+    button: "Open Ogotera kw'ogotogia Nyasae",
+    badge: "Kisii Hymns",
+    icon: Music2,
+  },
+  {
+    id: "kikuyu",
+    title: "Nyimbo cia Agendi (Kikuyu)",
+    description: "The Kikuyu Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+    href: fellowshipResources.kikuyuHymnal,
+    external: true,
+    button: "Open Nyimbo cia Agendi",
+    badge: "Kikuyu Hymns",
+    icon: Music2,
+  },
 ];
 
 export default function HymnalPage() {
