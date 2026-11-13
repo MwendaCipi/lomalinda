@@ -6,10 +6,11 @@ import { NyimboHymnal } from "@/components/nyimbo-hymnal";
 /**
  * The Swahili hymnbook, read in the app rather than on someone else's site.
  *
- * It sits under the hymnal shelf it belongs to (`/materials/hymnal`) so a
- * bookmark of the old deep page still finds it, and carries the way back to
- * that shelf as well as to all materials — a member who arrived from the
- * Hymnals card and one who arrived from a search both have their exit.
+ * It sits under the Hymnals shelf it belongs to (`/materials/?section=hymnals`)
+ * so a bookmark of the old deep page still finds it through that shelf's
+ * redirect, and carries the way back to the shelf as well as to all materials —
+ * a member who arrived from the Hymnals card and one who arrived from a search
+ * both have their exit.
  */
 export const metadata = {
   title: "Nyimbo za Kristo",
@@ -24,7 +25,7 @@ export default function NyimboZaKristoPage() {
         <div className="max-w-6xl">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link
-              href="/materials/hymnal"
+              href="/materials/?section=hymnals"
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-ember hover:underline"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />

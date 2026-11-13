@@ -44,9 +44,10 @@ export type MaterialDestination = {
  * toggles: the shelf a member picks is the thing they came to read, so the old
  * hubs behind a card became shelves rather than further card pages.
  *
- * `/materials/bible` and `/materials/hymnal` still stand as deep pages for
- * anyone who linked or bookmarked them; each carries the same readers and then
- * hands back to the shelf it belongs to.
+ * `/materials/bible` still stands as a deep page for anyone who linked or
+ * bookmarked it: it carries the same readers and then hands back to the shelf
+ * it belongs to. The hymnbooks have one list and no deep page — the Hymnals
+ * shelf below — so `/materials/hymnal` only redirects there.
  *
  * The children's divisions sit on the shelf themselves — one card per age
  * group, each opening that division's current student guide — because a card
@@ -167,6 +168,30 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
         "All 220 Swahili hymns, read in the app: search by number, title or first line, with verses and chorus.",
       icon: Music2,
       isExternal: false,
+    },
+    {
+      key: "dholuo",
+      href: fellowshipResources.dholuoHymnal,
+      label: "Wende Nyasaye (Dholuo)",
+      description: "The Dholuo Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+      icon: Music2,
+      isExternal: true,
+    },
+    {
+      key: "kisii",
+      href: fellowshipResources.kisiiHymnal,
+      label: "Ogotera kw'ogotogia Nyasae (Kisii)",
+      description: "The Ekegusii Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+      icon: Music2,
+      isExternal: true,
+    },
+    {
+      key: "kikuyu",
+      href: fellowshipResources.kikuyuHymnal,
+      label: "Nyimbo cia Agendi (Kikuyu)",
+      description: "The Kikuyu Christ in Song hymnal, with its full index of hymns for worship and church song services.",
+      icon: Music2,
+      isExternal: true,
     },
   ],
 };

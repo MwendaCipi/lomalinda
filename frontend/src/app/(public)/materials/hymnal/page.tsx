@@ -1,142 +1,28 @@
-import Link from "next/link";
-import { Music, Music2, type LucideIcon } from "lucide-react";
+"use client";
 
-import { PublicSectionNav } from "@/components/public-section-nav";
-import { materialSectionLinks } from "@/config/site-sections";
-import { fellowshipResources } from "@/config/fellowship-resources";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-const hymnals: {
-  id: string;
-  title: string;
-  description: string;
-  href: string;
-  /** The Swahili hymnal is a page of the app; the English one is another site. */
-  external: boolean;
-  button: string;
-  badge: string;
-  icon: LucideIcon;
-}[] = [
-  {
-    id: "hymnal",
-    title: "Seventh-day Adventist Hymnal",
-    description: "Search hymns by title, lyrics, category, or hymn number. Ideal for personal worship, choir preparation, and church song services.",
-    href: fellowshipResources.hymnal,
-    external: true,
-    button: "Open English SDA Hymnal",
-    badge: "English Hymns",
-    icon: Music,
-  },
-  {
-    id: "nzk",
-    title: "Nyimbo za Kristo (Swahili)",
-    description: "Browse the complete Swahili hymnbook collection for Sabbath School, vespers, family devotions, and worship praise.",
-    href: fellowshipResources.nzkHymnbook,
-    external: false,
-    button: "Open Nyimbo za Kristo",
-    badge: "Swahili Hymns",
-    icon: Music2,
-  },
-  {
-    id: "dholuo",
-    title: "Wende Nyasaye (Dholuo)",
-    description: "The Dholuo Christ in Song hymnal, with its full index of hymns for worship and church song services.",
-    href: fellowshipResources.dholuoHymnal,
-    external: true,
-    button: "Open Wende Nyasaye",
-    badge: "Dholuo Hymns",
-    icon: Music2,
-  },
-  {
-    id: "kisii",
-    title: "Ogotera kw'ogotogia Nyasae (Kisii)",
-    description: "The Ekegusii Christ in Song hymnal, with its full index of hymns for worship and church song services.",
-    href: fellowshipResources.kisiiHymnal,
-    external: true,
-    button: "Open Ogotera kw'ogotogia Nyasae",
-    badge: "Kisii Hymns",
-    icon: Music2,
-  },
-  {
-    id: "kikuyu",
-    title: "Nyimbo cia Agendi (Kikuyu)",
-    description: "The Kikuyu Christ in Song hymnal, with its full index of hymns for worship and church song services.",
-    href: fellowshipResources.kikuyuHymnal,
-    external: true,
-    button: "Open Nyimbo cia Agendi",
-    badge: "Kikuyu Hymns",
-    icon: Music2,
-  },
-];
+/**
+ * The hymnbooks have one list, and it is the Hymnals shelf on `/materials`.
+ *
+ * This path used to carry a list of its own, which drifted from the shelf's:
+ * the shelf knew two hymnbooks while this page knew five, so a member who
+ * followed the Materials toggle never saw the others. Rather than keep two
+ * lists in step, the shelf is the only one and this deep page hands old
+ * bookmarks and links over to it. The readers themselves — Nyimbo za Kristo at
+ * `/materials/hymnal/nyimbo-za-kristo` — stay where they are.
+ */
+export default function HymnalRedirectPage() {
+  const router = useRouter();
 
-export default function HymnalPage() {
+  useEffect(() => {
+    router.replace("/materials/?section=hymnals");
+  }, [router]);
+
   return (
-    <main className="min-h-screen bg-sand text-bark">
-      <section className="px-6 pt-14 lg:px-8">
-        <div className="max-w-6xl">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Church Hymnals</h1>
-          <p className="mt-3 hidden max-w-2xl text-base leading-8 text-moss sm:block">
-            Worship hymnals in English and Swahili for personal, family, and church praise.
-          </p>
-        </div>
-      </section>
-
-      <section className="px-6 py-12 lg:px-8 lg:py-14">
-        <div className="grid max-w-6xl gap-3 sm:gap-4 md:grid-cols-2">
-          {hymnals.map((item) => {
-            const Icon = item.icon;
-            const cardClass =
-              "group flex flex-col justify-between rounded-2xl border border-sand-line bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-ember hover:shadow-md sm:p-4";
-            const body = (
-              <>
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sand text-bark sm:h-9 sm:w-9"
-                      aria-hidden="true"
-                    >
-                      <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    </span>
-                    <span className="rounded-full bg-ember/10 px-2 py-0.5 text-[9px] font-semibold text-ember sm:px-2.5 sm:text-[10px]">
-                      {item.badge}
-                    </span>
-                  </div>
-                  <h2 className="mt-2 text-[13px] font-semibold tracking-tight transition-colors group-hover:text-ember sm:mt-2.5 sm:text-base">
-                    {item.title}
-                  </h2>
-                  <p className="mt-1 text-[10px] leading-4 text-moss sm:text-[11px] sm:leading-5">{item.description}</p>
-                </div>
-
-                <div className="mt-2.5 border-t border-sand-line pt-2 sm:mt-3 sm:pt-2.5">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-bark px-3 py-1 text-[10px] font-semibold text-white transition group-hover:bg-ember sm:px-3.5 sm:py-1.5 sm:text-[11px]">
-                    <span>{item.button}</span>
-                    <span>&rarr;</span>
-                  </span>
-                </div>
-              </>
-            );
-            return item.external ? (
-              <a key={item.id} href={item.href} className={cardClass}>
-                {body}
-              </a>
-            ) : (
-              <Link key={item.id} href={item.href} className={cardClass}>
-                {body}
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* The old Study Materials sidebar, now part of the page body. On phones
-          the destination cards are the map, so this long tail is desktop-only. */}
-      <PublicSectionNav
-        eyebrow="Study materials"
-        title="More study areas"
-        description="Lessons, mission readings, Scripture and the Spirit of Prophecy."
-        links={materialSectionLinks}
-        activeKey="hymnals"
-        className="hidden border-t border-sand-line bg-white/60 lg:block"
-      />
+    <main className="min-h-screen bg-sand px-6 py-16 text-center text-moss">
+      Redirecting to Hymnals...
     </main>
   );
 }

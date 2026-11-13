@@ -138,7 +138,7 @@ export const materialSections: {
     value: "hymnals",
     label: "Hymnals",
     short: "Hymns",
-    description: "SDA Church Hymnal and Nyimbo za Kristo lyrics and song search for worship.",
+    description: "Hymnals in English, Swahili, Dholuo, Kisii and Kikuyu, with song and lyric search for worship.",
     icon: Music,
   },
 ];

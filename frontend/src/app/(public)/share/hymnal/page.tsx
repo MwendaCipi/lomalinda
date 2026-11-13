@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export default function ShareHymnalRedirect() {
   const router = useRouter();
   useEffect(() => {
-    router.replace("/materials/hymnal");
+    router.replace("/materials/?section=hymnals");
   }, [router]);
 
   return (
