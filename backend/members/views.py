@@ -1254,6 +1254,24 @@ def _parse_adventech_date(date_str):
     return None
 
 
+# A lesson week is studied from noon on the Sabbath, not from its first minute.
+# The Sabbath morning class is still closing the lesson of the week before, so
+# until noon the app keeps showing that lesson and only then moves on.
+LESSON_WEEK_BEGINS_AT_HOUR = 12
+
+
+def sabbath_school_day(now=None):
+    """The calendar day a Sabbath School lesson week reads as.
+
+    Saturday before noon still belongs to the week that ended yesterday; from
+    noon the new quarter's lesson takes over. Every other day is simply today.
+    """
+    now = now or timezone.localtime()
+    if now.weekday() == 5 and now.hour < LESSON_WEEK_BEGINS_AT_HOUR:  # Saturday morning
+        return now.date() - timedelta(days=1)
+    return now.date()
+
+
 def fetch_and_cache_sabbath_school_lesson(quarter_id=None, lesson_id=None):
     """Fetches and caches a weekly Sabbath School lesson from the official API.
 
@@ -1263,7 +1281,7 @@ def fetch_and_cache_sabbath_school_lesson(quarter_id=None, lesson_id=None):
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    today = timezone.localdate()
+    today = sabbath_school_day()
 
     if not quarter_id:
         quarterlies = _get_json(f'{ADVENTECH_API_BASE}/en/quarterlies/index.json')
@@ -3550,7 +3568,11 @@ class WeeklyLessonView(APIView):
             data = fetch_and_cache_sabbath_school_lesson(quarter_id=quarter, lesson_id=lesson)
             return Response(data)
         except Exception as exc:
-            fallback = SabbathSchoolLesson.objects.order_by('-start_date').first()
+            # The last resort must still respect the week: on a Sabbath morning
+            # the newest cached lesson is next week's, not the one being read.
+            fallback = SabbathSchoolLesson.objects.filter(
+                start_date__lte=sabbath_school_day()
+            ).order_by('-start_date').first() or SabbathSchoolLesson.objects.order_by('-start_date').first()
             if fallback and fallback.days:
                 return Response({
                     'quarterly': {

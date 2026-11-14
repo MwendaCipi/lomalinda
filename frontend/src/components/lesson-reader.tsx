@@ -20,6 +20,18 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const ADVENTECH_BASE = "https://sabbath-school.adventech.io/api/v2";
 
+/**
+ * A lesson week is studied from noon on the Sabbath, not from its first minute:
+ * the Sabbath morning class is still closing the lesson of the week before, so
+ * until noon the reader stays on that lesson and that Friday's study.
+ */
+const LESSON_WEEK_START_HOUR = 12;
+
+/** True on the Sabbath before the week has turned over. */
+function beforeTheWeekTurns(now = new Date()) {
+  return now.getDay() === 6 && now.getHours() < LESSON_WEEK_START_HOUR;
+}
+
 /** A day's saved note, readable even with storage switched off. */
 function readNote(key: string) {
   if (!key) return "";
@@ -100,33 +112,32 @@ function getDayMeta(dayId: string): { name: string; short: string; isStudy: bool
   }
 }
 
-/** Formats "14/11/2026" or "2026-11-14" into "November 14, 2026". */
-function formatHumanDate(raw: string): string {
-  if (!raw) return "";
+/** Parses "14/11/2026" or "2026-11-14" as a local date. */
+function parseLessonDate(raw: string): Date | null {
+  if (!raw) return null;
   const parts = raw.split(/[-/]/);
-  if (parts.length === 3) {
-    let year: number, month: number, day: number;
-    if (parts[0].length === 4) {
-      year = parseInt(parts[0], 10);
-      month = parseInt(parts[1], 10) - 1;
-      day = parseInt(parts[2], 10);
-    } else {
-      day = parseInt(parts[0], 10);
-      month = parseInt(parts[1], 10) - 1;
-      year = parseInt(parts[2], 10);
-    }
-    const d = new Date(year, month, day);
-    if (!isNaN(d.getTime())) {
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    }
-  }
-  return raw;
+  if (parts.length !== 3) return null;
+  const numbers = parts.map((part) => parseInt(part, 10));
+  const [year, month, day] = parts[0].length === 4 ? numbers : [numbers[2], numbers[1], numbers[0]];
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** Formats "14/11/2026" or "2026-11-14" into "Nov 14, 2026". */
+function formatHumanDate(raw: string): string {
+  const parsed = parseLessonDate(raw);
+  return parsed
+    ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : raw;
 }
 
 /** Determines today's day of the week in Sabbath School order (01=Sat, 02=Sun, ... 07=Fri). */
 function getDefaultDayId(): string {
   if (typeof window === "undefined") return "01";
-  const day = new Date().getDay(); // 0 is Sunday, 6 is Saturday
+  const now = new Date();
+  // Sabbath morning is still last week's study, so it opens Friday's section.
+  if (beforeTheWeekTurns(now)) return "07";
+  const day = now.getDay(); // 0 is Sunday, 6 is Saturday
   if (day === 6) return "01"; // Saturday / Sabbath
   if (day === 0) return "02"; // Sunday
   if (day === 1) return "03"; // Monday
@@ -148,9 +159,19 @@ async function fetchDirectFromAdventech(quarterId?: string, lessonId?: string): 
   const qData = await qRes.json();
   const lessons: LessonSummary[] = qData.lessons || [];
 
+  // The same week rule the server uses, so the fallback opens the lesson the
+  // class is actually studying rather than the quarter's first lesson.
+  const readingDay = new Date();
+  if (beforeTheWeekTurns(readingDay)) readingDay.setDate(readingDay.getDate() - 1);
+  const coversReadingDay = (lesson: LessonSummary) => {
+    const start = parseLessonDate(lesson.start_date);
+    const end = parseLessonDate(lesson.end_date);
+    return Boolean(start && end && start <= readingDay && readingDay <= end);
+  };
+
   const targetLesson = lessonId
     ? lessons.find((l) => String(l.id).padStart(2, "0") === String(lessonId).padStart(2, "0")) || lessons[0]
-    : lessons[0];
+    : lessons.find(coversReadingDay) || lessons[0];
 
   const lRes = await fetch(`${ADVENTECH_BASE}/en/quarterlies/${adultQ.id}/lessons/${targetLesson.id}/index.json`);
   const lData = await lRes.json();
