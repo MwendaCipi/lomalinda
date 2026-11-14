@@ -27,7 +27,7 @@ const referenceShelf: {
     badge: "Scripture & Word",
     title: "Read the Holy Bible",
     description:
-      "All 66 books read in the app — pick a book and a chapter for daily devotions, family altar, and Sabbath School lesson preparation.",
+      "All 66 books read in the app, in English or Kiswahili — pick a book and a chapter for daily devotions, family altar, and Sabbath School lesson preparation. Highlight verses and keep your own notes.",
     href: fellowshipResources.bibleReader,
     button: "Open the Bible reader",
     external: false,

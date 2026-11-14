@@ -137,7 +137,7 @@ export const materialSections: {
   {
     value: "hymnals",
     label: "Hymnals",
-    short: "Hymns",
+    short: "Hymnals",
     description: "Hymnals in English, Swahili, Dholuo, Kisii and Kikuyu, with song and lyric search for worship.",
     icon: Music,
   },

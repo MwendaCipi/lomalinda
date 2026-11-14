@@ -10,7 +10,7 @@ import { BibleReader } from "@/components/bible-reader";
 export const metadata = {
   title: "Holy Bible",
   description:
-    "Read the whole Bible in the app — World English Bible, all 66 books, chapter by chapter.",
+    "Read the whole Bible in the app — English and Kiswahili, all 66 books, with highlights and notes.",
 };
 
 export default function BibleReaderPage() {
@@ -32,7 +32,8 @@ export default function BibleReaderPage() {
           </div>
           <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">Holy Bible</h1>
           <p className="mt-2 text-sm text-moss">
-            All 66 books, read in the app. Nothing to install, no account, and no other site in the way.
+            All 66 books in English and Kiswahili, read in the app. Highlight a verse, write a note, and
+            nothing to install.
           </p>
         </div>
       </section>
