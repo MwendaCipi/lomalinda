@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import ReportSigningsView, ReportSigningStatusView, ReportSigningRespondView, WithdrawalAccountabilityView, WithdrawalAccountabilityReceiptView, ExpenditureReverseView
-from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView, ProfileUpdateView, YaLessonRedirectView, EmailChangeRequestView, EmailChangeVerifyView, EmailChangeCancelView
+from .views import AdultLessonPdfRedirectView, AdultLessonRedirectView, ChildrenLessonRedirectView, MissionReadingRedirectView, ProfileUpdateView, YaLessonRedirectView, EmailChangeRequestView, EmailChangeVerifyView, EmailChangeCancelView, WeeklyLessonView, MemberLessonNoteView
 from .views import PrayerCellsView, PrayerCellDetailView, PrayerCellMembersView, PrayerCellJoinRequestView, PrayerCellJoinRequestReviewView
 from .views import DepartmentPolicyView
 from .views import EmailVerificationConfirmView, EmailVerificationResendView
@@ -35,6 +35,8 @@ urlpatterns = [
     path('pledges/<int:pk>/redeem/', PledgeRedeemView.as_view(), name='pledge-redeem'),
     path('users/<int:pk>/disfellowship/', DisfellowshipView.as_view(), name='user-disfellowship'),
     path('users/list-pdf/', MemberListPDFView.as_view(), name='member-list-pdf'),
+    path('lesson/weekly/', WeeklyLessonView.as_view(), name='weekly-lesson'),
+    path('lesson/notes/', MemberLessonNoteView.as_view(), name='member-lesson-notes'),
     path('lesson-reading/adult/', AdultLessonRedirectView.as_view(), name='adult-lesson-redirect'),
     path('lesson-reading/ya/', YaLessonRedirectView.as_view(), name='ya-lesson-redirect'),
     path('lesson-pdf/adult/<str:kind>/', AdultLessonPdfRedirectView.as_view(), name='adult-lesson-pdf-redirect'),

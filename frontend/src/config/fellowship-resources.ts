@@ -2,6 +2,10 @@ export const fellowshipResources = {
   bible: "https://www.biblesearch.me/Bible",
   /** The Bible read in the app — its own page, fetched chapter by chapter. */
   bibleReader: "/materials/bible/read",
+  /** The adult Sabbath School lesson guide read in the app with daily studies and notes. */
+  adultLessonReader: "/materials/lesson",
+  /** The English Extra Hymns (696–952) from Christ in Song. */
+  sdaExtraHymns: "/materials/hymnal/seventh-day-adventist-hymnal?section=extra",
   egw: "https://egwwritings.org/allCollection/en",
   hymnal: "https://sdahymnals.com/Hymnal/",
   // All 220 Nyimbo za Kristo hymns, searchable by number or title. The old

@@ -497,12 +497,12 @@ export const destinations = {
    * rather than on a shelf of lesson cards.
    */
   todaysLesson: {
-    href: `${API_URL}/api/members/lesson-reading/adult/`,
+    href: "/materials/lesson",
     label: "Today's Lesson",
-    description: "This week's Sabbath School lesson, ready to read.",
+    description: "This week's Sabbath School lesson, ready to read with personal notes.",
     icon: BookOpen,
     area: "study",
-    match: [],
+    match: ["/materials/lesson"],
   },
   /**
    * Hymnals — the hymnbooks read in the app. The address names the Hymnals

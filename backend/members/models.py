@@ -3867,3 +3867,51 @@ class WithdrawalPayout(models.Model):
 
     def __str__(self):
         return f"Payout WD-{self.withdrawal_id} to {self.phone_number} ({self.status})"
+
+
+class SabbathSchoolLesson(models.Model):
+    """A Sabbath School weekly lesson, cached from the official curriculum API.
+
+    Keeps the quarter's weekly study guides, memory texts, daily lessons and
+    embedded scripture readings on our own server so church members can study
+    the lesson inside the app with fast load times and offline readiness,
+    without external site redirects.
+    """
+    quarterly_id = models.CharField(max_length=60, db_index=True)
+    quarterly_title = models.CharField(max_length=200, blank=True, default='')
+    lesson_id = models.CharField(max_length=20, db_index=True)
+    lesson_index = models.CharField(max_length=100, unique=True)
+    title = models.CharField(max_length=255)
+    start_date = models.DateField(db_index=True)
+    end_date = models.DateField(db_index=True)
+    cover_url = models.URLField(max_length=500, blank=True, default='')
+    pdf_url = models.URLField(max_length=500, blank=True, default='')
+    days = models.JSONField(default=list)
+    lessons_list = models.JSONField(default=list, blank=True)
+    fetched_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['start_date', 'lesson_id']
+
+    def __str__(self):
+        return f"{self.quarterly_id} Lesson {self.lesson_id}: {self.title}"
+
+
+class MemberLessonNote(models.Model):
+    """A member's personal study or discussion notes for a specific lesson day."""
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='sabbath_school_notes',
+    )
+    lesson_index = models.CharField(max_length=100, db_index=True)
+    day_id = models.CharField(max_length=40, db_index=True)
+    note = models.TextField(blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('member', 'lesson_index', 'day_id')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Note by {self.member} on {self.lesson_index} day {self.day_id}"

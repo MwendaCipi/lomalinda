@@ -57,11 +57,11 @@ export const materialShelves: Record<MaterialSection, MaterialDestination[]> = {
   "lesson-guides": [
     {
       key: "adult-lesson",
-      href: `${API_URL}/api/members/lesson-reading/adult/`,
+      href: fellowshipResources.adultLessonReader,
       label: "Adult Lesson",
-      description: "The current adult Sabbath School lesson guide, with daily readings and commentary.",
+      description: "The adult Sabbath School lesson guide, read in the app with daily studies and personal notes.",
       icon: BookOpen,
-      isExternal: true,
+      isExternal: false,
     },
     {
       key: "ya-lesson",

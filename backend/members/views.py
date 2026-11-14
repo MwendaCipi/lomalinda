@@ -51,7 +51,7 @@ from rest_framework.views import APIView
 from config.authentication import sign_in_payload
 from .models import Announcement, AnnouncementResponse, PrayerCell, PrayerCellJoinRequest, PrayerCellMember, BoardMeeting, BoardMeetingAgenda, BusinessMeeting, BusinessMeetingAgenda, CampaignCardAssignment, CampaignPledge, CashContribution, SingingGroup, SingingGroupMember, ChildDedicationRequest, ChurchBudget, ChurchCorrespondence, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, ContributionTreasury, DepartmentWithdrawalRequest, EmailChangeRequest, EnrollmentRequest, DutyRota, Expenditure, ExternalResourceLink, format_invitation_code, Friend, FundraisingCampaign, giver_display_name, GivingChangeRequest, InKindContribution, InventoryItem, InventoryMovement,    Invitation, LeadershipChangeRequest, MemberProfile, DepartmentServiceHistory, RoleHistory, CURRENT_PRIVACY_POLICY_VERSION, CURRENT_TERMS_OF_USE_VERSION, MpesaRefund, MembershipRemovalRequest, MembershipTransferRequest, PendingTestimony, PrayerRequest, ProfileChangeRequest, Profession, SabbathEvent, SupportSubmission, Testimony, TreasuryAccount, TreasuryAccountTransaction, VisitationRequest, ChildrenGroup, ChildRecord, Pathfinder
 from .models import notification_pref_keys, wants_notice
-from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentPolicy, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout
+from .models import DEFAULT_DEPARTMENT_ROLES, DEPARTMENT_ROLE_SEED, BaptismalClassEntry, DailyWord, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentLetterRequest, DepartmentMessage, DepartmentMembership, DepartmentPolicy, DepartmentRole, EventEnrollment, GivingRequest, GIFT_RELATIONSHIP_CHOICES, LessonRequest, TreasuryPeriod, WeeklyMeeting, WithdrawalAccountability, WithdrawalAccountabilityReceipt, WithdrawalPayout, SabbathSchoolLesson, MemberLessonNote
 from .models import ReportSigning, ReportSignature
 from .mpesa import MpesaConfigurationError, initiate_b2c_payout, initiate_b2c_refund, initiate_stk_push_for_context, normalize_mpesa_phone, normalize_pull_rows, pull_paybill_transactions, register_pull_url, safe_mpesa_phone
 
@@ -1238,6 +1238,169 @@ def _covers_day(period, day):
 
 def current_adult_lesson_url():
     return SSNET_WEEKLY_LESSON_URL
+
+
+ADVENTECH_API_BASE = 'https://sabbath-school.adventech.io/api/v2'
+
+
+def _parse_adventech_date(date_str):
+    if not date_str:
+        return None
+    for fmt in ('%d/%m/%Y', '%d%m%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(str(date_str).strip(), fmt).date()
+        except Exception:
+            pass
+    return None
+
+
+def fetch_and_cache_sabbath_school_lesson(quarter_id=None, lesson_id=None):
+    """Fetches and caches a weekly Sabbath School lesson from the official API.
+
+    Resolves the Standard Adult quarterly and weekly lesson, retrieves daily
+    study guides (Sabbath through Friday plus teacher/mission sections), and
+    caches them in the database for instant, offline-capable in-app reading.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    today = timezone.localdate()
+
+    if not quarter_id:
+        quarterlies = _get_json(f'{ADVENTECH_API_BASE}/en/quarterlies/index.json')
+        matched_q = None
+        for q in quarterlies:
+            group = (q.get('quarterly_group') or {}).get('name')
+            if group == 'Standard Adult':
+                s = _parse_adventech_date(q.get('start_date', ''))
+                e = _parse_adventech_date(q.get('end_date', ''))
+                if s and e and s <= today <= e:
+                    matched_q = q
+                    break
+        if not matched_q:
+            for q in quarterlies:
+                if (q.get('quarterly_group') or {}).get('name') == 'Standard Adult':
+                    matched_q = q
+                    break
+        if not matched_q:
+            raise ValueError("No Standard Adult quarterly found")
+        quarter_id = matched_q['id']
+        quarter_meta = matched_q
+    else:
+        quarter_meta = {}
+
+    quarterly_data = _get_json(f'{ADVENTECH_API_BASE}/en/quarterlies/{quarter_id}/index.json')
+    quarterly_title = quarterly_data.get('title') or quarter_meta.get('title', 'Sabbath School Lesson')
+    quarterly_human_date = quarterly_data.get('human_date', '')
+    quarterly_desc = quarterly_data.get('description', '')
+    lessons = quarterly_data.get('lessons', [])
+
+    if not lesson_id:
+        matched_lesson = None
+        for l in lessons:
+            s = _parse_adventech_date(l.get('start_date', ''))
+            e = _parse_adventech_date(l.get('end_date', ''))
+            if s and e and s <= today <= e:
+                matched_lesson = l
+                break
+        if not matched_lesson and lessons:
+            matched_lesson = lessons[0]
+        if not matched_lesson:
+            raise ValueError(f"No lessons found for quarterly {quarter_id}")
+        lesson_id = matched_lesson['id']
+        target_lesson = matched_lesson
+    else:
+        norm_id = str(lesson_id).zfill(2)
+        target_lesson = next((l for l in lessons if str(l.get('id')).zfill(2) == norm_id), None)
+        if not target_lesson:
+            target_lesson = {'id': norm_id, 'title': f'Lesson {lesson_id}'}
+        lesson_id = norm_id
+
+    lesson_id_str = str(lesson_id).zfill(2)
+    lesson_index = f"en-{quarter_id}-{lesson_id_str}"
+
+    lesson_detail = _get_json(f'{ADVENTECH_API_BASE}/en/quarterlies/{quarter_id}/lessons/{lesson_id_str}/index.json')
+    lesson_info = lesson_detail.get('lesson', {})
+    lesson_title = lesson_info.get('title') or target_lesson.get('title', f'Lesson {lesson_id}')
+    start_date = _parse_adventech_date(lesson_info.get('start_date') or target_lesson.get('start_date', '')) or today
+    end_date = _parse_adventech_date(lesson_info.get('end_date') or target_lesson.get('end_date', '')) or today
+    cover_url = lesson_info.get('cover') or target_lesson.get('cover', '')
+    pdf_url = lesson_info.get('pdf') or ''
+
+    raw_days = lesson_detail.get('days', [])
+
+    def fetch_day_content(d):
+        d_id = d.get('id', '')
+        read_url = f'{ADVENTECH_API_BASE}/en/quarterlies/{quarter_id}/lessons/{lesson_id_str}/days/{d_id}/read/index.json'
+        try:
+            read_data = _get_json(read_url)
+            return {
+                'id': d_id,
+                'title': d.get('title', ''),
+                'date': d.get('date', ''),
+                'content': read_data.get('content', ''),
+                'bible': read_data.get('bible', []),
+            }
+        except Exception:
+            return {
+                'id': d_id,
+                'title': d.get('title', ''),
+                'date': d.get('date', ''),
+                'content': '',
+                'bible': [],
+            }
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        days_content = list(pool.map(fetch_day_content, raw_days))
+
+    lessons_list = [
+        {
+            'id': str(l.get('id')).zfill(2),
+            'title': l.get('title', ''),
+            'start_date': l.get('start_date', ''),
+            'end_date': l.get('end_date', ''),
+            'cover': l.get('cover', ''),
+        }
+        for l in lessons
+    ]
+
+    try:
+        SabbathSchoolLesson.objects.update_or_create(
+            lesson_index=lesson_index,
+            defaults={
+                'quarterly_id': quarter_id,
+                'quarterly_title': quarterly_title,
+                'lesson_id': lesson_id_str,
+                'title': lesson_title,
+                'start_date': start_date,
+                'end_date': end_date,
+                'cover_url': cover_url,
+                'pdf_url': pdf_url,
+                'days': days_content,
+                'lessons_list': lessons_list,
+            }
+        )
+    except Exception:
+        pass
+
+    return {
+        'quarterly': {
+            'id': quarter_id,
+            'title': quarterly_title,
+            'human_date': quarterly_human_date,
+            'description': quarterly_desc,
+        },
+        'lesson': {
+            'id': lesson_id_str,
+            'index': lesson_index,
+            'title': lesson_title,
+            'start_date': str(start_date),
+            'end_date': str(end_date),
+            'cover': cover_url,
+            'pdf': pdf_url,
+        },
+        'lessons': lessons_list,
+        'days': days_content,
+    }
 
 
 def current_ya_lesson_url():
@@ -3345,6 +3508,95 @@ class MissionReadingRedirectView(APIView):
             except Exception:
                 destination = fallback
         return HttpResponseRedirect(destination or fallback)
+
+
+class WeeklyLessonView(APIView):
+    """The weekly Sabbath School lesson study guide with all days and scriptures."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        quarter = request.query_params.get('quarter')
+        lesson = request.query_params.get('lesson')
+
+        # If specific lesson and quarter requested, check cache first
+        if quarter and lesson:
+            lesson_norm = str(lesson).zfill(2)
+            lesson_index = f"en-{quarter}-{lesson_norm}"
+            try:
+                cached = SabbathSchoolLesson.objects.filter(lesson_index=lesson_index).first()
+            except Exception:
+                cached = None
+            if cached and cached.days and (timezone.now() - cached.fetched_at).days < 14:
+                return Response({
+                    'quarterly': {
+                        'id': cached.quarterly_id,
+                        'title': cached.quarterly_title,
+                    },
+                    'lesson': {
+                        'id': cached.lesson_id,
+                        'index': cached.lesson_index,
+                        'title': cached.title,
+                        'start_date': str(cached.start_date),
+                        'end_date': str(cached.end_date),
+                        'cover': cached.cover_url,
+                        'pdf': cached.pdf_url,
+                    },
+                    'lessons': cached.lessons_list,
+                    'days': cached.days,
+                })
+
+        try:
+            data = fetch_and_cache_sabbath_school_lesson(quarter_id=quarter, lesson_id=lesson)
+            return Response(data)
+        except Exception as exc:
+            fallback = SabbathSchoolLesson.objects.order_by('-start_date').first()
+            if fallback and fallback.days:
+                return Response({
+                    'quarterly': {
+                        'id': fallback.quarterly_id,
+                        'title': fallback.quarterly_title,
+                    },
+                    'lesson': {
+                        'id': fallback.lesson_id,
+                        'index': fallback.lesson_index,
+                        'title': fallback.title,
+                        'start_date': str(fallback.start_date),
+                        'end_date': str(fallback.end_date),
+                        'cover': fallback.cover_url,
+                        'pdf': fallback.pdf_url,
+                    },
+                    'lessons': fallback.lessons_list,
+                    'days': fallback.days,
+                })
+            return Response({'error': f'Unable to load lesson: {str(exc)}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class MemberLessonNoteView(APIView):
+    """Get and save a member's personal notes for Sabbath School lesson days."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        lesson_index = request.query_params.get('lesson_index')
+        if not lesson_index:
+            return Response({'error': 'lesson_index is required'}, status=status.HTTP_400_BAD_REQUEST)
+        notes = MemberLessonNote.objects.filter(member=request.user, lesson_index=lesson_index)
+        notes_dict = {n.day_id: n.note for n in notes}
+        return Response({'notes': notes_dict})
+
+    def post(self, request):
+        lesson_index = request.data.get('lesson_index')
+        day_id = request.data.get('day_id')
+        note_text = request.data.get('note', '')
+        if not lesson_index or not day_id:
+            return Response({'error': 'lesson_index and day_id are required'}, status=status.HTTP_400_BAD_REQUEST)
+        note_obj, _ = MemberLessonNote.objects.update_or_create(
+            member=request.user,
+            lesson_index=lesson_index,
+            day_id=day_id,
+            defaults={'note': note_text}
+        )
+        return Response({'success': True, 'day_id': day_id, 'note': note_obj.note, 'updated_at': note_obj.updated_at})
 
 
 class AdultLessonRedirectView(APIView):

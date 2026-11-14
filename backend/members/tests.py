@@ -71,7 +71,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.utils import timezone
 
-from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DepartmentServiceHistory, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, DepartmentWithdrawalRequest, Announcement, AnnouncementResponse
+from .models import BoardMeeting, BaptismalClassEntry, CampaignPledge, CashContribution, ChurchBudget, ChurchEvent, ChurchEventMedia, ChurchFinancialReport, ChurchNotification, ChurchSettings, Contribution, DailyWord, DEPARTMENT_ROLE_SEED, DeaconateRequest, Department, DepartmentAssignment, DepartmentBudget, DepartmentEvent, DepartmentJoinRequest, DepartmentMembership, DepartmentMessage, DepartmentRole, DepartmentServiceHistory, DutyRota, LeadershipChangeRequest, EmailChangeRequest, EnrollmentRequest, GivingRequest, LessonRequest, SingingGroup, SingingGroupMember, Expenditure, ExternalResourceLink, format_invitation_code, FundraisingCampaign, InventoryItem, InventoryMovement, Invitation, MemberProfile, MembershipTransferRequest, MpesaRefund, ProfileChangeRequest, RoleHistory, Testimony, TreasuryAccount, TreasuryAccountTransaction, TreasuryPeriod, DepartmentWithdrawalRequest, Announcement, AnnouncementResponse, SabbathSchoolLesson, MemberLessonNote
 from .meetings import PLACEHOLDERS, eat_greeting
 from .mpesa import account_reference_for_purpose
 from .mpesa_tokens import pack_callback_context, unpack_callback_context
@@ -12302,6 +12302,71 @@ class YaLessonWeeklyCacheTests(APITestCase):
             response = self.client.get(self.url)
 
         self.assertEqual(response['Location'], YA_LESSON_URL)
+
+
+class WeeklyLessonAPITests(APITestCase):
+    """The weekly Sabbath School lesson endpoint returns structured studies and notes."""
+
+    def setUp(self):
+        self.member = User.objects.create_user('lesson.student', 'student@example.com', 'ChurchPass#2026')
+        MemberProfile.objects.create(user=self.member, role='member', roles='member')
+        self.today = timezone.localdate()
+
+    def test_weekly_lesson_returns_cached_lesson(self):
+        SabbathSchoolLesson.objects.create(
+            quarterly_id='2026-04',
+            quarterly_title='The Gift of Prophecy',
+            lesson_id='08',
+            lesson_index='en-2026-04-08',
+            title='Interpreting Prophetic Writings',
+            start_date=self.today,
+            end_date=self.today + timedelta(days=6),
+            cover_url='https://example.com/cover.png',
+            days=[
+                {
+                    'id': '01',
+                    'title': 'Interpreting Prophetic Writings',
+                    'date': str(self.today),
+                    'content': '<p>Memory text and introduction</p>',
+                    'bible': [],
+                },
+                {
+                    'id': '02',
+                    'title': 'The Bible Its Own Interpreter',
+                    'date': str(self.today + timedelta(days=1)),
+                    'content': '<p>Sunday study</p>',
+                    'bible': [],
+                },
+            ],
+            lessons_list=[
+                {'id': '08', 'title': 'Interpreting Prophetic Writings', 'start_date': str(self.today)},
+            ],
+        )
+
+        response = self.client.get('/api/members/lesson/weekly/?quarter=2026-04&lesson=08')
+        self.assertEqual(response.status_code, 200)
+        data = response.data
+        self.assertEqual(data['quarterly']['title'], 'The Gift of Prophecy')
+        self.assertEqual(data['lesson']['title'], 'Interpreting Prophetic Writings')
+        self.assertEqual(len(data['days']), 2)
+        self.assertEqual(data['days'][0]['id'], '01')
+
+    def test_member_lesson_notes_save_and_retrieve(self):
+        self.client.force_authenticate(self.member)
+        post_resp = self.client.post('/api/members/lesson/notes/', {
+            'lesson_index': 'en-2026-04-08',
+            'day_id': '02',
+            'note': 'Remember to look up 2 Timothy 3:16 for Sabbath School discussion.',
+        }, format='json')
+        self.assertEqual(post_resp.status_code, 200)
+        self.assertTrue(post_resp.data['success'])
+
+        get_resp = self.client.get('/api/members/lesson/notes/?lesson_index=en-2026-04-08')
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertEqual(
+            get_resp.data['notes']['02'],
+            'Remember to look up 2 Timothy 3:16 for Sabbath School discussion.',
+        )
 
 
 class AnnouncementDisplayWindowTests(APITestCase):
