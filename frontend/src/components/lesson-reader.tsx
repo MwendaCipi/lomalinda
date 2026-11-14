@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  ExternalLink,
   Library,
   NotebookPen,
   RotateCcw,
@@ -20,6 +19,16 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const ADVENTECH_BASE = "https://sabbath-school.adventech.io/api/v2";
+
+/** A day's saved note, readable even with storage switched off. */
+function readNote(key: string) {
+  if (!key) return "";
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 export type LessonDay = {
   id: string;
@@ -203,9 +212,14 @@ export function LessonReader({
   const [activeLessonId, setActiveLessonId] = useState<string>(initialLesson || "");
   const [isLessonMenuOpen, setIsLessonMenuOpen] = useState(false);
 
-  // Note-taking state
-  const [noteDraft, setNoteDraft] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  // Note-taking state. The draft carries the storage key it was read for, so a
+  // newly opened day is read during render instead of being copied into state
+  // from an effect — the box never shows yesterday's note for a frame.
+  const [note, setNote] = useState<{ key: string; text: string; status: "idle" | "saving" | "saved" }>({
+    key: "",
+    text: "",
+    status: "idle",
+  });
   const [copiedNote, setCopiedNote] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -255,7 +269,7 @@ export function LessonReader({
           const directData = await fetchDirectFromAdventech(undefined, lessonId);
           setData(directData);
           setActiveLessonId(directData.lesson.id);
-        } catch (directErr) {
+        } catch {
           setError("Unable to load the Sabbath School lesson. Please check your internet connection.");
         }
       }
@@ -265,7 +279,10 @@ export function LessonReader({
   }, []);
 
   useEffect(() => {
-    loadLesson(initialLesson);
+    // Deferred by a tick: loadLesson raises the loading flags before it awaits
+    // anything, and an effect should not set state on its first pass.
+    const timer = setTimeout(() => void loadLesson(initialLesson), 0);
+    return () => clearTimeout(timer);
   }, [loadLesson, initialLesson]);
 
   // Keep URL parameters in sync
@@ -289,24 +306,15 @@ export function LessonReader({
     return `sda-lesson:note:${data.lesson.index}:${currentDay.id}`;
   }, [data, currentDay]);
 
-  useEffect(() => {
-    if (!noteStorageKey) {
-      setNoteDraft("");
-      return;
-    }
-    try {
-      const stored = localStorage.getItem(noteStorageKey) ?? "";
-      setNoteDraft(stored);
-      setSaveStatus("idle");
-    } catch {
-      setNoteDraft("");
-    }
-  }, [noteStorageKey]);
+  if (note.key !== noteStorageKey) {
+    setNote({ key: noteStorageKey, text: readNote(noteStorageKey), status: "idle" });
+  }
+  const noteDraft = note.key === noteStorageKey ? note.text : "";
+  const saveStatus = note.status;
 
   // Handle note change with debounced save & optional server sync
   const handleNoteChange = (text: string) => {
-    setNoteDraft(text);
-    setSaveStatus("saving");
+    setNote((previous) => ({ ...previous, text, status: "saving" }));
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
@@ -339,7 +347,7 @@ export function LessonReader({
         }
       }
 
-      setSaveStatus("saved");
+      setNote((previous) => ({ ...previous, status: "saved" }));
     }, 400);
   };
 
